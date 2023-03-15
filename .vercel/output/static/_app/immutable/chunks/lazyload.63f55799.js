@@ -1,1 +1,0 @@
-const s={root:null,rootMargin:"0px",threshold:0},l=(e,t)=>{const o=()=>{e.style.opacity="1"};return new IntersectionObserver(r=>{r[0].isIntersecting&&(e.src=t,e.complete?o():e.addEventListener("load",o))},s).observe(e),{destroy(){e.removeEventListener("load",o)}}};export{l};
