@@ -23,6 +23,6 @@
     }
 
     gtag('js', new Date())
-    gtag('config', $page.data.gtagId)
+    gtag('config', 'GTM-PCJPXF9')
   </script>
 </svelte:head>
