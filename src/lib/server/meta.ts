@@ -1,6 +1,6 @@
 const uri = 'https://0rga.org'
 const siteName = 'Tlazolteotnia'
-const img = '/img/gallery/44.jpg'
+const img = '/img/material/og.png'
 
 export const getMetaData = (pathname: string) => {
   if (pathname === '/') {

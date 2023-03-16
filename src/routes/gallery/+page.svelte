@@ -11,7 +11,10 @@
         loading="lazy"
       />
     </div>
-    <p>My artwork here.</p>
+    <div class="textWrap">
+      <p>My portfolio is here.</p>
+      <span class="material-symbols-rounded"> outbound </span>
+    </div>
   </a>
 </div>
 
@@ -34,6 +37,7 @@
   .imgWrap {
     width: 100%;
     aspect-ratio: 12 / 13;
+    background-color: var(--img-background-colo);
   }
 
   img {
@@ -42,9 +46,25 @@
     transition: all 0.5s ease;
   }
 
-  p {
+  .textWrap {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-top: 1rem;
+  }
+
+  .textWrap p {
     line-height: 3.2rem;
-    font-size: 1.6rem;
+    font-size: 2rem;
+    font-weight: bold;
     text-align: center;
+    text-decoration: underline;
+  }
+
+  .textWrap span {
+    line-height: 3.2rem;
+    font-size: 2rem;
+    width: 3rem;
+    overflow: hidden;
   }
 </style>

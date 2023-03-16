@@ -150,6 +150,7 @@ body {
   --table-th-background-color: #3c3f46;
   --table-td-background-color: #131313;
   --code-background-color: #111620;
+  --img-background-colo: #171717;
   font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Oxygen, Ubuntu, Cantarell,
     Fira Sans, Droid Sans, Helvetica Neue, sans-serif;
   text-rendering: optimizeLegibility;
