@@ -4,7 +4,7 @@
   import { lazyLoad } from '$lib/lazyload'
   export let data: PageData
 
-  let clapNum: number = 0
+  let clapNum = 0
 
   const getClap = async () => {
     if (browser) {

@@ -11,7 +11,7 @@
 </script>
 
 <svelte:head>
-	<script defer src="{assets}/prism.js"></script>
+  <script defer src="{assets}/prism.js"></script>
 </svelte:head>
 
 <div class="wrap">
