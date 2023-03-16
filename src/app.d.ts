@@ -6,7 +6,15 @@ declare global {
     interface Locals {
       lang: 'ja-JP' | 'en-US'
     }
-    // interface PageData {}
+    interface PageData {
+      gtagId: string
+      meta: {
+        title: string
+        description: string
+        img: string
+        url: string
+      } | null
+    }
     // interface Platform {}
   }
 }

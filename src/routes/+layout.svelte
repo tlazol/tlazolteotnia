@@ -1,50 +1,56 @@
 <script lang="ts">
   import { page } from '$app/stores'
   import Header from './Header.svelte'
+  import Gtm from './Gtm.svelte'
   import type { PageData } from './$types'
   export let data: PageData
   import './styles.css'
 </script>
 
+<Gtm />
+
 <svelte:head>
   {#if data.meta}
-    <title>{$page.data.meta.title ? $page.data.meta.title : data.meta.title}</title>
+    <title>{$page.data.meta?.title ? $page.data.meta.title : data.meta.title}</title>
     <meta
       property="og:title"
-      content={$page.data.meta.title ? $page.data.meta.title : data.meta.title}
+      content={$page.data.meta?.title ? $page.data.meta.title : data.meta.title}
     />
     <meta
       name="twitter:title"
-      content={$page.data.meta.title ? $page.data.meta.title : data.meta.title}
+      content={$page.data.meta?.title ? $page.data.meta.title : data.meta.title}
     />
     <meta
       itemprop="name"
-      content={$page.data.meta.title ? $page.data.meta.title : data.meta.title}
+      content={$page.data.meta?.title ? $page.data.meta.title : data.meta.title}
     />
     <meta
       name="description"
-      content={$page.data.meta.description ? $page.data.meta.description : data.meta.description}
+      content={$page.data.meta?.description ? $page.data.meta.description : data.meta.description}
     />
     <meta
       itemprop="description"
-      content={$page.data.meta.description ? $page.data.meta.description : data.meta.description}
+      content={$page.data.meta?.description ? $page.data.meta.description : data.meta.description}
     />
     <meta
       property="og:description"
-      content={$page.data.meta.description ? $page.data.meta.description : data.meta.description}
+      content={$page.data.meta?.description ? $page.data.meta.description : data.meta.description}
     />
     <meta
       name="twitter:description"
-      content={$page.data.meta.description ? $page.data.meta.description : data.meta.description}
+      content={$page.data.meta?.description ? $page.data.meta.description : data.meta.description}
     />
-    <meta property="og:image" content={$page.data.meta.img ? $page.data.meta.img : data.meta.img} />
-    <meta itemprop="image" content={$page.data.meta.img ? $page.data.meta.img : data.meta.img} />
+    <meta
+      property="og:image"
+      content={$page.data.meta?.img ? $page.data.meta.img : data.meta.img}
+    />
+    <meta itemprop="image" content={$page.data.meta?.img ? $page.data.meta.img : data.meta.img} />
     <meta
       name="twitter:image"
-      content={$page.data.meta.img ? $page.data.meta.img : data.meta.img}
+      content={$page.data.meta?.img ? $page.data.meta.img : data.meta.img}
     />
-    <meta property="og:url" content={$page.data.meta.url ? $page.data.meta.url : data.meta.url} />
-    <meta name="twitter:url" content={$page.data.meta.url ? $page.data.meta.url : data.meta.url} />
+    <meta property="og:url" content={$page.data.meta?.url ? $page.data.meta.url : data.meta.url} />
+    <meta name="twitter:url" content={$page.data.meta?.url ? $page.data.meta.url : data.meta.url} />
   {/if}
 </svelte:head>
 
