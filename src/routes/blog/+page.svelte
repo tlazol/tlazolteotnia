@@ -48,7 +48,7 @@
     display: flex;
     justify-content: center;
     width: 100%;
-    border: 0.2rem solid var(--sub-color);
+    border: 0.1rem solid var(--sub-color-3);
     margin-top: 3rem;
     border-radius: 1rem;
     padding: 4rem 0;
@@ -61,17 +61,6 @@
   .icon {
     font-size: 10rem;
     color: var(--key-color);
-  }
-
-  .text-gradient {
-    font-weight: bold;
-    text-align: center;
-    background: #12c2e9;
-    background: -webkit-linear-gradient(right, #12c2e9, #c471ed, #f64f59);
-    background: linear-gradient(to right, #12c2e9, #c471ed, #f64f59);
-    -webkit-background-clip: text;
-    background-clip: text;
-    -webkit-text-fill-color: transparent;
   }
 
   .title {

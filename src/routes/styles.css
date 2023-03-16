@@ -184,6 +184,17 @@ img {
   height: auto;
 }
 
+.text-gradient {
+  font-weight: bold;
+  text-align: center;
+  background: #12c2e9;
+  background: -webkit-linear-gradient(bottom right, #12c2e9, #c471ed, #f64f59);
+  background: linear-gradient(to bottom right, #12c2e9, #c471ed, #f64f59);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
 /*
   -----------------
     Blog

@@ -54,12 +54,12 @@
     {#if data.lang === 'en-US' && !data.skill.en}
       <p class="buttonText">\ {data.skill.description[data.lang]} /</p>
       <a target="_blank" rel="noopener noreferrer" href={`${data.skill.aogUrl}?hl=ja-JP`}>
-        <span class="material-symbols-rounded text-gradient"> stadia_controller </span>
+        <span class="material-symbols-rounded text-gradient gradient"> stadia_controller </span>
       </a>
     {:else}
       <p class="buttonText">\ GAME START /</p>
       <a target="_blank" rel="noopener noreferrer" href={`${data.skill.aogUrl}?hl=${data.lang}`}>
-        <span class="material-symbols-rounded text-gradient"> stadia_controller </span>
+        <span class="material-symbols-rounded text-gradient gradient"> stadia_controller </span>
       </a>
       <p class="description">{data.skill.description[data.lang]}</p>
     {/if}
@@ -148,15 +148,7 @@
     text-decoration: underline;
   }
 
-  .text-gradient {
-    font-weight: bold;
-    text-align: center;
-    background: #12c2e9;
-    background: -webkit-linear-gradient(right, #12c2e9, #c471ed, #f64f59);
-    background: linear-gradient(to right, #12c2e9, #c471ed, #f64f59);
-    -webkit-background-clip: text;
-    background-clip: text;
-    -webkit-text-fill-color: transparent;
+  .gradient {
     font-size: 8rem;
     border-bottom: 3px solid var(--a-color);
     border-radius: 0.5rem;
@@ -173,7 +165,7 @@
       font-size: 10rem;
     }
 
-    .text-gradient {
+    .gradient {
       font-size: 12rem;
       width: 12rem;
     }

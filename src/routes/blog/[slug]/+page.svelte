@@ -1,6 +1,5 @@
 <script lang="ts">
-  import { browser } from '$app/environment'
-  import { assets, base } from '$app/paths'
+  import { assets } from '$app/paths'
   import type { PageData } from './$types'
   import './prism.css'
   export let data: PageData
@@ -11,9 +10,9 @@
   }
 </script>
 
-{#if browser}
-  <script defer src="{assets}/prism.js"></script>
-{/if}
+<svelte:head>
+	<script defer src="{assets}/prism.js"></script>
+</svelte:head>
 
 <div class="wrap">
   <div id="blogWrap">
