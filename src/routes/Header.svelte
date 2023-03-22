@@ -11,8 +11,13 @@
         </a>
       </li>
       <li>
-        <a href="/gallery" class={$page.url.pathname === '/gallery' ? 'on' : undefined}>
-          <span class="material-symbols-rounded"> photo_library </span>
+        <a
+          href="https://www.artstation.com/orga"
+          target="_blank"
+          rel="noopener noreferrer"
+          class={$page.url.pathname === '/gallery' ? 'on' : undefined}
+        >
+          <span class="material-symbols-rounded"> magic_button </span>
         </a>
       </li>
       <li>
