@@ -3,6 +3,7 @@
   import type { PageData } from './$types'
   import './prism.css'
   export let data: PageData
+  export const hoge = 'aaaa'
 
   const getDateJa = (date: Date) => {
     const d = new Date(date)
@@ -12,6 +13,34 @@
 
 <svelte:head>
   <script defer src="{assets}/prism.js"></script>
+  {@html `
+    <script type="application/ld+json">
+      {
+        "@context": "http://schema.org",
+        "@type": "Article",
+        "mainEntityOfPage": {
+          "@type": "WebPage",
+          "@id": "${data.meta.url}"
+        },
+        "headline": "${data.meta.title}",
+        "datePublished": "${data.meta.createdAt}",
+        "dateModified": "${data.meta.updatedAt}",
+        "author": [
+          {
+            "@type": "Person",
+            "name": "Daisuke Kobayashi"
+          }
+        ],
+        "image": {
+          "@type": "ImageObject",
+          "url": "${data.meta.img}",
+          "width": 1200,
+          "height": 630
+        },
+        "description": "${data.meta.description}"
+      }
+    </script>
+  `}
 </svelte:head>
 
 <div class="wrap">

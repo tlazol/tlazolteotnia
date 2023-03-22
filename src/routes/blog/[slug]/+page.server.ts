@@ -19,6 +19,7 @@ export const load: Load = async function ({ params }) {
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const blogEntry: Entry<any> = await client.getEntry(slug)
+      console.log(blogEntry)
 
       const description: string = blogEntry.fields.markdown.substring(0, 120)
 
@@ -30,7 +31,9 @@ export const load: Load = async function ({ params }) {
         img: `https://us-central1-tlazolteotnia.cloudfunctions.net/getThumbnail?text=${encodeURI(
           blogEntry.fields.text
         )}`,
-        url: `https://0rga.org/blog/${slug}`
+        url: `https://0rga.org/blog/${slug}`,
+        createdAt: blogEntry.sys.createdAt,
+        updatedAt: blogEntry.sys.updatedAt
       }
 
       return {

@@ -15,6 +15,7 @@
 <svelte:head>
   <script defer src={`https://www.googletagmanager.com/gtag/js?id=${$page.data.gtagId}`}>
   </script>
+  {@html `
   <script>
     window.dataLayer = window.dataLayer || []
 
@@ -23,6 +24,7 @@
     }
 
     gtag('js', new Date())
-    gtag('config', 'GTM-PCJPXF9')
+    gtag('config', '${$page.data.gtagId}')
   </script>
+  `}
 </svelte:head>
