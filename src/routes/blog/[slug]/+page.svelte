@@ -48,14 +48,6 @@
   <div id="blogWrap">
     <div class="title">{data.blogEntry.fields.text}</div>
     <div class="date">{getDateJa(data.blogEntry.fields.date)}</div>
-    <div id="nendAd">
-      {#if browser}
-        <script type="text/javascript">
-          var nend_params = { media: 67423, site: 342563, spot: 1014532, type: 10, oriented: 1 }
-        </script>
-        <script type="text/javascript" src="https://js1.nend.net/js/nendAdLoader.js"></script>
-      {/if}
-    </div>
     {@html data.blogEntry.fields.markdown}
   </div>
 </div>
@@ -85,20 +77,11 @@
     color: var(--sub-color);
   }
 
-  #nendAd {
-    min-width: 335px;
-    aspect-ratio: 13 / 10;
-  }
-
   @media (min-width: 480px) {
     .title {
       font-size: 8rem;
       line-height: 10rem;
       margin-top: 5rem;
-    }
-
-    #nendAd {
-      display: none;
     }
   }
 </style>
