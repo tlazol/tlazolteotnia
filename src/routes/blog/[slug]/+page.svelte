@@ -48,6 +48,22 @@
   <div id="blogWrap">
     <div class="title">{data.blogEntry.fields.text}</div>
     <div class="date">{getDateJa(data.blogEntry.fields.date)}</div>
+    <div class="dmmWrap">
+      <div class="dmm">
+        {#if browser}
+          <ins
+            class="dmm-widget-placement"
+            data-id="450bd92f27db4ff411ff71419d86c64b"
+            style="background:transparent"
+          />
+          <script
+            src="https://widget-view.dmm.com/js/placement.js"
+            class="dmm-widget-scripts"
+            data-id="450bd92f27db4ff411ff71419d86c64b"
+          ></script>
+        {/if}
+      </div>
+    </div>
     {@html data.blogEntry.fields.markdown}
   </div>
 </div>
@@ -56,6 +72,17 @@
   .wrap {
     display: flex;
     justify-content: center;
+  }
+
+  .dmmWrap {
+    display: flex;
+    justify-content: center;
+    margin-top: 2rem;
+  }
+
+  .dmm {
+    width: 336px;
+    height: 280px;
   }
 
   #blogWrap {
@@ -73,7 +100,6 @@
   .date {
     font-size: 1.4rem;
     margin-top: 1rem;
-    margin-bottom: 2rem;
     color: var(--sub-color);
   }
 
