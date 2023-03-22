@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { browser } from '$app/environment'
   import type { PageData } from './$types'
   import { lazyLoad } from '$lib/lazyload'
   export let data: PageData
@@ -6,7 +7,7 @@
 
 <div class="skillListWrap">
   <div class="skillList">
-    {#each data.skills as [k, v]}
+    {#each data.skills as [k, v], i}
       <div class="skill">
         <a href={`/skill/${v.shortId}`}>
           <picture>
@@ -19,6 +20,24 @@
           </picture>
         </a>
       </div>
+      {#if i === 0}
+        <div class="dmmWrap">
+          <div class="dmm">
+            {#if browser}
+              <ins
+                class="dmm-widget-placement"
+                data-id="450bd92f27db4ff411ff71419d86c64b"
+                style="background:transparent"
+              />
+              <script
+                src="https://widget-view.dmm.com/js/placement.js"
+                class="dmm-widget-scripts"
+                data-id="450bd92f27db4ff411ff71419d86c64b"
+              ></script>
+            {/if}
+          </div>
+        </div>
+      {/if}
     {/each}
   </div>
 </div>
@@ -43,12 +62,25 @@
   .skill {
     width: 100%;
     aspect-ratio: 16 / 9;
-    background-color: var(--img-background-colo);
+    background-color: var(--img-background-color);
   }
 
   .skill img {
     opacity: 0;
     transition: all 0.5s ease;
+  }
+
+  .dmmWrap {
+    display: flex;
+    justify-content: center;
+    width: 100%;
+    background-color: #fff;
+    border-bottom: 1px solid var(--img-background-color);
+  }
+
+  .dmm {
+    width: 336px;
+    height: 280px;
   }
 
   @media (min-width: 480px) {
@@ -79,6 +111,10 @@
     img {
       max-width: none;
       max-height: 100vh;
+    }
+
+    .dmmWrap {
+      display: none;
     }
   }
 </style>

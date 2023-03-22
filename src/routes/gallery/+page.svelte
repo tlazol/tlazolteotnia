@@ -37,7 +37,7 @@
   .imgWrap {
     width: 100%;
     aspect-ratio: 12 / 13;
-    background-color: var(--img-background-colo);
+    background-color: var(--img-background-color);
   }
 
   img {

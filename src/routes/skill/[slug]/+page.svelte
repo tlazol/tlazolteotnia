@@ -81,7 +81,7 @@
   .hero {
     width: 100%;
     aspect-ratio: 16 / 9;
-    background-color: var(--img-background-colo);
+    background-color: var(--img-background-color);
   }
 
   .clapWrap {
