@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { browser } from '$app/environment'
   import { assets } from '$app/paths'
   import type { PageData } from './$types'
   import './prism.css'
@@ -47,6 +48,14 @@
   <div id="blogWrap">
     <div class="title">{data.blogEntry.fields.text}</div>
     <div class="date">{getDateJa(data.blogEntry.fields.date)}</div>
+    <div id="nendAd">
+      {#if browser}
+          <script type="text/javascript">
+            var nend_params = {"media":67423,"site":342563,"spot":1014532,"type":10,"oriented":1};
+          </script>
+          <script type="text/javascript" src="https://js1.nend.net/js/nendAdLoader.js"></script>
+      {/if}
+    </div>
     {@html data.blogEntry.fields.markdown}
   </div>
 </div>

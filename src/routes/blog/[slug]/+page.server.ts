@@ -19,7 +19,6 @@ export const load: Load = async function ({ params }) {
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const blogEntry: Entry<any> = await client.getEntry(slug)
-      console.log(blogEntry)
 
       const description: string = blogEntry.fields.markdown.substring(0, 120)
 

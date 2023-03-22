@@ -344,6 +344,11 @@ img {
     nend Ad
   -----------------
 */
+#nendAd {
+  min-width: 335px;
+  aspect-ratio: 13 / 10;
+}
+
 .nendAd {
   display: block;
 }
@@ -353,18 +358,20 @@ img {
 }
 
 .nendAd .shortText {
-  font-size: 1rem;
-  line-height: 1.5rem;
+  font-size: 1.3rem!important;
+  line-height: 1.3rem!important;
   font-weight: 700;
-  padding: 0.5rem 1rem 0;
-  color: #fff;
+  padding: 0.5rem 0 0;
+  color: var(--a-color);
+  margin-top: 0.5rem!important;
 }
 
 .nendAd .promotionName {
-  font-size: 0.9rem;
-  line-height: 1.3rem;
-  padding: 0.2rem 1rem 2rem;
-  color: #aebacf;
+  font-size: 1.2rem!important;
+  line-height: 1.2rem!important;
+  padding: 0.5rem 0 0;
+  color: var(--sub-color);
+  margin-top: 0.5rem!important;
 }
 
 .nendAd .nend_ad_define {
@@ -432,29 +439,5 @@ img {
   }
   100% {
     transform: scale(1, 1) translate(0%, 0%);
-  }
-}
-
-@keyframes blink {
-  78% {
-    color: #962424;
-  }
-  79% {
-    color: #282d36;
-  }
-  81% {
-    color: #ff4a4a;
-  }
-  82% {
-    color: #962424;
-  }
-  83% {
-    color: #962424;
-  }
-  92% {
-    color: #282d36;
-  }
-  92.5% {
-    color: #ff4a4a;
   }
 }
