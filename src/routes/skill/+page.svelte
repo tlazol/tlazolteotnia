@@ -31,6 +31,7 @@
               />
               <script
                 src="https://widget-view.dmm.com/js/placement.js"
+                defer
                 class="dmm-widget-scripts"
                 data-id="450bd92f27db4ff411ff71419d86c64b"
               ></script>
