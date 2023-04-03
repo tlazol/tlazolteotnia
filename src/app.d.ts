@@ -13,8 +13,8 @@ declare global {
         description: string
         img: string
         url: string
-        createdAt: string
-        updatedAt: string
+        createdAt?: string
+        updatedAt?: string
       } | null
     }
     // interface Platform {}
