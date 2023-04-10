@@ -1,15 +1,11 @@
 <script lang="ts">
+  export let data: PageData
+  export const hoge = 'aaaa'
   import { browser } from '$app/environment'
   import { assets } from '$app/paths'
   import type { PageData } from './$types'
+  import { getDateJa, getKeywordsArray } from '$lib/util'
   import './prism.css'
-  export let data: PageData
-  export const hoge = 'aaaa'
-
-  const getDateJa = (date: Date) => {
-    const d = new Date(date)
-    return d.toLocaleDateString()
-  }
 </script>
 
 <svelte:head>
@@ -47,6 +43,11 @@
 <div class="wrap">
   <div id="blogWrap">
     <div class="title">{data.blogEntry.fields.text}</div>
+    <div class="keywords">
+      {#each getKeywordsArray(data.blogEntry.fields.keywords) as keyword}
+        <span class="keyword">{keyword.trim()}</span>
+      {/each}
+    </div>
     <div class="date">{getDateJa(data.blogEntry.fields.date)}</div>
     <div class="dmmWrap">
       <div class="dmm">
@@ -86,7 +87,7 @@
   }
 
   #blogWrap {
-    max-width: 1100px;
+    max-width: 800px;
     width: 100%;
   }
 
@@ -101,6 +102,21 @@
     font-size: 1.4rem;
     margin-top: 1rem;
     color: var(--sub-color);
+  }
+
+  .keywords {
+    display: flex;
+    flex-wrap: wrap;
+  }
+
+  .keyword {
+    font-size: 1.4rem;
+    color: var(--sub-color);
+    padding: 0.5rem;
+    border: 0.1rem solid var(--sub-color);
+    border-radius: 0.7rem;
+    margin-top: 1rem;
+    margin-right: 1rem;
   }
 
   @media (min-width: 480px) {

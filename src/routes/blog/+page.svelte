@@ -1,11 +1,7 @@
 <script lang="ts">
-  import type { PageData } from './$types'
   export let data: PageData
-
-  const getDateJa = (date: Date) => {
-    const d = new Date(date)
-    return d.toLocaleDateString()
-  }
+  import type { PageData } from './$types'
+  import { getDateJa, getKeywordsArray } from '$lib/util'
 </script>
 
 <div class="blogListWrap">
@@ -19,6 +15,11 @@
             >
           </div>
           <h1 class="title">{fields.text}</h1>
+          <p class="keywords">
+            {#each getKeywordsArray(fields.keywords) as keyword}
+              <span class="keyword">{keyword.trim()}</span>
+            {/each}
+          </p>
           <p class="date">{getDateJa(fields.date)}</p>
         </a>
       {/if}
@@ -72,8 +73,23 @@
 
   .date {
     font-size: 1.4rem;
-    margin-top: 0.5rem;
+    margin-top: 1rem;
     color: var(--sub-color);
+  }
+
+  .keywords {
+    display: flex;
+    flex-wrap: wrap;
+  }
+
+  .keyword {
+    font-size: 1.4rem;
+    color: var(--sub-color);
+    padding: 0.5rem;
+    border: 0.1rem solid var(--sub-color);
+    border-radius: 0.7rem;
+    margin-top: 1rem;
+    margin-right: 1rem;
   }
 
   @media (min-width: 480px) {

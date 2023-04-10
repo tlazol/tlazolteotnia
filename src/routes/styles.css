@@ -272,6 +272,7 @@ img {
   overflow: scroll;
   padding: 2rem;
   border-radius: 1rem;
+  border: 0.1rem solid var(--sub-color);
 }
 
 #blogWrap pre code {
