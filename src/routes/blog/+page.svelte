@@ -16,11 +16,11 @@
           </div>
           <h1 class="title">{fields.text}</h1>
           <p class="keywords">
-            {#each getKeywordsArray(fields.keywords) as keyword}
+            {#each getKeywordsArray(String(fields.keywords)) as keyword}
               <span class="keyword">{keyword.trim()}</span>
             {/each}
           </p>
-          <p class="date">{getDateJa(fields.date)}</p>
+          <p class="date">{getDateJa(String(fields.date))}</p>
         </a>
       {/if}
     {/each}

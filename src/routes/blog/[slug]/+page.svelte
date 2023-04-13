@@ -44,11 +44,11 @@
   <div id="blogWrap">
     <div class="title">{data.blogEntry.fields.text}</div>
     <div class="keywords">
-      {#each getKeywordsArray(data.blogEntry.fields.keywords) as keyword}
+      {#each getKeywordsArray(String(data.blogEntry.fields.keywords)) as keyword}
         <span class="keyword">{keyword.trim()}</span>
       {/each}
     </div>
-    <div class="date">{getDateJa(data.blogEntry.fields.date)}</div>
+    <div class="date">{getDateJa(String(data.blogEntry.fields.date))}</div>
     <div class="dmmWrap">
       <div class="dmm">
         {#if browser}

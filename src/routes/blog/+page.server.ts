@@ -14,7 +14,6 @@ export const load: PageServerLoad = async function () {
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const list: EntryCollection<any> = await client.getEntries({
-        order: '-sys.createdAt',
         content_type: 'blog'
       })
 

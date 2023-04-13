@@ -1,4 +1,4 @@
-export const getDateJa = (date: Date) => {
+export const getDateJa = (date: string) => {
   const d = new Date(date)
   return d.toLocaleDateString()
 }

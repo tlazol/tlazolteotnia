@@ -20,25 +20,27 @@ export const load: Load = async function ({ params }) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const blogEntry: Entry<any> = await client.getEntry(slug)
 
-      const description: string = blogEntry.fields.markdown.substring(0, 120)
+      if (blogEntry.fields.markdown && blogEntry.fields.text) {
+        const description: string = `${blogEntry.fields.markdown}`.substring(0, 120)
 
-      blogEntry.fields.markdown = md.render(blogEntry.fields.markdown)
+        blogEntry.fields.markdown = md.render(`${blogEntry.fields.markdown}`)
 
-      const meta = {
-        title: blogEntry.fields.text,
-        description,
-        img: `https://us-central1-tlazolteotnia.cloudfunctions.net/getThumbnail?text=${encodeURI(
-          blogEntry.fields.text
-        )}`,
-        url: `https://0rga.org/blog/${slug}`,
-        createdAt: blogEntry.sys.createdAt,
-        updatedAt: blogEntry.sys.updatedAt
-      }
+        const meta = {
+          title: blogEntry.fields.text,
+          description,
+          img: `https://us-central1-tlazolteotnia.cloudfunctions.net/getThumbnail?text=${encodeURI(
+            String(blogEntry.fields.text)
+          )}`,
+          url: `https://0rga.org/blog/${slug}`,
+          createdAt: blogEntry.sys.createdAt,
+          updatedAt: blogEntry.sys.updatedAt
+        }
 
-      return {
-        blogEntry,
-        description,
-        meta
+        return {
+          blogEntry,
+          description,
+          meta
+        }
       }
     }
     throw error(404, 'Not found')
