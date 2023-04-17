@@ -1,8 +1,9 @@
 <script lang="ts">
+  export let data: PageData
   import { browser } from '$app/environment'
   import type { PageData } from './$types'
   import { lazyLoad } from '$lib/lazyload'
-  export let data: PageData
+  import NendAd from '$lib/NendAd.svelte'
 </script>
 
 <div class="skillListWrap">
@@ -21,22 +22,8 @@
         </a>
       </div>
       {#if i === 0}
-        <div class="dmmWrap">
-          <div class="dmm">
-            {#if browser}
-              <ins
-                class="dmm-widget-placement"
-                data-id="450bd92f27db4ff411ff71419d86c64b"
-                style="background:transparent"
-              />
-              <script
-                src="https://widget-view.dmm.com/js/placement.js"
-                defer
-                class="dmm-widget-scripts"
-                data-id="450bd92f27db4ff411ff71419d86c64b"
-              ></script>
-            {/if}
-          </div>
+        <div class="nendAdWrap">
+          <NendAd />
         </div>
       {/if}
     {/each}
@@ -71,19 +58,6 @@
     transition: all 0.5s ease;
   }
 
-  .dmmWrap {
-    display: flex;
-    justify-content: center;
-    width: 100%;
-    background-color: #fff;
-    border-bottom: 1px solid var(--img-background-color);
-  }
-
-  .dmm {
-    width: 336px;
-    height: 280px;
-  }
-
   @media (min-width: 480px) {
     .skillList {
       flex-wrap: nowrap;
@@ -114,7 +88,7 @@
       max-height: 100vh;
     }
 
-    .dmmWrap {
+    .nendAdWrap {
       display: none;
     }
   }

@@ -1,11 +1,12 @@
 <script lang="ts">
-  export let data: PageData
-  export const hoge = 'aaaa'
-  import { browser } from '$app/environment'
   import { assets } from '$app/paths'
   import type { PageData } from './$types'
   import { getDateJa, getKeywordsArray } from '$lib/util'
+  import NendAd from '$lib/NendAd.svelte'
+  import DmmAd from '$lib/DmmAd.svelte'
+  import '../../blog.css'
   import './prism.css'
+  export let data: PageData
 </script>
 
 <svelte:head>
@@ -49,23 +50,13 @@
       {/each}
     </div>
     <div class="date">{getDateJa(String(data.blogEntry.fields.date))}</div>
-    <div class="dmmWrap">
-      <div class="dmm">
-        {#if browser}
-          <ins
-            class="dmm-widget-placement"
-            data-id="450bd92f27db4ff411ff71419d86c64b"
-            style="background:transparent"
-          />
-          <script
-            src="https://widget-view.dmm.com/js/placement.js"
-            class="dmm-widget-scripts"
-            data-id="450bd92f27db4ff411ff71419d86c64b"
-          ></script>
-        {/if}
-      </div>
+    <div class="nendAdWrap">
+      <NendAd />
     </div>
     {@html data.blogEntry.fields.markdown}
+    <div class="dmmAdWrap">
+      <DmmAd />
+    </div>
   </div>
 </div>
 
@@ -73,17 +64,6 @@
   .wrap {
     display: flex;
     justify-content: center;
-  }
-
-  .dmmWrap {
-    display: flex;
-    justify-content: center;
-    margin-top: 2rem;
-  }
-
-  .dmm {
-    width: 336px;
-    height: 280px;
   }
 
   #blogWrap {
@@ -119,6 +99,14 @@
     margin-right: 1rem;
   }
 
+  .nendAdWrap {
+    margin-top: 2rem;
+  }
+
+  .dmmAdWrap {
+    margin-top: 3rem;
+  }
+
   @media (min-width: 480px) {
     .title {
       font-size: 8rem;
@@ -126,7 +114,11 @@
       margin-top: 5rem;
     }
 
-    .dmmWrap {
+    .nendAdWrap {
+      display: none;
+    }
+
+    .dmmAdWrap {
       display: none;
     }
   }

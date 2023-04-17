@@ -1,8 +1,8 @@
 <script lang="ts">
+  export let data: PageData
   import { browser } from '$app/environment'
   import type { PageData } from './$types'
   import { lazyLoad } from '$lib/lazyload'
-  export let data: PageData
 
   let clapNum = 0
 
@@ -39,7 +39,7 @@
     </div>
     <div class="clapWrap">
       <!-- svelte-ignore a11y-click-events-have-key-events -->
-      <div class="clapColumn" on:click={() => incrementClap()}>
+      <div class="clapColumn incrementClap" on:click={() => incrementClap()}>
         <span class="material-symbols-rounded anime"> thumb_up </span>
         {#await getClap()}
           <p class="clapNum">.....</p>
@@ -95,6 +95,10 @@
     justify-content: center;
     display: flex;
     align-items: center;
+  }
+
+  .clapWrap .incrementClap {
+    cursor: pointer;
   }
 
   .clapWrap span {
