@@ -35,7 +35,7 @@
 
 <style>
   #nendAd {
-    aspect-ratio: 8 / 6;
+    aspect-ratio: 8 / 6.2;
   }
 
   @media (min-width: 480px) {
