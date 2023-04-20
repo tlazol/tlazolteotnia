@@ -2,7 +2,6 @@
   export let data: PageData
   import type { PageData } from './$types'
   import { lazyLoad } from '$lib/lazyload'
-  import YllixAd from '$lib/YllixAd.svelte'
 </script>
 
 <div class="skillListWrap">
@@ -21,9 +20,7 @@
         </a>
       </div>
       {#if i === 0}
-        <div class="yllixAdWrap">
-          <YllixAd />
-        </div>
+        <!-- <div class="yllixAdWrap"></div> -->
       {/if}
     {/each}
   </div>
