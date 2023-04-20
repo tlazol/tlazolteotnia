@@ -1,9 +1,8 @@
 <script lang="ts">
   export let data: PageData
-  import { browser } from '$app/environment'
   import type { PageData } from './$types'
   import { lazyLoad } from '$lib/lazyload'
-  import NendAd from '$lib/NendAd.svelte'
+  import YllixAd from '$lib/YllixAd.svelte'
 </script>
 
 <div class="skillListWrap">
@@ -22,8 +21,8 @@
         </a>
       </div>
       {#if i === 0}
-        <div class="nendAdWrap">
-          <NendAd />
+        <div class="yllixAdWrap">
+          <YllixAd />
         </div>
       {/if}
     {/each}
@@ -58,6 +57,15 @@
     transition: all 0.5s ease;
   }
 
+  .yllixAdWrap {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    aspect-ratio: 6 / 5;
+    background-color: var(--img-background-color);
+  }
+
   @media (min-width: 480px) {
     .skillList {
       flex-wrap: nowrap;
@@ -88,7 +96,7 @@
       max-height: 100vh;
     }
 
-    .nendAdWrap {
+    .yllixAdWrap {
       display: none;
     }
   }
