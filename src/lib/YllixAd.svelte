@@ -16,7 +16,7 @@
     if (postscribe) {
       postscribe(
         '#yllixAd',
-        '<script src="https://udbaa.com/bnr.php?section=General&pub=939356&format=300x250&ga=g"><\/script>'
+        '<script src="https://udbaa.com/bnr.php?section=General&pub=939356&format=300x250&ga=g"></script>'
       )
     }
   </script>
