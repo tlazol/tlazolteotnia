@@ -2,7 +2,6 @@
   export let data: PageData
   import type { PageData } from './$types'
   import { lazyLoad } from '$lib/lazyload'
-  import NendAd from '$lib/NendAd.svelte'
 </script>
 
 <div class="skillListWrap">
@@ -20,11 +19,6 @@
           </picture>
         </a>
       </div>
-      {#if i === 0}
-        <div class="nendAdWrap">
-          <NendAd />
-        </div>
-      {/if}
     {/each}
   </div>
 </div>
@@ -85,10 +79,6 @@
     img {
       max-width: none;
       max-height: 100vh;
-    }
-
-    .nendAdWrap {
-      display: none;
     }
   }
 </style>
