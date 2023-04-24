@@ -37,12 +37,13 @@
 <style>
   header {
     position: sticky;
-    bottom: 0;
+    top: 0;
     display: flex;
     justify-content: center;
     width: 100vw;
-    background-color: var(--main-background);
-    border-top: 1px solid var(--sub-color-3);
+    border-bottom: 1px solid var(--sub-color-3);
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
   }
 
   nav {
