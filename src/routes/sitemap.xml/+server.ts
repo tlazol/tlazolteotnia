@@ -13,6 +13,7 @@ export async function GET() {
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const list: EntryCollection<any> = await client.getEntries({
+        order: ['-sys.createdAt'],
         content_type: 'blog'
       })
 
