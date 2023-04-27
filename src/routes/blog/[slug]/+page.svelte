@@ -4,9 +4,9 @@
   import { getDateJa, getKeywordsArray } from '$lib/util'
   import NendAd from '$lib/NendAd.svelte'
   import DmmAd from '$lib/DmmAd.svelte'
+  export let data: PageData
   import '../../blog.css'
   import './prism.css'
-  export let data: PageData
 </script>
 
 <svelte:head>
