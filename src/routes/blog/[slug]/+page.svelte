@@ -54,18 +54,6 @@
       <NendAd />
     </div>
     {@html data.blogEntry.fields.markdown}
-    {#if data.blogEntry.fields.pdf}
-      <iframe
-        class="pdf"
-        title={`${data.blogEntry.fields.text}`}
-        src="https://drive.google.com/viewerng/viewer?embedded=true&url=https://0rga.org/pdf/{data
-          .blogEntry.sys.id}.pdf"
-        scrolling="no"
-        marginwidth="0"
-        marginheight="0"
-        frameborder="0"
-      />
-    {/if}
     <div class="dmmAdWrap">
       <DmmAd />
     </div>
@@ -117,12 +105,6 @@
 
   .dmmAdWrap {
     margin-top: 3rem;
-  }
-
-  .pdf {
-    width: 100%;
-    aspect-ratio: 16 / 9;
-    border: none;
   }
 
   @media (min-width: 480px) {
