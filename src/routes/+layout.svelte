@@ -55,8 +55,6 @@
 </svelte:head>
 
 <div class="app">
-  <Header />
-
   <main>
     <slot />
   </main>
@@ -88,6 +86,8 @@
       </div>
     </div>
   </footer>
+
+  <Header />
 </div>
 
 <style>

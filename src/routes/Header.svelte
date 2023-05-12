@@ -37,11 +37,11 @@
 <style>
   header {
     position: sticky;
-    top: 0;
+    bottom: 0;
     display: flex;
     justify-content: center;
     width: 100vw;
-    border-bottom: 1px solid var(--sub-color-3);
+    border-top: 1px solid var(--sub-color-3);
     backdrop-filter: blur(5px);
     -webkit-backdrop-filter: blur(5px);
   }
