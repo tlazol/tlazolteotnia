@@ -24,7 +24,7 @@ export const tagPillClassName = [
 ].join(' ')
 
 export const markdownBodyClassName = [
-  'py-[30px] pb-2.5 text-base leading-[1.85] text-[var(--text)] [overflow-wrap:anywhere]',
+  'markdown-body py-[30px] pb-2.5 text-base leading-[1.85] text-[var(--text)] [overflow-wrap:anywhere]',
   '[&>*]:max-w-[720px]',
   "[&_h2]:relative [&_h2]:mt-[3em] [&_h2]:mb-[1em] [&_h2]:pl-[2.1rem] [&_h2]:text-[clamp(1.35rem,4.8vw,1.9rem)] [&_h2]:leading-[1.32] [&_h2]:font-bold [&_h2]:text-[var(--green-soft)] [&_h2]:[overflow-wrap:anywhere] [&_h2]:[text-shadow:0_0_18px_rgba(49,255,128,0.22)] [&_h2]:before:absolute [&_h2]:before:top-0 [&_h2]:before:left-0 [&_h2]:before:text-[var(--yellow)] [&_h2]:before:content-['$'] [&_h2]:after:inline-block [&_h2]:after:ml-[0.35em] [&_h2]:after:h-[0.95em] [&_h2]:after:w-[0.42em] [&_h2]:after:translate-y-[0.13em] [&_h2]:after:bg-[var(--green)] [&_h2]:after:opacity-70 [&_h2]:after:content-['']",
   "[&_h3]:relative [&_h3]:mt-[2.25em] [&_h3]:mb-[0.8em] [&_h3]:pl-[1.45rem] [&_h3]:text-[clamp(1.1rem,3.6vw,1.32rem)] [&_h3]:leading-[1.42] [&_h3]:font-bold [&_h3]:text-[var(--cyan)] [&_h3]:[overflow-wrap:anywhere] [&_h3]:before:absolute [&_h3]:before:top-0 [&_h3]:before:left-0 [&_h3]:before:text-[var(--green)] [&_h3]:before:content-['>']",

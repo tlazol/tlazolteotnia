@@ -44,3 +44,29 @@
     animation-iteration-count: 1 !important;
   }
 }
+
+.markdown-body ul {
+  list-style: none;
+  padding-left: 0;
+}
+
+.markdown-body ul > li {
+  position: relative;
+  padding-left: 1.35rem;
+}
+
+.markdown-body ul > li::after {
+  position: absolute;
+  top: 0.88em;
+  left: 0;
+  width: 0.38rem;
+  height: 0.38rem;
+  border-radius: 999px;
+  background: var(--green);
+  content: "";
+  opacity: 0.9;
+}
+
+.markdown-body ul > li > :last-child {
+  margin-bottom: 0;
+}
