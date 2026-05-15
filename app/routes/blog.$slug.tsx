@@ -78,7 +78,7 @@ export default function BlogPost({ loaderData }: Route.ComponentProps) {
         <MarkdownBody body={post.body} />
       </article>
 
-      <ProfileFooter />
+      <ProfileFooter showTopLink />
     </main>
   )
 }

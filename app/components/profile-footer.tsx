@@ -1,7 +1,8 @@
+import { Link } from 'react-router'
 import { FaAngleRight } from 'react-icons/fa6'
 import { headingResetClassName, terminalLabelClassName, textLinkClassName } from '~/lib/styles'
 
-export function ProfileFooter() {
+export function ProfileFooter({ showTopLink = false }: { showTopLink?: boolean }) {
   return (
     <footer className="relative mt-24 grid gap-[26px] border-t border-[var(--line)] pt-[30px] before:absolute before:top-[-1px] before:right-0 before:left-0 before:h-px before:bg-[linear-gradient(90deg,var(--green),var(--blue),transparent)] before:opacity-58 before:content-[''] min-[680px]:grid-cols-[minmax(0,1.35fr)_minmax(220px,0.65fr)] min-[680px]:items-start min-[680px]:pt-[42px]">
       <div>
@@ -17,7 +18,13 @@ export function ProfileFooter() {
         </p>
       </div>
 
-      <nav className="flex flex-col items-start gap-2.5" aria-label="Profile links">
+      <nav className="flex flex-col items-start gap-2.5" aria-label="Footer links">
+        {showTopLink && (
+          <Link className={textLinkClassName} to="/">
+            <FaAngleRight aria-hidden="true" />
+            Back to top
+          </Link>
+        )}
         <a className={textLinkClassName} href="https://twitter.com/0rga">
           <FaAngleRight aria-hidden="true" />X / Twitter
         </a>
