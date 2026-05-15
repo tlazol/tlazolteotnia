@@ -26,8 +26,8 @@ export const tagPillClassName = [
 export const markdownBodyClassName = [
   'py-[30px] pb-2.5 text-base leading-[1.85] text-[var(--text)]',
   '[&>*]:max-w-[720px]',
-  '[&_h2]:mt-[2em] [&_h2]:mb-[0.7em] [&_h2]:text-[var(--green-soft)] [&_h2]:leading-[1.2]',
-  '[&_h3]:mt-[2em] [&_h3]:mb-[0.7em] [&_h3]:text-[var(--green-soft)] [&_h3]:leading-[1.2]',
+  "[&_h2]:relative [&_h2]:mt-[3em] [&_h2]:mb-[1em] [&_h2]:pl-[2.1rem] [&_h2]:text-[clamp(1.35rem,4.8vw,1.9rem)] [&_h2]:leading-[1.32] [&_h2]:font-bold [&_h2]:text-[var(--green-soft)] [&_h2]:[overflow-wrap:anywhere] [&_h2]:[text-shadow:0_0_18px_rgba(49,255,128,0.22)] [&_h2]:before:absolute [&_h2]:before:top-0 [&_h2]:before:left-0 [&_h2]:before:text-[var(--yellow)] [&_h2]:before:content-['$'] [&_h2]:after:inline-block [&_h2]:after:ml-[0.35em] [&_h2]:after:h-[0.95em] [&_h2]:after:w-[0.42em] [&_h2]:after:translate-y-[0.13em] [&_h2]:after:bg-[var(--green)] [&_h2]:after:opacity-70 [&_h2]:after:content-['']",
+  "[&_h3]:relative [&_h3]:mt-[2.25em] [&_h3]:mb-[0.8em] [&_h3]:pl-[1.45rem] [&_h3]:text-[clamp(1.1rem,3.6vw,1.32rem)] [&_h3]:leading-[1.42] [&_h3]:font-bold [&_h3]:text-[var(--cyan)] [&_h3]:[overflow-wrap:anywhere] [&_h3]:before:absolute [&_h3]:before:top-0 [&_h3]:before:left-0 [&_h3]:before:text-[var(--green)] [&_h3]:before:content-['>']",
   '[&_p]:mt-0 [&_p]:mb-[1.25em] [&_ul]:mt-0 [&_ul]:mb-[1.25em] [&_ol]:mt-0 [&_ol]:mb-[1.25em] [&_blockquote]:mt-0 [&_blockquote]:mb-[1.25em] [&_pre]:mt-0 [&_pre]:mb-[1.25em]',
   '[&_a]:font-bold [&_a]:text-[var(--green)] [&_a]:underline [&_a]:decoration-[rgba(49,255,128,0.45)] [&_a]:decoration-dashed [&_a]:decoration-1 [&_a]:underline-offset-[0.2em]',
   '[&_code]:border [&_code]:border-[var(--line)] [&_code]:bg-[var(--panel)] [&_code]:px-[0.35em] [&_code]:py-[0.1em] [&_code]:text-[0.92em] [&_code]:text-[var(--green-soft)]',
