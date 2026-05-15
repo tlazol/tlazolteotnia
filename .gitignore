@@ -17,3 +17,6 @@ offline_bundle*
 .agents*
 .playwright*
 *.md
+!content/
+!content/blog/
+!content/blog/*.md
