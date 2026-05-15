@@ -68,9 +68,8 @@ export default function Home({ loaderData }: Route.ComponentProps) {
             <span className="size-2 rounded-full bg-[var(--green)] text-[var(--green)] shadow-[0_0_14px_currentColor]" />
           </div>
           <pre className="m-0 overflow-x-hidden px-4 pt-[15px] pb-[17px] text-[clamp(0.78rem,3.4vw,0.95rem)] leading-[1.7] whitespace-pre-wrap text-[var(--text)] [overflow-wrap:anywhere]">
-            <code>{`Daisuke Kobayashi's personal terminal
-for artwork, notes, and small dispatches
-from the edge of the screen.`}</code>
+            <code>{`Art, notes, and odds and ends.
+Updated now and then.`}</code>
           </pre>
         </div>
       </section>
