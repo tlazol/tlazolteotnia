@@ -1,5 +1,5 @@
 import { Link } from 'react-router'
-import { FaAngleRight } from 'react-icons/fa6'
+import { FaAngleRight, FaCopyright } from 'react-icons/fa6'
 import { headingResetClassName, terminalLabelClassName, textLinkClassName } from '~/lib/styles'
 
 export function ProfileFooter({ showTopLink = false }: { showTopLink?: boolean }) {
@@ -35,6 +35,10 @@ export function ProfileFooter({ showTopLink = false }: { showTopLink?: boolean }
           <FaAngleRight aria-hidden="true" />
           ArtStation
         </a>
+        <p className="mt-3 flex items-center gap-2 text-[0.72rem] tracking-[0.08em] text-[color-mix(in_srgb,var(--muted)_64%,var(--dim))] uppercase">
+          <FaCopyright aria-hidden="true" />
+          2026 Daisuke Kobayashi. All rights reserved.
+        </p>
       </nav>
     </footer>
   )

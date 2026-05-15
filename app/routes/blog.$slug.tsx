@@ -1,4 +1,4 @@
-import { createElement, type ReactNode } from 'react'
+import { Fragment, createElement, type ReactNode } from 'react'
 import { Link } from 'react-router'
 import { FaAngleRight, FaHashtag } from 'react-icons/fa6'
 import { marked, type Token, type Tokens } from 'marked'
@@ -167,9 +167,14 @@ function renderBlock(token: Token, key: number): ReactNode {
         </table>
       )
     }
+    case 'text': {
+      const text = token as Tokens.Text
+
+      return <Fragment key={key}>{renderText(text)}</Fragment>
+    }
     default:
       if ('tokens' in token && Array.isArray(token.tokens)) {
-        return <>{renderBlocks(token.tokens)}</>
+        return <Fragment key={key}>{renderBlocks(token.tokens)}</Fragment>
       }
 
       return null
