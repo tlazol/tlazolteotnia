@@ -9,6 +9,7 @@ import { Highlight, type PrismTheme } from 'prism-react-renderer'
 import type { Route } from './+types/blog.$slug'
 import { ProfileFooter } from '~/components/profile-footer'
 import { getBlogPost } from '~/lib/blog.server'
+import { getBlogPostOgImageUrl, getBlogPostUrl, siteName } from '~/lib/site'
 import {
   codeBlockClassName,
   codeBlockLabelClassName,
@@ -36,13 +37,33 @@ export async function loader({ params }: Route.LoaderArgs) {
 
 export function meta({ data }: Route.MetaArgs) {
   const post = data?.post
+  const title = post ? `${post.title} | ${siteName}` : 'Post not found'
+  const description = post?.description ?? `A note from ${siteName}.`
+  const postUrl = post ? getBlogPostUrl(post.slug) : undefined
+  const imageUrl = post ? getBlogPostOgImageUrl(post.slug) : undefined
 
   return [
-    { title: post ? `${post.title} | Tlazolteotnia` : 'Post not found' },
+    { title },
     {
       name: 'description',
-      content: post?.description ?? 'A note from Tlazolteotnia.'
-    }
+      content: description
+    },
+    { property: 'og:title', content: title },
+    { property: 'og:description', content: description },
+    { property: 'og:type', content: 'article' },
+    ...(postUrl ? [{ property: 'og:url', content: postUrl }] : []),
+    ...(imageUrl
+      ? [
+          { property: 'og:image', content: imageUrl },
+          { property: 'og:image:width', content: '1200' },
+          { property: 'og:image:height', content: '630' },
+          { property: 'og:image:type', content: 'image/png' }
+        ]
+      : []),
+    { name: 'twitter:card', content: 'summary_large_image' },
+    { name: 'twitter:title', content: title },
+    { name: 'twitter:description', content: description },
+    ...(imageUrl ? [{ name: 'twitter:image', content: imageUrl }] : [])
   ]
 }
 
