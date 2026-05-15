@@ -2,10 +2,18 @@ import { Fragment, createElement, type ReactNode } from 'react'
 import { Link } from 'react-router'
 import { FaAngleRight, FaHashtag } from 'react-icons/fa6'
 import { marked, type Token, type Tokens } from 'marked'
+import Prism from 'prismjs'
+import 'prismjs/components/prism-json'
+import 'prismjs/components/prism-bash'
+import { Highlight, type PrismTheme } from 'prism-react-renderer'
 import type { Route } from './+types/blog.$slug'
 import { ProfileFooter } from '~/components/profile-footer'
 import { getBlogPost } from '~/lib/blog.server'
 import {
+  codeBlockClassName,
+  codeBlockLabelClassName,
+  codeBlockLineClassName,
+  codeBlockPreClassName,
   headingResetClassName,
   markdownBodyClassName,
   siteShellClassName,
@@ -13,6 +21,8 @@ import {
   terminalLabelClassName,
   textLinkClassName
 } from '~/lib/styles'
+
+Prism.manual = true
 
 export async function loader({ params }: Route.LoaderArgs) {
   const post = await getBlogPost(params.slug)
@@ -135,11 +145,7 @@ function renderBlock(token: Token, key: number): ReactNode {
     case 'code': {
       const code = token as Tokens.Code
 
-      return (
-        <pre key={key}>
-          <code className={code.lang ? `language-${code.lang}` : undefined}>{code.text}</code>
-        </pre>
-      )
+      return <CodeBlock code={code.text} info={code.lang} key={key} />
     }
     case 'hr':
       return <hr key={key} />
@@ -247,6 +253,85 @@ function renderImage(token: Tokens.Image, key: number) {
   return <img alt={token.text} key={key} src={token.href} title={token.title ?? undefined} />
 }
 
+function CodeBlock({ code, info }: { code: string; info?: string }) {
+  const { label, language } = parseCodeInfo(info)
+
+  return (
+    <figure className={codeBlockClassName}>
+      {label && <figcaption className={codeBlockLabelClassName}>{label}</figcaption>}
+      {language && Prism.languages[language] ? (
+        <Highlight code={code} language={language} prism={Prism} theme={codeBlockTheme}>
+          {({ className, getLineProps, getTokenProps, style, tokens }) => (
+            <pre className={`${codeBlockPreClassName} ${className}`} style={style}>
+              <code className={`language-${language}`}>
+                {tokens.map((line, lineIndex) => (
+                  <span
+                    key={lineIndex}
+                    {...getLineProps({
+                      className: codeBlockLineClassName,
+                      line
+                    })}
+                  >
+                    {line.map((token, tokenIndex) => (
+                      <span
+                        key={tokenIndex}
+                        {...getTokenProps({
+                          token
+                        })}
+                      />
+                    ))}
+                  </span>
+                ))}
+              </code>
+            </pre>
+          )}
+        </Highlight>
+      ) : (
+        <pre className={codeBlockPreClassName}>
+          <code>{code}</code>
+        </pre>
+      )}
+    </figure>
+  )
+}
+
+function parseCodeInfo(info?: string) {
+  const rawInfo = info?.trim()
+
+  if (!rawInfo) {
+    return {}
+  }
+
+  const separatorIndex = rawInfo.indexOf(':')
+  const rawLanguage = (separatorIndex >= 0 ? rawInfo.slice(0, separatorIndex) : rawInfo)
+    .split(/\s+/)[0]
+    .toLowerCase()
+  const filename =
+    separatorIndex >= 0
+      ? rawInfo
+          .slice(separatorIndex + 1)
+          .trim()
+          .split(/\s+/)[0]
+      : ''
+  const languageName = rawLanguage.split('+')[0]
+  const language = getCodeLanguage(languageName)
+
+  return {
+    label: filename || rawLanguage,
+    language
+  }
+}
+
+function getCodeLanguage(languageName: string) {
+  if (plainCodeLanguages.has(languageName)) {
+    return undefined
+  }
+
+  return (
+    codeLanguageAliases[languageName] ?? (Prism.languages[languageName] ? languageName : undefined)
+  )
+}
+
 function getHeadingTag(depth: number) {
   return `h${Math.min(Math.max(depth, 2), 6)}` as 'h2' | 'h3' | 'h4' | 'h5' | 'h6'
 }
@@ -259,4 +344,56 @@ function isSafeUrl(url: string) {
   } catch {
     return false
   }
+}
+
+const plainCodeLanguages = new Set(['text', 'txt', 'plain', 'plaintext'])
+
+const codeLanguageAliases: Record<string, string | undefined> = {
+  console: 'bash',
+  html: 'markup',
+  javascript: 'javascript',
+  js: 'javascript',
+  json: 'json',
+  css: 'css'
+}
+
+const codeBlockTheme: PrismTheme = {
+  plain: {
+    backgroundColor: 'transparent',
+    color: 'var(--text)'
+  },
+  styles: [
+    {
+      types: ['comment', 'prolog', 'doctype', 'cdata'],
+      style: { color: 'var(--dim)', fontStyle: 'italic' }
+    },
+    {
+      types: ['punctuation'],
+      style: { color: 'var(--muted)' }
+    },
+    {
+      types: ['property', 'tag', 'boolean', 'number', 'constant', 'symbol', 'deleted'],
+      style: { color: 'var(--amber)' }
+    },
+    {
+      types: ['selector', 'attr-name', 'string', 'char', 'builtin', 'inserted'],
+      style: { color: 'var(--green-soft)' }
+    },
+    {
+      types: ['operator', 'entity', 'url'],
+      style: { color: 'var(--cyan)' }
+    },
+    {
+      types: ['atrule', 'attr-value', 'keyword'],
+      style: { color: 'var(--pink)' }
+    },
+    {
+      types: ['function', 'class-name'],
+      style: { color: 'var(--blue)' }
+    },
+    {
+      types: ['regex', 'important', 'variable'],
+      style: { color: 'var(--yellow)' }
+    }
+  ]
 }
