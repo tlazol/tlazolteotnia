@@ -1,3 +1,6 @@
+import { readFile } from 'node:fs/promises'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import type { CSSProperties } from 'react'
 import { ImageResponse } from '@vercel/og'
 import type { LoaderFunctionArgs } from 'react-router'
@@ -12,7 +15,7 @@ const imageSize = {
 
 let fontDataPromise: Promise<ArrayBuffer> | null = null
 
-export async function loader({ params, request }: LoaderFunctionArgs) {
+export async function loader({ params }: LoaderFunctionArgs) {
   if (!params.slug) {
     throw new Response('Not Found', { status: 404 })
   }
@@ -23,7 +26,7 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
     throw new Response('Not Found', { status: 404 })
   }
 
-  const fontData = await loadFontData(request)
+  const fontData = await loadFontData()
   const titleFontSize = getTitleFontSize(post.title)
 
   return new ImageResponse(
@@ -69,21 +72,38 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
   )
 }
 
-async function loadFontData(request: Request) {
-  fontDataPromise ??= fetch(new URL(fontUrl, request.url))
-    .then((response) => {
-      if (!response.ok) {
-        throw new Error(`Failed to load OGP font: ${response.status}`)
-      }
-
-      return response.arrayBuffer()
-    })
-    .catch((error) => {
-      fontDataPromise = null
-      throw error
-    })
+async function loadFontData() {
+  fontDataPromise ??= readLocalFontData().catch((error) => {
+    fontDataPromise = null
+    throw error
+  })
 
   return fontDataPromise
+}
+
+async function readLocalFontData() {
+  const fontPaths = [
+    path.join(path.dirname(fileURLToPath(import.meta.url)), fontUrl.replace(/^\//, '')),
+    path.join(process.cwd(), 'build', 'client', fontUrl.replace(/^\//, '')),
+    path.join(process.cwd(), 'app', 'assets', 'NotoSansCJKjp-Bold.otf')
+  ]
+
+  for (const fontPath of fontPaths) {
+    try {
+      const font = await readFile(fontPath)
+      return font.buffer.slice(font.byteOffset, font.byteOffset + font.byteLength) as ArrayBuffer
+    } catch (error) {
+      if (!isMissingFileError(error)) {
+        throw error
+      }
+    }
+  }
+
+  throw new Error('Failed to load OGP font from local files')
+}
+
+function isMissingFileError(error: unknown) {
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT'
 }
 
 function getTitleFontSize(title: string) {

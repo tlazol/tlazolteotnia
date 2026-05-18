@@ -1,0 +1,147 @@
+{
+  "buildManifest": {
+    "serverBundles": {
+      "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0": {
+        "id": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
+        "file": "build/server/nodejs_eyJydW50aW1lIjoibm9kZWpzIn0/index.js",
+        "config": {
+          "runtime": "nodejs"
+        }
+      }
+    },
+    "routeIdToServerBundleId": {
+      "routes/home": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/blog": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/blog.$slug.og.png": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/blog.$slug": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0"
+    },
+    "routes": {
+      "root": {
+        "id": "root",
+        "file": "app/root.tsx",
+        "path": "",
+        "config": {}
+      },
+      "routes/home": {
+        "id": "routes/home",
+        "parentId": "root",
+        "file": "app/routes/home.tsx",
+        "index": true,
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/blog": {
+        "id": "routes/blog",
+        "parentId": "root",
+        "file": "app/routes/blog.tsx",
+        "path": "blog",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/blog.$slug.og.png": {
+        "id": "routes/blog.$slug.og.png",
+        "parentId": "root",
+        "file": "app/routes/blog.$slug.og.png.tsx",
+        "path": "blog/:slug/og.png",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/blog.$slug": {
+        "id": "routes/blog.$slug",
+        "parentId": "root",
+        "file": "app/routes/blog.$slug.tsx",
+        "path": "blog/:slug",
+        "config": {
+          "runtime": "nodejs"
+        }
+      }
+    }
+  },
+  "reactRouterConfig": {
+    "appDirectory": "/Users/daisukekobayashi/work/tlazolteotnia/app",
+    "basename": "/",
+    "buildDirectory": "/Users/daisukekobayashi/work/tlazolteotnia/build",
+    "future": {
+      "unstable_optimizeDeps": false,
+      "v8_passThroughRequests": false,
+      "unstable_trailingSlashAwareDataRequests": false,
+      "unstable_previewServerPrerendering": false,
+      "v8_middleware": false,
+      "v8_splitRouteModules": false,
+      "v8_viteEnvironmentApi": false
+    },
+    "routes": {
+      "root": {
+        "id": "root",
+        "file": "root.tsx",
+        "path": ""
+      },
+      "routes/home": {
+        "id": "routes/home",
+        "parentId": "root",
+        "file": "routes/home.tsx",
+        "index": true
+      },
+      "routes/blog": {
+        "id": "routes/blog",
+        "parentId": "root",
+        "file": "routes/blog.tsx",
+        "path": "blog"
+      },
+      "routes/blog.$slug.og.png": {
+        "id": "routes/blog.$slug.og.png",
+        "parentId": "root",
+        "file": "routes/blog.$slug.og.png.tsx",
+        "path": "blog/:slug/og.png"
+      },
+      "routes/blog.$slug": {
+        "id": "routes/blog.$slug",
+        "parentId": "root",
+        "file": "routes/blog.$slug.tsx",
+        "path": "blog/:slug"
+      }
+    },
+    "routeDiscovery": {
+      "mode": "lazy",
+      "manifestPath": "/__manifest"
+    },
+    "serverBuildFile": "index.js",
+    "serverModuleFormat": "esm",
+    "ssr": true,
+    "subResourceIntegrity": false,
+    "allowedActionOrigins": false,
+    "unstable_routeConfig": [
+      {
+        "id": "root",
+        "path": "",
+        "file": "root.tsx",
+        "children": [
+          {
+            "file": "routes/home.tsx",
+            "index": true
+          },
+          {
+            "file": "routes/blog.tsx",
+            "path": "blog"
+          },
+          {
+            "file": "routes/blog.$slug.og.png.tsx",
+            "path": "blog/:slug/og.png"
+          },
+          {
+            "file": "routes/blog.$slug.tsx",
+            "path": "blog/:slug"
+          }
+        ]
+      }
+    ]
+  },
+  "viteConfig": {
+    "build": {
+      "assetsDir": "assets"
+    }
+  }
+}
