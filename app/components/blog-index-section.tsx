@@ -1,8 +1,10 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
 import { FaHashtag } from 'react-icons/fa6'
+import { TagList } from '~/components/tag-list'
+import { getTagFilters } from '~/lib/blog-tags'
 import type { BlogPostSummary } from '~/lib/blog.server'
-import { tagPillClassName, terminalLabelClassName } from '~/lib/styles'
+import { terminalLabelClassName } from '~/lib/styles'
 
 type BlogIndexSectionProps = {
   posts: BlogPostSummary[]
@@ -56,7 +58,7 @@ export function BlogIndexSection({ posts }: BlogIndexSectionProps) {
                 to={`/blog/${post.slug}`}
               >
                 <span className="text-[0.82rem] font-bold text-[color-mix(in_srgb,var(--card-accent)_76%,var(--yellow))]">
-                  {formatDate(post.date)}
+                  {post.date}
                 </span>
                 <div className="grid gap-2">
                   <span className="text-[1.08rem] leading-[1.35] font-bold text-[var(--green-soft)] underline decoration-[rgba(156,255,191,0.42)] decoration-dashed decoration-1 underline-offset-[0.24em]">
@@ -65,16 +67,7 @@ export function BlogIndexSection({ posts }: BlogIndexSectionProps) {
                   <span className="text-[0.94rem] leading-[1.65] text-[var(--muted)]">
                     {post.description}
                   </span>
-                  {post.tags.length > 0 && (
-                    <ul className="m-0 flex list-none flex-wrap gap-2 p-0" aria-label="Tags">
-                      {post.tags.map((tag) => (
-                        <li className={tagPillClassName} key={tag}>
-                          <FaHashtag aria-hidden="true" />
-                          {tag}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
+                  <TagList tags={post.tags} />
                 </div>
               </Link>
             </li>
@@ -120,33 +113,8 @@ const tagFilterActiveClassName =
 const tagCountClassName =
   'rounded-full border border-current px-[0.52em] py-[0.06em] text-[0.68rem] leading-[1.25] opacity-75'
 
-const tagFilterMinimumCount = 3
-
-type TagFilter = {
-  name: string
-  count: number
-}
-
-function getTagFilters(posts: BlogPostSummary[]): TagFilter[] {
-  const tagCounts = new Map<string, number>()
-
-  for (const post of posts) {
-    for (const tag of post.tags) {
-      tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1)
-    }
-  }
-
-  return Array.from(tagCounts, ([name, count]) => ({ name, count }))
-    .filter((tag) => tag.count >= tagFilterMinimumCount)
-    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, 'ja'))
-}
-
 function getTagFilterClassName(isActive: boolean) {
   return `${tagFilterBaseClassName} ${
     isActive ? tagFilterActiveClassName : tagFilterInactiveClassName
   }`
-}
-
-function formatDate(date: string) {
-  return date
 }
