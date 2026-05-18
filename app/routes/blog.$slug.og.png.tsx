@@ -6,6 +6,7 @@ import { ImageResponse } from '@vercel/og'
 import type { LoaderFunctionArgs } from 'react-router'
 import fontUrl from '~/assets/NotoSansCJKjp-Bold.otf?url'
 import { getBlogPost } from '~/lib/blog.server'
+import { createResourceSecurityHeaders } from '~/lib/security-headers'
 import { siteName } from '~/lib/site'
 
 const imageSize = {
@@ -66,6 +67,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
         }
       ],
       headers: {
+        ...createResourceSecurityHeaders(),
         'Cache-Control': 'public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800'
       }
     }
