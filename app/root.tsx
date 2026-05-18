@@ -6,7 +6,7 @@ import { bodyClassName, headingResetClassName, siteShellClassName } from '~/lib/
 import './app.css'
 
 export const links: Route.LinksFunction = () => [
-  { rel: 'icon', href: '/favicon.ico' },
+  { rel: 'icon', type: 'image/png', href: '/favicon.png' },
   { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
   {
     rel: 'preconnect',
