@@ -4,10 +4,9 @@
   "main": "./workers/app.ts",
   "compatibility_date": "2026-07-02",
   "compatibility_flags": ["nodejs_compat"],
-  "workers_dev": true,
+  "workers_dev": false,
   "preview_urls": true,
-  // Add the 0rga.org custom domain route during the P3 cutover.
-  "routes": [],
+  "routes": [{ "pattern": "0rga.org", "custom_domain": true }],
   "upload_source_maps": true,
   "observability": {
     "enabled": true
