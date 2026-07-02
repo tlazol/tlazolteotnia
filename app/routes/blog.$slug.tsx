@@ -4,7 +4,7 @@ import { MarkdownBody } from '~/components/markdown-body'
 import { ProfileFooter } from '~/components/profile-footer'
 import { TagList } from '~/components/tag-list'
 import { getBlogPost } from '~/lib/blog.server'
-import { getBlogPostOgImageUrl, getBlogPostUrl, siteName } from '~/lib/site'
+import { getBlogPostUrl, siteName } from '~/lib/site'
 import { headingResetClassName, siteShellClassName, terminalLabelClassName } from '~/lib/styles'
 
 export async function loader({ params }: Route.LoaderArgs) {
@@ -17,12 +17,11 @@ export async function loader({ params }: Route.LoaderArgs) {
   return { post }
 }
 
-export function meta({ data }: Route.MetaArgs) {
-  const post = data?.post
+export function meta({ loaderData }: Route.MetaArgs) {
+  const post = loaderData?.post
   const title = post ? `${post.title} | ${siteName}` : 'Post not found'
   const description = post?.description ?? `A note from ${siteName}.`
   const postUrl = post ? getBlogPostUrl(post.slug) : undefined
-  const imageUrl = post ? getBlogPostOgImageUrl(post.slug) : undefined
 
   return [
     { title },
@@ -34,18 +33,9 @@ export function meta({ data }: Route.MetaArgs) {
     { property: 'og:description', content: description },
     { property: 'og:type', content: 'article' },
     ...(postUrl ? [{ property: 'og:url', content: postUrl }] : []),
-    ...(imageUrl
-      ? [
-          { property: 'og:image', content: imageUrl },
-          { property: 'og:image:width', content: '1200' },
-          { property: 'og:image:height', content: '630' },
-          { property: 'og:image:type', content: 'image/png' }
-        ]
-      : []),
-    { name: 'twitter:card', content: 'summary_large_image' },
+    { name: 'twitter:card', content: 'summary' },
     { name: 'twitter:title', content: title },
-    { name: 'twitter:description', content: description },
-    ...(imageUrl ? [{ name: 'twitter:image', content: imageUrl }] : [])
+    { name: 'twitter:description', content: description }
   ]
 }
 

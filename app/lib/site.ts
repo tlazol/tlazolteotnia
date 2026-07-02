@@ -8,7 +8,3 @@ export function getAbsoluteUrl(pathname: string) {
 export function getBlogPostUrl(slug: string) {
   return getAbsoluteUrl(`/blog/${encodeURIComponent(slug)}`)
 }
-
-export function getBlogPostOgImageUrl(slug: string) {
-  return getAbsoluteUrl(`/blog/${encodeURIComponent(slug)}/og.png`)
-}

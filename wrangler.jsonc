@@ -1,0 +1,15 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "tlazol",
+  "main": "./workers/app.ts",
+  "compatibility_date": "2026-07-02",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "preview_urls": true,
+  // Add the 0rga.org custom domain route during the P3 cutover.
+  "routes": [],
+  "upload_source_maps": true,
+  "observability": {
+    "enabled": true
+  }
+}

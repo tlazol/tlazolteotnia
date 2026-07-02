@@ -1,8 +1,10 @@
-import { readdir, readFile } from 'node:fs/promises'
-import path from 'node:path'
-import matter from 'gray-matter'
+import { parse as parseYaml } from 'yaml'
 
-const blogDirectory = path.join(process.cwd(), 'content', 'blog')
+const blogSources = import.meta.glob<string>('/content/blog/*.md', {
+  eager: true,
+  import: 'default',
+  query: '?raw'
+})
 
 export type BlogPost = {
   slug: string
@@ -52,10 +54,6 @@ export async function getBlogPost(slug: string): Promise<BlogPost | null> {
 }
 
 async function getBlogPostCache() {
-  if (process.env.NODE_ENV !== 'production') {
-    return buildBlogPostCache()
-  }
-
   blogPostCachePromise ??= buildBlogPostCache().catch((error) => {
     blogPostCachePromise = null
     throw error
@@ -83,26 +81,17 @@ async function buildBlogPostCache(): Promise<BlogPostCache> {
 }
 
 async function readAllPosts(): Promise<BlogPostRecord[]> {
-  let files: string[]
-
-  try {
-    files = await readdir(blogDirectory)
-  } catch {
-    return []
-  }
-
-  const posts = await Promise.all(
-    files.filter((file) => file.endsWith('.md')).map(async (file) => readPostFile(file))
-  )
-
-  return posts
+  return Object.entries(blogSources).map(([file, source]) => readPostFile(file, source))
 }
 
-async function readPostFile(file: string): Promise<BlogPostRecord> {
-  const slug = file.replace(/\.md$/, '')
-  const source = await readFile(path.join(blogDirectory, file), 'utf8')
-  const { content, data } = matter(source)
-  const frontmatter = data as BlogFrontmatter
+function readPostFile(file: string, source: string): BlogPostRecord {
+  const slug = file.split('/').at(-1)?.replace(/\.md$/, '')
+
+  if (!slug) {
+    throw new Error(`Failed to derive a blog slug from ${file}`)
+  }
+
+  const { body, frontmatter } = parseBlogSource(source)
 
   return {
     slug,
@@ -111,7 +100,20 @@ async function readPostFile(file: string): Promise<BlogPostRecord> {
     description: frontmatter.description ?? '',
     tags: Array.isArray(frontmatter.tags) ? frontmatter.tags : [],
     draft: frontmatter.draft === true,
-    body: content
+    body
+  }
+}
+
+function parseBlogSource(source: string) {
+  const match = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(source)
+
+  if (!match) {
+    return { body: source, frontmatter: {} as BlogFrontmatter }
+  }
+
+  return {
+    body: source.slice(match[0].length),
+    frontmatter: (parseYaml(match[1]) ?? {}) as BlogFrontmatter
   }
 }
 
