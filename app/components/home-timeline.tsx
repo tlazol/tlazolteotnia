@@ -192,6 +192,14 @@ export function HomeTimeline({ posts }: HomeTimelineProps) {
             </p>
           </div>
         )}
+
+        <footer className="border-t border-[var(--line)] px-4 py-6 text-[0.65rem] leading-[1.7] text-[var(--dim)] min-[680px]:px-5 min-[1180px]:hidden">
+          <p className="m-0">
+            © 2026 Daisuke Kobayashi
+            <br />
+            Built somewhere between signal and noise.
+          </p>
+        </footer>
       </section>
 
       <aside className="hidden min-w-0 px-5 pt-6 min-[1180px]:block" aria-label="Explore posts">
