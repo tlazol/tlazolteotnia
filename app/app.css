@@ -7,10 +7,14 @@
 }
 
 :root {
+  --font-display: "Space Grotesk", "Arial Black", sans-serif;
+  --font-ui: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    "Noto Sans JP", sans-serif;
   --bg: #020403;
   --panel: #07100b;
   --panel-strong: #0b1911;
   --text: #d8e8dd;
+  --text-strong: #effff4;
   --muted: #89a194;
   --dim: #53675b;
   --line: #163923;
@@ -32,6 +36,31 @@
     var(--yellow),
     var(--green)
   );
+}
+
+@keyframes signal-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 0.48;
+    transform: scale(0.72);
+  }
+}
+
+.signal-pulse {
+  animation: signal-pulse 1.8s ease-in-out infinite;
+}
+
+.no-scrollbar {
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
