@@ -48,7 +48,7 @@ export function PostModal({ post, summary, onClose }: PostModalProps) {
     <dialog
       aria-describedby={descriptionId}
       aria-labelledby={titleId}
-      className="fixed inset-0 m-auto h-[calc(100svh-1.5rem)] w-[calc(100%-1.5rem)] max-w-[900px] overflow-hidden rounded-2xl border border-[color-mix(in_srgb,var(--green)_32%,var(--line))] bg-[rgba(3,10,6,0.98)] p-0 text-[var(--text)] shadow-[0_28px_100px_rgba(0,0,0,0.72),0_0_44px_rgba(49,255,128,0.08)] backdrop:bg-[rgba(0,2,1,0.78)] backdrop:backdrop-blur-sm min-[680px]:h-[calc(100svh-3rem)] min-[680px]:w-[calc(100%-3rem)]"
+      className="fixed inset-0 m-auto h-[calc(100svh-1.5rem)] w-[calc(100%-1.5rem)] max-w-[900px] overflow-hidden rounded-2xl border border-[color-mix(in_srgb,var(--green)_32%,var(--line))] bg-[rgba(3,10,6,0.1)] p-0 text-[var(--text)] shadow-[0_28px_100px_rgba(0,0,0,0.72),0_0_44px_rgba(49,255,128,0.08)] backdrop:bg-[rgba(0,2,1,0)] backdrop:backdrop-blur-sm min-[680px]:h-[calc(100svh-3rem)] min-[680px]:w-[calc(100%-3rem)]"
       onCancel={(event) => {
         event.preventDefault()
         onClose()
@@ -62,7 +62,7 @@ export function PostModal({ post, summary, onClose }: PostModalProps) {
     >
       <div className="flex h-full flex-col">
         <div className="h-1 shrink-0 [background:var(--spectrum)]" />
-        <div className="flex min-h-14 shrink-0 items-center justify-between gap-4 border-b border-[var(--line)] bg-[rgba(7,16,11,0.96)] px-4 min-[680px]:px-6">
+        <div className="flex min-h-14 shrink-0 items-center justify-between gap-4 border-b border-[var(--line)] bg-[rgba(7,16,11,0.08)] px-4 min-[680px]:px-6">
           <p className="m-0 min-w-0 truncate text-[0.7rem] font-bold text-[var(--muted)] uppercase">
             reader://content/blog/{summary.slug}.md
           </p>
