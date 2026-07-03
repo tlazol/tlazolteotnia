@@ -1,5 +1,4 @@
-import { useState } from 'react'
-import { Link } from 'react-router'
+import { type MouseEvent, useState } from 'react'
 import {
   FaArrowRightLong,
   FaArrowUpRightFromSquare,
@@ -7,8 +6,10 @@ import {
   FaRegBookmark,
   FaThumbtack
 } from 'react-icons/fa6'
+import { Link, useFetcher } from 'react-router'
+import { PostModal } from '~/components/post-modal'
+import type { BlogPost, BlogPostSummary } from '~/lib/blog.server'
 import { getTagFilters } from '~/lib/blog-tags'
-import type { BlogPostSummary } from '~/lib/blog.server'
 
 type HomeTimelineProps = {
   posts: BlogPostSummary[]
@@ -16,8 +17,22 @@ type HomeTimelineProps = {
 
 export function HomeTimeline({ posts }: HomeTimelineProps) {
   const tags = getTagFilters(posts)
+  const postFetcher = useFetcher<{ post: BlogPost }>()
   const [selectedTag, setSelectedTag] = useState('')
+  const [selectedPost, setSelectedPost] = useState<BlogPostSummary | null>(null)
   const visiblePosts = selectedTag ? posts.filter((post) => post.tags.includes(selectedTag)) : posts
+  const fetchedPost = postFetcher.data?.post
+  const modalPost = fetchedPost && fetchedPost.slug === selectedPost?.slug ? fetchedPost : null
+
+  function openPost(event: MouseEvent<HTMLAnchorElement>, post: BlogPostSummary) {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+      return
+    }
+
+    event.preventDefault()
+    setSelectedPost(post)
+    postFetcher.load(`/blog/${post.slug}`)
+  }
 
   return (
     <div className="contents">
@@ -108,7 +123,12 @@ export function HomeTimeline({ posts }: HomeTimelineProps) {
                 className={postAccentClassNames[index % postAccentClassNames.length]}
                 key={post.slug}
               >
-                <Link className={postLinkClassName} to={`/blog/${post.slug}`}>
+                <Link
+                  aria-haspopup="dialog"
+                  className={postLinkClassName}
+                  onClick={(event) => openPost(event, post)}
+                  to={`/blog/${post.slug}`}
+                >
                   <span
                     className="relative z-10 mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-full border text-[0.7rem] font-bold tracking-[-0.08em] text-[var(--post-accent)] shadow-[0_0_20px_color-mix(in_srgb,var(--post-accent)_22%,transparent)] [background:color-mix(in_srgb,var(--post-accent)_10%,var(--panel))] [border-color:color-mix(in_srgb,var(--post-accent)_65%,var(--line))] min-[680px]:size-11"
                     aria-hidden="true"
@@ -213,6 +233,10 @@ export function HomeTimeline({ posts }: HomeTimelineProps) {
           </p>
         </div>
       </aside>
+
+      {selectedPost && (
+        <PostModal onClose={() => setSelectedPost(null)} post={modalPost} summary={selectedPost} />
+      )}
     </div>
   )
 }
