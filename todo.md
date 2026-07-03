@@ -43,7 +43,7 @@
 
 ## P2：NodeおよびVercel固有の構成を整理する
 
-- [x] Node用の起動構成をCloudflare向けに変更する
+- [x] Node用の動構成をCloudflare向けに変更する
   - [x] `start` の `react-router-serve` を削除またはCloudflare向けコマンドへ変更する
   - [x] 使用箇所を確認して `@react-router/node` を削除する
   - [x] 使用箇所を確認して `@react-router/serve` を削除する
