@@ -88,7 +88,7 @@ export function PostModal({ post, summary, onClose }: PostModalProps) {
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-10 min-[680px]:px-10 min-[680px]:pb-14">
-          <article>
+          <article className="mx-auto w-full max-w-[720px]">
             <header className="relative border-b border-[var(--line)] pt-9 pb-7 after:absolute after:right-0 after:bottom-[-1px] after:left-0 after:h-px after:opacity-50 after:content-[''] after:[background:var(--spectrum)] min-[680px]:pt-12">
               <time
                 className="text-[0.78rem] font-bold text-[var(--yellow)]"
