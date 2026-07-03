@@ -130,15 +130,17 @@ export function HomeTimeline({ posts }: HomeTimelineProps) {
                   to={`/blog/${post.slug}`}
                 >
                   <span
-                    className="relative z-10 mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-full border text-[0.7rem] font-bold tracking-[-0.08em] text-[var(--post-accent)] shadow-[0_0_20px_color-mix(in_srgb,var(--post-accent)_22%,transparent)] [background:color-mix(in_srgb,var(--post-accent)_10%,var(--panel))] [border-color:color-mix(in_srgb,var(--post-accent)_65%,var(--line))] min-[680px]:size-11"
+                    className="relative z-10 mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-full border text-[1.15rem] leading-none shadow-[0_0_20px_color-mix(in_srgb,var(--post-accent)_22%,transparent)] [background:color-mix(in_srgb,var(--post-accent)_10%,var(--panel))] [border-color:color-mix(in_srgb,var(--post-accent)_65%,var(--line))] min-[680px]:size-11 min-[680px]:text-[1.25rem]"
                     aria-hidden="true"
                   >
-                    0r
+                    {getPostEmoji(post.slug)}
                   </span>
 
                   <div className="min-w-0 [font-family:var(--font-ui)]">
                     <div className="flex min-w-0 items-baseline gap-1.5 text-[0.82rem] leading-[1.35]">
-                      <strong className="truncate text-[var(--text-strong)]">Tlazolteotnia</strong>
+                      <strong className="min-w-0 truncate text-[var(--text-strong)]">
+                        {getPostAuthor(post.slug)}
+                      </strong>
                       <span className="truncate text-[var(--muted)]">@0rga</span>
                       <span className="shrink-0 text-[var(--dim)]" aria-hidden="true">
                         ·
@@ -310,6 +312,45 @@ const postAccentClassNames = [
   '[--post-accent:var(--yellow)]',
   '[--post-accent:var(--red)]'
 ]
+
+const postEmojis = ['🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐻', '🐼', '🐨', '🐯', '🦁', '🐮']
+
+const postAuthors = [
+  'CHΔ0S://9X_QR',
+  'SYS∴VANTA_404',
+  'RX#NØISE',
+  'NULL://FANG_7',
+  'KERNEL∴MOTH',
+  'HEX#GHOST_09',
+  'VØID://PAWS',
+  'NYX∴ECHO_13',
+  'CRYPT#ΩRBIT',
+  'XENØ://DREAM',
+  'SIGIL∴404_QR',
+  'NOVA#STATIC',
+  'ØMEN://BYTE',
+  'RIFT∴KITSUNE',
+  'GLITCH#PALE',
+  'MØTH://NEON_5'
+]
+
+function getPostEmoji(slug: string) {
+  return postEmojis[getPostHash(slug) % postEmojis.length]
+}
+
+function getPostAuthor(slug: string) {
+  return postAuthors[getPostHash(slug) % postAuthors.length]
+}
+
+function getPostHash(slug: string) {
+  let hash = 0
+
+  for (const character of slug) {
+    hash = (hash * 31 + (character.codePointAt(0) ?? 0)) >>> 0
+  }
+
+  return hash
+}
 
 const tagFilterClassName =
   'inline-flex h-9 cursor-pointer items-center gap-3 rounded-full border bg-transparent px-3 text-[0.75rem] font-semibold transition-[border-color,background-color,color] [font-family:var(--font-ui)]'
