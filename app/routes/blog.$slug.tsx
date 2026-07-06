@@ -1,11 +1,11 @@
-import type { Route } from './+types/blog.$slug'
 import { BackLink } from '~/components/back-link'
 import { MarkdownBody } from '~/components/markdown-body'
 import { ProfileFooter } from '~/components/profile-footer'
 import { TagList } from '~/components/tag-list'
 import { getBlogPost } from '~/lib/blog.server'
-import { getBlogPostUrl, siteName } from '~/lib/site'
+import { getBlogPostOgImageUrl, getBlogPostUrl, siteName } from '~/lib/site'
 import { headingResetClassName, siteShellClassName, terminalLabelClassName } from '~/lib/styles'
+import type { Route } from './+types/blog.$slug'
 
 export async function loader({ params }: Route.LoaderArgs) {
   const post = await getBlogPost(params.slug)
@@ -22,6 +22,8 @@ export function meta({ loaderData }: Route.MetaArgs) {
   const title = post ? `${post.title} | ${siteName}` : 'Post not found'
   const description = post?.description ?? `A note from ${siteName}.`
   const postUrl = post ? getBlogPostUrl(post.slug) : undefined
+  const imageUrl = post ? getBlogPostOgImageUrl(post.slug) : undefined
+  const imageAlt = post ? `${post.title} | ${siteName}` : undefined
 
   return [
     { title },
@@ -33,9 +35,24 @@ export function meta({ loaderData }: Route.MetaArgs) {
     { property: 'og:description', content: description },
     { property: 'og:type', content: 'article' },
     ...(postUrl ? [{ property: 'og:url', content: postUrl }] : []),
-    { name: 'twitter:card', content: 'summary' },
+    ...(imageUrl && imageAlt
+      ? [
+          { property: 'og:image', content: imageUrl },
+          { property: 'og:image:type', content: 'image/png' },
+          { property: 'og:image:width', content: '1200' },
+          { property: 'og:image:height', content: '630' },
+          { property: 'og:image:alt', content: imageAlt }
+        ]
+      : []),
+    { name: 'twitter:card', content: post ? 'summary_large_image' : 'summary' },
     { name: 'twitter:title', content: title },
-    { name: 'twitter:description', content: description }
+    { name: 'twitter:description', content: description },
+    ...(imageUrl && imageAlt
+      ? [
+          { name: 'twitter:image', content: imageUrl },
+          { name: 'twitter:image:alt', content: imageAlt }
+        ]
+      : [])
   ]
 }
 

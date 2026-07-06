@@ -8,6 +8,7 @@
   "scripts": {
     "build": "react-router build",
     "dev": "react-router dev",
+    "generate:og": "tsx scripts/generate-og-images.tsx",
     "preview": "npm run build && vite preview",
     "deploy": "npm run build && wrangler deploy",
     "deploy:dry-run": "npm run build && wrangler deploy --dry-run",
@@ -32,11 +33,14 @@
     "@biomejs/biome": "2.5.0",
     "@cloudflare/vite-plugin": "^1.42.4",
     "@react-router/dev": "8.1.0",
+    "@resvg/resvg-js": "^2.6.2",
     "@tailwindcss/vite": "^4.3.2",
     "@types/node": "^26",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
+    "satori": "^0.26.0",
     "tailwindcss": "^4.3.2",
+    "tsx": "^4.23.0",
     "typescript": "^6.0.3",
     "vite": "^8.1.2",
     "wrangler": "^4.106.0"
