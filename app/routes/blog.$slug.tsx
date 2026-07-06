@@ -1,10 +1,10 @@
-import { BackLink } from '~/components/back-link'
+import { FaArrowLeftLong, FaFileLines, FaHashtag } from 'react-icons/fa6'
+import { Link } from 'react-router'
 import { MarkdownBody } from '~/components/markdown-body'
-import { ProfileFooter } from '~/components/profile-footer'
-import { TagList } from '~/components/tag-list'
+import { SiteNavigation } from '~/components/site-navigation'
 import { getBlogPost } from '~/lib/blog.server'
+import { getPostAuthor, getPostEmoji } from '~/lib/post-identity'
 import { getBlogPostOgImageUrl, getBlogPostUrl, siteName } from '~/lib/site'
-import { headingResetClassName, siteShellClassName, terminalLabelClassName } from '~/lib/styles'
 import type { Route } from './+types/blog.$slug'
 
 export async function loader({ params }: Route.LoaderArgs) {
@@ -60,30 +60,152 @@ export default function BlogPost({ loaderData }: Route.ComponentProps) {
   const { post } = loaderData
 
   return (
-    <main className={siteShellClassName}>
-      <article className="pt-[26px]">
-        <BackLink />
+    <main className="mx-auto grid min-h-svh w-full max-w-[1260px] grid-cols-1 min-[860px]:grid-cols-[220px_minmax(0,650px)] min-[1180px]:grid-cols-[220px_minmax(0,650px)_minmax(0,1fr)]">
+      <SiteNavigation />
 
-        <header className="relative border-b border-[var(--line)] pb-7 after:absolute after:right-0 after:bottom-[-1px] after:left-0 after:h-px after:opacity-50 after:content-[''] after:[background:var(--spectrum)]">
-          <p className={terminalLabelClassName}>cat content/blog/{post.slug}.md</p>
-          <h1
-            className={`${headingResetClassName} mt-16 mb-12 text-[clamp(2rem,12vw,4.8rem)] leading-none text-[var(--green-soft)] [overflow-wrap:anywhere]`}
+      <section className="min-w-0 border-x border-[var(--line)] bg-[rgba(2,8,5,0.7)]">
+        <header className="sticky top-0 z-20 flex min-h-16 items-center justify-between border-b border-[var(--line)] px-4 backdrop-blur-xl [background:rgba(2,8,5,0.82)] min-[680px]:px-5">
+          <Link
+            className="inline-flex items-center gap-3 text-[1.02rem] font-bold text-[var(--text-strong)] no-underline transition-colors [font-family:var(--font-ui)] hover:text-[var(--green-soft)]"
+            to="/"
           >
-            {post.title}
-          </h1>
-          <div className="mt-[18px] grid gap-3 text-[0.82rem] font-bold text-[var(--yellow)]">
-            <time dateTime={post.date}>{post.date}</time>
-            <TagList tags={post.tags} />
-          </div>
-          <p className="mt-[18px] max-w-[680px] text-base leading-[1.7] text-[var(--muted)]">
-            {post.description}
-          </p>
+            <FaArrowLeftLong className="size-4 text-[var(--green)]" aria-hidden="true" />
+            Post
+          </Link>
+          <span className="inline-flex items-center gap-2 text-[0.68rem] font-bold tracking-[0.08em] text-[var(--green)] uppercase">
+            <span className="signal-pulse size-2 rounded-full bg-[var(--green)] shadow-[0_0_14px_var(--green)]" />
+            public log
+          </span>
         </header>
 
-        <MarkdownBody body={post.body} />
-      </article>
+        <article className="[font-family:var(--font-ui)]">
+          <header className="relative grid grid-cols-[44px_minmax(0,1fr)] gap-3 overflow-hidden border-b border-[var(--line)] px-4 py-6 after:absolute after:bottom-0 after:left-0 after:h-px after:w-full after:opacity-45 after:content-[''] after:[background:var(--spectrum)] min-[680px]:grid-cols-[48px_minmax(0,1fr)] min-[680px]:gap-4 min-[680px]:px-5 min-[680px]:py-8">
+            <span
+              className="relative z-10 flex size-11 items-center justify-center rounded-full border border-[color-mix(in_srgb,var(--green)_65%,var(--line))] bg-[color-mix(in_srgb,var(--green)_10%,var(--panel))] text-[1.2rem] leading-none shadow-[0_0_24px_rgba(49,255,128,0.13)] min-[680px]:size-12 min-[680px]:text-[1.3rem]"
+              aria-hidden="true"
+            >
+              {getPostEmoji(post.slug)}
+            </span>
 
-      <ProfileFooter showTopLink />
+            <div className="min-w-0">
+              <p className="m-0 flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-0.5 text-[0.82rem] leading-[1.35]">
+                <strong className="min-w-0 text-[var(--text-strong)]">
+                  {getPostAuthor(post.slug)}
+                </strong>
+                <span className="text-[var(--muted)]">@0rga</span>
+                <span className="text-[var(--dim)]" aria-hidden="true">
+                  ·
+                </span>
+                <time className="text-[0.72rem] text-[var(--muted)]" dateTime={post.date}>
+                  {post.date.replaceAll('-', '.')}
+                </time>
+              </p>
+
+              <h1 className="mt-4 mb-0 text-[clamp(1.8rem,7vw,3.25rem)] leading-[1.08] font-bold tracking-[-0.045em] text-[var(--green-soft)] [overflow-wrap:anywhere] [font-family:var(--font-display)] [text-shadow:0_0_26px_rgba(49,255,128,0.17)]">
+                {post.title}
+              </h1>
+              <p className="mt-4 mb-0 text-[0.95rem] leading-[1.75] text-[var(--text)]">
+                {post.description}
+              </p>
+
+              {post.tags.length > 0 && (
+                <ul
+                  className="mt-4 mb-0 flex list-none flex-wrap gap-x-3 gap-y-1.5 p-0"
+                  aria-label="Tags"
+                >
+                  {post.tags.map((tag) => (
+                    <li
+                      className="flex items-center gap-1 text-[0.74rem] font-semibold text-[var(--green)]"
+                      key={tag}
+                    >
+                      <FaHashtag className="size-[0.68em]" aria-hidden="true" />
+                      {tag}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </header>
+
+          <div className="px-4 min-[680px]:px-5">
+            <MarkdownBody body={post.body} />
+          </div>
+        </article>
+
+        <footer className="mt-16 border-t border-[var(--line)] px-4 py-7 text-[0.65rem] leading-[1.7] text-[var(--dim)] min-[680px]:px-5">
+          <p className="m-0">
+            © 2026 Daisuke Kobayashi
+            <br />
+            Built somewhere between signal and noise.
+          </p>
+        </footer>
+      </section>
+
+      <aside className="hidden min-w-0 px-5 pt-6 min-[1180px]:block" aria-label="Post details">
+        <div className="sticky top-6">
+          <section className="overflow-hidden rounded-2xl border border-[var(--line)] bg-[rgba(7,16,11,0.82)]">
+            <div className="h-1 [background:var(--spectrum)]" />
+            <div className="p-4">
+              <div className="mb-4 flex items-center gap-2">
+                <FaFileLines className="text-[var(--green)]" aria-hidden="true" />
+                <h2 className="m-0 text-[1.2rem] font-bold tracking-[-0.03em] text-[var(--text-strong)] [font-family:var(--font-display)]">
+                  Post signal
+                </h2>
+              </div>
+
+              <dl className="m-0 grid gap-3 text-[0.75rem] [font-family:var(--font-ui)]">
+                <PostDetail label="Published" value={post.date} />
+                <PostDetail label="Format" value="Markdown" />
+                <PostDetail label="Status" value="Public" active />
+              </dl>
+
+              <p className="mt-5 mb-1.5 text-[0.66rem] font-bold tracking-[0.1em] text-[var(--dim)] uppercase">
+                Source
+              </p>
+              <p className="m-0 break-all text-[0.68rem] leading-[1.6] text-[var(--muted)]">
+                content/blog/{post.slug}.md
+              </p>
+
+              <Link
+                className="mt-5 flex h-10 items-center justify-between rounded-xl border border-[var(--line)] px-3 text-[0.76rem] font-bold text-[var(--green-soft)] no-underline transition-colors [font-family:var(--font-ui)] hover:border-[var(--green)] hover:bg-[rgba(49,255,128,0.06)]"
+                to="/"
+              >
+                Back to timeline
+                <FaArrowLeftLong aria-hidden="true" />
+              </Link>
+            </div>
+          </section>
+          <p className="mt-4 px-2 text-[0.65rem] leading-[1.7] text-[var(--dim)]">
+            reader://{post.slug}
+            <br />
+            Signal received in Tokyo / JST.
+          </p>
+        </div>
+      </aside>
     </main>
+  )
+}
+
+function PostDetail({
+  active = false,
+  label,
+  value
+}: {
+  active?: boolean
+  label: string
+  value: string
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 border-b border-[var(--line)] pb-2.5 last:border-0 last:pb-0">
+      <dt className="text-[var(--muted)]">{label}</dt>
+      <dd
+        className={`m-0 font-semibold ${active ? 'inline-flex items-center gap-1.5 text-[var(--green)]' : 'text-[var(--text)]'}`}
+      >
+        {active && (
+          <span className="size-1.5 rounded-full bg-[var(--green)] shadow-[0_0_8px_var(--green)]" />
+        )}
+        {value}
+      </dd>
+    </div>
   )
 }
