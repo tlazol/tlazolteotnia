@@ -77,7 +77,7 @@ export function PostModal({ post, summary, onClose }: PostModalProps) {
             </Link>
             <button
               aria-label="Close article"
-              className="flex size-8 cursor-pointer items-center justify-center rounded-full border border-[var(--line)] bg-transparent text-[var(--muted)] transition-colors hover:border-[var(--green)] hover:bg-[rgba(49,255,128,0.08)] hover:text-[var(--green-soft)]"
+              className="flex size-8 cursor-pointer items-center justify-center rounded-full border border-[var(--green)] bg-[var(--green)] text-[var(--bg)] shadow-[0_0_20px_rgba(49,255,128,0.22)] transition-colors hover:border-[var(--green-soft)] hover:bg-[var(--green-soft)]"
               onClick={onClose}
               ref={closeButtonRef}
               type="button"
