@@ -8,7 +8,7 @@
   "scripts": {
     "build": "react-router build",
     "dev": "react-router dev",
-    "generate:og": "tsx scripts/generate-og-images.tsx",
+    "og": "tsx scripts/generate-og-images.tsx",
     "preview": "npm run build && vite preview",
     "deploy": "npm run build && wrangler deploy",
     "deploy:dry-run": "npm run build && wrangler deploy --dry-run",
