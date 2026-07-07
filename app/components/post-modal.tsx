@@ -3,6 +3,7 @@ import { FaArrowUpRightFromSquare, FaXmark } from 'react-icons/fa6'
 import { Link } from 'react-router'
 import { TagList } from '~/components/tag-list'
 import type { BlogPost, BlogPostSummary } from '~/lib/blog.server'
+import { getPostAccent } from '~/lib/post-accent'
 
 const MarkdownBody = lazy(() =>
   import('~/components/markdown-body').then(({ MarkdownBody }) => ({ default: MarkdownBody }))
@@ -48,7 +49,8 @@ export function PostModal({ post, summary, onClose }: PostModalProps) {
     <dialog
       aria-describedby={descriptionId}
       aria-labelledby={titleId}
-      className="fixed inset-0 m-auto h-[calc(100svh-1.5rem)] w-[calc(100%-1.5rem)] max-w-[900px] overflow-hidden rounded-2xl border border-[color-mix(in_srgb,var(--green)_32%,var(--line))] bg-[rgba(3,10,6,0.46)] p-0 text-[var(--text)] shadow-[0_28px_100px_rgba(0,0,0,0.72),0_0_44px_rgba(49,255,128,0.08)] backdrop:bg-[rgba(0,2,1,0.28)] backdrop:backdrop-blur-sm min-[680px]:h-[calc(100svh-3rem)] min-[680px]:w-[calc(100%-3rem)]"
+      className="fixed inset-0 m-auto h-[calc(100svh-1.5rem)] w-[calc(100%-1.5rem)] max-w-[900px] overflow-hidden rounded-2xl border border-[color-mix(in_srgb,var(--post-accent)_38%,var(--line))] bg-[rgba(3,10,6,0.46)] p-0 text-[var(--text)] shadow-[0_28px_100px_rgba(0,0,0,0.72),0_0_44px_var(--post-accent-glow)] backdrop:bg-[rgba(0,2,1,0.28)] backdrop:backdrop-blur-sm min-[680px]:h-[calc(100svh-3rem)] min-[680px]:w-[calc(100%-3rem)]"
+      data-post-accent={getPostAccent(summary.slug)}
       onCancel={(event) => {
         event.preventDefault()
         onClose()
@@ -61,15 +63,15 @@ export function PostModal({ post, summary, onClose }: PostModalProps) {
       ref={dialogRef}
     >
       <div className="flex h-full flex-col">
-        <div className="h-1 shrink-0 [background:var(--spectrum)]" />
-        <div className="flex min-h-14 shrink-0 items-center justify-between gap-4 border-b border-[var(--line)] bg-[rgba(7,16,11,0.44)] px-4 min-[680px]:px-6">
+        <div className="h-1 shrink-0 [background:var(--post-spectrum)]" />
+        <div className="flex min-h-14 shrink-0 items-center justify-between gap-4 border-b border-[color-mix(in_srgb,var(--post-accent)_18%,var(--line))] bg-[color-mix(in_srgb,var(--post-accent)_5%,rgba(7,16,11,0.44))] px-4 min-[680px]:px-6">
           <p className="m-0 min-w-0 truncate text-[0.7rem] font-bold text-[var(--muted)] uppercase">
             reader://content/blog/{summary.slug}.md
           </p>
           <div className="flex shrink-0 items-center gap-3">
             <Link
               aria-label="Open post page"
-              className="inline-flex items-center gap-1.5 text-[0.72rem] font-bold text-[var(--green-soft)] no-underline hover:text-[var(--green)]"
+              className="inline-flex items-center gap-1.5 text-[0.72rem] font-bold text-[var(--post-accent-soft)] no-underline hover:text-[var(--post-accent)]"
               to={`/blog/${summary.slug}`}
             >
               <span className="hidden min-[520px]:inline">Open post page</span>
@@ -77,7 +79,7 @@ export function PostModal({ post, summary, onClose }: PostModalProps) {
             </Link>
             <button
               aria-label="Close article"
-              className="flex size-8 cursor-pointer items-center justify-center rounded-full border border-[var(--green)] bg-[var(--green)] text-[var(--bg)] shadow-[0_0_20px_rgba(49,255,128,0.22)] transition-colors hover:border-[var(--green-soft)] hover:bg-[var(--green-soft)]"
+              className="flex size-8 cursor-pointer items-center justify-center rounded-full border border-[var(--post-accent)] bg-[var(--post-accent)] text-[var(--bg)] shadow-[0_0_20px_var(--post-accent-glow)] transition-colors hover:border-[var(--post-accent-soft)] hover:bg-[var(--post-accent-soft)]"
               onClick={onClose}
               ref={closeButtonRef}
               type="button"
@@ -89,15 +91,15 @@ export function PostModal({ post, summary, onClose }: PostModalProps) {
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-10 min-[680px]:px-10 min-[680px]:pb-14">
           <article className="mx-auto w-full max-w-[720px]">
-            <header className="relative border-b border-[var(--line)] pt-9 pb-7 after:absolute after:right-0 after:bottom-[-1px] after:left-0 after:h-px after:opacity-50 after:content-[''] after:[background:var(--spectrum)] min-[680px]:pt-12">
+            <header className="relative border-b border-[color-mix(in_srgb,var(--post-accent)_18%,var(--line))] pt-9 pb-7 after:absolute after:right-0 after:bottom-[-1px] after:left-0 after:h-px after:opacity-65 after:content-[''] after:[background:var(--post-spectrum)] min-[680px]:pt-12">
               <time
-                className="text-[0.78rem] font-bold text-[var(--yellow)]"
+                className="text-[0.78rem] font-bold text-[var(--post-accent)]"
                 dateTime={summary.date}
               >
                 {summary.date}
               </time>
               <h1
-                className="mt-5 mb-5 text-[clamp(1.65rem,6vw,3.2rem)] leading-[1.12] font-bold text-[var(--green-soft)] [overflow-wrap:anywhere] [font-family:var(--font-display)]"
+                className="mt-5 mb-5 text-[clamp(1.65rem,6vw,3.2rem)] leading-[1.12] font-bold text-[var(--post-accent-soft)] [overflow-wrap:anywhere] [font-family:var(--font-display)] [text-shadow:0_0_26px_var(--post-accent-glow)]"
                 id={titleId}
               >
                 {summary.title}
@@ -128,7 +130,7 @@ export function PostModal({ post, summary, onClose }: PostModalProps) {
 function PostLoadingState() {
   return (
     <p
-      className="my-0 py-16 text-center text-[0.78rem] font-bold tracking-[0.08em] text-[var(--green)] uppercase"
+      className="my-0 py-16 text-center text-[0.78rem] font-bold tracking-[0.08em] text-[var(--post-accent)] uppercase"
       role="status"
     >
       Loading article…

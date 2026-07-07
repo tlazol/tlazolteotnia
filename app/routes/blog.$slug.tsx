@@ -3,6 +3,7 @@ import { Link } from 'react-router'
 import { MarkdownBody } from '~/components/markdown-body'
 import { SiteNavigation } from '~/components/site-navigation'
 import { getBlogPost } from '~/lib/blog.server'
+import { getPostAccent } from '~/lib/post-accent'
 import { getPostAuthor, getPostEmoji } from '~/lib/post-identity'
 import { getBlogPostOgImageUrl, getBlogPostUrl, siteName } from '~/lib/site'
 import type { Route } from './+types/blog.$slug'
@@ -60,28 +61,31 @@ export default function BlogPost({ loaderData }: Route.ComponentProps) {
   const { post } = loaderData
 
   return (
-    <main className="mx-auto grid min-h-svh w-full max-w-[1260px] grid-cols-1 min-[860px]:grid-cols-[220px_minmax(0,650px)] min-[1180px]:grid-cols-[220px_minmax(0,650px)_minmax(0,1fr)]">
+    <main
+      className="mx-auto grid min-h-svh w-full max-w-[1260px] grid-cols-1 min-[860px]:grid-cols-[220px_minmax(0,650px)] min-[1180px]:grid-cols-[220px_minmax(0,650px)_minmax(0,1fr)]"
+      data-post-accent={getPostAccent(post.slug)}
+    >
       <SiteNavigation />
 
       <section className="min-w-0 border-x border-[var(--line)] bg-[rgba(2,8,5,0.7)]">
         <header className="sticky top-0 z-20 flex min-h-16 items-center justify-between border-b border-[var(--line)] px-4 backdrop-blur-xl [background:rgba(2,8,5,0.82)] min-[680px]:px-5">
           <Link
-            className="inline-flex items-center gap-3 text-[1.02rem] font-bold text-[var(--text-strong)] no-underline transition-colors [font-family:var(--font-ui)] hover:text-[var(--green-soft)]"
+            className="inline-flex items-center gap-3 text-[1.02rem] font-bold text-[var(--text-strong)] no-underline transition-colors [font-family:var(--font-ui)] hover:text-[var(--post-accent-soft)]"
             to="/"
           >
-            <FaArrowLeftLong className="size-4 text-[var(--green)]" aria-hidden="true" />
+            <FaArrowLeftLong className="size-4 text-[var(--post-accent)]" aria-hidden="true" />
             Post
           </Link>
-          <span className="inline-flex items-center gap-2 text-[0.68rem] font-bold tracking-[0.08em] text-[var(--green)] uppercase">
-            <span className="signal-pulse size-2 rounded-full bg-[var(--green)] shadow-[0_0_14px_var(--green)]" />
+          <span className="inline-flex items-center gap-2 text-[0.68rem] font-bold tracking-[0.08em] text-[var(--post-accent)] uppercase">
+            <span className="signal-pulse size-2 rounded-full bg-[var(--post-accent)] shadow-[0_0_14px_var(--post-accent)]" />
             public log
           </span>
         </header>
 
         <article className="[font-family:var(--font-ui)]">
-          <header className="relative grid grid-cols-[44px_minmax(0,1fr)] gap-3 overflow-hidden border-b border-[var(--line)] px-4 py-6 after:absolute after:bottom-0 after:left-0 after:h-px after:w-full after:opacity-45 after:content-[''] after:[background:var(--spectrum)] min-[680px]:grid-cols-[48px_minmax(0,1fr)] min-[680px]:gap-4 min-[680px]:px-5 min-[680px]:py-8">
+          <header className="relative grid grid-cols-[44px_minmax(0,1fr)] gap-3 overflow-hidden border-b border-[color-mix(in_srgb,var(--post-accent)_18%,var(--line))] bg-[linear-gradient(120deg,var(--post-accent-wash),transparent_55%)] px-4 py-6 after:absolute after:bottom-0 after:left-0 after:h-px after:w-full after:opacity-65 after:content-[''] after:[background:var(--post-spectrum)] min-[680px]:grid-cols-[48px_minmax(0,1fr)] min-[680px]:gap-4 min-[680px]:px-5 min-[680px]:py-8">
             <span
-              className="relative z-10 flex size-11 items-center justify-center rounded-full border border-[color-mix(in_srgb,var(--green)_65%,var(--line))] bg-[color-mix(in_srgb,var(--green)_10%,var(--panel))] text-[1.2rem] leading-none shadow-[0_0_24px_rgba(49,255,128,0.13)] min-[680px]:size-12 min-[680px]:text-[1.3rem]"
+              className="relative z-10 flex size-11 items-center justify-center rounded-full border border-[color-mix(in_srgb,var(--post-accent)_65%,var(--line))] bg-[color-mix(in_srgb,var(--post-accent)_10%,var(--panel))] text-[1.2rem] leading-none shadow-[0_0_24px_var(--post-accent-glow)] min-[680px]:size-12 min-[680px]:text-[1.3rem]"
               aria-hidden="true"
             >
               {getPostEmoji(post.slug)}
@@ -101,7 +105,7 @@ export default function BlogPost({ loaderData }: Route.ComponentProps) {
                 </time>
               </p>
 
-              <h1 className="mt-4 mb-0 text-[clamp(1.8rem,7vw,3.25rem)] leading-[1.08] font-bold tracking-[-0.045em] text-[var(--green-soft)] [overflow-wrap:anywhere] [font-family:var(--font-display)] [text-shadow:0_0_26px_rgba(49,255,128,0.17)]">
+              <h1 className="mt-4 mb-0 text-[clamp(1.8rem,7vw,3.25rem)] leading-[1.08] font-bold tracking-[-0.045em] text-[var(--post-accent-soft)] [overflow-wrap:anywhere] [font-family:var(--font-display)] [text-shadow:0_0_26px_var(--post-accent-glow)]">
                 {post.title}
               </h1>
               <p className="mt-4 mb-0 text-[0.95rem] leading-[1.75] text-[var(--text)]">
@@ -115,7 +119,7 @@ export default function BlogPost({ loaderData }: Route.ComponentProps) {
                 >
                   {post.tags.map((tag) => (
                     <li
-                      className="flex items-center gap-1 text-[0.74rem] font-semibold text-[var(--green)]"
+                      className="flex items-center gap-1 text-[0.74rem] font-semibold text-[var(--post-accent)]"
                       key={tag}
                     >
                       <FaHashtag className="size-[0.68em]" aria-hidden="true" />
@@ -144,10 +148,10 @@ export default function BlogPost({ loaderData }: Route.ComponentProps) {
       <aside className="hidden min-w-0 px-5 pt-6 min-[1180px]:block" aria-label="Post details">
         <div className="sticky top-6">
           <section className="overflow-hidden rounded-2xl border border-[var(--line)] bg-[rgba(7,16,11,0.82)]">
-            <div className="h-1 [background:var(--spectrum)]" />
+            <div className="h-1 [background:var(--post-spectrum)]" />
             <div className="p-4">
               <div className="mb-4 flex items-center gap-2">
-                <FaFileLines className="text-[var(--green)]" aria-hidden="true" />
+                <FaFileLines className="text-[var(--post-accent)]" aria-hidden="true" />
                 <h2 className="m-0 text-[1.2rem] font-bold tracking-[-0.03em] text-[var(--text-strong)] [font-family:var(--font-display)]">
                   Post signal
                 </h2>
@@ -167,7 +171,7 @@ export default function BlogPost({ loaderData }: Route.ComponentProps) {
               </p>
 
               <Link
-                className="mt-5 flex h-10 items-center justify-between rounded-xl border border-[var(--line)] px-3 text-[0.76rem] font-bold text-[var(--green-soft)] no-underline transition-colors [font-family:var(--font-ui)] hover:border-[var(--green)] hover:bg-[rgba(49,255,128,0.06)]"
+                className="mt-5 flex h-10 items-center justify-between rounded-xl border border-[var(--line)] px-3 text-[0.76rem] font-bold text-[var(--post-accent-soft)] no-underline transition-colors [font-family:var(--font-ui)] hover:border-[var(--post-accent)] hover:bg-[var(--post-accent-wash)]"
                 to="/"
               >
                 Back to timeline
@@ -199,10 +203,10 @@ function PostDetail({
     <div className="flex items-center justify-between gap-3 border-b border-[var(--line)] pb-2.5 last:border-0 last:pb-0">
       <dt className="text-[var(--muted)]">{label}</dt>
       <dd
-        className={`m-0 font-semibold ${active ? 'inline-flex items-center gap-1.5 text-[var(--green)]' : 'text-[var(--text)]'}`}
+        className={`m-0 font-semibold ${active ? 'inline-flex items-center gap-1.5 text-[var(--post-accent)]' : 'text-[var(--text)]'}`}
       >
         {active && (
-          <span className="size-1.5 rounded-full bg-[var(--green)] shadow-[0_0_8px_var(--green)]" />
+          <span className="size-1.5 rounded-full bg-[var(--post-accent)] shadow-[0_0_8px_var(--post-accent)]" />
         )}
         {value}
       </dd>

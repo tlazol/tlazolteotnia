@@ -28,6 +28,7 @@
   --cyan: #70f7ff;
   --amber: #f4c95d;
   --danger: #ff6b6b;
+  --post-accent: var(--green);
   --spectrum: linear-gradient(
     90deg,
     var(--blue),
@@ -36,6 +37,53 @@
     var(--yellow),
     var(--green)
   );
+}
+
+:root,
+[data-post-accent] {
+  --post-accent-soft: color-mix(in srgb, var(--post-accent) 58%, white);
+  --post-accent-muted: color-mix(
+    in srgb,
+    var(--post-accent) 76%,
+    var(--muted)
+  );
+  --post-accent-wash: color-mix(
+    in srgb,
+    var(--post-accent) 8%,
+    transparent
+  );
+  --post-accent-glow: color-mix(
+    in srgb,
+    var(--post-accent) 24%,
+    transparent
+  );
+  --post-spectrum: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--post-accent) 28%, transparent),
+    var(--post-accent),
+    var(--post-accent-soft),
+    color-mix(in srgb, var(--post-accent) 18%, transparent)
+  );
+}
+
+[data-post-accent="green"] {
+  --post-accent: var(--green);
+}
+
+[data-post-accent="blue"] {
+  --post-accent: var(--blue);
+}
+
+[data-post-accent="pink"] {
+  --post-accent: var(--pink);
+}
+
+[data-post-accent="yellow"] {
+  --post-accent: var(--yellow);
+}
+
+[data-post-accent="red"] {
+  --post-accent: var(--red);
 }
 
 @keyframes signal-pulse {
@@ -91,7 +139,7 @@
   width: 0.38rem;
   height: 0.38rem;
   border-radius: 999px;
-  background: var(--green);
+  background: var(--post-accent);
   content: "";
   opacity: 0.9;
 }

@@ -10,6 +10,7 @@ import { Link, useFetcher } from 'react-router'
 import { PostModal } from '~/components/post-modal'
 import type { BlogPost, BlogPostSummary } from '~/lib/blog.server'
 import { getTagFilters } from '~/lib/blog-tags'
+import { getPostAccent } from '~/lib/post-accent'
 import { getPostAuthor, getPostEmoji } from '~/lib/post-identity'
 
 type HomeTimelineProps = {
@@ -119,11 +120,8 @@ export function HomeTimeline({ posts }: HomeTimelineProps) {
 
         {visiblePosts.length > 0 ? (
           <ol className="m-0 list-none p-0">
-            {visiblePosts.map((post, index) => (
-              <li
-                className={postAccentClassNames[index % postAccentClassNames.length]}
-                key={post.slug}
-              >
+            {visiblePosts.map((post) => (
+              <li data-post-accent={getPostAccent(post.slug)} key={post.slug}>
                 <Link
                   aria-haspopup="dialog"
                   className={postLinkClassName}
@@ -154,7 +152,7 @@ export function HomeTimeline({ posts }: HomeTimelineProps) {
                       </time>
                     </div>
 
-                    <h2 className="mt-2 mb-0 text-[clamp(1.02rem,3vw,1.18rem)] leading-[1.45] font-bold text-[var(--text-strong)] transition-colors group-hover:text-[var(--green-soft)]">
+                    <h2 className="mt-2 mb-0 text-[clamp(1.02rem,3vw,1.18rem)] leading-[1.45] font-bold text-[var(--text-strong)] transition-colors group-hover:text-[var(--post-accent-soft)]">
                       {post.title}
                     </h2>
                     <p className="mt-1.5 mb-0 text-[0.91rem] leading-[1.65] text-[var(--text)]">
@@ -305,14 +303,6 @@ const postLinkClassName = [
   "after:absolute after:inset-y-0 after:left-0 after:w-0 after:bg-[var(--post-accent)] after:opacity-70 after:shadow-[0_0_20px_var(--post-accent)] after:transition-[width] after:content-['']",
   'hover:bg-[color-mix(in_srgb,var(--post-accent)_5%,transparent)] hover:after:w-0.5 focus-visible:bg-[color-mix(in_srgb,var(--post-accent)_5%,transparent)] focus-visible:after:w-0.5'
 ].join(' ')
-
-const postAccentClassNames = [
-  '[--post-accent:var(--green)]',
-  '[--post-accent:var(--blue)]',
-  '[--post-accent:var(--pink)]',
-  '[--post-accent:var(--yellow)]',
-  '[--post-accent:var(--red)]'
-]
 
 const tagFilterClassName =
   'inline-flex h-9 cursor-pointer items-center gap-3 rounded-full border bg-transparent px-3 text-[0.75rem] font-semibold transition-[border-color,background-color,color] [font-family:var(--font-ui)]'

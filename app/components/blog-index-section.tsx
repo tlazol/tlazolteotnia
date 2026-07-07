@@ -4,6 +4,7 @@ import { FaHashtag } from 'react-icons/fa6'
 import { TagList } from '~/components/tag-list'
 import { getTagFilters } from '~/lib/blog-tags'
 import type { BlogPostSummary } from '~/lib/blog.server'
+import { getPostAccent } from '~/lib/post-accent'
 import { terminalLabelClassName } from '~/lib/styles'
 
 type BlogIndexSectionProps = {
@@ -49,19 +50,18 @@ export function BlogIndexSection({ posts }: BlogIndexSectionProps) {
 
       {visiblePosts.length > 0 ? (
         <ol className="m-0 grid list-none gap-3.5 p-0">
-          {visiblePosts.map((post, index) => (
+          {visiblePosts.map((post) => (
             <li key={post.slug}>
               <Link
-                className={`${postCardClassName} ${
-                  postAccentClassNames[index % postAccentClassNames.length]
-                }`}
+                className={postCardClassName}
+                data-post-accent={getPostAccent(post.slug)}
                 to={`/blog/${post.slug}`}
               >
-                <span className="text-[0.82rem] font-bold text-[color-mix(in_srgb,var(--card-accent)_76%,var(--yellow))]">
+                <span className="text-[0.82rem] font-bold text-[color-mix(in_srgb,var(--post-accent)_76%,var(--yellow))]">
                   {post.date}
                 </span>
                 <div className="grid gap-2">
-                  <span className="text-[1.08rem] leading-[1.35] font-bold text-[var(--green-soft)] underline decoration-[rgba(156,255,191,0.42)] decoration-dashed decoration-1 underline-offset-[0.24em]">
+                  <span className="text-[1.08rem] leading-[1.35] font-bold text-[var(--post-accent-soft)] underline decoration-[color-mix(in_srgb,var(--post-accent)_42%,transparent)] decoration-dashed decoration-1 underline-offset-[0.24em]">
                     {post.title}
                   </span>
                   <span className="text-[0.94rem] leading-[1.65] text-[var(--muted)]">
@@ -85,19 +85,11 @@ export function BlogIndexSection({ posts }: BlogIndexSectionProps) {
 }
 
 const postCardClassName = [
-  'relative grid min-h-[124px] grid-cols-1 gap-3 overflow-hidden rounded-lg border border-[color-mix(in_srgb,var(--card-accent)_34%,var(--line))] p-[18px] no-underline [background:linear-gradient(90deg,color-mix(in_srgb,var(--card-accent)_14%,transparent),transparent_42%),rgba(7,16,11,0.86)] transition-[border-color,background-color,transform] duration-[160ms] ease-out',
-  "before:absolute before:inset-y-0 before:left-0 before:w-[3px] before:bg-[linear-gradient(180deg,var(--card-accent),transparent_84%)] before:shadow-[0_0_24px_color-mix(in_srgb,var(--card-accent)_52%,transparent)] before:content-['']",
-  'hover:-translate-y-0.5 hover:border-[color-mix(in_srgb,var(--card-accent)_72%,var(--green))] hover:[background-color:color-mix(in_srgb,var(--card-accent)_10%,transparent)]',
+  'relative grid min-h-[124px] grid-cols-1 gap-3 overflow-hidden rounded-lg border border-[color-mix(in_srgb,var(--post-accent)_34%,var(--line))] p-[18px] no-underline [background:linear-gradient(90deg,color-mix(in_srgb,var(--post-accent)_14%,transparent),transparent_42%),rgba(7,16,11,0.86)] transition-[border-color,background-color,transform] duration-[160ms] ease-out',
+  "before:absolute before:inset-y-0 before:left-0 before:w-[3px] before:bg-[linear-gradient(180deg,var(--post-accent),transparent_84%)] before:shadow-[0_0_24px_color-mix(in_srgb,var(--post-accent)_52%,transparent)] before:content-['']",
+  'hover:-translate-y-0.5 hover:border-[var(--post-accent)] hover:[background-color:color-mix(in_srgb,var(--post-accent)_10%,transparent)]',
   'min-[680px]:grid-cols-[150px_1fr] min-[680px]:p-[22px]'
 ].join(' ')
-
-const postAccentClassNames = [
-  '[--card-accent:var(--green)]',
-  '[--card-accent:var(--blue)]',
-  '[--card-accent:var(--pink)]',
-  '[--card-accent:var(--yellow)]',
-  '[--card-accent:var(--red)]'
-]
 
 const tagFilterBaseClassName = [
   'inline-flex max-w-full cursor-pointer appearance-none items-center gap-1.5 rounded-full border px-3 py-1.5 text-[0.76rem] leading-[1.35] font-bold transition-[border-color,background-color,color,transform] duration-[160ms] ease-out [overflow-wrap:anywhere]',
