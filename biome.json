@@ -1,5 +1,5 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.4.13/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.5.0/schema.json",
   "vcs": { "enabled": false, "clientKind": "git", "useIgnoreFile": false },
   "files": {
     "ignoreUnknown": false,
@@ -11,6 +11,8 @@
       "**/*.json",
       "**/*.rest",
       "!.react-router",
+      "!.playwright-cli",
+      "!.wrangler",
       "!build",
       "!offline_bundle-dev",
       "!offline_bundle-prod",
@@ -30,6 +32,8 @@
       "**/*.json",
       "**/*.rest",
       "!.react-router",
+      "!.playwright-cli",
+      "!.wrangler",
       "!build",
       "!offline_bundle-dev",
       "!offline_bundle-prod",

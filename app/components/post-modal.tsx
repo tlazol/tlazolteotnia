@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useRef } from 'react'
 import { FaArrowUpRightFromSquare, FaXmark } from 'react-icons/fa6'
 import { Link } from 'react-router'
 import { TagList } from '~/components/tag-list'
-import type { BlogPost, BlogPostSummary } from '~/lib/blog.server'
+import type { BlogPost, BlogPostSummary } from '~/lib/blog-post'
 import { getPostAccent } from '~/lib/post-accent'
 
 const MarkdownBody = lazy(() =>

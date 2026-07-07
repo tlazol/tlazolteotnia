@@ -1,14 +1,15 @@
-import type { Route } from './+types/home'
 import { HomeTimeline } from '~/components/home-timeline'
 import { SiteNavigation } from '~/components/site-navigation'
 import { getBlogPosts } from '~/lib/blog.server'
+import { authorName, siteName, siteOrigin } from '~/lib/site'
+import type { Route } from './+types/home'
 
 export function meta() {
   return [
-    { title: 'Tlazolteotnia | 0rga.org' },
+    { title: `${siteName} | ${new URL(siteOrigin).host}` },
     {
       name: 'description',
-      content: 'Personal site and notes from Daisuke Kobayashi / Tlazolteotnia.'
+      content: `Personal site and notes from ${authorName} / ${siteName}.`
     }
   ]
 }

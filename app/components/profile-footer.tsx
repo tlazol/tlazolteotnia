@@ -1,5 +1,13 @@
-import { Link } from 'react-router'
 import { FaAngleRight, FaCopyright } from 'react-icons/fa6'
+import { Link } from 'react-router'
+import {
+  artStationUrl,
+  authorName,
+  copyrightCurrentYear,
+  getCopyrightYears,
+  siteName,
+  xUrl
+} from '~/lib/site'
 import { headingResetClassName, terminalLabelClassName, textLinkClassName } from '~/lib/styles'
 
 export function ProfileFooter({ showTopLink = false }: { showTopLink?: boolean }) {
@@ -10,10 +18,10 @@ export function ProfileFooter({ showTopLink = false }: { showTopLink?: boolean }
         <h2
           className={`${headingResetClassName} text-[clamp(1.6rem,9vw,3rem)] leading-[1.05] text-[color-mix(in_srgb,var(--green-soft)_74%,var(--muted))]`}
         >
-          Daisuke Kobayashi
+          {authorName}
         </h2>
         <p className="mt-4 max-w-[570px] text-[clamp(0.78rem,3vw,0.98rem)] leading-[1.55] text-[color-mix(in_srgb,var(--muted)_84%,var(--dim))]">
-          Tlazolteotnia is a personal space for artwork, experiments, and short notes. For current
+          {siteName} is a personal space for artwork, experiments, and short notes. For current
           visual work, visit ArtStation.
         </p>
       </div>
@@ -28,16 +36,16 @@ export function ProfileFooter({ showTopLink = false }: { showTopLink?: boolean }
             Back to top
           </Link>
         )}
-        <a className={textLinkClassName} href="https://twitter.com/0rga">
+        <a className={textLinkClassName} href={xUrl}>
           <FaAngleRight aria-hidden="true" />X / Twitter
         </a>
-        <a className={textLinkClassName} href="https://www.artstation.com/orga">
+        <a className={textLinkClassName} href={artStationUrl}>
           <FaAngleRight aria-hidden="true" />
           ArtStation
         </a>
         <p className="mt-3 flex items-center gap-2 text-[0.72rem] tracking-[0.08em] text-[color-mix(in_srgb,var(--muted)_64%,var(--dim))] uppercase">
           <FaCopyright aria-hidden="true" />
-          2026 Daisuke Kobayashi. All rights reserved.
+          {getCopyrightYears(copyrightCurrentYear)} {authorName}. All rights reserved.
         </p>
       </nav>
     </footer>

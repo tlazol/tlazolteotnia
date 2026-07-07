@@ -5,7 +5,7 @@ description: "ChatGPT に依頼して作成した、SvelteKit で 3rd Party Scri
 tags: ["SvelteKit", "3rd Party Script"]
 draft: false
 ---
-先日 [SvelteKit で 3rd Party Script を埋め込む 3 つの方法](/blog/5Zlj6lxqbqRZBxpqw7Tf5J) という記事を書きましたが、記事の内容を読ませた ChatGPT により具体的に、より良い記事になるように校正させてみました。
+先日 [SvelteKit で 3rd Party Script を埋め込む 3 つの方法](/blog/sveltekit-third-party-script) という記事を書きましたが、記事の内容を読ませた ChatGPT により具体的に、より良い記事になるように校正させてみました。
 
 わかっていたことですが、自分で書いた内容より読みやすいしわかりやすいですね。
 

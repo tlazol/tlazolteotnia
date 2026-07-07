@@ -22,3 +22,7 @@ export function getTagFilters(posts: TaggedPost[]): TagFilter[] {
     .filter((tag) => tag.count >= tagFilterMinimumCount)
     .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, 'ja'))
 }
+
+export function filterPostsByTag<Post extends TaggedPost>(posts: Post[], selectedTag: string) {
+  return selectedTag ? posts.filter((post) => post.tags.includes(selectedTag)) : posts
+}

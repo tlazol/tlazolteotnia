@@ -1,4 +1,4 @@
-import { createContext, useContext, type ReactNode } from 'react'
+import { createContext, type ReactNode, useContext } from 'react'
 
 const CspNonceContext = createContext('')
 
@@ -15,10 +15,6 @@ export function createHtmlSecurityHeaders(nonce: string) {
     ...commonSecurityHeaders,
     'Content-Security-Policy': createContentSecurityPolicy(nonce)
   }
-}
-
-export function createResourceSecurityHeaders() {
-  return commonSecurityHeaders
 }
 
 function createContentSecurityPolicy(nonce: string) {

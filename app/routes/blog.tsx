@@ -1,10 +1,10 @@
-import type { Route } from './+types/blog'
 import { BackLink } from '~/components/back-link'
 import { BlogIndexSection } from '~/components/blog-index-section'
 import { ProfileFooter } from '~/components/profile-footer'
 import { getBlogPosts } from '~/lib/blog.server'
-import { headingResetClassName, siteShellClassName } from '~/lib/styles'
 import { siteName } from '~/lib/site'
+import { headingResetClassName, siteShellClassName } from '~/lib/styles'
+import type { Route } from './+types/blog'
 
 export function meta() {
   return [

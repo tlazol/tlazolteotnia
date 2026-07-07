@@ -8,10 +8,20 @@ import {
 } from 'react-icons/fa6'
 import { Link, useFetcher } from 'react-router'
 import { PostModal } from '~/components/post-modal'
-import type { BlogPost, BlogPostSummary } from '~/lib/blog.server'
-import { getTagFilters } from '~/lib/blog-tags'
+import type { BlogPost, BlogPostSummary } from '~/lib/blog-post'
+import { filterPostsByTag, getTagFilters, type TagFilter as TagFilterData } from '~/lib/blog-tags'
 import { getPostAccent } from '~/lib/post-accent'
 import { getPostAuthor, getPostEmoji } from '~/lib/post-identity'
+import { shouldOpenPostModal } from '~/lib/post-modal'
+import {
+  artStationUrl,
+  authorAccount,
+  authorName,
+  copyrightCurrentYear,
+  getCopyrightText,
+  siteName,
+  xUrl
+} from '~/lib/site'
 
 type HomeTimelineProps = {
   posts: BlogPostSummary[]
@@ -22,12 +32,12 @@ export function HomeTimeline({ posts }: HomeTimelineProps) {
   const postFetcher = useFetcher<{ post: BlogPost }>()
   const [selectedTag, setSelectedTag] = useState('')
   const [selectedPost, setSelectedPost] = useState<BlogPostSummary | null>(null)
-  const visiblePosts = selectedTag ? posts.filter((post) => post.tags.includes(selectedTag)) : posts
+  const visiblePosts = filterPostsByTag(posts, selectedTag)
   const fetchedPost = postFetcher.data?.post
   const modalPost = fetchedPost && fetchedPost.slug === selectedPost?.slug ? fetchedPost : null
 
   function openPost(event: MouseEvent<HTMLAnchorElement>, post: BlogPostSummary) {
-    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+    if (!shouldOpenPostModal(event)) {
       return
     }
 
@@ -36,6 +46,40 @@ export function HomeTimeline({ posts }: HomeTimelineProps) {
     postFetcher.load(`/blog/${post.slug}`)
   }
 
+  return (
+    <>
+      <HomeTimelineView
+        onOpenPost={openPost}
+        onSelectTag={setSelectedTag}
+        posts={posts}
+        selectedTag={selectedTag}
+        tags={tags}
+        visiblePosts={visiblePosts}
+      />
+      {selectedPost && (
+        <PostModal onClose={() => setSelectedPost(null)} post={modalPost} summary={selectedPost} />
+      )}
+    </>
+  )
+}
+
+type HomeTimelineViewProps = {
+  posts: BlogPostSummary[]
+  visiblePosts: BlogPostSummary[]
+  tags: TagFilterData[]
+  selectedTag: string
+  onSelectTag: (tag: string) => void
+  onOpenPost: (event: MouseEvent<HTMLAnchorElement>, post: BlogPostSummary) => void
+}
+
+function HomeTimelineView({
+  posts,
+  visiblePosts,
+  tags,
+  selectedTag,
+  onSelectTag,
+  onOpenPost
+}: HomeTimelineViewProps) {
   return (
     <div className="contents">
       <section
@@ -66,16 +110,14 @@ export function HomeTimeline({ posts }: HomeTimelineProps) {
                 Pinned post
               </p>
               <p className="mt-0 mb-2 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 [font-family:var(--font-ui)]">
-                <strong className="text-[0.96rem] text-[var(--text-strong)]">
-                  Daisuke Kobayashi
-                </strong>
-                <span className="text-[0.8rem] text-[var(--muted)]">@0rga</span>
+                <strong className="text-[0.96rem] text-[var(--text-strong)]">{authorName}</strong>
+                <span className="text-[0.8rem] text-[var(--muted)]">@{authorAccount}</span>
               </p>
               <h1
                 id="timeline-title"
                 className="m-0 text-[clamp(2rem,8vw,3.75rem)] leading-[0.95] font-bold tracking-[-0.055em] text-[var(--green-soft)] [font-family:var(--font-display)] [text-shadow:0_0_28px_rgba(49,255,128,0.2)]"
               >
-                Tlazolteotnia
+                {siteName}
               </h1>
               <p className="mt-4 mb-0 max-w-[36rem] text-[0.98rem] leading-[1.65] text-[var(--text)] [font-family:var(--font-ui)]">
                 Art, code, and experiments from the edge of the terminal. Notes are posted here,
@@ -85,10 +127,10 @@ export function HomeTimeline({ posts }: HomeTimelineProps) {
                 CHΔ0S://9X_QR · SYS∴VANTA_404 · RX#NOISE
               </p>
               <div className="mt-4 flex flex-wrap gap-4">
-                <a className={profileLinkClassName} href="https://www.artstation.com/orga">
+                <a className={profileLinkClassName} href={artStationUrl}>
                   ArtStation <FaArrowUpRightFromSquare aria-hidden="true" />
                 </a>
-                <a className={profileLinkClassName} href="https://twitter.com/0rga">
+                <a className={profileLinkClassName} href={xUrl}>
                   X / Twitter <FaArrowUpRightFromSquare aria-hidden="true" />
                 </a>
               </div>
@@ -103,7 +145,7 @@ export function HomeTimeline({ posts }: HomeTimelineProps) {
                 active={selectedTag === ''}
                 count={posts.length}
                 label="All"
-                onClick={() => setSelectedTag('')}
+                onClick={() => onSelectTag('')}
               />
               {tags.map((tag) => (
                 <TagFilter
@@ -111,142 +153,179 @@ export function HomeTimeline({ posts }: HomeTimelineProps) {
                   count={tag.count}
                   key={tag.name}
                   label={tag.name}
-                  onClick={() => setSelectedTag(tag.name)}
+                  onClick={() => onSelectTag(tag.name)}
                 />
               ))}
             </div>
           </div>
         )}
 
-        {visiblePosts.length > 0 ? (
-          <ol className="m-0 list-none p-0">
-            {visiblePosts.map((post) => (
-              <li data-post-accent={getPostAccent(post.slug)} key={post.slug}>
-                <Link
-                  aria-haspopup="dialog"
-                  className={postLinkClassName}
-                  onClick={(event) => openPost(event, post)}
-                  to={`/blog/${post.slug}`}
-                >
-                  <span
-                    className="relative z-10 mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-full border text-[1.15rem] leading-none shadow-[0_0_20px_color-mix(in_srgb,var(--post-accent)_22%,transparent)] [background:color-mix(in_srgb,var(--post-accent)_10%,var(--panel))] [border-color:color-mix(in_srgb,var(--post-accent)_65%,var(--line))] min-[680px]:size-11 min-[680px]:text-[1.25rem]"
-                    aria-hidden="true"
-                  >
-                    {getPostEmoji(post.slug)}
-                  </span>
-
-                  <div className="min-w-0 [font-family:var(--font-ui)]">
-                    <div className="flex min-w-0 items-baseline gap-1.5 text-[0.82rem] leading-[1.35]">
-                      <strong className="min-w-0 truncate text-[var(--text-strong)]">
-                        {getPostAuthor(post.slug)}
-                      </strong>
-                      <span className="truncate text-[var(--muted)]">@0rga</span>
-                      <span className="shrink-0 text-[var(--dim)]" aria-hidden="true">
-                        ·
-                      </span>
-                      <time
-                        className="shrink-0 font-sans text-[0.72rem] text-[var(--muted)]"
-                        dateTime={post.date}
-                      >
-                        {post.date.replaceAll('-', '.')}
-                      </time>
-                    </div>
-
-                    <h2 className="mt-2 mb-0 text-[clamp(1.02rem,3vw,1.18rem)] leading-[1.45] font-bold text-[var(--text-strong)] transition-colors group-hover:text-[var(--post-accent-soft)]">
-                      {post.title}
-                    </h2>
-                    <p className="mt-1.5 mb-0 text-[0.91rem] leading-[1.65] text-[var(--text)]">
-                      {post.description}
-                    </p>
-
-                    {post.tags.length > 0 && (
-                      <ul className="mt-3 mb-0 flex list-none flex-wrap gap-x-3 gap-y-1 p-0">
-                        {post.tags.map((tag) => (
-                          <li
-                            className="flex items-center gap-1 text-[0.72rem] font-medium text-[color-mix(in_srgb,var(--post-accent)_76%,var(--muted))]"
-                            key={tag}
-                          >
-                            <FaHashtag className="size-[0.68em]" aria-hidden="true" />
-                            {tag}
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-
-                    <span className="mt-4 flex items-center justify-between border-t border-[color-mix(in_srgb,var(--post-accent)_16%,var(--line))] pt-3 text-[0.72rem] font-bold tracking-[0.04em] text-[var(--muted)] transition-colors group-hover:text-[var(--post-accent)]">
-                      Read the post
-                      <FaArrowRightLong
-                        className="transition-transform group-hover:translate-x-1"
-                        aria-hidden="true"
-                      />
-                    </span>
-                  </div>
-                </Link>
-              </li>
-            ))}
-          </ol>
-        ) : (
-          <div className="px-5 py-16 text-center">
-            <FaRegBookmark className="mx-auto mb-4 text-[var(--green)]" aria-hidden="true" />
-            <p className="m-0 text-[var(--muted)] [font-family:var(--font-ui)]">
-              No public posts tagged “{selectedTag}” found.
-            </p>
-          </div>
-        )}
+        <TimelinePosts
+          onOpenPost={onOpenPost}
+          selectedTag={selectedTag}
+          visiblePosts={visiblePosts}
+        />
 
         <footer className="border-t border-[var(--line)] px-4 py-6 text-[0.65rem] leading-[1.7] text-[var(--dim)] min-[680px]:px-5 min-[1180px]:hidden">
           <p className="m-0">
-            © 2026 Daisuke Kobayashi
+            {getCopyrightText(copyrightCurrentYear)}
             <br />
             Built somewhere between signal and noise.
           </p>
         </footer>
       </section>
 
-      <aside className="hidden min-w-0 px-5 pt-6 min-[1180px]:block" aria-label="Explore posts">
-        <div className="sticky top-6">
-          <section className="overflow-hidden rounded-2xl border border-[var(--line)] bg-[rgba(7,16,11,0.82)]">
-            <div className="h-1 [background:var(--spectrum)]" />
-            <div className="p-4">
-              <h2 className="m-0 text-[1.2rem] font-bold tracking-[-0.03em] text-[var(--text-strong)] [font-family:var(--font-display)]">
-                Explore channels
+      <ExploreSidebar
+        onSelectTag={onSelectTag}
+        postCount={posts.length}
+        selectedTag={selectedTag}
+        tags={tags}
+      />
+    </div>
+  )
+}
+
+function TimelinePosts({
+  visiblePosts,
+  selectedTag,
+  onOpenPost
+}: {
+  visiblePosts: BlogPostSummary[]
+  selectedTag: string
+  onOpenPost: (event: MouseEvent<HTMLAnchorElement>, post: BlogPostSummary) => void
+}) {
+  if (visiblePosts.length === 0) {
+    return (
+      <div className="px-5 py-16 text-center">
+        <FaRegBookmark className="mx-auto mb-4 text-[var(--green)]" aria-hidden="true" />
+        <p className="m-0 text-[var(--muted)] [font-family:var(--font-ui)]">
+          No public posts tagged “{selectedTag}” found.
+        </p>
+      </div>
+    )
+  }
+
+  return (
+    <ol className="m-0 list-none p-0">
+      {visiblePosts.map((post) => (
+        <li data-post-accent={getPostAccent(post.slug)} key={post.slug}>
+          <Link
+            aria-haspopup="dialog"
+            className={postLinkClassName}
+            onClick={(event) => onOpenPost(event, post)}
+            to={`/blog/${post.slug}`}
+          >
+            <span
+              className="relative z-10 mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-full border text-[1.15rem] leading-none shadow-[0_0_20px_color-mix(in_srgb,var(--post-accent)_22%,transparent)] [background:color-mix(in_srgb,var(--post-accent)_10%,var(--panel))] [border-color:color-mix(in_srgb,var(--post-accent)_65%,var(--line))] min-[680px]:size-11 min-[680px]:text-[1.25rem]"
+              aria-hidden="true"
+            >
+              {getPostEmoji(post.slug)}
+            </span>
+
+            <div className="min-w-0 [font-family:var(--font-ui)]">
+              <div className="flex min-w-0 items-baseline gap-1.5 text-[0.82rem] leading-[1.35]">
+                <strong className="min-w-0 truncate text-[var(--text-strong)]">
+                  {getPostAuthor(post.slug)}
+                </strong>
+                <span className="truncate text-[var(--muted)]">@{authorAccount}</span>
+                <span className="shrink-0 text-[var(--dim)]" aria-hidden="true">
+                  ·
+                </span>
+                <time
+                  className="shrink-0 font-sans text-[0.72rem] text-[var(--muted)]"
+                  dateTime={post.date}
+                >
+                  {post.date.replaceAll('-', '.')}
+                </time>
+              </div>
+
+              <h2 className="mt-2 mb-0 text-[clamp(1.02rem,3vw,1.18rem)] leading-[1.45] font-bold text-[var(--text-strong)] transition-colors group-hover:text-[var(--post-accent-soft)]">
+                {post.title}
               </h2>
-              <p className="mt-1.5 mb-4 text-[0.78rem] leading-[1.5] text-[var(--muted)] [font-family:var(--font-ui)]">
-                Filter the feed by topic.
+              <p className="mt-1.5 mb-0 text-[0.91rem] leading-[1.65] text-[var(--text)]">
+                {post.description}
               </p>
-              <div className="flex flex-col gap-1.5">
+
+              {post.tags.length > 0 && (
+                <ul className="mt-3 mb-0 flex list-none flex-wrap gap-x-3 gap-y-1 p-0">
+                  {post.tags.map((tag) => (
+                    <li
+                      className="flex items-center gap-1 text-[0.72rem] font-medium text-[color-mix(in_srgb,var(--post-accent)_76%,var(--muted))]"
+                      key={tag}
+                    >
+                      <FaHashtag className="size-[0.68em]" aria-hidden="true" />
+                      {tag}
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              <span className="mt-4 flex items-center justify-between border-t border-[color-mix(in_srgb,var(--post-accent)_16%,var(--line))] pt-3 text-[0.72rem] font-bold tracking-[0.04em] text-[var(--muted)] transition-colors group-hover:text-[var(--post-accent)]">
+                Read the post
+                <FaArrowRightLong
+                  className="transition-transform group-hover:translate-x-1"
+                  aria-hidden="true"
+                />
+              </span>
+            </div>
+          </Link>
+        </li>
+      ))}
+    </ol>
+  )
+}
+
+function ExploreSidebar({
+  postCount,
+  tags,
+  selectedTag,
+  onSelectTag
+}: {
+  postCount: number
+  tags: TagFilterData[]
+  selectedTag: string
+  onSelectTag: (tag: string) => void
+}) {
+  return (
+    <aside className="hidden min-w-0 px-5 pt-6 min-[1180px]:block" aria-label="Explore posts">
+      <div className="sticky top-6">
+        <section className="overflow-hidden rounded-2xl border border-[var(--line)] bg-[rgba(7,16,11,0.82)]">
+          <div className="h-1 [background:var(--spectrum)]" />
+          <div className="p-4">
+            <h2 className="m-0 text-[1.2rem] font-bold tracking-[-0.03em] text-[var(--text-strong)] [font-family:var(--font-display)]">
+              Explore channels
+            </h2>
+            <p className="mt-1.5 mb-4 text-[0.78rem] leading-[1.5] text-[var(--muted)] [font-family:var(--font-ui)]">
+              Filter the feed by topic.
+            </p>
+            <div className="flex flex-col gap-1.5">
+              <TagFilter
+                active={selectedTag === ''}
+                count={postCount}
+                label="All posts"
+                onClick={() => onSelectTag('')}
+                wide
+              />
+              {tags.map((tag) => (
                 <TagFilter
-                  active={selectedTag === ''}
-                  count={posts.length}
-                  label="All posts"
-                  onClick={() => setSelectedTag('')}
+                  active={selectedTag === tag.name}
+                  count={tag.count}
+                  key={tag.name}
+                  label={tag.name}
+                  onClick={() => onSelectTag(tag.name)}
                   wide
                 />
-                {tags.map((tag) => (
-                  <TagFilter
-                    active={selectedTag === tag.name}
-                    count={tag.count}
-                    key={tag.name}
-                    label={tag.name}
-                    onClick={() => setSelectedTag(tag.name)}
-                    wide
-                  />
-                ))}
-              </div>
+              ))}
             </div>
-          </section>
-          <p className="mt-4 px-2 text-[0.65rem] leading-[1.7] text-[var(--dim)]">
-            © 2026 Daisuke Kobayashi
-            <br />
-            Built somewhere between signal and noise.
-          </p>
-        </div>
-      </aside>
-
-      {selectedPost && (
-        <PostModal onClose={() => setSelectedPost(null)} post={modalPost} summary={selectedPost} />
-      )}
-    </div>
+          </div>
+        </section>
+        <p className="mt-4 px-2 text-[0.65rem] leading-[1.7] text-[var(--dim)]">
+          {getCopyrightText(copyrightCurrentYear)}
+          <br />
+          Built somewhere between signal and noise.
+        </p>
+      </div>
+    </aside>
   )
 }
 

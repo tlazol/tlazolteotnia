@@ -5,7 +5,7 @@ description: "自分のサイト全体へ Glassmorphism を適用し、その後
 tags: ["Glassmorphism", "UI", "UX"]
 draft: false
 ---
-2021/1/29に [Glassmorphism をやってみてわかった事](/blog/5YrUIPSTkH9BOkPEL8Brg6) という記事を上げましたが、この前またデザインを変えました。理由を含めて得た知見をアウトプットします。なお、デザインを変えてしまいましたが Glassmorphism が悪いのかと言うとそうではありません。道具に罪はありませんので、自分が使い方を間違っただけです。
+2021/1/29に [Glassmorphism をやってみてわかった事](/blog/glassmorphism-lessons) という記事を上げましたが、この前またデザインを変えました。理由を含めて得た知見をアウトプットします。なお、デザインを変えてしまいましたが Glassmorphism が悪いのかと言うとそうではありません。道具に罪はありませんので、自分が使い方を間違っただけです。
 
 Glassmorphism のメリットデメリットを改めて比較してみます。
 

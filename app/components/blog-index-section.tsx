@@ -1,9 +1,9 @@
 import { useState } from 'react'
-import { Link } from 'react-router'
 import { FaHashtag } from 'react-icons/fa6'
+import { Link } from 'react-router'
 import { TagList } from '~/components/tag-list'
-import { getTagFilters } from '~/lib/blog-tags'
-import type { BlogPostSummary } from '~/lib/blog.server'
+import type { BlogPostSummary } from '~/lib/blog-post'
+import { filterPostsByTag, getTagFilters } from '~/lib/blog-tags'
 import { getPostAccent } from '~/lib/post-accent'
 import { terminalLabelClassName } from '~/lib/styles'
 
@@ -14,7 +14,7 @@ type BlogIndexSectionProps = {
 export function BlogIndexSection({ posts }: BlogIndexSectionProps) {
   const tags = getTagFilters(posts)
   const [selectedTag, setSelectedTag] = useState('')
-  const visiblePosts = selectedTag ? posts.filter((post) => post.tags.includes(selectedTag)) : posts
+  const visiblePosts = filterPostsByTag(posts, selectedTag)
 
   return (
     <section className="py-11">

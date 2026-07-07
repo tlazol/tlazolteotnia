@@ -8,7 +8,7 @@ draft: false
 # 追記 2023/3/23
 
 こちらに新しい記事を追加しました。
-[SvelteKit で 3rd Party Script を埋め込む 3 つの方法](/blog/5Zlj6lxqbqRZBxpqw7Tf5J)
+[SvelteKit で 3rd Party Script を埋め込む 3 つの方法](/blog/sveltekit-third-party-script)
 
 # 以下、古い記事
 

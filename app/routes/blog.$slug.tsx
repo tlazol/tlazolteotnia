@@ -5,7 +5,14 @@ import { SiteNavigation } from '~/components/site-navigation'
 import { getBlogPost } from '~/lib/blog.server'
 import { getPostAccent } from '~/lib/post-accent'
 import { getPostAuthor, getPostEmoji } from '~/lib/post-identity'
-import { getBlogPostOgImageUrl, getBlogPostUrl, siteName } from '~/lib/site'
+import {
+  authorAccount,
+  copyrightCurrentYear,
+  getBlogPostOgImageUrl,
+  getBlogPostUrl,
+  getCopyrightText,
+  siteName
+} from '~/lib/site'
 import type { Route } from './+types/blog.$slug'
 
 export async function loader({ params }: Route.LoaderArgs) {
@@ -96,7 +103,7 @@ export default function BlogPost({ loaderData }: Route.ComponentProps) {
                 <strong className="min-w-0 text-[var(--text-strong)]">
                   {getPostAuthor(post.slug)}
                 </strong>
-                <span className="text-[var(--muted)]">@0rga</span>
+                <span className="text-[var(--muted)]">@{authorAccount}</span>
                 <span className="text-[var(--dim)]" aria-hidden="true">
                   ·
                 </span>
@@ -138,7 +145,7 @@ export default function BlogPost({ loaderData }: Route.ComponentProps) {
 
         <footer className="mt-16 border-t border-[var(--line)] px-4 py-7 text-[0.65rem] leading-[1.7] text-[var(--dim)] min-[680px]:px-5">
           <p className="m-0">
-            © 2026 Daisuke Kobayashi
+            {getCopyrightText(copyrightCurrentYear)}
             <br />
             Built somewhere between signal and noise.
           </p>

@@ -1,8 +1,7 @@
 import { isRouteErrorResponse, Links, Meta, Outlet, Scripts, ScrollRestoration } from 'react-router'
-
-import type { Route } from './+types/root'
 import { useCspNonce } from '~/lib/security-headers'
 import { bodyClassName, headingResetClassName, siteShellClassName } from '~/lib/styles'
+import type { Route } from './+types/root'
 import './app.css'
 
 export const links: Route.LinksFunction = () => [

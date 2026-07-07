@@ -21,11 +21,11 @@
 .claude
 .codex
 offline_bundle*
-/docs/
 .agents*
 .playwright*
-*.md
-!todo.md
-!content/
-!content/blog/
-!content/blog/*.md
+/AGENTS.md
+
+# Local development-tool output
+/.playwright-cli/
+*.log
+*screenshot*.png

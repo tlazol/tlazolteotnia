@@ -1,4 +1,5 @@
 import { FaArrowUpRightFromSquare, FaHouse, FaPalette } from 'react-icons/fa6'
+import { artStationUrl, siteName, xUrl } from '~/lib/site'
 
 export function SiteNavigation({ homeHref = '/' }: { homeHref?: string }) {
   return (
@@ -7,7 +8,7 @@ export function SiteNavigation({ homeHref = '/' }: { homeHref?: string }) {
         <a
           className="mb-9 flex size-12 items-center justify-center rounded-full border border-[rgba(49,255,128,0.38)] bg-[rgba(49,255,128,0.07)] font-bold tracking-[-0.12em] text-[var(--green-soft)] no-underline shadow-[0_0_30px_rgba(49,255,128,0.12)] transition-colors hover:bg-[rgba(49,255,128,0.13)]"
           href={homeHref}
-          aria-label="Tlazolteotnia home"
+          aria-label={`${siteName} home`}
         >
           0r
         </a>
@@ -17,11 +18,11 @@ export function SiteNavigation({ homeHref = '/' }: { homeHref?: string }) {
             <FaHouse aria-hidden="true" />
             Home
           </a>
-          <a className={navLinkClassName} href="https://www.artstation.com/orga">
+          <a className={navLinkClassName} href={artStationUrl}>
             <FaPalette aria-hidden="true" />
             ArtStation
           </a>
-          <a className={navLinkClassName} href="https://twitter.com/0rga">
+          <a className={navLinkClassName} href={xUrl}>
             <FaArrowUpRightFromSquare aria-hidden="true" />X / Twitter
           </a>
         </nav>

@@ -1,18 +1,12 @@
-import { Fragment, createElement, type ReactNode } from 'react'
 import { marked, type Token, type Tokens } from 'marked'
-import Prism from 'prismjs'
-import 'prismjs/components/prism-bash'
-import 'prismjs/components/prism-json'
-import { Highlight, type PrismTheme } from 'prism-react-renderer'
+import { createElement, Fragment, type ReactNode } from 'react'
+import { CodeBlock } from '~/components/code-block'
 import {
-  codeBlockClassName,
-  codeBlockLabelClassName,
-  codeBlockLineClassName,
-  codeBlockPreClassName,
-  markdownBodyClassName
-} from '~/lib/styles'
-
-Prism.manual = true
+  getMarkdownHeadingTag,
+  getUnknownMarkdownTokenPolicy,
+  isSafeMarkdownUrl
+} from '~/lib/markdown'
+import { markdownBodyClassName } from '~/lib/styles'
 
 export function MarkdownBody({ body }: { body: string }) {
   return <div className={markdownBodyClassName}>{renderBlocks(marked.lexer(body))}</div>
@@ -31,7 +25,11 @@ function renderBlock(token: Token, key: number): ReactNode {
     case 'heading': {
       const heading = token as Tokens.Heading
 
-      return createElement(getHeadingTag(heading.depth), { key }, renderInline(heading.tokens))
+      return createElement(
+        getMarkdownHeadingTag(heading.depth),
+        { key },
+        renderInline(heading.tokens)
+      )
     }
     case 'paragraph': {
       const paragraph = token as Tokens.Paragraph
@@ -95,12 +93,15 @@ function renderBlock(token: Token, key: number): ReactNode {
 
       return <Fragment key={key}>{renderText(text)}</Fragment>
     }
-    default:
-      if ('tokens' in token && Array.isArray(token.tokens)) {
-        return <Fragment key={key}>{renderBlocks(token.tokens)}</Fragment>
+    default: {
+      const unknownToken = token as { tokens?: Token[] }
+
+      if (getUnknownMarkdownTokenPolicy(unknownToken, 'block') === 'render-children') {
+        return <Fragment key={key}>{renderBlocks(unknownToken.tokens ?? [])}</Fragment>
       }
 
       return null
+    }
   }
 }
 
@@ -139,8 +140,13 @@ function renderInlineToken(token: Token, key: number): ReactNode {
       return renderImage(token as Tokens.Image, key)
     case 'html':
       return null
-    default:
-      return 'text' in token ? token.text : null
+    default: {
+      const unknownToken = token as { text?: string }
+
+      return getUnknownMarkdownTokenPolicy(unknownToken, 'inline') === 'render-text'
+        ? unknownToken.text
+        : null
+    }
   }
 }
 
@@ -151,7 +157,7 @@ function renderText(token: Tokens.Text) {
 function renderLink(token: Tokens.Link, key: number) {
   const children = renderInline(token.tokens)
 
-  if (!isSafeUrl(token.href)) {
+  if (!isSafeMarkdownUrl(token.href)) {
     return children
   }
 
@@ -163,154 +169,9 @@ function renderLink(token: Tokens.Link, key: number) {
 }
 
 function renderImage(token: Tokens.Image, key: number) {
-  if (!isSafeUrl(token.href)) {
+  if (!isSafeMarkdownUrl(token.href)) {
     return token.text
   }
 
   return <img alt={token.text} key={key} src={token.href} title={token.title ?? undefined} />
-}
-
-function CodeBlock({ code, info }: { code: string; info?: string }) {
-  const { label, language } = parseCodeInfo(info)
-
-  return (
-    <figure className={codeBlockClassName}>
-      {label && <figcaption className={codeBlockLabelClassName}>{label}</figcaption>}
-      {language && Prism.languages[language] ? (
-        <Highlight code={code} language={language} prism={Prism} theme={codeBlockTheme}>
-          {({ className, getLineProps, getTokenProps, style, tokens }) => (
-            <pre className={`${codeBlockPreClassName} ${className}`} style={style}>
-              <code className={`language-${language}`}>
-                {tokens.map((line, lineIndex) => (
-                  <span
-                    key={lineIndex}
-                    {...getLineProps({
-                      className: codeBlockLineClassName,
-                      line
-                    })}
-                  >
-                    {line.map((token, tokenIndex) => (
-                      <span
-                        key={tokenIndex}
-                        {...getTokenProps({
-                          token
-                        })}
-                      />
-                    ))}
-                  </span>
-                ))}
-              </code>
-            </pre>
-          )}
-        </Highlight>
-      ) : (
-        <pre className={codeBlockPreClassName}>
-          <code>{code}</code>
-        </pre>
-      )}
-    </figure>
-  )
-}
-
-function parseCodeInfo(info?: string) {
-  const rawInfo = info?.trim()
-
-  if (!rawInfo) {
-    return {}
-  }
-
-  const separatorIndex = rawInfo.indexOf(':')
-  const rawLanguage = (separatorIndex >= 0 ? rawInfo.slice(0, separatorIndex) : rawInfo)
-    .split(/\s+/)[0]
-    .toLowerCase()
-  const filename =
-    separatorIndex >= 0
-      ? rawInfo
-          .slice(separatorIndex + 1)
-          .trim()
-          .split(/\s+/)[0]
-      : ''
-  const languageName = rawLanguage.split('+')[0]
-  const language = getCodeLanguage(languageName)
-
-  return {
-    label: filename || rawLanguage,
-    language
-  }
-}
-
-function getCodeLanguage(languageName: string) {
-  if (plainCodeLanguages.has(languageName)) {
-    return undefined
-  }
-
-  return (
-    codeLanguageAliases[languageName] ?? (Prism.languages[languageName] ? languageName : undefined)
-  )
-}
-
-function getHeadingTag(depth: number) {
-  return `h${Math.min(Math.max(depth, 2), 6)}` as 'h2' | 'h3' | 'h4' | 'h5' | 'h6'
-}
-
-function isSafeUrl(url: string) {
-  try {
-    const parsedUrl = new URL(url, 'https://0rga.org')
-
-    return ['http:', 'https:', 'mailto:', 'tel:'].includes(parsedUrl.protocol)
-  } catch {
-    return false
-  }
-}
-
-const plainCodeLanguages = new Set(['text', 'txt', 'plain', 'plaintext'])
-
-const codeLanguageAliases: Record<string, string | undefined> = {
-  console: 'bash',
-  html: 'markup',
-  javascript: 'javascript',
-  js: 'javascript',
-  json: 'json',
-  css: 'css'
-}
-
-const codeBlockTheme: PrismTheme = {
-  plain: {
-    backgroundColor: 'transparent',
-    color: 'var(--text)'
-  },
-  styles: [
-    {
-      types: ['comment', 'prolog', 'doctype', 'cdata'],
-      style: { color: 'var(--dim)', fontStyle: 'italic' }
-    },
-    {
-      types: ['punctuation'],
-      style: { color: 'var(--muted)' }
-    },
-    {
-      types: ['property', 'tag', 'boolean', 'number', 'constant', 'symbol', 'deleted'],
-      style: { color: 'var(--amber)' }
-    },
-    {
-      types: ['selector', 'attr-name', 'string', 'char', 'builtin', 'inserted'],
-      style: { color: 'var(--green-soft)' }
-    },
-    {
-      types: ['operator', 'entity', 'url'],
-      style: { color: 'var(--cyan)' }
-    },
-    {
-      types: ['atrule', 'attr-value', 'keyword'],
-      style: { color: 'var(--pink)' }
-    },
-    {
-      types: ['function', 'class-name'],
-      style: { color: 'var(--blue)' }
-    },
-    {
-      types: ['regex', 'important', 'variable'],
-      style: { color: 'var(--yellow)' }
-    }
-  ]
 }
