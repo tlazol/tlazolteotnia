@@ -43,7 +43,7 @@ export function CommunityLayout({
 
   return (
     <main
-      className={`grid min-h-svh w-full grid-cols-1 overflow-x-hidden ${
+      className={`grid min-h-svh w-full grid-cols-1 overflow-x-clip ${
         showDetails
           ? 'min-[900px]:grid-cols-[72px_236px_minmax(0,1fr)] min-[1240px]:grid-cols-[72px_236px_minmax(0,1fr)_280px]'
           : 'min-[900px]:grid-cols-[72px_236px_minmax(0,1fr)]'
