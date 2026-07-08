@@ -69,15 +69,17 @@ export function HomeTimeline({ posts }: HomeTimelineProps) {
         rightSidebar={<SignalMembers posts={posts} />}
         topics={topics}
       >
-        <div className="mx-auto w-full max-w-[940px]">
+        <div className="w-full">
           <WelcomeMessage />
           <TimelinePosts
             onOpenPost={openPost}
             selectedTag={selectedTag}
             visiblePosts={visiblePosts}
           />
-          <footer className="border-t border-[var(--line)] px-4 py-7 text-[0.65rem] leading-[1.7] text-[var(--dim)] min-[680px]:px-6">
-            {getCopyrightText(copyrightCurrentYear)} · Built somewhere between signal and noise.
+          <footer className="border-t border-[var(--line)] text-[0.65rem] leading-[1.7] text-[var(--dim)]">
+            <div className="mx-auto w-full max-w-[940px] px-4 py-7 min-[680px]:px-6">
+              {getCopyrightText(copyrightCurrentYear)} · Built somewhere between signal and noise.
+            </div>
           </footer>
         </div>
       </CommunityLayout>
@@ -91,10 +93,10 @@ export function HomeTimeline({ posts }: HomeTimelineProps) {
 
 function WelcomeMessage() {
   return (
-    <article className="relative overflow-hidden border-b border-[var(--line)] px-4 py-7 min-[680px]:px-6 min-[680px]:py-9">
+    <article className="relative overflow-hidden border-b border-[var(--line)]">
       <div className="absolute top-0 right-0 h-48 w-48 rounded-full bg-[rgba(250,115,218,0.1)] blur-3xl" />
       <div className="absolute bottom-0 left-1/3 h-32 w-56 rounded-full bg-[rgba(45,172,249,0.08)] blur-3xl" />
-      <div className="relative grid grid-cols-[44px_minmax(0,1fr)] gap-3 min-[680px]:grid-cols-[52px_minmax(0,1fr)] min-[680px]:gap-4">
+      <div className="relative grid w-full max-w-[940px] grid-cols-[44px_minmax(0,1fr)] gap-3 px-4 py-7 min-[680px]:grid-cols-[52px_minmax(0,1fr)] min-[680px]:gap-4 min-[680px]:px-6 min-[680px]:py-9">
         <span className="welcome-avatar relative flex size-11 items-center justify-center rounded-full border border-[rgba(156,255,191,0.58)] bg-[var(--panel-strong)] text-[0.76rem] font-bold tracking-[-0.08em] text-[var(--green-soft)] shadow-[0_0_28px_rgba(49,255,128,0.2)] min-[680px]:size-12">
           0r
           <span className="online-spectrum absolute right-[-2px] bottom-[-2px] size-3 rounded-full border-2 border-[var(--chat)]" />
@@ -163,52 +165,54 @@ function TimelinePosts({
         <li data-post-accent={getPostAccent(post.slug)} key={post.slug}>
           <Link
             aria-haspopup="dialog"
-            className="community-message group grid grid-cols-[40px_minmax(0,1fr)] gap-3 border-b border-[var(--line)] px-4 py-5 text-inherit no-underline transition-[background-color] duration-200 hover:bg-[color-mix(in_srgb,var(--post-accent)_6%,transparent)] focus-visible:bg-[color-mix(in_srgb,var(--post-accent)_6%,transparent)] min-[680px]:grid-cols-[48px_minmax(0,1fr)] min-[680px]:gap-4 min-[680px]:px-6 min-[680px]:py-6"
+            className="community-message group block border-b border-[var(--line)] text-inherit no-underline transition-[background-color] duration-200 hover:bg-[color-mix(in_srgb,var(--post-accent)_6%,transparent)] focus-visible:bg-[color-mix(in_srgb,var(--post-accent)_6%,transparent)]"
             onClick={(event) => onOpenPost(event, post)}
             to={`/blog/${post.slug}`}
           >
-            <span
-              className="relative z-10 mt-0.5 flex size-10 items-center justify-center rounded-full border text-[1.15rem] leading-none shadow-[0_0_22px_color-mix(in_srgb,var(--post-accent)_28%,transparent)] transition-[transform,box-shadow] group-hover:-translate-y-0.5 group-hover:scale-105 group-hover:shadow-[0_0_30px_color-mix(in_srgb,var(--post-accent)_48%,transparent)] [background:color-mix(in_srgb,var(--post-accent)_12%,var(--panel))] [border-color:color-mix(in_srgb,var(--post-accent)_70%,var(--line))] min-[680px]:size-12 min-[680px]:text-[1.3rem]"
-              aria-hidden="true"
-            >
-              {getPostEmoji(post.slug)}
-              <span className="absolute -right-1 -bottom-1 size-2.5 rounded-full border-2 border-[var(--chat)] bg-[var(--post-accent)] shadow-[0_0_10px_var(--post-accent)]" />
-            </span>
+            <div className="grid w-full max-w-[940px] grid-cols-[40px_minmax(0,1fr)] gap-3 px-4 py-5 min-[680px]:grid-cols-[48px_minmax(0,1fr)] min-[680px]:gap-4 min-[680px]:px-6 min-[680px]:py-6">
+              <span
+                className="relative z-10 mt-0.5 flex size-10 items-center justify-center rounded-full border text-[1.15rem] leading-none shadow-[0_0_22px_color-mix(in_srgb,var(--post-accent)_28%,transparent)] transition-[transform,box-shadow] group-hover:-translate-y-0.5 group-hover:scale-105 group-hover:shadow-[0_0_30px_color-mix(in_srgb,var(--post-accent)_48%,transparent)] [background:color-mix(in_srgb,var(--post-accent)_12%,var(--panel))] [border-color:color-mix(in_srgb,var(--post-accent)_70%,var(--line))] min-[680px]:size-12 min-[680px]:text-[1.3rem]"
+                aria-hidden="true"
+              >
+                {getPostEmoji(post.slug)}
+                <span className="absolute -right-1 -bottom-1 size-2.5 rounded-full border-2 border-[var(--chat)] bg-[var(--post-accent)] shadow-[0_0_10px_var(--post-accent)]" />
+              </span>
 
-            <div className="min-w-0 [font-family:var(--font-ui)]">
-              <div className="flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-0.5 text-[0.82rem] leading-[1.35]">
-                <strong className="min-w-0 truncate text-[var(--post-accent-soft)]">
-                  {getPostAuthor(post.slug)}
-                </strong>
-                <span className="truncate text-[var(--muted)]">@{authorAccount}</span>
-                <time className="shrink-0 text-[0.7rem] text-[var(--dim)]" dateTime={post.date}>
-                  {post.date.replaceAll('-', '.')}
-                </time>
+              <div className="min-w-0 [font-family:var(--font-ui)]">
+                <div className="flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-0.5 text-[0.82rem] leading-[1.35]">
+                  <strong className="min-w-0 truncate text-[var(--post-accent-soft)]">
+                    {getPostAuthor(post.slug)}
+                  </strong>
+                  <span className="truncate text-[var(--muted)]">@{authorAccount}</span>
+                  <time className="shrink-0 text-[0.7rem] text-[var(--dim)]" dateTime={post.date}>
+                    {post.date.replaceAll('-', '.')}
+                  </time>
+                </div>
+
+                <h2 className="mt-2 mb-0 text-[clamp(1.02rem,3vw,1.2rem)] leading-[1.42] font-bold text-[var(--text-strong)] transition-colors group-hover:text-[var(--post-accent-soft)]">
+                  {post.title}
+                </h2>
+                <p className="mt-1.5 mb-0 text-[0.91rem] leading-[1.68] text-[var(--text)]">
+                  {post.description}
+                </p>
+
+                {post.tags.length > 0 && (
+                  <ul
+                    className="mt-3 mb-0 flex list-none flex-wrap gap-1.5 p-0"
+                    aria-label="Reactions"
+                  >
+                    {post.tags.map((tag) => (
+                      <li
+                        className="inline-flex items-center gap-1 rounded-md border border-[color-mix(in_srgb,var(--post-accent)_26%,var(--line))] bg-[color-mix(in_srgb,var(--post-accent)_7%,transparent)] px-2 py-1 text-[0.68rem] font-semibold text-[color-mix(in_srgb,var(--post-accent)_78%,var(--text))] transition-colors group-hover:border-[color-mix(in_srgb,var(--post-accent)_48%,var(--line))]"
+                        key={tag}
+                      >
+                        <FaHashtag className="size-[0.68em]" aria-hidden="true" />
+                        {tag}
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
-
-              <h2 className="mt-2 mb-0 text-[clamp(1.02rem,3vw,1.2rem)] leading-[1.42] font-bold text-[var(--text-strong)] transition-colors group-hover:text-[var(--post-accent-soft)]">
-                {post.title}
-              </h2>
-              <p className="mt-1.5 mb-0 text-[0.91rem] leading-[1.68] text-[var(--text)]">
-                {post.description}
-              </p>
-
-              {post.tags.length > 0 && (
-                <ul
-                  className="mt-3 mb-0 flex list-none flex-wrap gap-1.5 p-0"
-                  aria-label="Reactions"
-                >
-                  {post.tags.map((tag) => (
-                    <li
-                      className="inline-flex items-center gap-1 rounded-md border border-[color-mix(in_srgb,var(--post-accent)_26%,var(--line))] bg-[color-mix(in_srgb,var(--post-accent)_7%,transparent)] px-2 py-1 text-[0.68rem] font-semibold text-[color-mix(in_srgb,var(--post-accent)_78%,var(--text))] transition-colors group-hover:border-[color-mix(in_srgb,var(--post-accent)_48%,var(--line))]"
-                      key={tag}
-                    >
-                      <FaHashtag className="size-[0.68em]" aria-hidden="true" />
-                      {tag}
-                    </li>
-                  ))}
-                </ul>
-              )}
             </div>
           </Link>
         </li>

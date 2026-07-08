@@ -73,72 +73,82 @@ export default function BlogPost({ loaderData }: Route.ComponentProps) {
       rightSidebar={<PostDetails accent={accent} post={post} />}
       statusLabel="reading mode"
     >
-      <div className="mx-auto w-full max-w-[940px]" data-post-accent={accent}>
-        <div className="flex min-h-11 items-center border-b border-[var(--line)] px-4 min-[680px]:px-6">
-          <Link
-            className="inline-flex items-center gap-2 text-[0.72rem] font-semibold text-[var(--muted)] no-underline transition-colors hover:text-[var(--post-accent-soft)] [font-family:var(--font-ui)]"
-            to="/blog"
-          >
-            <FaArrowLeftLong className="text-[var(--post-accent)]" aria-hidden="true" />
-            Back to all posts
-          </Link>
+      <div className="w-full" data-post-accent={accent}>
+        <div className="border-b border-[var(--line)]">
+          <div className="flex min-h-11 w-full max-w-[940px] items-center px-4 min-[680px]:px-6">
+            <Link
+              className="inline-flex items-center gap-2 text-[0.72rem] font-semibold text-[var(--muted)] no-underline transition-colors hover:text-[var(--post-accent-soft)] [font-family:var(--font-ui)]"
+              to="/blog"
+            >
+              <FaArrowLeftLong className="text-[var(--post-accent)]" aria-hidden="true" />
+              Back to all posts
+            </Link>
+          </div>
         </div>
 
         <article className="[font-family:var(--font-ui)]">
-          <header className="relative grid grid-cols-[44px_minmax(0,1fr)] gap-3 overflow-hidden border-b border-[color-mix(in_srgb,var(--post-accent)_22%,var(--line))] bg-[linear-gradient(120deg,var(--post-accent-wash),transparent_58%)] px-4 py-7 min-[680px]:grid-cols-[52px_minmax(0,1fr)] min-[680px]:gap-4 min-[680px]:px-6 min-[680px]:py-9">
+          <header className="relative overflow-hidden border-b border-[color-mix(in_srgb,var(--post-accent)_22%,var(--line))] bg-[linear-gradient(120deg,var(--post-accent-wash),transparent_58%)]">
             <div className="absolute top-0 right-0 h-56 w-56 rounded-full bg-[var(--post-accent-wash)] blur-3xl" />
-            <span
-              className="relative z-10 flex size-11 items-center justify-center rounded-full border border-[color-mix(in_srgb,var(--post-accent)_70%,var(--line))] bg-[color-mix(in_srgb,var(--post-accent)_12%,var(--panel))] text-[1.2rem] leading-none shadow-[0_0_26px_var(--post-accent-glow)] min-[680px]:size-12 min-[680px]:text-[1.3rem]"
-              aria-hidden="true"
-            >
-              {getPostEmoji(post.slug)}
-              <span className="absolute -right-1 -bottom-1 size-3 rounded-full border-2 border-[var(--chat)] bg-[var(--post-accent)] shadow-[0_0_12px_var(--post-accent)]" />
-            </span>
-
-            <div className="relative min-w-0">
-              <p className="m-0 flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-0.5 text-[0.82rem] leading-[1.35]">
-                <strong className="min-w-0 text-[var(--post-accent-soft)]">
-                  {getPostAuthor(post.slug)}
-                </strong>
-                <span className="text-[var(--muted)]">@{authorAccount}</span>
-                <time className="text-[0.72rem] text-[var(--dim)]" dateTime={post.date}>
-                  {post.date.replaceAll('-', '.')}
-                </time>
-                <span className="inline-flex items-center gap-1 rounded-md bg-[color-mix(in_srgb,var(--post-accent)_13%,transparent)] px-1.5 py-0.5 text-[0.58rem] font-bold tracking-[0.05em] text-[var(--post-accent)] uppercase">
-                  <FaWandMagicSparkles aria-hidden="true" /> featured
+            <div className="relative mx-auto w-full max-w-[940px] px-4 py-7 min-[680px]:grid min-[680px]:grid-cols-[52px_minmax(0,720px)] min-[680px]:gap-4 min-[680px]:px-6 min-[680px]:py-9">
+              <div className="absolute top-7 left-4 z-10 min-[680px]:static">
+                <span
+                  className="relative flex size-11 items-center justify-center rounded-full border border-[color-mix(in_srgb,var(--post-accent)_70%,var(--line))] bg-[color-mix(in_srgb,var(--post-accent)_12%,var(--panel))] text-[1.2rem] leading-none shadow-[0_0_26px_var(--post-accent-glow)] min-[680px]:size-12 min-[680px]:text-[1.3rem]"
+                  aria-hidden="true"
+                >
+                  {getPostEmoji(post.slug)}
+                  <span className="absolute -right-1 -bottom-1 size-3 rounded-full border-2 border-[var(--chat)] bg-[var(--post-accent)] shadow-[0_0_12px_var(--post-accent)]" />
                 </span>
-              </p>
+              </div>
 
-              <h1 className="mt-4 mb-0 text-[clamp(1.8rem,7vw,3.35rem)] leading-[1.08] font-bold tracking-[-0.045em] text-[var(--post-accent-soft)] [overflow-wrap:anywhere] [font-family:var(--font-display)] [text-shadow:0_0_26px_var(--post-accent-glow)]">
-                {post.title}
-              </h1>
-              <p className="mt-4 mb-0 text-[0.95rem] leading-[1.75] text-[var(--text)]">
-                {post.description}
-              </p>
+              <div className="relative min-w-0">
+                <p className="m-0 flex min-h-11 min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 pl-14 text-[0.82rem] leading-[1.35] min-[680px]:min-h-0 min-[680px]:items-baseline min-[680px]:pl-0">
+                  <strong className="min-w-0 text-[var(--post-accent-soft)]">
+                    {getPostAuthor(post.slug)}
+                  </strong>
+                  <span className="text-[var(--muted)]">@{authorAccount}</span>
+                  <time className="text-[0.72rem] text-[var(--dim)]" dateTime={post.date}>
+                    {post.date.replaceAll('-', '.')}
+                  </time>
+                  <span className="inline-flex items-center gap-1 rounded-md bg-[color-mix(in_srgb,var(--post-accent)_13%,transparent)] px-1.5 py-0.5 text-[0.58rem] font-bold tracking-[0.05em] text-[var(--post-accent)] uppercase">
+                    <FaWandMagicSparkles aria-hidden="true" /> featured
+                  </span>
+                </p>
 
-              {post.tags.length > 0 && (
-                <ul className="mt-4 mb-0 flex list-none flex-wrap gap-1.5 p-0" aria-label="Tags">
-                  {post.tags.map((tag) => (
-                    <li
-                      className="inline-flex items-center gap-1 rounded-md border border-[color-mix(in_srgb,var(--post-accent)_28%,var(--line))] bg-[color-mix(in_srgb,var(--post-accent)_7%,transparent)] px-2 py-1 text-[0.7rem] font-semibold text-[var(--post-accent)]"
-                      key={tag}
-                    >
-                      <FaHashtag className="size-[0.68em]" aria-hidden="true" />
-                      {tag}
-                    </li>
-                  ))}
-                </ul>
-              )}
+                <h1 className="mt-4 mb-0 text-[clamp(1.8rem,7vw,3.35rem)] leading-[1.08] font-bold tracking-[-0.045em] text-[var(--post-accent-soft)] [overflow-wrap:anywhere] [font-family:var(--font-display)] [text-shadow:0_0_26px_var(--post-accent-glow)]">
+                  {post.title}
+                </h1>
+                <p className="mt-4 mb-0 text-[0.95rem] leading-[1.75] text-[var(--text)]">
+                  {post.description}
+                </p>
+
+                {post.tags.length > 0 && (
+                  <ul className="mt-4 mb-0 flex list-none flex-wrap gap-1.5 p-0" aria-label="Tags">
+                    {post.tags.map((tag) => (
+                      <li
+                        className="inline-flex items-center gap-1 rounded-md border border-[color-mix(in_srgb,var(--post-accent)_28%,var(--line))] bg-[color-mix(in_srgb,var(--post-accent)_7%,transparent)] px-2 py-1 text-[0.7rem] font-semibold text-[var(--post-accent)]"
+                        key={tag}
+                      >
+                        <FaHashtag className="size-[0.68em]" aria-hidden="true" />
+                        {tag}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             </div>
           </header>
 
-          <div className="px-4 min-[680px]:px-6">
-            <MarkdownBody body={post.body} />
+          <div className="mx-auto w-full max-w-[940px] px-4 min-[680px]:grid min-[680px]:grid-cols-[52px_minmax(0,720px)] min-[680px]:gap-4 min-[680px]:px-6">
+            <div className="min-w-0 min-[680px]:col-start-2">
+              <MarkdownBody body={post.body} />
+            </div>
           </div>
         </article>
 
-        <footer className="mt-16 border-t border-[var(--line)] px-4 py-7 text-[0.65rem] leading-[1.7] text-[var(--dim)] min-[680px]:px-6">
-          {getCopyrightText(copyrightCurrentYear)} · Signal received in Tokyo / JST.
+        <footer className="mt-16 border-t border-[var(--line)] text-[0.65rem] leading-[1.7] text-[var(--dim)]">
+          <div className="mx-auto w-full max-w-[940px] px-4 py-7 min-[680px]:px-6">
+            {getCopyrightText(copyrightCurrentYear)} · Signal received in Tokyo / JST.
+          </div>
         </footer>
       </div>
     </CommunityLayout>

@@ -40,10 +40,10 @@ export function BlogIndexSection({ posts }: BlogIndexSectionProps) {
       statusLabel="archive live"
       topics={topics}
     >
-      <div className="mx-auto w-full max-w-[940px]">
-        <header className="relative overflow-hidden border-b border-[var(--line)] px-4 py-8 min-[680px]:px-6 min-[680px]:py-10">
+      <div className="w-full">
+        <header className="relative overflow-hidden border-b border-[var(--line)]">
           <div className="absolute top-0 right-8 h-40 w-40 rounded-full bg-[rgba(45,172,249,0.11)] blur-3xl" />
-          <div className="relative flex items-start gap-4">
+          <div className="relative flex w-full max-w-[940px] items-start gap-4 px-4 py-8 min-[680px]:px-6 min-[680px]:py-10">
             <span className="server-orb relative hidden size-12 shrink-0 items-center justify-center rounded-2xl min-[520px]:flex">
               <span className="relative z-10 flex size-[42px] items-center justify-center rounded-[13px] bg-[var(--panel-strong)] text-[var(--cyan)]">
                 <FaSatelliteDish aria-hidden="true" />
@@ -70,42 +70,44 @@ export function BlogIndexSection({ posts }: BlogIndexSectionProps) {
             {visiblePosts.map((post) => (
               <li data-post-accent={getPostAccent(post.slug)} key={post.slug}>
                 <Link
-                  className="community-message group grid grid-cols-[40px_minmax(0,1fr)] gap-3 border-b border-[var(--line)] px-4 py-5 text-inherit no-underline transition-colors hover:bg-[color-mix(in_srgb,var(--post-accent)_6%,transparent)] min-[680px]:grid-cols-[48px_minmax(0,1fr)] min-[680px]:gap-4 min-[680px]:px-6 min-[680px]:py-6"
+                  className="community-message group block border-b border-[var(--line)] text-inherit no-underline transition-colors hover:bg-[color-mix(in_srgb,var(--post-accent)_6%,transparent)]"
                   to={`/blog/${post.slug}`}
                 >
-                  <span className="relative z-10 flex size-10 items-center justify-center rounded-full border border-[color-mix(in_srgb,var(--post-accent)_70%,var(--line))] bg-[color-mix(in_srgb,var(--post-accent)_12%,var(--panel))] text-[1.15rem] shadow-[0_0_22px_color-mix(in_srgb,var(--post-accent)_26%,transparent)] transition-transform group-hover:-translate-y-0.5 group-hover:scale-105 min-[680px]:size-12 min-[680px]:text-[1.3rem]">
-                    {getPostEmoji(post.slug)}
-                    <span className="absolute -right-1 -bottom-1 size-2.5 rounded-full border-2 border-[var(--chat)] bg-[var(--post-accent)] shadow-[0_0_10px_var(--post-accent)]" />
-                  </span>
-                  <span className="min-w-0 [font-family:var(--font-ui)]">
-                    <span className="flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-0.5 text-[0.82rem]">
-                      <strong className="truncate text-[var(--post-accent-soft)]">
-                        {getPostAuthor(post.slug)}
-                      </strong>
-                      <span className="text-[var(--muted)]">@{authorAccount}</span>
-                      <time className="text-[0.7rem] text-[var(--dim)]" dateTime={post.date}>
-                        {post.date.replaceAll('-', '.')}
-                      </time>
+                  <span className="grid w-full max-w-[940px] grid-cols-[40px_minmax(0,1fr)] gap-3 px-4 py-5 min-[680px]:grid-cols-[48px_minmax(0,1fr)] min-[680px]:gap-4 min-[680px]:px-6 min-[680px]:py-6">
+                    <span className="relative z-10 flex size-10 items-center justify-center rounded-full border border-[color-mix(in_srgb,var(--post-accent)_70%,var(--line))] bg-[color-mix(in_srgb,var(--post-accent)_12%,var(--panel))] text-[1.15rem] shadow-[0_0_22px_color-mix(in_srgb,var(--post-accent)_26%,transparent)] transition-transform group-hover:-translate-y-0.5 group-hover:scale-105 min-[680px]:size-12 min-[680px]:text-[1.3rem]">
+                      {getPostEmoji(post.slug)}
+                      <span className="absolute -right-1 -bottom-1 size-2.5 rounded-full border-2 border-[var(--chat)] bg-[var(--post-accent)] shadow-[0_0_10px_var(--post-accent)]" />
                     </span>
-                    <strong className="mt-2 block text-[clamp(1.02rem,3vw,1.2rem)] leading-[1.42] text-[var(--text-strong)] transition-colors group-hover:text-[var(--post-accent-soft)]">
-                      {post.title}
-                    </strong>
-                    <span className="mt-1.5 block text-[0.91rem] leading-[1.68] text-[var(--text)]">
-                      {post.description}
-                    </span>
-                    {post.tags.length > 0 && (
-                      <span className="mt-3 flex flex-wrap gap-1.5">
-                        {post.tags.map((tag) => (
-                          <span
-                            className="inline-flex items-center gap-1 rounded-md border border-[color-mix(in_srgb,var(--post-accent)_26%,var(--line))] bg-[color-mix(in_srgb,var(--post-accent)_7%,transparent)] px-2 py-1 text-[0.68rem] font-semibold text-[color-mix(in_srgb,var(--post-accent)_78%,var(--text))]"
-                            key={tag}
-                          >
-                            <FaHashtag className="size-[0.68em]" aria-hidden="true" />
-                            {tag}
-                          </span>
-                        ))}
+                    <span className="min-w-0 [font-family:var(--font-ui)]">
+                      <span className="flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-0.5 text-[0.82rem]">
+                        <strong className="truncate text-[var(--post-accent-soft)]">
+                          {getPostAuthor(post.slug)}
+                        </strong>
+                        <span className="text-[var(--muted)]">@{authorAccount}</span>
+                        <time className="text-[0.7rem] text-[var(--dim)]" dateTime={post.date}>
+                          {post.date.replaceAll('-', '.')}
+                        </time>
                       </span>
-                    )}
+                      <strong className="mt-2 block text-[clamp(1.02rem,3vw,1.2rem)] leading-[1.42] text-[var(--text-strong)] transition-colors group-hover:text-[var(--post-accent-soft)]">
+                        {post.title}
+                      </strong>
+                      <span className="mt-1.5 block text-[0.91rem] leading-[1.68] text-[var(--text)]">
+                        {post.description}
+                      </span>
+                      {post.tags.length > 0 && (
+                        <span className="mt-3 flex flex-wrap gap-1.5">
+                          {post.tags.map((tag) => (
+                            <span
+                              className="inline-flex items-center gap-1 rounded-md border border-[color-mix(in_srgb,var(--post-accent)_26%,var(--line))] bg-[color-mix(in_srgb,var(--post-accent)_7%,transparent)] px-2 py-1 text-[0.68rem] font-semibold text-[color-mix(in_srgb,var(--post-accent)_78%,var(--text))]"
+                              key={tag}
+                            >
+                              <FaHashtag className="size-[0.68em]" aria-hidden="true" />
+                              {tag}
+                            </span>
+                          ))}
+                        </span>
+                      )}
+                    </span>
                   </span>
                 </Link>
               </li>
