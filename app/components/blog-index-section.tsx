@@ -1,11 +1,12 @@
 import { useState } from 'react'
-import { FaHashtag } from 'react-icons/fa6'
+import { FaHashtag, FaSatelliteDish, FaWandMagicSparkles } from 'react-icons/fa6'
 import { Link } from 'react-router'
-import { TagList } from '~/components/tag-list'
+import { CommunityLayout, type TopicChannel } from '~/components/community-layout'
 import type { BlogPostSummary } from '~/lib/blog-post'
 import { filterPostsByTag, getTagFilters } from '~/lib/blog-tags'
 import { getPostAccent } from '~/lib/post-accent'
-import { terminalLabelClassName } from '~/lib/styles'
+import { getPostAuthor, getPostEmoji } from '~/lib/post-identity'
+import { authorAccount } from '~/lib/site'
 
 type BlogIndexSectionProps = {
   posts: BlogPostSummary[]
@@ -15,98 +16,141 @@ export function BlogIndexSection({ posts }: BlogIndexSectionProps) {
   const tags = getTagFilters(posts)
   const [selectedTag, setSelectedTag] = useState('')
   const visiblePosts = filterPostsByTag(posts, selectedTag)
+  const topics: TopicChannel[] = [
+    {
+      active: selectedTag === '',
+      count: posts.length,
+      label: 'all-posts',
+      onSelect: () => setSelectedTag('')
+    },
+    ...tags.map((tag) => ({
+      active: selectedTag === tag.name,
+      count: tag.count,
+      label: tag.name,
+      onSelect: () => setSelectedTag(tag.name)
+    }))
+  ]
 
   return (
-    <section className="py-11">
-      <p className={terminalLabelClassName}>ls content/blog</p>
+    <CommunityLayout
+      activeSection="blog"
+      channelLabel={selectedTag || 'all-posts'}
+      channelMeta={`${visiblePosts.length} archived transmissions`}
+      rightSidebar={<ArchiveDetails posts={posts} tagCount={tags.length} />}
+      statusLabel="archive live"
+      topics={topics}
+    >
+      <div className="mx-auto w-full max-w-[940px]">
+        <header className="relative overflow-hidden border-b border-[var(--line)] px-4 py-8 min-[680px]:px-6 min-[680px]:py-10">
+          <div className="absolute top-0 right-8 h-40 w-40 rounded-full bg-[rgba(45,172,249,0.11)] blur-3xl" />
+          <div className="relative flex items-start gap-4">
+            <span className="server-orb relative hidden size-12 shrink-0 items-center justify-center rounded-2xl min-[520px]:flex">
+              <span className="relative z-10 flex size-[42px] items-center justify-center rounded-[13px] bg-[var(--panel-strong)] text-[var(--cyan)]">
+                <FaSatelliteDish aria-hidden="true" />
+              </span>
+            </span>
+            <div>
+              <p className="m-0 flex items-center gap-2 text-[0.68rem] font-bold tracking-[0.08em] text-[var(--pink)] uppercase">
+                <FaWandMagicSparkles aria-hidden="true" />
+                Transmission archive
+              </p>
+              <h1 className="mt-2 mb-0 text-[clamp(2rem,8vw,3.7rem)] leading-none font-bold tracking-[-0.05em] text-[var(--text-strong)] [font-family:var(--font-display)]">
+                {selectedTag || 'All posts'}
+              </h1>
+              <p className="mt-3 mb-0 max-w-[36rem] text-[0.92rem] leading-[1.65] text-[var(--muted)]">
+                Notes on frontend work, tools, art, games, experiments, and whatever else joins the
+                signal.
+              </p>
+            </div>
+          </div>
+        </header>
 
-      {tags.length > 0 && (
-        <fieldset className="m-0 mb-6 flex min-w-0 flex-wrap gap-2 border-0 border-b border-dashed border-[var(--line)] p-0 pb-5">
-          <legend className="sr-only">Filter posts by tag</legend>
-          <button
-            aria-pressed={selectedTag === ''}
-            className={getTagFilterClassName(selectedTag === '')}
-            onClick={() => setSelectedTag('')}
-            type="button"
-          >
-            All
-            <span className={tagCountClassName}>{posts.length}</span>
-          </button>
-          {tags.map((tag) => (
-            <button
-              aria-pressed={selectedTag === tag.name}
-              className={getTagFilterClassName(selectedTag === tag.name)}
-              key={tag.name}
-              onClick={() => setSelectedTag(tag.name)}
-              type="button"
-            >
-              <FaHashtag aria-hidden="true" />
-              {tag.name}
-              <span className={tagCountClassName}>{tag.count}</span>
-            </button>
-          ))}
-        </fieldset>
-      )}
+        {visiblePosts.length > 0 ? (
+          <ol className="message-stream m-0 list-none p-0">
+            {visiblePosts.map((post) => (
+              <li data-post-accent={getPostAccent(post.slug)} key={post.slug}>
+                <Link
+                  className="community-message group grid grid-cols-[40px_minmax(0,1fr)] gap-3 border-b border-[var(--line)] px-4 py-5 text-inherit no-underline transition-colors hover:bg-[color-mix(in_srgb,var(--post-accent)_6%,transparent)] min-[680px]:grid-cols-[48px_minmax(0,1fr)] min-[680px]:gap-4 min-[680px]:px-6 min-[680px]:py-6"
+                  to={`/blog/${post.slug}`}
+                >
+                  <span className="relative z-10 flex size-10 items-center justify-center rounded-full border border-[color-mix(in_srgb,var(--post-accent)_70%,var(--line))] bg-[color-mix(in_srgb,var(--post-accent)_12%,var(--panel))] text-[1.15rem] shadow-[0_0_22px_color-mix(in_srgb,var(--post-accent)_26%,transparent)] transition-transform group-hover:-translate-y-0.5 group-hover:scale-105 min-[680px]:size-12 min-[680px]:text-[1.3rem]">
+                    {getPostEmoji(post.slug)}
+                    <span className="absolute -right-1 -bottom-1 size-2.5 rounded-full border-2 border-[var(--chat)] bg-[var(--post-accent)] shadow-[0_0_10px_var(--post-accent)]" />
+                  </span>
+                  <span className="min-w-0 [font-family:var(--font-ui)]">
+                    <span className="flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-0.5 text-[0.82rem]">
+                      <strong className="truncate text-[var(--post-accent-soft)]">
+                        {getPostAuthor(post.slug)}
+                      </strong>
+                      <span className="text-[var(--muted)]">@{authorAccount}</span>
+                      <time className="text-[0.7rem] text-[var(--dim)]" dateTime={post.date}>
+                        {post.date.replaceAll('-', '.')}
+                      </time>
+                    </span>
+                    <strong className="mt-2 block text-[clamp(1.02rem,3vw,1.2rem)] leading-[1.42] text-[var(--text-strong)] transition-colors group-hover:text-[var(--post-accent-soft)]">
+                      {post.title}
+                    </strong>
+                    <span className="mt-1.5 block text-[0.91rem] leading-[1.68] text-[var(--text)]">
+                      {post.description}
+                    </span>
+                    {post.tags.length > 0 && (
+                      <span className="mt-3 flex flex-wrap gap-1.5">
+                        {post.tags.map((tag) => (
+                          <span
+                            className="inline-flex items-center gap-1 rounded-md border border-[color-mix(in_srgb,var(--post-accent)_26%,var(--line))] bg-[color-mix(in_srgb,var(--post-accent)_7%,transparent)] px-2 py-1 text-[0.68rem] font-semibold text-[color-mix(in_srgb,var(--post-accent)_78%,var(--text))]"
+                            key={tag}
+                          >
+                            <FaHashtag className="size-[0.68em]" aria-hidden="true" />
+                            {tag}
+                          </span>
+                        ))}
+                      </span>
+                    )}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <div className="px-5 py-20 text-center text-[var(--muted)]">
+            No signals in this channel yet. Try another topic.
+          </div>
+        )}
+      </div>
+    </CommunityLayout>
+  )
+}
 
-      {visiblePosts.length > 0 ? (
-        <ol className="m-0 grid list-none gap-3.5 p-0">
-          {visiblePosts.map((post) => (
-            <li key={post.slug}>
-              <Link
-                className={postCardClassName}
-                data-post-accent={getPostAccent(post.slug)}
-                to={`/blog/${post.slug}`}
-              >
-                <span className="text-[0.82rem] font-bold text-[color-mix(in_srgb,var(--post-accent)_76%,var(--yellow))]">
-                  {post.date}
-                </span>
-                <div className="grid gap-2">
-                  <span className="text-[1.08rem] leading-[1.35] font-bold text-[var(--post-accent-soft)] underline decoration-[color-mix(in_srgb,var(--post-accent)_42%,transparent)] decoration-dashed decoration-1 underline-offset-[0.24em]">
-                    {post.title}
-                  </span>
-                  <span className="text-[0.94rem] leading-[1.65] text-[var(--muted)]">
-                    {post.description}
-                  </span>
-                  <TagList tags={post.tags} />
-                </div>
-              </Link>
-            </li>
-          ))}
-        </ol>
-      ) : (
-        <p className="m-0 border border-dashed border-[var(--line)] p-[22px] text-[var(--muted)]">
-          {selectedTag
-            ? `No public posts tagged "${selectedTag}" found.`
-            : 'No public posts found.'}
+function ArchiveDetails({ posts, tagCount }: { posts: BlogPostSummary[]; tagCount: number }) {
+  const newestPost = posts[0]
+  const oldestPost = posts.at(-1)
+
+  return (
+    <section className="overflow-hidden rounded-2xl border border-[var(--line)] bg-[rgba(7,16,11,0.78)]">
+      <div className="h-1 [background:var(--spectrum)]" />
+      <div className="p-4">
+        <p className="m-0 text-[0.66rem] font-bold tracking-[0.08em] text-[var(--pink)] uppercase">
+          Archive status
         </p>
-      )}
+        <h2 className="mt-2 mb-5 text-[1.25rem] font-bold tracking-[-0.03em] text-[var(--text-strong)] [font-family:var(--font-display)]">
+          Signal library
+        </h2>
+        <dl className="m-0 grid gap-3 text-[0.74rem] [font-family:var(--font-ui)]">
+          <ArchiveDetail label="Messages" value={String(posts.length)} />
+          <ArchiveDetail label="Channels" value={String(tagCount)} />
+          <ArchiveDetail label="Newest" value={newestPost?.date ?? '—'} />
+          <ArchiveDetail label="First signal" value={oldestPost?.date ?? '—'} />
+        </dl>
+      </div>
     </section>
   )
 }
 
-const postCardClassName = [
-  'relative grid min-h-[124px] grid-cols-1 gap-3 overflow-hidden rounded-lg border border-[color-mix(in_srgb,var(--post-accent)_34%,var(--line))] p-[18px] no-underline [background:linear-gradient(90deg,color-mix(in_srgb,var(--post-accent)_14%,transparent),transparent_42%),rgba(7,16,11,0.86)] transition-[border-color,background-color,transform] duration-[160ms] ease-out',
-  "before:absolute before:inset-y-0 before:left-0 before:w-[3px] before:bg-[linear-gradient(180deg,var(--post-accent),transparent_84%)] before:shadow-[0_0_24px_color-mix(in_srgb,var(--post-accent)_52%,transparent)] before:content-['']",
-  'hover:-translate-y-0.5 hover:border-[var(--post-accent)] hover:[background-color:color-mix(in_srgb,var(--post-accent)_10%,transparent)]',
-  'min-[680px]:grid-cols-[150px_1fr] min-[680px]:p-[22px]'
-].join(' ')
-
-const tagFilterBaseClassName = [
-  'inline-flex max-w-full cursor-pointer appearance-none items-center gap-1.5 rounded-full border px-3 py-1.5 text-[0.76rem] leading-[1.35] font-bold transition-[border-color,background-color,color,transform] duration-[160ms] ease-out [overflow-wrap:anywhere]',
-  '[&_svg]:size-[0.72em] [&_svg]:shrink-0'
-].join(' ')
-
-const tagFilterInactiveClassName =
-  'border-[color-mix(in_srgb,var(--green)_28%,var(--line))] text-[var(--green)] [background:linear-gradient(180deg,rgba(156,255,191,0.08),transparent),rgba(49,255,128,0.04)] hover:-translate-y-px hover:border-[color-mix(in_srgb,var(--green)_74%,var(--line))] hover:text-[var(--green-soft)] focus-visible:-translate-y-px focus-visible:border-[var(--green)] [&_svg]:text-[var(--green-soft)]'
-
-const tagFilterActiveClassName =
-  'border-[var(--green)] bg-[var(--green)] text-[var(--bg)] shadow-[0_0_20px_rgba(49,255,128,0.22)] [&_svg]:text-[var(--bg)]'
-
-const tagCountClassName =
-  'rounded-full border border-current px-[0.52em] py-[0.06em] text-[0.68rem] leading-[1.25] opacity-75'
-
-function getTagFilterClassName(isActive: boolean) {
-  return `${tagFilterBaseClassName} ${
-    isActive ? tagFilterActiveClassName : tagFilterInactiveClassName
-  }`
+function ArchiveDetail({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3 border-b border-[var(--line)] pb-2.5 last:border-0 last:pb-0">
+      <dt className="text-[var(--muted)]">{label}</dt>
+      <dd className="m-0 font-semibold text-[var(--cyan)]">{value}</dd>
+    </div>
+  )
 }

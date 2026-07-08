@@ -10,9 +10,14 @@
   --font-display: "Space Grotesk", "Arial Black", sans-serif;
   --font-ui: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI",
     "Noto Sans JP", sans-serif;
+  --font-mono: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
   --bg: #020403;
   --panel: #07100b;
   --panel-strong: #0b1911;
+  --rail: #010504;
+  --sidebar: #06100a;
+  --chat: #020805;
+  --hover: rgba(112, 247, 255, 0.07);
   --text: #d8e8dd;
   --text-strong: #effff4;
   --muted: #89a194;
@@ -99,8 +104,178 @@
   }
 }
 
+@keyframes spectrum-flow {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+@keyframes orb-turn {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+@keyframes sparkle-drift {
+  0%,
+  100% {
+    opacity: 0.42;
+    transform: translate3d(0, 0, 0);
+  }
+
+  50% {
+    opacity: 0.72;
+    transform: translate3d(-18px, 12px, 0);
+  }
+}
+
+@keyframes aurora-breathe {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(1) translate3d(0, 0, 0);
+  }
+
+  50% {
+    opacity: 0.8;
+    transform: scale(1.06) translate3d(-1.5%, 1%, 0);
+  }
+}
+
 .signal-pulse {
   animation: signal-pulse 1.8s ease-in-out infinite;
+}
+
+.online-spectrum {
+  background: var(--spectrum);
+  background-size: 400% 100%;
+  box-shadow: 0 0 12px var(--green), 0 0 20px rgba(250, 115, 218, 0.35);
+  animation: spectrum-flow 4s ease-in-out infinite;
+}
+
+.spectrum-text {
+  color: transparent;
+  background: var(--spectrum);
+  background-size: 200% 100%;
+  background-clip: text;
+  animation: spectrum-flow 7s ease-in-out infinite;
+  -webkit-background-clip: text;
+}
+
+.neon-edge {
+  position: relative;
+}
+
+.neon-edge::after {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 1px;
+  background: var(--spectrum);
+  background-size: 300% 100%;
+  content: "";
+  opacity: 0.6;
+  animation: spectrum-flow 6s ease-in-out infinite;
+}
+
+.server-orb::before {
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  background: conic-gradient(
+    from 0deg,
+    var(--blue),
+    var(--pink),
+    var(--yellow),
+    var(--green),
+    var(--cyan),
+    var(--blue)
+  );
+  box-shadow: 0 0 22px rgba(49, 255, 128, 0.22),
+    0 0 28px rgba(250, 115, 218, 0.13);
+  content: "";
+  animation: orb-turn 9s linear infinite;
+}
+
+.community-chat::before,
+.community-chat::after {
+  position: fixed;
+  pointer-events: none;
+  z-index: 0;
+  content: "";
+}
+
+.community-chat::before {
+  top: 3.5rem;
+  right: 0;
+  bottom: 0;
+  left: 19.25rem;
+  background: radial-gradient(circle at 82% 8%, rgba(250, 115, 218, 0.13), transparent 24rem),
+    radial-gradient(circle at 12% 44%, rgba(45, 172, 249, 0.1), transparent 22rem),
+    radial-gradient(circle at 72% 78%, rgba(49, 255, 128, 0.08), transparent 26rem);
+  animation: aurora-breathe 12s ease-in-out infinite;
+}
+
+.community-chat::after {
+  top: 3.5rem;
+  right: 0;
+  bottom: 0;
+  left: 19.25rem;
+  background-image: radial-gradient(circle, rgba(112, 247, 255, 0.8) 0 1px, transparent 1.5px),
+    radial-gradient(circle, rgba(250, 115, 218, 0.72) 0 1px, transparent 1.5px),
+    radial-gradient(circle, rgba(255, 223, 95, 0.55) 0 1px, transparent 1.5px);
+  background-position: 0 0, 38px 42px, 18px 76px;
+  background-size: 96px 96px, 132px 132px, 170px 170px;
+  opacity: 0.46;
+  mask-image: linear-gradient(180deg, #000, transparent 88%);
+  animation: sparkle-drift 10s ease-in-out infinite;
+}
+
+.message-stream > li {
+  position: relative;
+}
+
+.message-stream > li:not(:last-child)::before {
+  position: absolute;
+  top: 3.65rem;
+  bottom: -1px;
+  left: 2.68rem;
+  width: 1px;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--post-accent) 78%, transparent),
+    color-mix(in srgb, var(--post-accent) 8%, transparent)
+  );
+  box-shadow: 0 0 10px color-mix(in srgb, var(--post-accent) 32%, transparent);
+  content: "";
+}
+
+.community-message {
+  position: relative;
+  isolation: isolate;
+}
+
+.community-message::after {
+  position: absolute;
+  inset: 0 auto 0 0;
+  z-index: -1;
+  width: 0;
+  background: var(--post-accent);
+  box-shadow: 0 0 22px var(--post-accent);
+  content: "";
+  opacity: 0.75;
+  transition: width 180ms ease;
+}
+
+.community-message:hover::after,
+.community-message:focus-visible::after {
+  width: 2px;
 }
 
 .no-scrollbar {
@@ -119,6 +294,23 @@
     transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
+  }
+}
+
+@media (max-width: 899px) {
+  .community-chat::before,
+  .community-chat::after {
+    left: 0;
+  }
+
+  .community-chat::after {
+    opacity: 0.25;
+  }
+}
+
+@media (max-width: 679px) {
+  .message-stream > li:not(:last-child)::before {
+    left: 2.2rem;
   }
 }
 

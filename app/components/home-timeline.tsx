@@ -1,15 +1,10 @@
 import { type MouseEvent, useState } from 'react'
-import {
-  FaArrowRightLong,
-  FaArrowUpRightFromSquare,
-  FaHashtag,
-  FaRegBookmark,
-  FaThumbtack
-} from 'react-icons/fa6'
+import { FaArrowUpRightFromSquare, FaHashtag, FaRegBookmark, FaThumbtack } from 'react-icons/fa6'
 import { Link, useFetcher } from 'react-router'
+import { CommunityLayout, type TopicChannel } from '~/components/community-layout'
 import { PostModal } from '~/components/post-modal'
 import type { BlogPost, BlogPostSummary } from '~/lib/blog-post'
-import { filterPostsByTag, getTagFilters, type TagFilter as TagFilterData } from '~/lib/blog-tags'
+import { filterPostsByTag, getTagFilters } from '~/lib/blog-tags'
 import { getPostAccent } from '~/lib/post-accent'
 import { getPostAuthor, getPostEmoji } from '~/lib/post-identity'
 import { shouldOpenPostModal } from '~/lib/post-modal'
@@ -46,16 +41,47 @@ export function HomeTimeline({ posts }: HomeTimelineProps) {
     postFetcher.load(`/blog/${post.slug}`)
   }
 
+  const topics: TopicChannel[] = [
+    {
+      active: selectedTag === '',
+      count: posts.length,
+      label: 'all-signals',
+      onSelect: () => setSelectedTag('')
+    },
+    ...tags.map((tag) => ({
+      active: selectedTag === tag.name,
+      count: tag.count,
+      label: tag.name,
+      onSelect: () => setSelectedTag(tag.name)
+    }))
+  ]
+
   return (
     <>
-      <HomeTimelineView
-        onOpenPost={openPost}
-        onSelectTag={setSelectedTag}
-        posts={posts}
-        selectedTag={selectedTag}
-        tags={tags}
-        visiblePosts={visiblePosts}
-      />
+      <CommunityLayout
+        activeSection="home"
+        channelLabel={selectedTag ? selectedTag : 'home-base'}
+        channelMeta={
+          selectedTag
+            ? `${visiblePosts.length} transmissions tagged ${selectedTag}`
+            : 'Art, code, experiments, and bright little signals.'
+        }
+        rightSidebar={<SignalMembers posts={posts} />}
+        topics={topics}
+      >
+        <div className="mx-auto w-full max-w-[940px]">
+          <WelcomeMessage />
+          <TimelinePosts
+            onOpenPost={openPost}
+            selectedTag={selectedTag}
+            visiblePosts={visiblePosts}
+          />
+          <footer className="border-t border-[var(--line)] px-4 py-7 text-[0.65rem] leading-[1.7] text-[var(--dim)] min-[680px]:px-6">
+            {getCopyrightText(copyrightCurrentYear)} · Built somewhere between signal and noise.
+          </footer>
+        </div>
+      </CommunityLayout>
+
       {selectedPost && (
         <PostModal onClose={() => setSelectedPost(null)} post={modalPost} summary={selectedPost} />
       )}
@@ -63,125 +89,51 @@ export function HomeTimeline({ posts }: HomeTimelineProps) {
   )
 }
 
-type HomeTimelineViewProps = {
-  posts: BlogPostSummary[]
-  visiblePosts: BlogPostSummary[]
-  tags: TagFilterData[]
-  selectedTag: string
-  onSelectTag: (tag: string) => void
-  onOpenPost: (event: MouseEvent<HTMLAnchorElement>, post: BlogPostSummary) => void
-}
-
-function HomeTimelineView({
-  posts,
-  visiblePosts,
-  tags,
-  selectedTag,
-  onSelectTag,
-  onOpenPost
-}: HomeTimelineViewProps) {
+function WelcomeMessage() {
   return (
-    <div className="contents">
-      <section
-        className="min-w-0 border-x border-[var(--line)] bg-[rgba(2,8,5,0.7)]"
-        aria-labelledby="timeline-title"
-      >
-        <header className="sticky top-0 z-20 flex min-h-16 items-center justify-between border-b border-[var(--line)] px-4 backdrop-blur-xl [background:rgba(2,8,5,0.82)] min-[680px]:px-5">
-          <div>
-            <p className="m-0 text-[1.08rem] leading-none font-bold text-[var(--text-strong)] [font-family:var(--font-ui)]">
-              Home
-            </p>
-            <p className="mt-1.5 mb-0 text-[0.66rem] leading-none tracking-[0.12em] text-[var(--muted)] uppercase">
-              {visiblePosts.length} posts / public log
-            </p>
-          </div>
-          <span className="inline-flex items-center gap-2 text-[0.68rem] font-bold tracking-[0.08em] text-[var(--green)] uppercase">
-            <span className="signal-pulse size-2 rounded-full bg-[var(--green)] shadow-[0_0_14px_var(--green)]" />
-            online
-          </span>
-        </header>
-
-        <article className="relative border-b border-[var(--line)] px-4 py-5 min-[680px]:px-5">
-          <div className="grid grid-cols-[48px_minmax(0,1fr)] gap-3 min-[680px]:grid-cols-[52px_minmax(0,1fr)]">
-            <ProfileAvatar />
-            <div className="min-w-0">
-              <p className="mt-0 mb-1.5 flex items-center gap-1.5 text-[0.68rem] font-semibold text-[var(--yellow)] [font-family:var(--font-ui)]">
-                <FaThumbtack className="size-[0.72rem]" aria-hidden="true" />
-                Pinned post
-              </p>
-              <p className="mt-0 mb-2 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 [font-family:var(--font-ui)]">
-                <strong className="text-[0.96rem] text-[var(--text-strong)]">{authorName}</strong>
-                <span className="text-[0.8rem] text-[var(--muted)]">@{authorAccount}</span>
-              </p>
-              <h1
-                id="timeline-title"
-                className="m-0 text-[clamp(2rem,8vw,3.75rem)] leading-[0.95] font-bold tracking-[-0.055em] text-[var(--green-soft)] [font-family:var(--font-display)] [text-shadow:0_0_28px_rgba(49,255,128,0.2)]"
-              >
-                {siteName}
-              </h1>
-              <p className="mt-4 mb-0 max-w-[36rem] text-[0.98rem] leading-[1.65] text-[var(--text)] [font-family:var(--font-ui)]">
-                Art, code, and experiments from the edge of the terminal. Notes are posted here,
-                irregularly but deliberately.
-              </p>
-              <p className="mt-3 mb-0 text-[0.76rem] leading-[1.6] text-[var(--muted)]">
-                CHΔ0S://9X_QR · SYS∴VANTA_404 · RX#NOISE
-              </p>
-              <div className="mt-4 flex flex-wrap gap-4">
-                <a className={profileLinkClassName} href={artStationUrl}>
-                  ArtStation <FaArrowUpRightFromSquare aria-hidden="true" />
-                </a>
-                <a className={profileLinkClassName} href={xUrl}>
-                  X / Twitter <FaArrowUpRightFromSquare aria-hidden="true" />
-                </a>
-              </div>
-            </div>
-          </div>
-        </article>
-
-        {tags.length > 0 && (
-          <div className="no-scrollbar overflow-x-auto border-b border-[var(--line)] px-4 py-3 min-[1180px]:hidden">
-            <div className="flex w-max gap-2">
-              <TagFilter
-                active={selectedTag === ''}
-                count={posts.length}
-                label="All"
-                onClick={() => onSelectTag('')}
-              />
-              {tags.map((tag) => (
-                <TagFilter
-                  active={selectedTag === tag.name}
-                  count={tag.count}
-                  key={tag.name}
-                  label={tag.name}
-                  onClick={() => onSelectTag(tag.name)}
-                />
-              ))}
-            </div>
-          </div>
-        )}
-
-        <TimelinePosts
-          onOpenPost={onOpenPost}
-          selectedTag={selectedTag}
-          visiblePosts={visiblePosts}
-        />
-
-        <footer className="border-t border-[var(--line)] px-4 py-6 text-[0.65rem] leading-[1.7] text-[var(--dim)] min-[680px]:px-5 min-[1180px]:hidden">
-          <p className="m-0">
-            {getCopyrightText(copyrightCurrentYear)}
-            <br />
-            Built somewhere between signal and noise.
+    <article className="relative overflow-hidden border-b border-[var(--line)] px-4 py-7 min-[680px]:px-6 min-[680px]:py-9">
+      <div className="absolute top-0 right-0 h-48 w-48 rounded-full bg-[rgba(250,115,218,0.1)] blur-3xl" />
+      <div className="absolute bottom-0 left-1/3 h-32 w-56 rounded-full bg-[rgba(45,172,249,0.08)] blur-3xl" />
+      <div className="relative grid grid-cols-[44px_minmax(0,1fr)] gap-3 min-[680px]:grid-cols-[52px_minmax(0,1fr)] min-[680px]:gap-4">
+        <span className="welcome-avatar relative flex size-11 items-center justify-center rounded-full border border-[rgba(156,255,191,0.58)] bg-[var(--panel-strong)] text-[0.76rem] font-bold tracking-[-0.08em] text-[var(--green-soft)] shadow-[0_0_28px_rgba(49,255,128,0.2)] min-[680px]:size-12">
+          0r
+          <span className="online-spectrum absolute right-[-2px] bottom-[-2px] size-3 rounded-full border-2 border-[var(--chat)]" />
+        </span>
+        <div className="min-w-0">
+          <p className="mt-0 mb-1.5 flex items-center gap-1.5 text-[0.68rem] font-semibold text-[var(--yellow)] [font-family:var(--font-ui)]">
+            <FaThumbtack className="size-[0.72rem]" aria-hidden="true" />
+            Pinned welcome
           </p>
-        </footer>
-      </section>
-
-      <ExploreSidebar
-        onSelectTag={onSelectTag}
-        postCount={posts.length}
-        selectedTag={selectedTag}
-        tags={tags}
-      />
-    </div>
+          <p className="mt-0 mb-2 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 [font-family:var(--font-ui)]">
+            <strong className="text-[0.96rem] text-[var(--text-strong)]">{authorName}</strong>
+            <span className="text-[0.8rem] text-[var(--muted)]">@{authorAccount}</span>
+            <span className="rounded-md bg-[rgba(45,172,249,0.15)] px-1.5 py-0.5 text-[0.58rem] font-bold tracking-[0.06em] text-[var(--cyan)] uppercase">
+              host
+            </span>
+          </p>
+          <h1 className="spectrum-text m-0 text-[clamp(2rem,8vw,4rem)] leading-[0.95] font-bold tracking-[-0.055em] [font-family:var(--font-display)] [filter:drop-shadow(0_0_18px_rgba(49,255,128,0.18))]">
+            {siteName}
+          </h1>
+          <p className="mt-4 mb-0 max-w-[38rem] text-[0.98rem] leading-[1.68] text-[var(--text)] [font-family:var(--font-ui)]">
+            Art, code, and experiments from the edge of the terminal. Drop in, follow a channel, and
+            see what is glowing today.
+          </p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Reaction emoji="✨" label="hello" />
+            <Reaction emoji="⚡" label="signal boost" />
+            <Reaction emoji="🌈" label="stay weird" />
+          </div>
+          <div className="mt-4 flex flex-wrap gap-4">
+            <a className={profileLinkClassName} href={artStationUrl}>
+              ArtStation <FaArrowUpRightFromSquare aria-hidden="true" />
+            </a>
+            <a className={profileLinkClassName} href={xUrl}>
+              X / Twitter <FaArrowUpRightFromSquare aria-hidden="true" />
+            </a>
+          </div>
+        </div>
+      </div>
+    </article>
   )
 }
 
@@ -196,61 +148,59 @@ function TimelinePosts({
 }) {
   if (visiblePosts.length === 0) {
     return (
-      <div className="px-5 py-16 text-center">
-        <FaRegBookmark className="mx-auto mb-4 text-[var(--green)]" aria-hidden="true" />
+      <div className="px-5 py-20 text-center">
+        <FaRegBookmark className="mx-auto mb-4 text-[var(--pink)]" aria-hidden="true" />
         <p className="m-0 text-[var(--muted)] [font-family:var(--font-ui)]">
-          No public posts tagged “{selectedTag}” found.
+          No signals tagged “{selectedTag}” yet. Try another channel.
         </p>
       </div>
     )
   }
 
   return (
-    <ol className="m-0 list-none p-0">
+    <ol className="message-stream m-0 list-none p-0">
       {visiblePosts.map((post) => (
         <li data-post-accent={getPostAccent(post.slug)} key={post.slug}>
           <Link
             aria-haspopup="dialog"
-            className={postLinkClassName}
+            className="community-message group grid grid-cols-[40px_minmax(0,1fr)] gap-3 border-b border-[var(--line)] px-4 py-5 text-inherit no-underline transition-[background-color] duration-200 hover:bg-[color-mix(in_srgb,var(--post-accent)_6%,transparent)] focus-visible:bg-[color-mix(in_srgb,var(--post-accent)_6%,transparent)] min-[680px]:grid-cols-[48px_minmax(0,1fr)] min-[680px]:gap-4 min-[680px]:px-6 min-[680px]:py-6"
             onClick={(event) => onOpenPost(event, post)}
             to={`/blog/${post.slug}`}
           >
             <span
-              className="relative z-10 mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-full border text-[1.15rem] leading-none shadow-[0_0_20px_color-mix(in_srgb,var(--post-accent)_22%,transparent)] [background:color-mix(in_srgb,var(--post-accent)_10%,var(--panel))] [border-color:color-mix(in_srgb,var(--post-accent)_65%,var(--line))] min-[680px]:size-11 min-[680px]:text-[1.25rem]"
+              className="relative z-10 mt-0.5 flex size-10 items-center justify-center rounded-full border text-[1.15rem] leading-none shadow-[0_0_22px_color-mix(in_srgb,var(--post-accent)_28%,transparent)] transition-[transform,box-shadow] group-hover:-translate-y-0.5 group-hover:scale-105 group-hover:shadow-[0_0_30px_color-mix(in_srgb,var(--post-accent)_48%,transparent)] [background:color-mix(in_srgb,var(--post-accent)_12%,var(--panel))] [border-color:color-mix(in_srgb,var(--post-accent)_70%,var(--line))] min-[680px]:size-12 min-[680px]:text-[1.3rem]"
               aria-hidden="true"
             >
               {getPostEmoji(post.slug)}
+              <span className="absolute -right-1 -bottom-1 size-2.5 rounded-full border-2 border-[var(--chat)] bg-[var(--post-accent)] shadow-[0_0_10px_var(--post-accent)]" />
             </span>
 
             <div className="min-w-0 [font-family:var(--font-ui)]">
-              <div className="flex min-w-0 items-baseline gap-1.5 text-[0.82rem] leading-[1.35]">
-                <strong className="min-w-0 truncate text-[var(--text-strong)]">
+              <div className="flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-0.5 text-[0.82rem] leading-[1.35]">
+                <strong className="min-w-0 truncate text-[var(--post-accent-soft)]">
                   {getPostAuthor(post.slug)}
                 </strong>
                 <span className="truncate text-[var(--muted)]">@{authorAccount}</span>
-                <span className="shrink-0 text-[var(--dim)]" aria-hidden="true">
-                  ·
-                </span>
-                <time
-                  className="shrink-0 font-sans text-[0.72rem] text-[var(--muted)]"
-                  dateTime={post.date}
-                >
+                <time className="shrink-0 text-[0.7rem] text-[var(--dim)]" dateTime={post.date}>
                   {post.date.replaceAll('-', '.')}
                 </time>
               </div>
 
-              <h2 className="mt-2 mb-0 text-[clamp(1.02rem,3vw,1.18rem)] leading-[1.45] font-bold text-[var(--text-strong)] transition-colors group-hover:text-[var(--post-accent-soft)]">
+              <h2 className="mt-2 mb-0 text-[clamp(1.02rem,3vw,1.2rem)] leading-[1.42] font-bold text-[var(--text-strong)] transition-colors group-hover:text-[var(--post-accent-soft)]">
                 {post.title}
               </h2>
-              <p className="mt-1.5 mb-0 text-[0.91rem] leading-[1.65] text-[var(--text)]">
+              <p className="mt-1.5 mb-0 text-[0.91rem] leading-[1.68] text-[var(--text)]">
                 {post.description}
               </p>
 
               {post.tags.length > 0 && (
-                <ul className="mt-3 mb-0 flex list-none flex-wrap gap-x-3 gap-y-1 p-0">
+                <ul
+                  className="mt-3 mb-0 flex list-none flex-wrap gap-1.5 p-0"
+                  aria-label="Reactions"
+                >
                   {post.tags.map((tag) => (
                     <li
-                      className="flex items-center gap-1 text-[0.72rem] font-medium text-[color-mix(in_srgb,var(--post-accent)_76%,var(--muted))]"
+                      className="inline-flex items-center gap-1 rounded-md border border-[color-mix(in_srgb,var(--post-accent)_26%,var(--line))] bg-[color-mix(in_srgb,var(--post-accent)_7%,transparent)] px-2 py-1 text-[0.68rem] font-semibold text-[color-mix(in_srgb,var(--post-accent)_78%,var(--text))] transition-colors group-hover:border-[color-mix(in_srgb,var(--post-accent)_48%,var(--line))]"
                       key={tag}
                     >
                       <FaHashtag className="size-[0.68em]" aria-hidden="true" />
@@ -259,14 +209,6 @@ function TimelinePosts({
                   ))}
                 </ul>
               )}
-
-              <span className="mt-4 flex items-center justify-between border-t border-[color-mix(in_srgb,var(--post-accent)_16%,var(--line))] pt-3 text-[0.72rem] font-bold tracking-[0.04em] text-[var(--muted)] transition-colors group-hover:text-[var(--post-accent)]">
-                Read the post
-                <FaArrowRightLong
-                  className="transition-transform group-hover:translate-x-1"
-                  aria-hidden="true"
-                />
-              </span>
             </div>
           </Link>
         </li>
@@ -275,113 +217,63 @@ function TimelinePosts({
   )
 }
 
-function ExploreSidebar({
-  postCount,
-  tags,
-  selectedTag,
-  onSelectTag
-}: {
-  postCount: number
-  tags: TagFilterData[]
-  selectedTag: string
-  onSelectTag: (tag: string) => void
-}) {
+function SignalMembers({ posts }: { posts: BlogPostSummary[] }) {
+  const memberPosts = posts.slice(0, 6)
+
   return (
-    <aside className="hidden min-w-0 px-5 pt-6 min-[1180px]:block" aria-label="Explore posts">
-      <div className="sticky top-6">
-        <section className="overflow-hidden rounded-2xl border border-[var(--line)] bg-[rgba(7,16,11,0.82)]">
-          <div className="h-1 [background:var(--spectrum)]" />
-          <div className="p-4">
-            <h2 className="m-0 text-[1.2rem] font-bold tracking-[-0.03em] text-[var(--text-strong)] [font-family:var(--font-display)]">
-              Explore channels
-            </h2>
-            <p className="mt-1.5 mb-4 text-[0.78rem] leading-[1.5] text-[var(--muted)] [font-family:var(--font-ui)]">
-              Filter the feed by topic.
-            </p>
-            <div className="flex flex-col gap-1.5">
-              <TagFilter
-                active={selectedTag === ''}
-                count={postCount}
-                label="All posts"
-                onClick={() => onSelectTag('')}
-                wide
-              />
-              {tags.map((tag) => (
-                <TagFilter
-                  active={selectedTag === tag.name}
-                  count={tag.count}
-                  key={tag.name}
-                  label={tag.name}
-                  onClick={() => onSelectTag(tag.name)}
-                  wide
-                />
-              ))}
-            </div>
-          </div>
-        </section>
-        <p className="mt-4 px-2 text-[0.65rem] leading-[1.7] text-[var(--dim)]">
-          {getCopyrightText(copyrightCurrentYear)}
-          <br />
-          Built somewhere between signal and noise.
-        </p>
+    <section>
+      <p className={detailLabelClassName}>Online signals — {memberPosts.length + 1}</p>
+      <div className="mb-4 flex items-center gap-3 rounded-lg bg-[rgba(49,255,128,0.045)] px-2 py-2 [font-family:var(--font-ui)]">
+        <span className="relative flex size-9 items-center justify-center rounded-full border border-[var(--green)] bg-[var(--panel-strong)] text-[0.68rem] font-bold text-[var(--green-soft)]">
+          0r
+          <span className="online-spectrum absolute right-[-2px] bottom-[-2px] size-3 rounded-full border-2 border-[var(--sidebar)]" />
+        </span>
+        <span className="min-w-0">
+          <strong className="block truncate text-[0.78rem] text-[var(--green-soft)]">
+            {authorName}
+          </strong>
+          <span className="block truncate text-[0.64rem] text-[var(--muted)]">
+            hosting the signal
+          </span>
+        </span>
       </div>
-    </aside>
+      <div className="grid gap-1">
+        {memberPosts.map((post) => (
+          <div
+            className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 [font-family:var(--font-ui)] hover:bg-[var(--hover)]"
+            data-post-accent={getPostAccent(post.slug)}
+            key={post.slug}
+          >
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-full border border-[color-mix(in_srgb,var(--post-accent)_56%,var(--line))] bg-[var(--panel)] text-[0.95rem] shadow-[0_0_14px_color-mix(in_srgb,var(--post-accent)_18%,transparent)]">
+              {getPostEmoji(post.slug)}
+            </span>
+            <span className="min-w-0">
+              <strong className="block truncate text-[0.72rem] text-[var(--post-accent-soft)]">
+                {getPostAuthor(post.slug)}
+              </strong>
+              <span className="block truncate text-[0.6rem] text-[var(--dim)]">transmitting</span>
+            </span>
+          </div>
+        ))}
+      </div>
+      <p className="mt-5 px-2 text-[0.62rem] leading-[1.7] text-[var(--dim)]">
+        A playful relay of art, code, games, and experiments from Tokyo / JST.
+      </p>
+    </section>
   )
 }
 
-function ProfileAvatar() {
+function Reaction({ emoji, label }: { emoji: string; label: string }) {
   return (
-    <span
-      className="relative flex size-11 items-center justify-center rounded-full border border-[rgba(156,255,191,0.54)] bg-[var(--panel-strong)] text-[0.78rem] font-bold tracking-[-0.08em] text-[var(--green-soft)] shadow-[0_0_28px_rgba(49,255,128,0.16)] before:absolute before:inset-[-4px] before:-z-10 before:rounded-full before:opacity-60 before:blur-[6px] before:content-[''] before:[background:var(--spectrum)] min-[680px]:size-12"
-      aria-hidden="true"
-    >
-      0r
+    <span className="inline-flex items-center gap-1.5 rounded-md border border-[var(--line)] bg-[rgba(7,16,11,0.72)] px-2 py-1 text-[0.68rem] font-semibold text-[var(--muted)] [font-family:var(--font-ui)]">
+      <span aria-hidden="true">{emoji}</span>
+      {label}
     </span>
   )
 }
 
-function TagFilter({
-  active,
-  count,
-  label,
-  onClick,
-  wide = false
-}: {
-  active: boolean
-  count: number
-  label: string
-  onClick: () => void
-  wide?: boolean
-}) {
-  return (
-    <button
-      aria-pressed={active}
-      className={`${tagFilterClassName} ${wide ? 'w-full justify-between rounded-xl' : ''} ${
-        active
-          ? 'border-[var(--green)] bg-[rgba(49,255,128,0.12)] text-[var(--green-soft)] shadow-[0_0_16px_rgba(49,255,128,0.08)]'
-          : 'border-[var(--line)] text-[var(--muted)] hover:border-[color-mix(in_srgb,var(--green)_50%,var(--line))] hover:bg-[rgba(49,255,128,0.04)] hover:text-[var(--text)]'
-      }`}
-      onClick={onClick}
-      type="button"
-    >
-      <span className="flex min-w-0 items-center gap-1.5">
-        <FaHashtag className="size-[0.7em] shrink-0 text-[var(--green)]" aria-hidden="true" />
-        <span className="truncate">{label}</span>
-      </span>
-      <span className="shrink-0 text-[0.65rem] text-[var(--dim)]">{count}</span>
-    </button>
-  )
-}
-
 const profileLinkClassName =
-  'inline-flex items-center gap-1.5 text-[0.78rem] font-bold text-[var(--green-soft)] no-underline transition-colors [font-family:var(--font-ui)] hover:text-[var(--green)] [&_svg]:size-[0.72em]'
+  'inline-flex items-center gap-1.5 text-[0.78rem] font-bold text-[var(--green-soft)] no-underline transition-colors [font-family:var(--font-ui)] hover:text-[var(--cyan)] [&_svg]:size-[0.72em]'
 
-const postLinkClassName = [
-  'group relative grid grid-cols-[40px_minmax(0,1fr)] gap-3 overflow-hidden border-b border-[var(--line)] px-4 py-5 text-inherit no-underline transition-[background-color] duration-200 min-[680px]:grid-cols-[44px_minmax(0,1fr)] min-[680px]:px-5 min-[680px]:py-6',
-  "before:absolute before:top-[4.1rem] before:bottom-[-1px] before:left-[2.25rem] before:w-px before:bg-[linear-gradient(180deg,color-mix(in_srgb,var(--post-accent)_52%,transparent),color-mix(in_srgb,var(--post-accent)_8%,transparent))] before:content-[''] min-[680px]:before:left-[2.6rem]",
-  "after:absolute after:inset-y-0 after:left-0 after:w-0 after:bg-[var(--post-accent)] after:opacity-70 after:shadow-[0_0_20px_var(--post-accent)] after:transition-[width] after:content-['']",
-  'hover:bg-[color-mix(in_srgb,var(--post-accent)_5%,transparent)] hover:after:w-0.5 focus-visible:bg-[color-mix(in_srgb,var(--post-accent)_5%,transparent)] focus-visible:after:w-0.5'
-].join(' ')
-
-const tagFilterClassName =
-  'inline-flex h-9 cursor-pointer items-center gap-3 rounded-full border bg-transparent px-3 text-[0.75rem] font-semibold transition-[border-color,background-color,color] [font-family:var(--font-ui)]'
+const detailLabelClassName =
+  'm-0 px-2 pb-2 text-[0.66rem] font-bold tracking-[0.04em] text-[var(--dim)] uppercase [font-family:var(--font-ui)]'
