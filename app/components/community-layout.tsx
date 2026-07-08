@@ -1,13 +1,13 @@
 import { type ReactNode, useState } from 'react'
 import {
-  FaArrowUpRightFromSquare,
   FaBars,
   FaChevronDown,
   FaHashtag,
   FaHouse,
   FaPalette,
   FaUserGroup,
-  FaXmark
+  FaXmark,
+  FaXTwitter
 } from 'react-icons/fa6'
 import { Link } from 'react-router'
 import { artStationUrl, authorAccount, authorName, siteName, xUrl } from '~/lib/site'
@@ -193,7 +193,7 @@ function ServerRail() {
           <FaPalette aria-hidden="true" />
         </RailLink>
         <RailLink href={xUrl} label="X / Twitter">
-          <FaArrowUpRightFromSquare aria-hidden="true" />
+          <FaXTwitter aria-hidden="true" />
         </RailLink>
         <span
           className="mt-auto mb-2 size-2 rounded-full bg-[var(--pink)] shadow-[0_0_12px_var(--pink)]"
