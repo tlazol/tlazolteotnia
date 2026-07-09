@@ -118,7 +118,12 @@ function ReactionButton({
     >
       <span aria-hidden="true">{reaction.emoji}</span>
       <span>{reaction.count}</span>
-      {reaction.reacted && <span aria-hidden="true">✓</span>}
+      <span
+        aria-hidden="true"
+        className={`inline-block w-[0.7em] ${reaction.reacted ? '' : 'invisible'}`}
+      >
+        ✓
+      </span>
     </button>
   )
 }

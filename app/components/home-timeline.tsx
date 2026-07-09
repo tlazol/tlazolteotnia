@@ -115,6 +115,7 @@ export function HomeTimeline({ posts, reactionsBySlug: initialReactions }: HomeT
           onReaction={updateReaction}
           onReactions={updateReactions}
           post={modalPost}
+          reactions={reactionsBySlug[selectedPost.slug] ?? []}
           summary={selectedPost}
         />
       )}

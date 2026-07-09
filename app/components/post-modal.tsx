@@ -13,13 +13,21 @@ const MarkdownBody = lazy(() =>
 
 type PostModalProps = {
   post: BlogPost | null
+  reactions: ReactionCount[]
   summary: BlogPostSummary
   onClose: () => void
   onReaction: (slug: string, reaction: ReactionCount) => void
   onReactions: (slug: string, reactions: ReactionCount[]) => void
 }
 
-export function PostModal({ post, summary, onClose, onReaction, onReactions }: PostModalProps) {
+export function PostModal({
+  post,
+  reactions,
+  summary,
+  onClose,
+  onReaction,
+  onReactions
+}: PostModalProps) {
   const reactionFetcher = useFetcher<{ reactions: ReactionCount[] }>()
   const dialogRef = useRef<HTMLDialogElement>(null)
   const closeButtonRef = useRef<HTMLButtonElement>(null)
@@ -120,7 +128,7 @@ export function PostModal({ post, summary, onClose, onReaction, onReactions }: P
               <TagList tags={summary.tags} />
               <ReactionBar
                 onReaction={(reaction) => onReaction(summary.slug, reaction)}
-                reactions={reactionFetcher.data?.reactions ?? []}
+                reactions={reactionFetcher.data?.reactions ?? reactions}
                 slug={summary.slug}
               />
               <p
