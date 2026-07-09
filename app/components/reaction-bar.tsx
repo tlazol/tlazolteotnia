@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { MdAddReaction } from 'react-icons/md'
 import { useFetcher } from 'react-router'
 import { mergeReaction, REACTION_EMOJIS, type ReactionCount } from '~/lib/reactions'
@@ -143,6 +143,7 @@ function ReactionPicker({
   open: boolean
   pendingEmoji: string | null
 }) {
+  const gradientId = `reaction-rainbow-${useId().replaceAll(':', '')}`
   const ref = useRef<HTMLDivElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
   const toggleRef = useRef<HTMLButtonElement>(null)
@@ -169,12 +170,17 @@ function ReactionPicker({
 
   return (
     <div className="reaction-picker relative" ref={ref}>
-      <span aria-hidden="true" className="reaction-picker__spark reaction-picker__spark--one">
-        ✦
-      </span>
-      <span aria-hidden="true" className="reaction-picker__spark reaction-picker__spark--two">
-        ·
-      </span>
+      <svg aria-hidden="true" className="absolute size-0">
+        <defs>
+          <linearGradient id={gradientId} x1="0%" x2="100%" y1="0%" y2="100%">
+            <stop offset="0%" stopColor="#58c7ff" />
+            <stop offset="25%" stopColor="#ff68de" />
+            <stop offset="50%" stopColor="#ffe76d" />
+            <stop offset="75%" stopColor="#52ff91" />
+            <stop offset="100%" stopColor="#70f7ff" />
+          </linearGradient>
+        </defs>
+      </svg>
       <button
         aria-expanded={open}
         aria-haspopup="menu"
@@ -185,7 +191,7 @@ function ReactionPicker({
         type="button"
       >
         <span className="reaction-picker__icon" aria-hidden="true">
-          <MdAddReaction />
+          <MdAddReaction style={{ fill: `url(#${gradientId})` }} />
         </span>
       </button>
       {open && (
