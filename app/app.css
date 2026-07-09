@@ -177,8 +177,28 @@
     #70f7ff,
     #58c7ff
   );
-  background-size: 400% 400%;
-  animation: spectrum-flow 6s ease-in-out infinite;
+  background-position: center;
+  background-size: 220% 220%;
+}
+
+[data-post-accent="green"] .animal-avatar {
+  background-position: 18% 72%;
+}
+
+[data-post-accent="blue"] .animal-avatar {
+  background-position: 82% 24%;
+}
+
+[data-post-accent="pink"] .animal-avatar {
+  background-position: 36% 12%;
+}
+
+[data-post-accent="yellow"] .animal-avatar {
+  background-position: 68% 88%;
+}
+
+[data-post-accent="red"] .animal-avatar {
+  background-position: 8% 42%;
 }
 
 .animal-avatar__emoji {
