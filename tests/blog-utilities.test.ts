@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { filterPostsByTag, getTagFilters } from '../app/lib/blog-tags'
 import { getPostAccent } from '../app/lib/post-accent'
-import { getPostAuthor, getPostEmoji } from '../app/lib/post-identity'
+import {
+  getPostAuthor,
+  getPostEmoji,
+  getPostIdentity,
+  getPostSpecies
+} from '../app/lib/post-identity'
 import { shouldOpenPostModal } from '../app/lib/post-modal'
 import {
   getAbsoluteUrl,
@@ -47,6 +52,23 @@ describe('blog utilities', () => {
       getPostAuthor('same')
     ])
     expect(getPostAccent('same')).toMatch(/green|blue|pink|yellow|red/)
+  })
+
+  it('gives every published article its own animal identity', () => {
+    const slugs = Object.keys(
+      import.meta.glob<string>('../content/blog/*.md', {
+        eager: true,
+        query: '?raw',
+        import: 'default'
+      })
+    ).map((path) => path.split('/').at(-1)?.replace(/\.md$/, '') ?? '')
+    const identities = slugs.map(getPostIdentity)
+
+    expect(new Set(identities.map(({ author }) => author))).toHaveLength(slugs.length)
+    expect(new Set(identities.map(({ emoji }) => emoji))).toHaveLength(slugs.length)
+    expect(new Set(identities.map(({ species }) => species))).toHaveLength(slugs.length)
+    expect(identities.every(({ species }) => species !== 'なかま')).toBe(true)
+    expect(getPostSpecies('react-router-renewal')).toBe('キツネ')
   })
 
   it('builds canonical absolute, post, and OG image URLs', () => {

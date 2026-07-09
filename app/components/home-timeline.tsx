@@ -1,4 +1,4 @@
-import { type MouseEvent, useState } from 'react'
+import { type MouseEvent, useEffect, useState } from 'react'
 import {
   FaArrowUpRightFromSquare,
   FaHashtag,
@@ -258,7 +258,11 @@ function TimelinePosts({
 }
 
 function SignalMembers({ posts }: { posts: BlogPostSummary[] }) {
-  const memberPosts = posts.slice(0, 6)
+  const [memberPosts, setMemberPosts] = useState(() => posts.slice(0, 6))
+
+  useEffect(() => {
+    setMemberPosts(pickRandomPosts(posts, 6))
+  }, [posts])
 
   return (
     <section>
@@ -301,6 +305,20 @@ function SignalMembers({ posts }: { posts: BlogPostSummary[] }) {
       </p>
     </section>
   )
+}
+
+function pickRandomPosts(posts: BlogPostSummary[], count: number) {
+  const shuffledPosts = [...posts]
+
+  for (let index = shuffledPosts.length - 1; index > 0; index -= 1) {
+    const randomIndex = Math.floor(Math.random() * (index + 1))
+    ;[shuffledPosts[index], shuffledPosts[randomIndex]] = [
+      shuffledPosts[randomIndex],
+      shuffledPosts[index]
+    ]
+  }
+
+  return shuffledPosts.slice(0, count)
 }
 
 function Reaction({ emoji, label }: { emoji: string; label: string }) {
