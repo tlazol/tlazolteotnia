@@ -4,6 +4,14 @@ export type PostIdentity = {
   species: string
 }
 
+const callSignGlyphs: Record<string, string> = {
+  A: '∆',
+  E: 'Ξ',
+  I: '⮒',
+  O: 'Ø',
+  U: '∪'
+}
+
 // Every published article has its own member of the animal relay. Keeping the
 // roster explicit prevents hash collisions and makes a new animal a deliberate
 // part of publishing a new article.
@@ -74,5 +82,19 @@ export function getPostSpecies(slug: string) {
 }
 
 function animal(emoji: string, author: string, species: string): PostIdentity {
-  return { emoji, author, species }
+  return { emoji, author: distortCallsign(author), species }
+}
+
+function distortCallsign(author: string) {
+  return author
+    .replace('://', '⫶')
+    .split(/(⫶)/)
+    .map((part) => {
+      if (part === '⫶') return part
+
+      const glyphs = Array.from(part, (character) => callSignGlyphs[character] ?? character)
+      if (glyphs.length >= 5) glyphs.splice(-2, 0, '·')
+      return glyphs.join('')
+    })
+    .join('')
 }
