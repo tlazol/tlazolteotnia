@@ -67,8 +67,8 @@ export default function BlogPost({ loaderData }: Route.ComponentProps) {
 
   return (
     <CommunityLayout
-      activeSection="blog"
-      channelLabel="long-form"
+      activeSection="home"
+      channelLabel={post.slug}
       channelMeta={post.title}
       rightSidebar={<PostDetails accent={accent} post={post} />}
       statusLabel="reading mode"
@@ -78,7 +78,7 @@ export default function BlogPost({ loaderData }: Route.ComponentProps) {
           <div className="flex min-h-11 w-full max-w-[940px] items-center px-4 min-[680px]:px-6">
             <Link
               className="inline-flex items-center gap-2 text-[0.72rem] font-semibold text-[var(--muted)] no-underline transition-colors hover:text-[var(--post-accent-soft)] [font-family:var(--font-ui)]"
-              to="/blog"
+              to="/"
             >
               <FaArrowLeftLong className="text-[var(--post-accent)]" aria-hidden="true" />
               Back to all posts

@@ -232,16 +232,9 @@ function ChannelNavigation({
         <ChannelLink
           active={activeSection === 'home'}
           icon={<FaHouse />}
-          label="home-base"
+          label="top"
           onClick={onNavigate}
           to="/"
-        />
-        <ChannelLink
-          active={activeSection === 'blog'}
-          icon={<FaHashtag />}
-          label="all-posts"
-          onClick={onNavigate}
-          to="/blog"
         />
       </div>
 

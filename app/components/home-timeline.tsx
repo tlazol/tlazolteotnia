@@ -60,7 +60,7 @@ export function HomeTimeline({ posts }: HomeTimelineProps) {
     <>
       <CommunityLayout
         activeSection="home"
-        channelLabel={selectedTag ? selectedTag : 'home-base'}
+        channelLabel={selectedTag ? selectedTag : 'top'}
         channelMeta={
           selectedTag
             ? `${visiblePosts.length} transmissions tagged ${selectedTag}`
