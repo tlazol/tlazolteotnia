@@ -1,5 +1,12 @@
 import { type MouseEvent, useState } from 'react'
-import { FaArrowUpRightFromSquare, FaHashtag, FaRegBookmark, FaThumbtack } from 'react-icons/fa6'
+import {
+  FaArrowUpRightFromSquare,
+  FaHashtag,
+  FaRegBookmark,
+  FaSatelliteDish,
+  FaThumbtack,
+  FaWandMagicSparkles
+} from 'react-icons/fa6'
 import { Link, useFetcher } from 'react-router'
 import { CommunityLayout, type TopicChannel } from '~/components/community-layout'
 import { PostModal } from '~/components/post-modal'
@@ -70,7 +77,7 @@ export function HomeTimeline({ posts }: HomeTimelineProps) {
         topics={topics}
       >
         <div className="w-full">
-          <WelcomeMessage />
+          <WelcomeMessage selectedTag={selectedTag} />
           <TimelinePosts
             onOpenPost={openPost}
             selectedTag={selectedTag}
@@ -91,7 +98,35 @@ export function HomeTimeline({ posts }: HomeTimelineProps) {
   )
 }
 
-function WelcomeMessage() {
+function WelcomeMessage({ selectedTag }: { selectedTag: string }) {
+  if (selectedTag) {
+    return (
+      <header className="relative overflow-hidden border-b border-[var(--line)]">
+        <div className="absolute top-0 right-8 h-40 w-40 rounded-full bg-[rgba(45,172,249,0.11)] blur-3xl" />
+        <div className="relative flex w-full max-w-[940px] items-start gap-4 px-4 py-8 min-[680px]:px-6 min-[680px]:py-10">
+          <span className="server-orb relative hidden size-12 shrink-0 items-center justify-center rounded-2xl min-[520px]:flex">
+            <span className="relative z-10 flex size-[42px] items-center justify-center rounded-[13px] bg-[var(--panel-strong)] text-[var(--cyan)]">
+              <FaSatelliteDish aria-hidden="true" />
+            </span>
+          </span>
+          <div>
+            <p className="m-0 flex items-center gap-2 text-[0.68rem] font-bold tracking-[0.08em] text-[var(--pink)] uppercase">
+              <FaWandMagicSparkles aria-hidden="true" />
+              Transmission archive
+            </p>
+            <h1 className="mt-2 mb-0 text-[clamp(2rem,8vw,3.7rem)] leading-none font-bold tracking-[-0.05em] text-[var(--text-strong)] [font-family:var(--font-display)]">
+              {selectedTag}
+            </h1>
+            <p className="mt-3 mb-0 max-w-[36rem] text-[0.92rem] leading-[1.65] text-[var(--muted)]">
+              Notes on frontend work, tools, art, games, experiments, and whatever else joins the
+              signal.
+            </p>
+          </div>
+        </div>
+      </header>
+    )
+  }
+
   return (
     <article className="relative overflow-hidden border-b border-[var(--line)]">
       <div className="absolute top-0 right-0 h-48 w-48 rounded-full bg-[rgba(250,115,218,0.1)] blur-3xl" />
