@@ -1,5 +1,5 @@
 import { RouterContextProvider } from 'react-router'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { dbContext, reactionSecretContext } from '~/lib/cloudflare-context'
 import { createReaction, getPostReactions, readReactionEmoji } from '~/lib/reactions.server'
 import { action as reactionAction, loader as reactionLoader } from '~/routes/api.reactions.$slug'
@@ -226,34 +226,20 @@ describe('reaction server', () => {
     expect(post).toMatchObject({ post: { slug: 'react-router-renewal' }, reactions: [] })
   })
 
-  it('expires the home reaction cache 45 seconds after it was populated', async () => {
-    const now = vi.spyOn(Date, 'now')
+  it('reads fresh reaction counts on every home load', async () => {
     const firstDb = new FakeD1()
     firstDb.counts.set('react-router-renewal|👍', 1)
     const nextDb = new FakeD1()
     nextDb.counts.set('react-router-renewal|👍', 2)
-    try {
-      now.mockReturnValue(1_000)
-      const first = await homeLoader({
-        context: makeContext(firstDb)
-      } as unknown as Parameters<typeof homeLoader>[0])
-      expect(first.reactionsBySlug['react-router-renewal']?.[0]?.count).toBe(1)
+    const first = await homeLoader({
+      context: makeContext(firstDb)
+    } as unknown as Parameters<typeof homeLoader>[0])
+    expect(first.reactionsBySlug['react-router-renewal']?.[0]?.count).toBe(1)
 
-      now.mockReturnValue(20_000)
-      const cached = await homeLoader({
-        context: makeContext(nextDb)
-      } as unknown as Parameters<typeof homeLoader>[0])
-      expect(cached.reactionsBySlug['react-router-renewal']?.[0]?.count).toBe(1)
-      expect(nextDb.listReads).toBe(0)
-
-      now.mockReturnValue(47_000)
-      const refreshed = await homeLoader({
-        context: makeContext(nextDb)
-      } as unknown as Parameters<typeof homeLoader>[0])
-      expect(refreshed.reactionsBySlug['react-router-renewal']?.[0]?.count).toBe(2)
-      expect(nextDb.listReads).toBe(1)
-    } finally {
-      now.mockRestore()
-    }
+    const refreshed = await homeLoader({
+      context: makeContext(nextDb)
+    } as unknown as Parameters<typeof homeLoader>[0])
+    expect(refreshed.reactionsBySlug['react-router-renewal']?.[0]?.count).toBe(2)
+    expect(nextDb.listReads).toBe(1)
   })
 })
