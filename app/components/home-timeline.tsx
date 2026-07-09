@@ -7,7 +7,7 @@ import {
   FaThumbtack,
   FaWandMagicSparkles
 } from 'react-icons/fa6'
-import { Link, useFetcher } from 'react-router'
+import { Link, useFetcher, useSearchParams } from 'react-router'
 import { CommunityLayout, type TopicChannel } from '~/components/community-layout'
 import { PostModal } from '~/components/post-modal'
 import type { BlogPost, BlogPostSummary } from '~/lib/blog-post'
@@ -32,7 +32,8 @@ type HomeTimelineProps = {
 export function HomeTimeline({ posts }: HomeTimelineProps) {
   const tags = getTagFilters(posts)
   const postFetcher = useFetcher<{ post: BlogPost }>()
-  const [selectedTag, setSelectedTag] = useState('')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const selectedTag = searchParams.get('topic') ?? ''
   const [selectedPost, setSelectedPost] = useState<BlogPostSummary | null>(null)
   const visiblePosts = filterPostsByTag(posts, selectedTag)
   const fetchedPost = postFetcher.data?.post
@@ -53,13 +54,13 @@ export function HomeTimeline({ posts }: HomeTimelineProps) {
       active: selectedTag === '',
       count: posts.length,
       label: 'all-signals',
-      onSelect: () => setSelectedTag('')
+      onSelect: () => setSearchParams({})
     },
     ...tags.map((tag) => ({
       active: selectedTag === tag.name,
       count: tag.count,
       label: tag.name,
-      onSelect: () => setSelectedTag(tag.name)
+      onSelect: () => setSearchParams({ topic: tag.name })
     }))
   ]
 

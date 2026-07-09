@@ -1,8 +1,9 @@
 import { FaArrowLeftLong, FaFileLines, FaHashtag, FaWandMagicSparkles } from 'react-icons/fa6'
-import { Link } from 'react-router'
-import { CommunityLayout } from '~/components/community-layout'
+import { Link, useNavigate } from 'react-router'
+import { CommunityLayout, type TopicChannel } from '~/components/community-layout'
 import { MarkdownBody } from '~/components/markdown-body'
-import { getBlogPost } from '~/lib/blog.server'
+import { getBlogPost, getBlogPosts } from '~/lib/blog.server'
+import { getTagFilters } from '~/lib/blog-tags'
 import { getPostAccent } from '~/lib/post-accent'
 import { getPostAuthor, getPostEmoji } from '~/lib/post-identity'
 import {
@@ -16,13 +17,13 @@ import {
 import type { Route } from './+types/blog.$slug'
 
 export async function loader({ params }: Route.LoaderArgs) {
-  const post = await getBlogPost(params.slug)
+  const [post, posts] = await Promise.all([getBlogPost(params.slug), getBlogPosts()])
 
   if (!post) {
     throw new Response('Not Found', { status: 404 })
   }
 
-  return { post }
+  return { post, posts }
 }
 
 export function meta({ loaderData }: Route.MetaArgs) {
@@ -62,8 +63,23 @@ export function meta({ loaderData }: Route.MetaArgs) {
 }
 
 export default function BlogPost({ loaderData }: Route.ComponentProps) {
-  const { post } = loaderData
+  const { post, posts } = loaderData
   const accent = getPostAccent(post.slug)
+  const navigate = useNavigate()
+  const topics: TopicChannel[] = [
+    {
+      active: false,
+      count: posts.length,
+      label: 'all-signals',
+      onSelect: () => navigate('/')
+    },
+    ...getTagFilters(posts).map((tag) => ({
+      active: false,
+      count: tag.count,
+      label: tag.name,
+      onSelect: () => navigate(`/?topic=${encodeURIComponent(tag.name)}`)
+    }))
+  ]
 
   return (
     <CommunityLayout
@@ -72,6 +88,7 @@ export default function BlogPost({ loaderData }: Route.ComponentProps) {
       channelMeta={post.title}
       rightSidebar={<PostDetails accent={accent} post={post} />}
       statusLabel="reading mode"
+      topics={topics}
     >
       <div className="w-full" data-post-accent={accent}>
         <div className="border-b border-[var(--line)]">
