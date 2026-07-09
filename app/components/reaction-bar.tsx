@@ -109,9 +109,9 @@ function ReactionButton({
       aria-label={label}
       className={`inline-flex min-h-8 items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[0.78rem] font-semibold transition-colors ${
         reaction.reacted
-          ? 'border-[var(--post-accent)] bg-[var(--post-accent-wash)] text-[var(--post-accent-soft)]'
+          ? 'reaction-button--reacted border-transparent text-[var(--post-accent-soft)]'
           : 'cursor-pointer border-[var(--line)] bg-[rgba(7,16,11,0.72)] text-[var(--text)] hover:border-[var(--post-accent)]'
-      } disabled:cursor-not-allowed disabled:opacity-70`}
+      } disabled:cursor-not-allowed ${pending ? 'opacity-70' : ''}`}
       disabled={pending || reaction.reacted}
       onClick={onClick}
       type="button"
@@ -120,7 +120,7 @@ function ReactionButton({
       <span>{reaction.count}</span>
       <span
         aria-hidden="true"
-        className={`inline-block w-[0.7em] ${reaction.reacted ? '' : 'invisible'}`}
+        className={`inline-block w-[0.7em] text-white ${reaction.reacted ? '' : 'invisible'}`}
       >
         ✓
       </span>
@@ -230,7 +230,9 @@ function ReactionPicker({
                       ? `${emoji}にリアクション済み`
                       : `${emoji}でリアクションする`
                 }
-                className="flex size-10 cursor-pointer items-center justify-center rounded-lg text-xl hover:bg-[var(--hover)] focus-visible:bg-[var(--hover)] disabled:cursor-not-allowed disabled:opacity-40"
+                className={`flex size-10 cursor-pointer items-center justify-center rounded-lg text-xl hover:bg-[var(--hover)] focus-visible:bg-[var(--hover)] disabled:cursor-not-allowed ${
+                  pendingEmoji === emoji ? 'opacity-40' : ''
+                }`}
                 disabled={reacted || pendingEmoji === emoji}
                 key={emoji}
                 onClick={() => onReact(emoji)}

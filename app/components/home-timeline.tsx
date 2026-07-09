@@ -227,25 +227,25 @@ function TimelinePosts({
     <ol className="message-stream m-0 list-none p-0">
       {visiblePosts.map((post) => (
         <li
-          className="community-message border-b border-[var(--line)] transition-[background-color] duration-200 hover:bg-[color-mix(in_srgb,var(--post-accent)_6%,transparent)]"
+          className="community-message group relative border-b border-[var(--line)] transition-[background-color] duration-200 hover:bg-[color-mix(in_srgb,var(--post-accent)_6%,transparent)]"
           data-post-accent={getPostAccent(post.slug)}
           key={post.slug}
         >
-          <Link
-            aria-haspopup="dialog"
-            className="group block text-inherit no-underline focus-visible:bg-[color-mix(in_srgb,var(--post-accent)_6%,transparent)]"
-            onClick={(event) => onOpenPost(event, post)}
-            to={`/blog/${post.slug}`}
-          >
-            <div className="grid w-full max-w-[940px] grid-cols-[40px_minmax(0,1fr)] gap-3 px-4 pt-5 min-[680px]:grid-cols-[48px_minmax(0,1fr)] min-[680px]:gap-4 min-[680px]:px-6 min-[680px]:pt-6">
-              <span
-                className="animal-avatar relative z-10 mt-0.5 flex size-10 items-center justify-center rounded-full border-2 border-[var(--post-accent)] text-[1.15rem] leading-none shadow-[0_0_22px_color-mix(in_srgb,var(--post-accent)_38%,transparent)] transition-[transform,box-shadow] group-hover:-translate-y-0.5 group-hover:scale-105 group-hover:shadow-[0_0_30px_color-mix(in_srgb,var(--post-accent)_58%,transparent)] min-[680px]:size-12 min-[680px]:text-[1.3rem]"
-                aria-hidden="true"
-              >
-                <span className="animal-avatar__emoji">{getPostEmoji(post.slug)}</span>
-                <span className="absolute -right-1 -bottom-1 size-2.5 rounded-full border-2 border-[var(--chat)] bg-[var(--post-accent)] shadow-[0_0_10px_var(--post-accent)]" />
-              </span>
+          <div className="grid w-full max-w-[940px] grid-cols-[40px_minmax(0,1fr)] gap-3 px-4 pt-5 min-[680px]:grid-cols-[48px_minmax(0,1fr)] min-[680px]:gap-4 min-[680px]:px-6 min-[680px]:pt-6">
+            <span
+              className="animal-avatar relative z-10 mt-0.5 flex size-10 items-center justify-center rounded-full border-2 border-[var(--post-accent)] text-[1.15rem] leading-none shadow-[0_0_22px_color-mix(in_srgb,var(--post-accent)_38%,transparent)] transition-[transform,box-shadow] group-hover:-translate-y-0.5 group-hover:scale-105 group-hover:shadow-[0_0_30px_color-mix(in_srgb,var(--post-accent)_58%,transparent)] min-[680px]:size-12 min-[680px]:text-[1.3rem]"
+              aria-hidden="true"
+            >
+              <span className="animal-avatar__emoji">{getPostEmoji(post.slug)}</span>
+              <span className="absolute -right-1 -bottom-1 size-2.5 rounded-full border-2 border-[var(--chat)] bg-[var(--post-accent)] shadow-[0_0_10px_var(--post-accent)]" />
+            </span>
 
+            <Link
+              aria-haspopup="dialog"
+              className="min-w-0 text-inherit no-underline before:absolute before:inset-0 before:content-[''] focus-visible:bg-[color-mix(in_srgb,var(--post-accent)_6%,transparent)]"
+              onClick={(event) => onOpenPost(event, post)}
+              to={`/blog/${post.slug}`}
+            >
               <div className="min-w-0 [font-family:var(--font-ui)]">
                 <div className="flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-0.5 text-[0.82rem] leading-[1.35]">
                   <strong className="min-w-0 truncate text-[var(--post-accent-soft)]">
@@ -278,9 +278,9 @@ function TimelinePosts({
                   </ul>
                 )}
               </div>
-            </div>
-          </Link>
-          <div className="w-full max-w-[940px] pr-4 pb-5 pl-[68px] min-[680px]:pr-6 min-[680px]:pb-6 min-[680px]:pl-[88px]">
+            </Link>
+          </div>
+          <div className="pointer-events-none relative z-10 w-full max-w-[940px] pr-4 pb-5 pl-[68px] min-[680px]:pr-6 min-[680px]:pb-6 min-[680px]:pl-[88px] [&_button]:pointer-events-auto">
             <ReactionBar
               onReaction={(reaction) => onReaction(post.slug, reaction)}
               reactions={reactionsBySlug[post.slug] ?? []}

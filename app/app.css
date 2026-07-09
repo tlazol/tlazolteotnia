@@ -184,6 +184,36 @@
   }
 }
 
+@keyframes reacted-border-flow {
+  to {
+    background-position: 0 0, 100% 0;
+  }
+}
+
+.reaction-button--reacted {
+  border-color: transparent;
+  animation: reacted-border-flow 2.4s linear infinite;
+  background:
+    linear-gradient(var(--panel), var(--panel)) padding-box,
+    linear-gradient(
+        90deg,
+        var(--blue),
+        var(--pink),
+        var(--yellow),
+        var(--green),
+        var(--blue)
+      )
+      border-box;
+  background-position: 0 0, 0 0;
+  background-size: 100% 100%, 200% 100%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reaction-button--reacted {
+    animation: none;
+  }
+}
+
 .reaction-picker {
   isolation: isolate;
 }
