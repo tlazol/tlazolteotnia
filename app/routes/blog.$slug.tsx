@@ -106,8 +106,8 @@ export default function BlogPost({ loaderData }: Route.ComponentProps) {
         <article className="[font-family:var(--font-ui)]">
           <header className="relative overflow-hidden border-b border-[color-mix(in_srgb,var(--post-accent)_22%,var(--line))] bg-[linear-gradient(120deg,var(--post-accent-wash),transparent_58%)]">
             <div className="absolute top-0 right-0 h-56 w-56 rounded-full bg-[var(--post-accent-wash)] blur-3xl" />
-            <div className="relative mx-auto w-full max-w-[940px] px-4 py-7 min-[680px]:grid min-[680px]:grid-cols-[52px_minmax(0,720px)] min-[680px]:gap-4 min-[680px]:px-6 min-[680px]:py-9">
-              <div className="absolute top-7 left-4 z-10 min-[680px]:static">
+            <div className="relative mx-auto w-full max-w-[768px] px-4 py-7 min-[680px]:px-6 min-[680px]:py-9">
+              <div className="absolute top-7 left-4 z-10 min-[680px]:top-9 min-[1440px]:left-[-40px]">
                 <span
                   className="animal-avatar relative flex size-11 items-center justify-center rounded-full border-2 border-[var(--post-accent)] text-[1.2rem] leading-none shadow-[0_0_26px_color-mix(in_srgb,var(--post-accent)_42%,transparent)] min-[680px]:size-12 min-[680px]:text-[1.3rem]"
                   aria-hidden="true"
@@ -118,7 +118,7 @@ export default function BlogPost({ loaderData }: Route.ComponentProps) {
               </div>
 
               <div className="relative min-w-0">
-                <p className="m-0 flex min-h-11 min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 pl-14 text-[0.82rem] leading-[1.35] min-[680px]:min-h-0 min-[680px]:items-baseline min-[680px]:pl-0">
+                <p className="m-0 flex min-h-11 min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 pl-14 text-[0.82rem] leading-[1.35] min-[1440px]:min-h-0 min-[1440px]:items-baseline min-[1440px]:pl-0">
                   <strong className="min-w-0 text-[var(--post-accent-soft)]">
                     {getPostAuthor(post.slug)}
                   </strong>
@@ -155,8 +155,8 @@ export default function BlogPost({ loaderData }: Route.ComponentProps) {
             </div>
           </header>
 
-          <div className="mx-auto w-full max-w-[940px] px-4 min-[680px]:grid min-[680px]:grid-cols-[52px_minmax(0,720px)] min-[680px]:gap-4 min-[680px]:px-6">
-            <div className="min-w-0 min-[680px]:col-start-2">
+          <div className="mx-auto w-full max-w-[768px] px-4 min-[680px]:px-6">
+            <div className="min-w-0">
               <MarkdownBody body={post.body} />
             </div>
           </div>
