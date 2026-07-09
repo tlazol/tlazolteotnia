@@ -207,10 +207,10 @@ function TimelinePosts({
           >
             <div className="grid w-full max-w-[940px] grid-cols-[40px_minmax(0,1fr)] gap-3 px-4 py-5 min-[680px]:grid-cols-[48px_minmax(0,1fr)] min-[680px]:gap-4 min-[680px]:px-6 min-[680px]:py-6">
               <span
-                className="relative z-10 mt-0.5 flex size-10 items-center justify-center rounded-full border text-[1.15rem] leading-none shadow-[0_0_22px_color-mix(in_srgb,var(--post-accent)_28%,transparent)] transition-[transform,box-shadow] group-hover:-translate-y-0.5 group-hover:scale-105 group-hover:shadow-[0_0_30px_color-mix(in_srgb,var(--post-accent)_48%,transparent)] [background:color-mix(in_srgb,var(--post-accent)_12%,var(--panel))] [border-color:color-mix(in_srgb,var(--post-accent)_70%,var(--line))] min-[680px]:size-12 min-[680px]:text-[1.3rem]"
+                className="animal-avatar relative z-10 mt-0.5 flex size-10 items-center justify-center rounded-full border-2 border-[var(--post-accent)] text-[1.15rem] leading-none shadow-[0_0_22px_color-mix(in_srgb,var(--post-accent)_38%,transparent)] transition-[transform,box-shadow] group-hover:-translate-y-0.5 group-hover:scale-105 group-hover:shadow-[0_0_30px_color-mix(in_srgb,var(--post-accent)_58%,transparent)] min-[680px]:size-12 min-[680px]:text-[1.3rem]"
                 aria-hidden="true"
               >
-                {getPostEmoji(post.slug)}
+                <span className="animal-avatar__emoji">{getPostEmoji(post.slug)}</span>
                 <span className="absolute -right-1 -bottom-1 size-2.5 rounded-full border-2 border-[var(--chat)] bg-[var(--post-accent)] shadow-[0_0_10px_var(--post-accent)]" />
               </span>
 
@@ -288,8 +288,8 @@ function SignalMembers({ posts }: { posts: BlogPostSummary[] }) {
             data-post-accent={getPostAccent(post.slug)}
             key={post.slug}
           >
-            <span className="flex size-8 shrink-0 items-center justify-center rounded-full border border-[color-mix(in_srgb,var(--post-accent)_56%,var(--line))] bg-[var(--panel)] text-[0.95rem] shadow-[0_0_14px_color-mix(in_srgb,var(--post-accent)_18%,transparent)]">
-              {getPostEmoji(post.slug)}
+            <span className="animal-avatar flex size-8 shrink-0 items-center justify-center rounded-full border-2 border-[var(--post-accent)] text-[0.95rem] shadow-[0_0_16px_color-mix(in_srgb,var(--post-accent)_38%,transparent)]">
+              <span className="animal-avatar__emoji">{getPostEmoji(post.slug)}</span>
             </span>
             <span className="min-w-0">
               <strong className="block truncate text-[0.72rem] text-[var(--post-accent-soft)]">

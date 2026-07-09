@@ -167,6 +167,30 @@
   -webkit-background-clip: text;
 }
 
+.animal-avatar {
+  background: linear-gradient(
+    120deg,
+    #58c7ff,
+    #ff68de,
+    #ffe76d,
+    #52ff91,
+    #70f7ff,
+    #58c7ff
+  );
+  background-size: 400% 400%;
+  animation: spectrum-flow 6s ease-in-out infinite;
+}
+
+.animal-avatar__emoji {
+  position: relative;
+  z-index: 1;
+  filter: drop-shadow(1px 0 0 rgba(255, 255, 255, 0.96))
+    drop-shadow(-1px 0 0 rgba(255, 255, 255, 0.96))
+    drop-shadow(0 1px 0 rgba(255, 255, 255, 0.96))
+    drop-shadow(0 -1px 0 rgba(255, 255, 255, 0.96))
+    drop-shadow(0 2px 2px rgba(1, 5, 4, 0.72));
+}
+
 .neon-edge {
   position: relative;
 }

@@ -109,10 +109,10 @@ export default function BlogPost({ loaderData }: Route.ComponentProps) {
             <div className="relative mx-auto w-full max-w-[940px] px-4 py-7 min-[680px]:grid min-[680px]:grid-cols-[52px_minmax(0,720px)] min-[680px]:gap-4 min-[680px]:px-6 min-[680px]:py-9">
               <div className="absolute top-7 left-4 z-10 min-[680px]:static">
                 <span
-                  className="relative flex size-11 items-center justify-center rounded-full border border-[color-mix(in_srgb,var(--post-accent)_70%,var(--line))] bg-[color-mix(in_srgb,var(--post-accent)_12%,var(--panel))] text-[1.2rem] leading-none shadow-[0_0_26px_var(--post-accent-glow)] min-[680px]:size-12 min-[680px]:text-[1.3rem]"
+                  className="animal-avatar relative flex size-11 items-center justify-center rounded-full border-2 border-[var(--post-accent)] text-[1.2rem] leading-none shadow-[0_0_26px_color-mix(in_srgb,var(--post-accent)_42%,transparent)] min-[680px]:size-12 min-[680px]:text-[1.3rem]"
                   aria-hidden="true"
                 >
-                  {getPostEmoji(post.slug)}
+                  <span className="animal-avatar__emoji">{getPostEmoji(post.slug)}</span>
                   <span className="absolute -right-1 -bottom-1 size-3 rounded-full border-2 border-[var(--chat)] bg-[var(--post-accent)] shadow-[0_0_12px_var(--post-accent)]" />
                 </span>
               </div>
