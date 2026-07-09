@@ -184,34 +184,42 @@
   }
 }
 
-@keyframes reacted-border-flow {
-  to {
-    background-position: 0 0, 100% 0;
-  }
-}
-
 .reaction-button--reacted {
   border-color: transparent;
-  animation: reacted-border-flow 2.4s linear infinite;
   background:
     linear-gradient(var(--panel), var(--panel)) padding-box,
     linear-gradient(
-        90deg,
-        var(--blue),
-        var(--pink),
-        var(--yellow),
-        var(--green),
-        var(--blue)
+        120deg,
+        #58c7ff,
+        #ff68de,
+        #ffe76d,
+        #52ff91,
+        #70f7ff,
+        #58c7ff
       )
       border-box;
-  background-position: 0 0, 0 0;
-  background-size: 100% 100%, 200% 100%;
+  background-position: 0 0, center;
+  background-size: 100% 100%, 220% 220%;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .reaction-button--reacted {
-    animation: none;
-  }
+[data-post-accent="green"] .reaction-button--reacted {
+  background-position: 0 0, 18% 72%;
+}
+
+[data-post-accent="blue"] .reaction-button--reacted {
+  background-position: 0 0, 82% 24%;
+}
+
+[data-post-accent="pink"] .reaction-button--reacted {
+  background-position: 0 0, 36% 12%;
+}
+
+[data-post-accent="yellow"] .reaction-button--reacted {
+  background-position: 0 0, 68% 88%;
+}
+
+[data-post-accent="red"] .reaction-button--reacted {
+  background-position: 0 0, 8% 42%;
 }
 
 .reaction-picker {
