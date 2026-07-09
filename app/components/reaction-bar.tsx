@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { MdAddReaction } from 'react-icons/md'
 import { useFetcher } from 'react-router'
 import { mergeReaction, REACTION_EMOJIS, type ReactionCount } from '~/lib/reactions'
 
@@ -165,7 +166,7 @@ function ReactionPicker({
         ref={toggleRef}
         type="button"
       >
-        ＋
+        <MdAddReaction aria-hidden="true" />
       </button>
       {open && (
         <div
