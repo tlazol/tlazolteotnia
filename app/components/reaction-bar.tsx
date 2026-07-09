@@ -163,17 +163,25 @@ function ReactionPicker({
   }, [onClose, open])
 
   return (
-    <div className="relative" ref={ref}>
+    <div className="reaction-picker relative" ref={ref}>
+      <span aria-hidden="true" className="reaction-picker__spark reaction-picker__spark--one">
+        ✦
+      </span>
+      <span aria-hidden="true" className="reaction-picker__spark reaction-picker__spark--two">
+        ·
+      </span>
       <button
         aria-expanded={open}
         aria-haspopup="menu"
         aria-label="リアクションを追加"
-        className="flex size-8 cursor-pointer items-center justify-center rounded-lg border border-[var(--line)] bg-[rgba(7,16,11,0.72)] text-lg text-[var(--muted)] hover:border-[var(--post-accent)] hover:text-[var(--text)]"
+        className="reaction-picker__toggle"
         onClick={open ? onClose : onOpen}
         ref={toggleRef}
         type="button"
       >
-        <MdAddReaction aria-hidden="true" />
+        <span className="reaction-picker__icon" aria-hidden="true">
+          <MdAddReaction />
+        </span>
       </button>
       {open && (
         <div
