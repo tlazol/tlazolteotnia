@@ -23,17 +23,24 @@ export function ReactionBar({
   const [pickerOpen, setPickerOpen] = useState(false)
   const [pendingEmoji, setPendingEmoji] = useState<string | null>(null)
   const previousRef = useRef<ReactionCount[]>(reactions)
+  const submissionStartedRef = useRef(false)
 
   useEffect(() => setCurrent(reactions), [reactions])
 
   useEffect(() => {
-    if (fetcher.state !== 'idle' || !pendingEmoji) return
+    if (!pendingEmoji) return
+    if (fetcher.state !== 'idle') {
+      submissionStartedRef.current = true
+      return
+    }
+    if (!submissionStartedRef.current) return
     if (fetcher.data?.reaction) {
       setCurrent((value) => mergeReaction(value, fetcher.data?.reaction as ReactionCount))
       onReaction?.(fetcher.data.reaction)
     } else if (fetcher.data?.error) {
       setCurrent(previousRef.current)
     }
+    submissionStartedRef.current = false
     setPendingEmoji(null)
   }, [fetcher.data, fetcher.state, onReaction, pendingEmoji])
 
