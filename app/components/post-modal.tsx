@@ -1,9 +1,11 @@
 import { lazy, Suspense, useEffect, useRef } from 'react'
 import { FaArrowUpRightFromSquare, FaXmark } from 'react-icons/fa6'
-import { Link } from 'react-router'
+import { Link, useFetcher } from 'react-router'
+import { ReactionBar } from '~/components/reaction-bar'
 import { TagList } from '~/components/tag-list'
 import type { BlogPost, BlogPostSummary } from '~/lib/blog-post'
 import { getPostAccent } from '~/lib/post-accent'
+import type { ReactionCount } from '~/lib/reactions'
 
 const MarkdownBody = lazy(() =>
   import('~/components/markdown-body').then(({ MarkdownBody }) => ({ default: MarkdownBody }))
@@ -13,13 +15,24 @@ type PostModalProps = {
   post: BlogPost | null
   summary: BlogPostSummary
   onClose: () => void
+  onReaction: (slug: string, reaction: ReactionCount) => void
+  onReactions: (slug: string, reactions: ReactionCount[]) => void
 }
 
-export function PostModal({ post, summary, onClose }: PostModalProps) {
+export function PostModal({ post, summary, onClose, onReaction, onReactions }: PostModalProps) {
+  const reactionFetcher = useFetcher<{ reactions: ReactionCount[] }>()
   const dialogRef = useRef<HTMLDialogElement>(null)
   const closeButtonRef = useRef<HTMLButtonElement>(null)
   const descriptionId = `post-modal-description-${summary.slug}`
   const titleId = `post-modal-title-${summary.slug}`
+
+  useEffect(() => {
+    reactionFetcher.load(`/api/reactions/${summary.slug}`)
+  }, [summary.slug])
+
+  useEffect(() => {
+    if (reactionFetcher.data?.reactions) onReactions(summary.slug, reactionFetcher.data.reactions)
+  }, [reactionFetcher.data, onReactions, summary.slug])
 
   useEffect(() => {
     const dialog = dialogRef.current
@@ -105,6 +118,11 @@ export function PostModal({ post, summary, onClose }: PostModalProps) {
                 {summary.title}
               </h1>
               <TagList tags={summary.tags} />
+              <ReactionBar
+                onReaction={(reaction) => onReaction(summary.slug, reaction)}
+                reactions={reactionFetcher.data?.reactions ?? []}
+                slug={summary.slug}
+              />
               <p
                 className="mt-5 mb-0 max-w-[680px] text-[0.92rem] leading-[1.7] text-[var(--muted)] min-[680px]:text-base"
                 id={descriptionId}

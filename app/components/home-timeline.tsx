@@ -1,4 +1,4 @@
-import { type MouseEvent, useEffect, useState } from 'react'
+import { type MouseEvent, useCallback, useEffect, useState } from 'react'
 import {
   FaArrowUpRightFromSquare,
   FaHashtag,
@@ -10,11 +10,13 @@ import {
 import { Link, useFetcher, useSearchParams } from 'react-router'
 import { CommunityLayout, type TopicChannel } from '~/components/community-layout'
 import { PostModal } from '~/components/post-modal'
+import { ReactionSummary } from '~/components/reaction-bar'
 import type { BlogPost, BlogPostSummary } from '~/lib/blog-post'
 import { filterPostsByTag, getTagFilters } from '~/lib/blog-tags'
 import { getPostAccent } from '~/lib/post-accent'
 import { getPostAuthor, getPostEmoji } from '~/lib/post-identity'
 import { shouldOpenPostModal } from '~/lib/post-modal'
+import { mergeReaction, type ReactionCount } from '~/lib/reactions'
 import {
   artStationUrl,
   authorAccount,
@@ -27,17 +29,30 @@ import {
 
 type HomeTimelineProps = {
   posts: BlogPostSummary[]
+  reactionsBySlug: Record<string, ReactionCount[]>
 }
 
-export function HomeTimeline({ posts }: HomeTimelineProps) {
+export function HomeTimeline({ posts, reactionsBySlug: initialReactions }: HomeTimelineProps) {
   const tags = getTagFilters(posts)
   const postFetcher = useFetcher<{ post: BlogPost }>()
   const [searchParams, setSearchParams] = useSearchParams()
   const selectedTag = searchParams.get('topic') ?? ''
   const [selectedPost, setSelectedPost] = useState<BlogPostSummary | null>(null)
+  const [reactionsBySlug, setReactionsBySlug] = useState(initialReactions)
   const visiblePosts = filterPostsByTag(posts, selectedTag)
   const fetchedPost = postFetcher.data?.post
   const modalPost = fetchedPost && fetchedPost.slug === selectedPost?.slug ? fetchedPost : null
+
+  const updateReaction = useCallback((slug: string, reaction: ReactionCount) => {
+    setReactionsBySlug((value) => ({
+      ...value,
+      [slug]: mergeReaction(value[slug] ?? [], reaction)
+    }))
+  }, [])
+
+  const updateReactions = useCallback((slug: string, reactions: ReactionCount[]) => {
+    setReactionsBySlug((value) => ({ ...value, [slug]: reactions }))
+  }, [])
 
   function openPost(event: MouseEvent<HTMLAnchorElement>, post: BlogPostSummary) {
     if (!shouldOpenPostModal(event)) {
@@ -83,6 +98,7 @@ export function HomeTimeline({ posts }: HomeTimelineProps) {
             onOpenPost={openPost}
             selectedTag={selectedTag}
             visiblePosts={visiblePosts}
+            reactionsBySlug={reactionsBySlug}
           />
           <footer className="border-t border-[var(--line)] text-[0.65rem] leading-[1.7] text-[var(--dim)]">
             <div className="mx-auto w-full max-w-[940px] px-4 py-7 min-[680px]:px-6">
@@ -93,7 +109,13 @@ export function HomeTimeline({ posts }: HomeTimelineProps) {
       </CommunityLayout>
 
       {selectedPost && (
-        <PostModal onClose={() => setSelectedPost(null)} post={modalPost} summary={selectedPost} />
+        <PostModal
+          onClose={() => setSelectedPost(null)}
+          onReaction={updateReaction}
+          onReactions={updateReactions}
+          post={modalPost}
+          summary={selectedPost}
+        />
       )}
     </>
   )
@@ -178,11 +200,13 @@ function WelcomeMessage({ selectedTag }: { selectedTag: string }) {
 function TimelinePosts({
   visiblePosts,
   selectedTag,
-  onOpenPost
+  onOpenPost,
+  reactionsBySlug
 }: {
   visiblePosts: BlogPostSummary[]
   selectedTag: string
   onOpenPost: (event: MouseEvent<HTMLAnchorElement>, post: BlogPostSummary) => void
+  reactionsBySlug: Record<string, ReactionCount[]>
 }) {
   if (visiblePosts.length === 0) {
     return (
@@ -233,10 +257,7 @@ function TimelinePosts({
                 </p>
 
                 {post.tags.length > 0 && (
-                  <ul
-                    className="mt-3 mb-0 flex list-none flex-wrap gap-1.5 p-0"
-                    aria-label="Reactions"
-                  >
+                  <ul className="mt-3 mb-0 flex list-none flex-wrap gap-1.5 p-0" aria-label="Tags">
                     {post.tags.map((tag) => (
                       <li
                         className="inline-flex items-center gap-1 rounded-md border border-[color-mix(in_srgb,var(--post-accent)_26%,var(--line))] bg-[color-mix(in_srgb,var(--post-accent)_7%,transparent)] px-2 py-1 text-[0.68rem] font-semibold text-[color-mix(in_srgb,var(--post-accent)_78%,var(--text))] transition-colors group-hover:border-[color-mix(in_srgb,var(--post-accent)_48%,var(--line))]"
@@ -248,6 +269,7 @@ function TimelinePosts({
                     ))}
                   </ul>
                 )}
+                <ReactionSummary reactions={reactionsBySlug[post.slug] ?? []} />
               </div>
             </div>
           </Link>

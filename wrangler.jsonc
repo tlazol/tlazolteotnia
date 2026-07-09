@@ -8,6 +8,14 @@
   "preview_urls": true,
   "routes": [{ "pattern": "0rga.org", "custom_domain": true }],
   "upload_source_maps": true,
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "tlazolteotnia",
+      "database_id": "88464a7d-1ec3-43a0-98ac-b4acfa63f567",
+      "migrations_dir": "migrations"
+    }
+  ],
   "observability": {
     "enabled": true
   }

@@ -28,4 +28,5 @@ offline_bundle*
 # Local development-tool output
 /.playwright-cli/
 *.log
+*.cpuprofile
 *screenshot*.png

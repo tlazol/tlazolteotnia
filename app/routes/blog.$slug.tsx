@@ -1,11 +1,14 @@
 import { FaArrowLeftLong, FaFileLines, FaHashtag, FaWandMagicSparkles } from 'react-icons/fa6'
-import { Link, useNavigate } from 'react-router'
+import { data, Link, useNavigate } from 'react-router'
 import { CommunityLayout, type TopicChannel } from '~/components/community-layout'
 import { MarkdownBody } from '~/components/markdown-body'
+import { ReactionBar } from '~/components/reaction-bar'
 import { getBlogPost, getBlogPosts } from '~/lib/blog.server'
 import { getTagFilters } from '~/lib/blog-tags'
 import { getPostAccent } from '~/lib/post-accent'
 import { getPostAuthor, getPostEmoji } from '~/lib/post-identity'
+import { getReactionTotal } from '~/lib/reactions'
+import { appendVisitorCookie, getPostReactions } from '~/lib/reactions.server'
 import {
   authorAccount,
   copyrightCurrentYear,
@@ -16,14 +19,22 @@ import {
 } from '~/lib/site'
 import type { Route } from './+types/blog.$slug'
 
-export async function loader({ params }: Route.LoaderArgs) {
+export async function loader({ context, params, request }: Route.LoaderArgs) {
   const [post, posts] = await Promise.all([getBlogPost(params.slug), getBlogPosts()])
 
   if (!post) {
     throw new Response('Not Found', { status: 404 })
   }
 
-  return { post, posts }
+  try {
+    const result = await getPostReactions(context, request, post.slug)
+    const headers = new Headers({ 'Cache-Control': 'private, no-store' })
+    appendVisitorCookie(headers, result.cookie)
+    return data({ post, posts, reactions: result.reactions }, { headers })
+  } catch (error) {
+    console.error('Failed to read post reactions', error)
+    return { post, posts, reactions: [] }
+  }
 }
 
 export function meta({ loaderData }: Route.MetaArgs) {
@@ -63,7 +74,7 @@ export function meta({ loaderData }: Route.MetaArgs) {
 }
 
 export default function BlogPost({ loaderData }: Route.ComponentProps) {
-  const { post, posts } = loaderData
+  const { post, posts, reactions } = loaderData
   const accent = getPostAccent(post.slug)
   const navigate = useNavigate()
   const topics: TopicChannel[] = [
@@ -86,7 +97,9 @@ export default function BlogPost({ loaderData }: Route.ComponentProps) {
       activeSection="home"
       channelLabel={post.slug}
       channelMeta={post.title}
-      rightSidebar={<PostDetails accent={accent} post={post} />}
+      rightSidebar={
+        <PostDetails accent={accent} post={post} reactionTotal={getReactionTotal(reactions)} />
+      }
       statusLabel="reading mode"
       topics={topics}
     >
@@ -151,6 +164,7 @@ export default function BlogPost({ loaderData }: Route.ComponentProps) {
                     ))}
                   </ul>
                 )}
+                <ReactionBar reactions={reactions} slug={post.slug} />
               </div>
             </div>
           </header>
@@ -174,10 +188,12 @@ export default function BlogPost({ loaderData }: Route.ComponentProps) {
 
 function PostDetails({
   accent,
-  post
+  post,
+  reactionTotal
 }: {
   accent: ReturnType<typeof getPostAccent>
   post: Route.ComponentProps['loaderData']['post']
+  reactionTotal: number
 }) {
   return (
     <section
@@ -197,7 +213,7 @@ function PostDetails({
           <PostDetail label="Published" value={post.date} />
           <PostDetail label="Format" value="Markdown" />
           <PostDetail active label="Status" value="Public" />
-          <PostDetail label="Reactions" value={String(post.tags.length)} />
+          <PostDetail label="Reactions" value={String(reactionTotal)} />
         </dl>
 
         <p className="mt-5 mb-1.5 text-[0.66rem] font-bold tracking-[0.1em] text-[var(--dim)] uppercase">

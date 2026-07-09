@@ -1,4 +1,5 @@
-import { createRequestHandler } from 'react-router'
+import { createRequestHandler, RouterContextProvider } from 'react-router'
+import { dbContext, reactionSecretContext } from '../app/lib/cloudflare-context'
 
 const requestHandler = createRequestHandler(
   () => import('virtual:react-router/server-build'),
@@ -6,7 +7,10 @@ const requestHandler = createRequestHandler(
 )
 
 export default {
-  fetch(request: Request) {
-    return requestHandler(request)
+  fetch(request: Request, env: Env) {
+    const context = new RouterContextProvider()
+    context.set(dbContext, env.DB)
+    context.set(reactionSecretContext, env.REACTION_COOKIE_SECRET)
+    return requestHandler(request, context)
   }
 } satisfies ExportedHandler<Env>
