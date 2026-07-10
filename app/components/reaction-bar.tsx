@@ -164,7 +164,7 @@ function ReactionButton({
   return (
     <button
       aria-label={label}
-      className={`reaction-button relative inline-flex min-h-9 items-center gap-1.5 overflow-visible rounded-lg border px-3 py-1 text-[0.78rem] font-semibold ${
+      className={`reaction-button relative inline-flex min-h-8 items-center gap-1.5 overflow-visible rounded-lg border px-2 py-0.5 text-[0.65rem] font-semibold ${
         reaction.reacted
           ? 'reaction-button--reacted border-transparent text-[var(--post-accent-soft)]'
           : 'cursor-pointer border-[var(--line)] bg-[rgba(7,16,11,0.72)] text-[var(--text)] hover:border-[var(--post-accent)]'
@@ -179,12 +179,6 @@ function ReactionButton({
         {reaction.emoji}
       </span>
       <span className="reaction-button__count">{reaction.count}</span>
-      <span
-        aria-hidden="true"
-        className={`inline-block w-[0.7em] text-white ${reaction.reacted ? '' : 'invisible'}`}
-      >
-        ✓
-      </span>
       {celebrating && (
         <span aria-hidden="true" className="reaction-button__sparkles">
           {Array.from({ length: 8 }, (_, index) => (
