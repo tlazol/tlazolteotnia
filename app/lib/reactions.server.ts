@@ -1,6 +1,11 @@
 import type { RouterContextProvider } from 'react-router'
 import { getBlogPost } from '~/lib/blog.server'
-import { dbContext, reactionSecretContext } from '~/lib/cloudflare-context'
+import {
+  dbContext,
+  reactionCountsCacheContext,
+  reactionSecretContext,
+  waitUntilContext
+} from '~/lib/cloudflare-context'
 import {
   isReactionEmoji,
   type ReactionCount,
@@ -11,11 +16,14 @@ import {
 const VISITOR_COOKIE = 'reaction_visitor'
 const VISITOR_MAX_AGE = 60 * 60 * 24 * 365 * 2
 const visitorPattern = /^[A-Za-z0-9_-]{43}$/
+const REACTION_COUNTS_CACHE_PATH = '/__cache/reaction-counts-v1'
+const REACTION_COUNTS_CACHE_TTL = 60
 
 type CountRow = { emoji: string; count: number }
 type VoteRow = { emoji: string }
 type CountBySlugRow = CountRow & { post_slug: string }
 type VoteBySlugRow = VoteRow & { post_slug: string }
+type CountCachePayload = { slugs: string[]; rows: CountBySlugRow[] }
 
 export async function requirePost(slug: string | undefined) {
   const post = slug ? await getBlogPost(slug) : null
@@ -56,27 +64,63 @@ export async function getReactionCountsBySlug(
   if (slugs.length === 0) return { reactionsBySlug: {} }
   const { id, cookie } = getOrCreateVisitor(request)
   const visitorHash = await hashVisitor(id, context.get(reactionSecretContext))
-  const placeholders = slugs.map(() => '?').join(', ')
+  const normalizedSlugs = [...slugs].sort()
+  const placeholders = normalizedSlugs.map(() => '?').join(', ')
   const db = context.get(dbContext)
+  const cache = context.get(reactionCountsCacheContext)
+  const cacheKey = getReactionCountsCacheKey(request)
+  const cachedRows = cache ? await readCachedCountRows(cache, cacheKey, normalizedSlugs) : undefined
+
+  if (cachedRows) {
+    const [votesResult] = await db.batch([
+      db
+        .prepare(
+          `SELECT post_slug, emoji FROM reaction_votes WHERE visitor_hash = ? AND post_slug IN (${placeholders})`
+        )
+        .bind(visitorHash, ...normalizedSlugs)
+    ])
+    return {
+      reactionsBySlug: buildReactionsBySlug(cachedRows, votesResult.results as VoteBySlugRow[]),
+      cookie
+    }
+  }
+
   const [countsResult, votesResult] = await db.batch([
     db
       .prepare(
         `SELECT post_slug, emoji, count FROM reaction_counts WHERE post_slug IN (${placeholders})`
       )
-      .bind(...slugs),
+      .bind(...normalizedSlugs),
     db
       .prepare(
         `SELECT post_slug, emoji FROM reaction_votes WHERE visitor_hash = ? AND post_slug IN (${placeholders})`
       )
-      .bind(visitorHash, ...slugs)
+      .bind(visitorHash, ...normalizedSlugs)
   ])
+  const countRows = countsResult.results as CountBySlugRow[]
+  if (cache) {
+    await storeCountRows(context, cache, cacheKey, {
+      slugs: normalizedSlugs,
+      rows: countRows
+    })
+  }
+  return {
+    reactionsBySlug: buildReactionsBySlug(countRows, votesResult.results as VoteBySlugRow[]),
+    cookie
+  }
+}
+
+function buildReactionsBySlug(
+  countRows: CountBySlugRow[],
+  voteRows: VoteBySlugRow[]
+): Record<string, ReactionCount[]> {
   const reacted = new Set(
-    (votesResult.results as VoteBySlugRow[])
+    voteRows
       .filter((row) => isReactionEmoji(row.emoji))
       .map((row) => `${row.post_slug}\0${row.emoji}`)
   )
   const bySlug: Record<string, ReactionCount[]> = {}
-  for (const row of countsResult.results as CountBySlugRow[]) {
+  for (const row of countRows) {
     if (!isReactionEmoji(row.emoji)) continue
     const reactions = bySlug[row.post_slug] ?? []
     reactions.push({
@@ -87,7 +131,7 @@ export async function getReactionCountsBySlug(
     bySlug[row.post_slug] = reactions
   }
   for (const slug of Object.keys(bySlug)) bySlug[slug] = sortReactionCounts(bySlug[slug])
-  return { reactionsBySlug: bySlug, cookie }
+  return bySlug
 }
 
 export async function createReaction(
@@ -109,10 +153,78 @@ export async function createReaction(
     .prepare('SELECT count FROM reaction_counts WHERE post_slug = ? AND emoji = ?')
     .bind(slug, emoji)
     .first<number>('count')
+  if (insert.meta.changes > 0) {
+    await invalidateReactionCountsCache(context, request)
+  }
   return {
     reaction: { emoji, count: count ?? 0, reacted: true } satisfies ReactionCount,
     created: insert.meta.changes > 0,
     cookie
+  }
+}
+
+function getReactionCountsCacheKey(request: Request): Request {
+  const url = new URL(REACTION_COUNTS_CACHE_PATH, request.url)
+  return new Request(url)
+}
+
+async function readCachedCountRows(
+  cache: Cache,
+  key: Request,
+  slugs: string[]
+): Promise<CountBySlugRow[] | undefined> {
+  try {
+    const response = await cache.match(key)
+    if (!response) return undefined
+    const payload = (await response.json()) as CountCachePayload
+    if (
+      payload.slugs.length !== slugs.length ||
+      payload.slugs.some((slug, index) => slug !== slugs[index])
+    ) {
+      return undefined
+    }
+    return payload.rows
+  } catch (error) {
+    console.error('Failed to read reaction count cache', error)
+    return undefined
+  }
+}
+
+async function storeCountRows(
+  context: Readonly<RouterContextProvider>,
+  cache: Cache,
+  key: Request,
+  payload: CountCachePayload
+) {
+  const write = cache
+    .put(
+      key,
+      new Response(JSON.stringify(payload), {
+        headers: {
+          'Cache-Control': `public, s-maxage=${REACTION_COUNTS_CACHE_TTL}`,
+          'Content-Type': 'application/json'
+        }
+      })
+    )
+    .catch((error) => console.error('Failed to store reaction count cache', error))
+  const waitUntil = context.get(waitUntilContext)
+  if (waitUntil) {
+    waitUntil(write)
+    return
+  }
+  await write
+}
+
+async function invalidateReactionCountsCache(
+  context: Readonly<RouterContextProvider>,
+  request: Request
+) {
+  const cache = context.get(reactionCountsCacheContext)
+  if (!cache) return
+  try {
+    await cache.delete(getReactionCountsCacheKey(request))
+  } catch (error) {
+    console.error('Failed to invalidate reaction count cache', error)
   }
 }
 
