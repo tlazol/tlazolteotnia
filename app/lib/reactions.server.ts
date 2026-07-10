@@ -14,6 +14,8 @@ const visitorPattern = /^[A-Za-z0-9_-]{43}$/
 
 type CountRow = { emoji: string; count: number }
 type VoteRow = { emoji: string }
+type CountBySlugRow = CountRow & { post_slug: string }
+type VoteBySlugRow = VoteRow & { post_slug: string }
 
 export async function requirePost(slug: string | undefined) {
   const post = slug ? await getBlogPost(slug) : null
@@ -48,26 +50,44 @@ export async function getPostReactions(
 
 export async function getReactionCountsBySlug(
   context: Readonly<RouterContextProvider>,
+  request: Request,
   slugs: string[]
-): Promise<Record<string, ReactionCount[]>> {
-  if (slugs.length === 0) return {}
+): Promise<{ reactionsBySlug: Record<string, ReactionCount[]>; cookie?: string }> {
+  if (slugs.length === 0) return { reactionsBySlug: {} }
+  const { id, cookie } = getOrCreateVisitor(request)
+  const visitorHash = await hashVisitor(id, context.get(reactionSecretContext))
   const placeholders = slugs.map(() => '?').join(', ')
-  const result = await context
-    .get(dbContext)
-    .prepare(
-      `SELECT post_slug, emoji, count FROM reaction_counts WHERE post_slug IN (${placeholders})`
-    )
-    .bind(...slugs)
-    .all<{ post_slug: string; emoji: string; count: number }>()
+  const db = context.get(dbContext)
+  const [countsResult, votesResult] = await db.batch([
+    db
+      .prepare(
+        `SELECT post_slug, emoji, count FROM reaction_counts WHERE post_slug IN (${placeholders})`
+      )
+      .bind(...slugs),
+    db
+      .prepare(
+        `SELECT post_slug, emoji FROM reaction_votes WHERE visitor_hash = ? AND post_slug IN (${placeholders})`
+      )
+      .bind(visitorHash, ...slugs)
+  ])
+  const reacted = new Set(
+    (votesResult.results as VoteBySlugRow[])
+      .filter((row) => isReactionEmoji(row.emoji))
+      .map((row) => `${row.post_slug}\0${row.emoji}`)
+  )
   const bySlug: Record<string, ReactionCount[]> = {}
-  for (const row of result.results) {
+  for (const row of countsResult.results as CountBySlugRow[]) {
     if (!isReactionEmoji(row.emoji)) continue
     const reactions = bySlug[row.post_slug] ?? []
-    reactions.push({ emoji: row.emoji, count: row.count })
+    reactions.push({
+      emoji: row.emoji,
+      count: row.count,
+      reacted: reacted.has(`${row.post_slug}\0${row.emoji}`)
+    })
     bySlug[row.post_slug] = reactions
   }
   for (const slug of Object.keys(bySlug)) bySlug[slug] = sortReactionCounts(bySlug[slug])
-  return bySlug
+  return { reactionsBySlug: bySlug, cookie }
 }
 
 export async function createReaction(

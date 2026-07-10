@@ -71,6 +71,39 @@ class FakeStatement {
   }
 
   async result() {
+    if (this.sql.startsWith('SELECT post_slug, emoji, count')) {
+      this.db.listReads += 1
+      const slugs = new Set(this.values)
+      return {
+        results: [...this.db.counts.entries()]
+          .map(([key, count]) => {
+            const separator = key.lastIndexOf('|')
+            return {
+              post_slug: key.slice(0, separator),
+              emoji: key.slice(separator + 1),
+              count
+            }
+          })
+          .filter((row) => slugs.has(row.post_slug))
+      }
+    }
+    if (this.sql.startsWith('SELECT post_slug, emoji FROM reaction_votes')) {
+      const prefix = `${this.values[0]}|`
+      const slugs = new Set(this.values.slice(1))
+      return {
+        results: [...this.db.votes]
+          .filter((key) => key.startsWith(prefix))
+          .map((key) => {
+            const value = key.slice(prefix.length)
+            const separator = value.lastIndexOf('|')
+            return {
+              post_slug: value.slice(0, separator),
+              emoji: value.slice(separator + 1)
+            }
+          })
+          .filter((row) => slugs.has(row.post_slug))
+      }
+    }
     if (this.sql.startsWith('SELECT emoji, count')) {
       const prefix = `${this.values[0]}|`
       return {
@@ -214,9 +247,11 @@ describe('reaction server', () => {
         throw new Error('D1 unavailable')
       }
     } as unknown as FakeD1)
-    const home = await homeLoader({ context } as unknown as Parameters<typeof homeLoader>[0])
-    expect(home.posts.length).toBeGreaterThan(0)
-    expect(home.reactionsBySlug).toEqual({})
+    const home = await homeLoader({ context, request: request() } as unknown as Parameters<
+      typeof homeLoader
+    >[0])
+    expect(home.data.posts.length).toBeGreaterThan(0)
+    expect(home.data.reactionsBySlug).toEqual({})
 
     const post = await postLoader({
       context,
@@ -232,14 +267,32 @@ describe('reaction server', () => {
     const nextDb = new FakeD1()
     nextDb.counts.set('react-router-renewal|👍', 2)
     const first = await homeLoader({
-      context: makeContext(firstDb)
+      context: makeContext(firstDb),
+      request: request()
     } as unknown as Parameters<typeof homeLoader>[0])
-    expect(first.reactionsBySlug['react-router-renewal']?.[0]?.count).toBe(1)
+    expect(first.data.reactionsBySlug['react-router-renewal']?.[0]?.count).toBe(1)
 
     const refreshed = await homeLoader({
-      context: makeContext(nextDb)
+      context: makeContext(nextDb),
+      request: request()
     } as unknown as Parameters<typeof homeLoader>[0])
-    expect(refreshed.reactionsBySlug['react-router-renewal']?.[0]?.count).toBe(2)
+    expect(refreshed.data.reactionsBySlug['react-router-renewal']?.[0]?.count).toBe(2)
     expect(nextDb.listReads).toBe(1)
+  })
+
+  it('restores the current visitor reactions on the home timeline', async () => {
+    const db = new FakeD1()
+    const context = makeContext(db)
+    const cookie = `reaction_visitor=${'a'.repeat(43)}`
+    await createReaction(context, request(cookie), 'react-router-renewal', '👍')
+
+    const home = await homeLoader({
+      context,
+      request: request(cookie)
+    } as unknown as Parameters<typeof homeLoader>[0])
+
+    expect(home.data.reactionsBySlug['react-router-renewal']).toEqual([
+      { emoji: '👍', count: 1, reacted: true }
+    ])
   })
 })
