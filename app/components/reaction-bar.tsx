@@ -282,7 +282,7 @@ function ReactionPicker({
       </button>
       {open && (
         <div
-          className="absolute bottom-10 left-0 z-30 grid w-48 grid-cols-4 gap-1 rounded-xl border border-[var(--line)] bg-[var(--panel-strong)] p-2 shadow-2xl"
+          className="absolute bottom-10 left-0 z-30 w-48 rounded-xl border border-[var(--line)] bg-[var(--panel-strong)] p-2 shadow-2xl"
           onKeyDown={(event) => {
             const buttons = [
               ...(menuRef.current?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)') ??
@@ -312,30 +312,34 @@ function ReactionPicker({
           role="menu"
           style={{ transform: `translateX(${menuOffset}px)` }}
         >
-          {REACTION_EMOJIS.map((emoji) => {
-            const reacted = current.some((reaction) => reaction.emoji === emoji && reaction.reacted)
-            return (
-              <button
-                aria-label={
-                  pendingEmoji === emoji
-                    ? `${emoji}でリアクションを送信中`
-                    : reacted
-                      ? `${emoji}にリアクション済み`
-                      : `${emoji}でリアクションする`
-                }
-                className={`flex size-10 cursor-pointer items-center justify-center rounded-lg text-xl hover:bg-[var(--hover)] focus-visible:bg-[var(--hover)] disabled:cursor-not-allowed ${
-                  pendingEmoji === emoji ? 'opacity-40' : ''
-                }`}
-                disabled={reacted || pendingEmoji === emoji}
-                key={emoji}
-                onClick={() => onReact(emoji)}
-                role="menuitem"
-                type="button"
-              >
-                {emoji}
-              </button>
-            )
-          })}
+          <div className="reaction-picker__options grid grid-cols-4 gap-1 pr-1">
+            {REACTION_EMOJIS.map((emoji) => {
+              const reacted = current.some(
+                (reaction) => reaction.emoji === emoji && reaction.reacted
+              )
+              return (
+                <button
+                  aria-label={
+                    pendingEmoji === emoji
+                      ? `${emoji}でリアクションを送信中`
+                      : reacted
+                        ? `${emoji}にリアクション済み`
+                        : `${emoji}でリアクションする`
+                  }
+                  className={`flex size-10 cursor-pointer items-center justify-center rounded-lg text-xl hover:bg-[var(--hover)] focus-visible:bg-[var(--hover)] disabled:cursor-not-allowed ${
+                    pendingEmoji === emoji ? 'opacity-40' : ''
+                  }`}
+                  disabled={reacted || pendingEmoji === emoji}
+                  key={emoji}
+                  onClick={() => onReact(emoji)}
+                  role="menuitem"
+                  type="button"
+                >
+                  {emoji}
+                </button>
+              )
+            })}
+          </div>
         </div>
       )}
     </div>

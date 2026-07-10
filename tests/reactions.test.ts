@@ -7,7 +7,7 @@ import {
 } from '~/lib/reactions'
 
 describe('reactions', () => {
-  it('uses the specified 16 emoji as its allowlist', () => {
+  it('uses the specified 50 emoji as its allowlist', () => {
     expect(REACTION_EMOJIS).toEqual([
       '👍',
       '❤️',
@@ -24,7 +24,41 @@ describe('reactions', () => {
       '📡',
       '🐾',
       '💡',
-      '🌙'
+      '🌙',
+      '👏',
+      '🙌',
+      '💯',
+      '😍',
+      '🥰',
+      '😎',
+      '🤩',
+      '😭',
+      '🥹',
+      '😮',
+      '🤯',
+      '😅',
+      '😆',
+      '🙏',
+      '💪',
+      '🤝',
+      '✅',
+      '⭐',
+      '🌟',
+      '💫',
+      '🎯',
+      '🏆',
+      '🥳',
+      '🎨',
+      '🧠',
+      '💻',
+      '🛠️',
+      '📚',
+      '☕',
+      '🍿',
+      '🐈',
+      '🐕',
+      '🌱',
+      '🌸'
     ])
     expect(isReactionEmoji('👍')).toBe(true)
     expect(isReactionEmoji('❌')).toBe(false)

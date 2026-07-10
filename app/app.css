@@ -453,6 +453,14 @@
   transition: filter 160ms ease, transform 160ms ease;
 }
 
+.reaction-picker__options {
+  max-height: min(8rem, calc(100dvh - 6rem));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-color: var(--post-accent) transparent;
+  scrollbar-width: thin;
+}
+
 .signal-pulse {
   animation: signal-pulse 1.8s ease-in-out infinite;
 }
