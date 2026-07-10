@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { MdAddReaction } from 'react-icons/md'
 import { useFetcher } from 'react-router'
+import { getPostAccent } from '~/lib/post-accent'
 import { mergeReaction, REACTION_EMOJIS, type ReactionCount } from '~/lib/reactions'
 
 type ReactionResponse = {
@@ -8,6 +9,44 @@ type ReactionResponse = {
   created?: boolean
   error?: string
 }
+
+const reactionRainbowPatterns = {
+  green: {
+    colors: ['#58c7ff', '#ff68de', '#ffe76d', '#52ff91', '#70f7ff'],
+    x1: '0%',
+    x2: '100%',
+    y1: '100%',
+    y2: '0%'
+  },
+  blue: {
+    colors: ['#ff68de', '#ffe76d', '#52ff91', '#70f7ff', '#58c7ff'],
+    x1: '100%',
+    x2: '0%',
+    y1: '0%',
+    y2: '100%'
+  },
+  pink: {
+    colors: ['#ffe76d', '#52ff91', '#70f7ff', '#58c7ff', '#ff68de'],
+    x1: '0%',
+    x2: '100%',
+    y1: '0%',
+    y2: '100%'
+  },
+  yellow: {
+    colors: ['#52ff91', '#70f7ff', '#58c7ff', '#ff68de', '#ffe76d'],
+    x1: '50%',
+    x2: '50%',
+    y1: '100%',
+    y2: '0%'
+  },
+  red: {
+    colors: ['#70f7ff', '#58c7ff', '#ff68de', '#ffe76d', '#52ff91'],
+    x1: '100%',
+    x2: '0%',
+    y1: '50%',
+    y2: '50%'
+  }
+} as const
 
 export function ReactionBar({
   reactions,
@@ -79,6 +118,7 @@ export function ReactionBar({
           onReact={react}
           open={pickerOpen}
           pendingEmoji={pendingEmoji}
+          slug={slug}
         />
       </fieldset>
       {fetcher.data?.error && !pendingEmoji && (
@@ -134,7 +174,8 @@ function ReactionPicker({
   onOpen,
   onReact,
   open,
-  pendingEmoji
+  pendingEmoji,
+  slug
 }: {
   current: ReactionCount[]
   onClose: () => void
@@ -142,8 +183,10 @@ function ReactionPicker({
   onReact: (emoji: string) => void
   open: boolean
   pendingEmoji: string | null
+  slug: string
 }) {
   const gradientId = `reaction-rainbow-${useId().replaceAll(':', '')}`
+  const rainbowPattern = reactionRainbowPatterns[getPostAccent(slug)]
   const ref = useRef<HTMLDivElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
   const toggleRef = useRef<HTMLButtonElement>(null)
@@ -172,12 +215,16 @@ function ReactionPicker({
     <div className="reaction-picker relative" ref={ref}>
       <svg aria-hidden="true" className="absolute size-0">
         <defs>
-          <linearGradient id={gradientId} x1="0%" x2="100%" y1="0%" y2="100%">
-            <stop offset="0%" stopColor="#58c7ff" />
-            <stop offset="25%" stopColor="#ff68de" />
-            <stop offset="50%" stopColor="#ffe76d" />
-            <stop offset="75%" stopColor="#52ff91" />
-            <stop offset="100%" stopColor="#70f7ff" />
+          <linearGradient
+            id={gradientId}
+            x1={rainbowPattern.x1}
+            x2={rainbowPattern.x2}
+            y1={rainbowPattern.y1}
+            y2={rainbowPattern.y2}
+          >
+            {rainbowPattern.colors.map((color, index) => (
+              <stop key={color} offset={`${index * 25}%`} stopColor={color} />
+            ))}
           </linearGradient>
         </defs>
       </svg>
