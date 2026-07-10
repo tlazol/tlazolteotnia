@@ -1,5 +1,7 @@
+import { useCallback, useState } from 'react'
 import { FaArrowLeftLong, FaFileLines, FaHashtag, FaWandMagicSparkles } from 'react-icons/fa6'
 import { data, Link, useNavigate } from 'react-router'
+import { ArticleReactionFooter } from '~/components/article-reaction-footer'
 import { CommunityLayout, type TopicChannel } from '~/components/community-layout'
 import { MarkdownBody } from '~/components/markdown-body'
 import { ReactionBar } from '~/components/reaction-bar'
@@ -7,7 +9,7 @@ import { getBlogPost, getBlogPosts } from '~/lib/blog.server'
 import { getTagFilters } from '~/lib/blog-tags'
 import { getPostAccent } from '~/lib/post-accent'
 import { getPostAuthor, getPostEmoji } from '~/lib/post-identity'
-import { getReactionTotal } from '~/lib/reactions'
+import { getReactionTotal, mergeReaction, type ReactionCount } from '~/lib/reactions'
 import { appendVisitorCookie, getPostReactions } from '~/lib/reactions.server'
 import {
   authorAccount,
@@ -75,8 +77,12 @@ export function meta({ loaderData }: Route.MetaArgs) {
 
 export default function BlogPost({ loaderData }: Route.ComponentProps) {
   const { post, posts, reactions } = loaderData
+  const [currentReactions, setCurrentReactions] = useState(reactions)
   const accent = getPostAccent(post.slug)
   const navigate = useNavigate()
+  const updateReaction = useCallback((reaction: ReactionCount) => {
+    setCurrentReactions((current) => mergeReaction(current, reaction))
+  }, [])
   const topics: TopicChannel[] = [
     {
       active: false,
@@ -98,7 +104,11 @@ export default function BlogPost({ loaderData }: Route.ComponentProps) {
       channelLabel={post.slug}
       channelMeta={post.title}
       rightSidebar={
-        <PostDetails accent={accent} post={post} reactionTotal={getReactionTotal(reactions)} />
+        <PostDetails
+          accent={accent}
+          post={post}
+          reactionTotal={getReactionTotal(currentReactions)}
+        />
       }
       statusLabel="reading mode"
       topics={topics}
@@ -164,7 +174,11 @@ export default function BlogPost({ loaderData }: Route.ComponentProps) {
                     ))}
                   </ul>
                 )}
-                <ReactionBar reactions={reactions} slug={post.slug} />
+                <ReactionBar
+                  onReaction={updateReaction}
+                  reactions={currentReactions}
+                  slug={post.slug}
+                />
               </div>
             </div>
           </header>
@@ -172,6 +186,11 @@ export default function BlogPost({ loaderData }: Route.ComponentProps) {
           <div className="mx-auto w-full max-w-[768px] px-4 min-[680px]:px-6">
             <div className="min-w-0">
               <MarkdownBody body={post.body} />
+              <ArticleReactionFooter
+                onReaction={updateReaction}
+                reactions={currentReactions}
+                slug={post.slug}
+              />
             </div>
           </div>
         </article>

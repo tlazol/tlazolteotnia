@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useRef } from 'react'
 import { FaArrowUpRightFromSquare, FaXmark } from 'react-icons/fa6'
 import { Link, useFetcher } from 'react-router'
+import { ArticleReactionFooter } from '~/components/article-reaction-footer'
 import { ReactionBar } from '~/components/reaction-bar'
 import { TagList } from '~/components/tag-list'
 import type { BlogPost, BlogPostSummary } from '~/lib/blog-post'
@@ -145,6 +146,13 @@ export function PostModal({
               </Suspense>
             ) : (
               <PostLoadingState />
+            )}
+            {post && (
+              <ArticleReactionFooter
+                onReaction={(reaction) => onReaction(summary.slug, reaction)}
+                reactions={reactionFetcher.data?.reactions ?? reactions}
+                slug={summary.slug}
+              />
             )}
           </article>
         </div>
