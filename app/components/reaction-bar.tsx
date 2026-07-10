@@ -115,7 +115,7 @@ export function ReactionBar({
         <span className="reaction-bar__signal" />
         Send a signal
       </p>
-      <fieldset className="m-0 flex flex-wrap items-center gap-2 border-0 p-0">
+      <fieldset className="m-0 flex flex-wrap items-center gap-1 border-0 p-0">
         <legend className="sr-only">Reactions</legend>
         {current.map((reaction) => (
           <ReactionButton
