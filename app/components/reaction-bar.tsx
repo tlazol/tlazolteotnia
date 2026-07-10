@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react'
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { MdAddReaction } from 'react-icons/md'
 import { useFetcher } from 'react-router'
 import { getPostAccent } from '~/lib/post-accent'
@@ -47,6 +47,8 @@ const reactionRainbowPatterns = {
     y2: '50%'
   }
 } as const
+
+const PICKER_VIEWPORT_GUTTER = 16
 
 export function ReactionBar({
   reactions,
@@ -216,6 +218,23 @@ function ReactionPicker({
   const ref = useRef<HTMLDivElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
   const toggleRef = useRef<HTMLButtonElement>(null)
+  const [menuOffset, setMenuOffset] = useState(0)
+  useLayoutEffect(() => {
+    if (!open) return
+    const keepMenuInViewport = () => {
+      if (!menuRef.current || !toggleRef.current) return
+      const toggleLeft = toggleRef.current.getBoundingClientRect().left
+      const maxLeft = Math.max(
+        PICKER_VIEWPORT_GUTTER,
+        window.innerWidth - menuRef.current.offsetWidth - PICKER_VIEWPORT_GUTTER
+      )
+      const menuLeft = Math.min(Math.max(toggleLeft, PICKER_VIEWPORT_GUTTER), maxLeft)
+      setMenuOffset(menuLeft - toggleLeft)
+    }
+    keepMenuInViewport()
+    window.addEventListener('resize', keepMenuInViewport)
+    return () => window.removeEventListener('resize', keepMenuInViewport)
+  }, [open])
   useEffect(() => {
     if (!open) return
     menuRef.current?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus()
@@ -297,6 +316,7 @@ function ReactionPicker({
           }}
           ref={menuRef}
           role="menu"
+          style={{ transform: `translateX(${menuOffset}px)` }}
         >
           {REACTION_EMOJIS.map((emoji) => {
             const reacted = current.some((reaction) => reaction.emoji === emoji && reaction.reacted)
