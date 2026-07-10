@@ -61,10 +61,17 @@ export function ReactionBar({
   const [current, setCurrent] = useState(reactions)
   const [pickerOpen, setPickerOpen] = useState(false)
   const [pendingEmoji, setPendingEmoji] = useState<string | null>(null)
+  const [celebratingEmoji, setCelebratingEmoji] = useState<string | null>(null)
   const previousRef = useRef<ReactionCount[]>(reactions)
   const submissionStartedRef = useRef(false)
 
   useEffect(() => setCurrent(reactions), [reactions])
+
+  useEffect(() => {
+    if (!celebratingEmoji) return
+    const timeout = window.setTimeout(() => setCelebratingEmoji(null), 900)
+    return () => window.clearTimeout(timeout)
+  }, [celebratingEmoji])
 
   useEffect(() => {
     if (!pendingEmoji) return
@@ -95,16 +102,22 @@ export function ReactionBar({
       })
     )
     setPendingEmoji(emoji)
+    setCelebratingEmoji(emoji)
     setPickerOpen(false)
     fetcher.submit({ emoji }, { action: `/api/reactions/${slug}`, method: 'post' })
   }
 
   return (
-    <div className="mt-5 [font-family:var(--font-ui)]">
-      <fieldset className="m-0 flex flex-wrap items-center gap-1.5 border-0 p-0">
+    <div className="reaction-bar mt-5 [font-family:var(--font-ui)]">
+      <p aria-hidden="true" className="reaction-bar__prompt">
+        <span className="reaction-bar__signal" />
+        Send a signal
+      </p>
+      <fieldset className="m-0 flex flex-wrap items-center gap-2 border-0 p-0">
         <legend className="sr-only">Reactions</legend>
         {current.map((reaction) => (
           <ReactionButton
+            celebrating={celebratingEmoji === reaction.emoji}
             key={reaction.emoji}
             onClick={() => react(reaction.emoji)}
             pending={pendingEmoji === reaction.emoji}
@@ -133,10 +146,12 @@ export function ReactionBar({
 function ReactionButton({
   reaction,
   pending,
+  celebrating,
   onClick
 }: {
   reaction: ReactionCount
   pending: boolean
+  celebrating: boolean
   onClick: () => void
 }) {
   const label = pending
@@ -147,23 +162,34 @@ function ReactionButton({
   return (
     <button
       aria-label={label}
-      className={`inline-flex min-h-8 items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[0.78rem] font-semibold transition-colors ${
+      className={`reaction-button relative inline-flex min-h-9 items-center gap-1.5 overflow-visible rounded-lg border px-3 py-1 text-[0.78rem] font-semibold ${
         reaction.reacted
           ? 'reaction-button--reacted border-transparent text-[var(--post-accent-soft)]'
           : 'cursor-pointer border-[var(--line)] bg-[rgba(7,16,11,0.72)] text-[var(--text)] hover:border-[var(--post-accent)]'
-      } disabled:cursor-not-allowed ${pending ? 'opacity-70' : ''}`}
+      } disabled:cursor-not-allowed ${pending ? 'reaction-button--pending' : ''} ${
+        celebrating ? 'reaction-button--celebrating' : ''
+      }`}
       disabled={pending || reaction.reacted}
       onClick={onClick}
       type="button"
     >
-      <span aria-hidden="true">{reaction.emoji}</span>
-      <span>{reaction.count}</span>
+      <span aria-hidden="true" className="reaction-button__emoji">
+        {reaction.emoji}
+      </span>
+      <span className="reaction-button__count">{reaction.count}</span>
       <span
         aria-hidden="true"
         className={`inline-block w-[0.7em] text-white ${reaction.reacted ? '' : 'invisible'}`}
       >
         ✓
       </span>
+      {celebrating && (
+        <span aria-hidden="true" className="reaction-button__sparkles">
+          {Array.from({ length: 8 }, (_, index) => (
+            <i key={index} />
+          ))}
+        </span>
+      )}
     </button>
   )
 }
@@ -232,7 +258,7 @@ function ReactionPicker({
         aria-expanded={open}
         aria-haspopup="menu"
         aria-label="リアクションを追加"
-        className="reaction-picker__toggle"
+        className={`reaction-picker__toggle ${open ? 'reaction-picker__toggle--open' : ''}`}
         onClick={open ? onClose : onOpen}
         ref={toggleRef}
         type="button"
