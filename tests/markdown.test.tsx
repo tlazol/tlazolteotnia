@@ -22,7 +22,7 @@ describe('MarkdownBody', () => {
     expect(html).toContain('<ol start="3">')
     expect(html).toContain('<blockquote>')
     expect(html).toContain('<hr/>')
-    expect(html).toContain('<table>')
+    expect(html).toContain('<div class="markdown-table"><table>')
   })
 
   it('does not render block or inline raw HTML', () => {

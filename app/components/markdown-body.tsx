@@ -68,24 +68,26 @@ function renderBlock(token: Token, key: number): ReactNode {
       const table = token as Tokens.Table
 
       return (
-        <table key={key}>
-          <thead>
-            <tr>
-              {table.header.map((cell, index) => (
-                <th key={index}>{renderInline(cell.tokens)}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {table.rows.map((row, rowIndex) => (
-              <tr key={rowIndex}>
-                {row.map((cell, cellIndex) => (
-                  <td key={cellIndex}>{renderInline(cell.tokens)}</td>
+        <div className="markdown-table" key={key}>
+          <table>
+            <thead>
+              <tr>
+                {table.header.map((cell, index) => (
+                  <th key={index}>{renderInline(cell.tokens)}</th>
                 ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {table.rows.map((row, rowIndex) => (
+                <tr key={rowIndex}>
+                  {row.map((cell, cellIndex) => (
+                    <td key={cellIndex}>{renderInline(cell.tokens)}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )
     }
     case 'text': {
