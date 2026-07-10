@@ -41,12 +41,27 @@ describe('reactions', () => {
     ).toEqual(['❤️', '🎉', '👍'])
   })
 
-  it('merges the confirmed count without changing other emoji', () => {
+  it('merges the confirmed count without changing the displayed order', () => {
+    expect(
+      mergeReaction(
+        [
+          { emoji: '👍', count: 2 },
+          { emoji: '❤️', count: 1 }
+        ],
+        { emoji: '❤️', count: 3, reacted: true }
+      )
+    ).toEqual([
+      { emoji: '👍', count: 2 },
+      { emoji: '❤️', count: 3, reacted: true }
+    ])
+  })
+
+  it('appends a newly used emoji to the displayed reactions', () => {
     expect(
       mergeReaction([{ emoji: '👍', count: 1 }], { emoji: '❤️', count: 3, reacted: true })
     ).toEqual([
-      { emoji: '❤️', count: 3, reacted: true },
-      { emoji: '👍', count: 1 }
+      { emoji: '👍', count: 1 },
+      { emoji: '❤️', count: 3, reacted: true }
     ])
   })
 })

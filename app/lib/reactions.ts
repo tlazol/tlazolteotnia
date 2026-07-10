@@ -46,9 +46,10 @@ export function mergeReaction(
   reactions: ReactionCount[],
   nextReaction: ReactionCount
 ): ReactionCount[] {
-  const byEmoji = new Map(reactions.map((reaction) => [reaction.emoji, reaction]))
-  byEmoji.set(nextReaction.emoji, nextReaction)
-  return sortReactionCounts([...byEmoji.values()])
+  const existingIndex = reactions.findIndex((reaction) => reaction.emoji === nextReaction.emoji)
+  if (existingIndex === -1) return [...reactions, nextReaction]
+
+  return reactions.map((reaction, index) => (index === existingIndex ? nextReaction : reaction))
 }
 
 export function getReactionTotal(reactions: ReactionCount[]): number {
