@@ -14,7 +14,7 @@ draft: false
 
 上記2つのページを、それぞれ独立したPWAとして設定するとします。
 
-# 用意するもの
+## 用意するもの
 
 ### hoge用
 
@@ -28,13 +28,13 @@ draft: false
 - example.com/fuga/serviceWorker.js
 - example.com/fuga/manifest.json
 
-#### **`各serviceWorker.js`**
+### **`各serviceWorker.js`**
 
 ```js
 self.addEventListener('fetch', (event) => {})
 ```
 
-#### **`hoge/serviceWorker.js`**
+### **`hoge/serviceWorker.js`**
 
 ```js
 {
@@ -44,7 +44,7 @@ self.addEventListener('fetch', (event) => {})
 }
 ```
 
-#### **`fuga/serviceWorker.js`**
+### **`fuga/serviceWorker.js`**
 
 ```js
 {
@@ -54,7 +54,7 @@ self.addEventListener('fetch', (event) => {})
 }
 ```
 
-# 以上
+## 以上
 
 気がつければとても単純な事でしたが、
 たどり着くまでが、試行錯誤でした。

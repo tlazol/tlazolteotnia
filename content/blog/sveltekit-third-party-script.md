@@ -19,7 +19,7 @@ ParseError: A component can only have one instance-level <script> element
 
 とエラーが起きますので。
 
-# svelte:head を使う
+## svelte:head を使う
 
 ```javascript
 <script lang="ts">
@@ -34,7 +34,7 @@ ParseError: A component can only have one instance-level <script> element
 これが一番オーソドックスな方法かもしれません。
 svelte:head の中には script タグが書けるので、この方法で読み込むことができます。
 
-# svelte:head と @html の合せ技
+## svelte:head と @html の合せ技
 ```javascript
 <svelte:head>
   {@html `
@@ -54,7 +54,7 @@ svelte:head の中には script タグが書けるので、この方法で読み
 
 例えば上記コードは GTM のタグを埋め込むソースですが script を src ではなく直書きし、かつその中で svelte での変数を使用したい場合は @html との合せ技を使用します。これに気づくまで結構時間がかかりました。
 
-# browser を使う
+## browser を使う
 
 ```javascript
 <script lang="ts">

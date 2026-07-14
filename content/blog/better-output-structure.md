@@ -5,12 +5,12 @@ description: "アウトプットを分かりやすく組み立てるための構
 tags: ["アウトプット", "資料の書き方"]
 draft: false
 ---
-# このページは何？
+## このページは何？
 前回書いた [アウトプットが上手になる10の方法](https://0rga.org/blog/3v7n5U1eQX6MoYNrqIb8xb) の実践版です。
 
 アウトプットの組み立て方や、ちょっと細かい点などをご紹介できればと思います。
 
-# 1. アウトラインから書く
+## 1. アウトラインから書く
 ![Programmer-pana](/images/blog/better-output-structure-01.png)
 
 こちらは前回も書きましたが、とても重要な事です。
@@ -40,7 +40,7 @@ draft: false
 
 見出しからはみ出ないかぎり、破綻したアウトプットにはならないはずです。
 
-# 2. 図で表せることは図で
+## 2. 図で表せることは図で
 ![fruit slice09 lemon](/images/blog/better-output-structure-02.png)
 
 一般的には、文章で伝えるより、図で伝えたほうが、伝わりやすいです。
@@ -49,7 +49,7 @@ draft: false
 
 「これ、文章と図、どっちで伝えたほうが伝わりやすいかな？」とアウトプットを作る際は常に意識しましょう。
 
-# 3. 画像で文章のイメージを固定化させる
+## 3. 画像で文章のイメージを固定化させる
 ![Photo Sharing-bro](/images/blog/better-output-structure-03.png)
 
 文章だけだと、イメージしたものが人それぞれになりがちです。
@@ -58,20 +58,20 @@ draft: false
 
 例えば「なんだ！？」と思っている人がいるとします。
 
-## 文章だけ
+### 文章だけ
 
 ```console
 「なんだ！？」と思っている男性
 ```
 
-## 画像あり
+### 画像あり
 ![doctor man3 1 question](/images/blog/better-output-structure-04.png)
 
 ```console
 「なんだ！？」と思っている男性
 ```
 
-## 画像あり
+### 画像あり
 ![doctor man1 2 angry](/images/blog/better-output-structure-05.png)
 
 ```console
@@ -84,7 +84,7 @@ draft: false
 
 自分が書いた文章の、認識の幅を意識しましょう。
 
-# 4. 正式名称で書く
+## 4. 正式名称で書く
 ![Collection-amico](/images/blog/better-output-structure-06.png)
 
 ちょっと細かい事ですが、アウトプットする際は正式名称を書きましょう。
@@ -93,7 +93,7 @@ draft: false
 
 正式名称をちゃんと書き、尊敬の念を払いましょう。
 
-# 5. 英単語の前後にはスペースを入れる
+## 5. 英単語の前後にはスペースを入れる
 ![Outer space-rafiki](/images/blog/better-output-structure-07.png)
 
 これも細かい事ですが、英単語の前後には半角スペースを入れると可読性があがります。
@@ -112,7 +112,7 @@ draft: false
 
 読みやすいと思って頂けたら、ぜひ実践してみてください。
 
-# 6. 事実と感想は明確にする
+## 6. 事実と感想は明確にする
 ![Typing-rafiki](/images/blog/better-output-structure-08.png)
 
 アウトプットしたい事が、事実なのか、個人的な考えなのか、単なる感想なのかは、明確にしましょう。
@@ -131,7 +131,7 @@ draft: false
 
 このように、事実と感想は分けて書きましょう。
 
-# 7. 議題|結論から書く
+## 7. 議題|結論から書く
 ![Business Plan-rafiki](/images/blog/better-output-structure-09.png)
 
 それがいったい何について書いてるのか、最後にわかる文章を、最後まで読んでくれるひとは少ないです。
@@ -140,7 +140,7 @@ draft: false
 
 そうすることで、最後まで読んでくれる人が増えます。どうせアウトプットするらな最後まで読んでほしいですもんね。
 
-# 8. 一度音読して(架空の誰かに)説明してみる
+## 8. 一度音読して(架空の誰かに)説明してみる
 ![Conference speaker-rafiki](/images/blog/better-output-structure-10.png)
 
 自分の書いた文書を、誰かに説明する **てい** で音読してみましょう。
@@ -151,7 +151,7 @@ draft: false
 
 ぜひ一度やってみて下さい。音読の効果を体感できると思います。
 
-# 9. 一晩寝かせる
+## 9. 一晩寝かせる
 ![Insomnia-rafiki](/images/blog/better-output-structure-11.png)
 
 さて、あなたはアウトプットを書き上げました。
@@ -160,7 +160,7 @@ draft: false
 
 寝て、起きて、改めて読んでみると、誤字脱字や、変な文章に気が付きやすいですよ。
 
-# 10. 画像や参照の使用方法は厳守
+## 10. 画像や参照の使用方法は厳守
 ![Notebook-amico](/images/blog/better-output-structure-12.png)
 
 アウトプットに、フリーの画像などを使いたい場合もあると思います。その際は、確実に使用方法を確認しましょう。
@@ -171,7 +171,7 @@ draft: false
 
 と明記する必要があります。
 
-# おわりに
+## おわりに
 自分がいつも意識している事をまとめてみました。
 
 アウトプットをする際に思い出していただけると、嬉しいです。

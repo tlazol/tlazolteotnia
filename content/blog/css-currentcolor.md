@@ -7,7 +7,7 @@ draft: false
 ---
 CSS の [\<color\>](https://developer.mozilla.org/ja/docs/Web/CSS/color_value) に currentcolor という値があります。あまり知られていないようですが使うと便利な値です。
 
-# 例えばよくあるこんな時
+## 例えばよくあるこんな時
 
 ```html
 <!DOCTYPE html>
@@ -58,7 +58,7 @@ div の中身（ pタグとaタグ ）を全部赤文字にしたいなーと思
 
 と指定する方法がありますが `#ff0000` を 2 回書いているのがちょっと気に入りません。プログラマー的に。
 
-# そんな時は currentcolor の出番
+## そんな時は currentcolor の出番
 
 そんなちょっとした `気持ち悪さ` を解消してくれるのが currentcolor です。さっそく使ってみます。
 
