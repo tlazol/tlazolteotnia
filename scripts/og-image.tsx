@@ -27,30 +27,23 @@ export function getTitleFontSize(title: string) {
   return 56
 }
 
-function splitTitle(title: string) {
-  const words = title
-    .toUpperCase()
-    .split(/[\s、。！？!?・:：]+/)
-    .filter(Boolean)
+export function makeRowTexts(title: string, description: string) {
+  const source = [...`${title} ${description}`.toUpperCase().replace(/\s+/g, ' ').trim()]
+  const totalLength = Math.max(source.length, rowTemplates.length * 42)
+  const characters = Array.from(
+    { length: totalLength },
+    (_, index) => source[index % source.length]
+  )
+  const rowLength = Math.floor(totalLength / rowTemplates.length)
+  const longerRows = totalLength % rowTemplates.length
+  let offset = 0
 
-  if (words.length > 1) return words
-
-  return (words[0] ?? title).match(/.{1,7}/gu) ?? [title]
-}
-
-function makeRowText(words: string[], rowIndex: number) {
-  const text: string[] = []
-  let length = 0
-  let index = rowIndex
-
-  while (length < 42) {
-    const word = words[index % words.length]
-    text.push(word)
-    length += [...word].length + 1
-    index += 1
-  }
-
-  return text.join('  ')
+  return rowTemplates.map((_, index) => {
+    const length = rowLength + (index < longerRows ? 1 : 0)
+    const text = characters.slice(offset, offset + length).join('')
+    offset += length
+    return text
+  })
 }
 
 function shuffle<T>(items: T[], next: () => number) {
@@ -83,10 +76,10 @@ function getRowStyles(title: string) {
   }))
 }
 
-export async function renderSvg(title: string, date: string, font: Buffer) {
-  const words = splitTitle(title)
+export async function renderSvg(title: string, description: string, date: string, font: Buffer) {
+  const rowTexts = makeRowTexts(title, description)
   const dateLabel = date.replaceAll('-', '.')
-  const rowStyles = getRowStyles(title)
+  const rowStyles = getRowStyles(`${title}\n${description}`)
 
   return satori(
     <div
@@ -120,7 +113,7 @@ export async function renderSvg(title: string, date: string, font: Buffer) {
             whiteSpace: 'nowrap'
           }}
         >
-          {makeRowText(words, index)}
+          {rowTexts[index]}
         </div>
       ))}
       <div
@@ -153,8 +146,8 @@ export async function renderSvg(title: string, date: string, font: Buffer) {
   )
 }
 
-export async function renderOgPng(title: string, date: string, font: Buffer) {
-  const svg = await renderSvg(title, date, font)
+export async function renderOgPng(title: string, description: string, date: string, font: Buffer) {
+  const svg = await renderSvg(title, description, date, font)
 
   return new Resvg(svg, {
     fitTo: { mode: 'original' },

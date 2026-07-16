@@ -4,6 +4,7 @@ import { type BlogPostRecord, parseBlogPost } from '../app/lib/blog-post'
 import {
   formatOgCheckError,
   getTitleFontSize,
+  makeRowTexts,
   renderOgPng,
   selectPosts
 } from '../scripts/generate-og-images'
@@ -35,12 +36,38 @@ describe('OG image generation', () => {
     expect(getTitleFontSize('a'.repeat(length))).toBe(size)
   })
 
+  it('uses the full title and description before repeating text', () => {
+    const source = 'ABCD EFGH'
+    const text = makeRowTexts('ABCD', 'EFGH').join('')
+
+    expect(text.startsWith(source)).toBe(true)
+    expect(text.slice(0, source.length * 2)).toBe(source.repeat(2))
+  })
+
   it('renders the same PNG bytes for the same input', async () => {
     const font = await readFile('scripts/assets/NotoSansCJKjp-Bold.otf')
-    const first = await renderOgPng('Deterministic title', '2026-05-15', font)
-    const second = await renderOgPng('Deterministic title', '2026-05-15', font)
+    const first = await renderOgPng(
+      'Deterministic title',
+      'Deterministic description',
+      '2026-05-15',
+      font
+    )
+    const second = await renderOgPng(
+      'Deterministic title',
+      'Deterministic description',
+      '2026-05-15',
+      font
+    )
 
     expect(first.equals(second)).toBe(true)
+  }, 20_000)
+
+  it('uses the description when rendering an image', async () => {
+    const font = await readFile('scripts/assets/NotoSansCJKjp-Bold.otf')
+    const first = await renderOgPng('Same title', 'First description', '2026-05-15', font)
+    const second = await renderOgPng('Same title', 'Second description', '2026-05-15', font)
+
+    expect(first.equals(second)).toBe(false)
   }, 20_000)
 
   it('names changed slugs and the regeneration command in check errors', () => {
