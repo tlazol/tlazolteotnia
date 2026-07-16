@@ -17,7 +17,8 @@ const rowTemplates = [
   { fontSize: 86, height: 88 },
   { fontSize: 29, height: 30 }
 ]
-const neonColors = ['#effff4', '#70f7ff', '#31ff80', '#fa73da', '#ffdf5f', '#2dacf9']
+const textColor = '#ffffff'
+const glitchTextShadow = '-4px 0 0 #00e5ff, 4px 0 0 #ff2fcf, 0 0 10px #ffffff'
 
 export function getTitleFontSize(title: string) {
   const length = [...title].length
@@ -30,7 +31,11 @@ export function getTitleFontSize(title: string) {
 
 export function makeRowTexts(title: string, description: string) {
   const source = [
-    ...`${title} ${description}`.toUpperCase().replace(/[、。]/g, '').replace(/\s+/g, ' ').trim()
+    ...`${title} ${description}`
+      .toUpperCase()
+      .replace(/[、。]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
   ]
   const totalLength = Math.max(source.length, rowTemplates.length * 42)
   const characters = Array.from(
@@ -75,12 +80,7 @@ function getRowStyles(title: string) {
     state ^= state << 5
     return (state >>> 0) / 2 ** 32
   }
-  const colors = shuffle(neonColors, next)
-
-  return shuffle(rowTemplates, next).map((template, index) => ({
-    ...template,
-    color: colors[index % colors.length]
-  }))
+  return shuffle(rowTemplates, next)
 }
 
 export async function renderSvg(title: string, description: string, date: string, font: Buffer) {
@@ -111,12 +111,12 @@ export async function renderSvg(title: string, description: string, date: string
             display: 'flex',
             alignItems: 'center',
             flexShrink: 0,
-            color: style.color,
+            color: textColor,
             fontSize: style.fontSize,
             lineHeight: 1,
             letterSpacing: '-0.12em',
             overflow: 'hidden',
-            textShadow: `0 0 12px ${style.color}`,
+            textShadow: glitchTextShadow,
             whiteSpace: 'nowrap'
           }}
         >
@@ -130,9 +130,10 @@ export async function renderSvg(title: string, description: string, date: string
           bottom: 9,
           display: 'flex',
           background: '#111111',
-          color: '#70f7ff',
+          color: textColor,
           fontSize: 15,
-          letterSpacing: '0.08em'
+          letterSpacing: '0.08em',
+          textShadow: glitchTextShadow
         }}
       >
         {dateLabel} / TL AZ OL TE OT NIA

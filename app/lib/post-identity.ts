@@ -60,7 +60,8 @@ const postIdentities: Record<string, PostIdentity> = {
   'sveltekit-third-party-script': animal('🦍', 'GØRILLA://THIRD', 'ゴリラ'),
   'sveltekit-vercel-renewal': animal('🦌', 'DEER://DEPLOY', 'シカ'),
   'vue-lightsout-game': animal('🦋', 'BUTTERFLY://LIGHTS', 'チョウ'),
-  'vui-idle-hack-and-slash-rpg': animal('🦁', 'LIØN://IDLE', 'ライオン')
+  'vui-idle-hack-and-slash-rpg': animal('🦁', 'LIØN://IDLE', 'ライオン'),
+  'why-not-just-try-yourself': animal('🐗', 'BØAR://TRY', 'イノシシ')
 }
 
 const fallbackIdentity = animal('🐾', 'NEWCØMER://SIGNAL', 'なかま')

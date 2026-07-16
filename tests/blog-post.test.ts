@@ -100,6 +100,7 @@ describe('blog post parser', () => {
     expect(
       sortBlogPostsNewestFirst(posts.filter((post) => !post.draft)).map((post) => post.slug)
     ).toEqual([
+      'why-not-just-try-yourself',
       'still-dont-know-best-way-to-count-documents-in-documentdb',
       'migration-to-cloudflare',
       'chaos-zero-nightmare-is-good',
