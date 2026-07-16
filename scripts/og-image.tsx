@@ -126,12 +126,12 @@ export async function renderSvg(title: string, description: string, date: string
       <div
         style={{
           position: 'absolute',
-          right: 10,
-          bottom: 9,
+          right: 14,
+          bottom: 12,
           display: 'flex',
           background: '#111111',
           color: textColor,
-          fontSize: 15,
+          fontSize: 20,
           letterSpacing: '0.08em',
           textShadow: glitchTextShadow
         }}
