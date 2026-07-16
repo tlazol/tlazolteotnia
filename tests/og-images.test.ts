@@ -25,12 +25,12 @@ describe('OG image generation', () => {
   })
 
   it.each([
-    [26, 70],
-    [27, 60],
-    [42, 60],
-    [43, 50],
-    [60, 50],
-    [61, 44]
+    [26, 105],
+    [27, 88],
+    [42, 88],
+    [43, 70],
+    [60, 70],
+    [61, 56]
   ])('uses the expected title size at %i characters', (length, size) => {
     expect(getTitleFontSize('a'.repeat(length))).toBe(size)
   })
