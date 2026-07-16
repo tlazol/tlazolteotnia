@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url'
 import { type BlogPostRecord, parseBlogPosts } from '../app/lib/blog-post'
 import { renderOgPng } from './og-image'
 
-export { getTitleFontSize, makeRowTexts, renderOgPng, renderSvg } from './og-image'
+export { fillRowText, getTitleFontSize, makeRowTexts, renderOgPng, renderSvg } from './og-image'
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url))
 const projectDirectory = path.resolve(scriptDirectory, '..')

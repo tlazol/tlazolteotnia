@@ -3,18 +3,19 @@ import satori from 'satori'
 
 const imageWidth = 1200
 const imageHeight = 630
+const rowTextRepeatCount = 8
 
 const rowTemplates = [
-  { fontSize: 170, height: 118 },
-  { fontSize: 40, height: 32 },
-  { fontSize: 120, height: 84 },
-  { fontSize: 60, height: 45 },
-  { fontSize: 150, height: 101 },
-  { fontSize: 34, height: 26 },
-  { fontSize: 92, height: 66 },
-  { fontSize: 52, height: 40 },
-  { fontSize: 130, height: 88 },
-  { fontSize: 42, height: 30 }
+  { fontSize: 116, height: 118 },
+  { fontSize: 31, height: 32 },
+  { fontSize: 82, height: 84 },
+  { fontSize: 44, height: 45 },
+  { fontSize: 99, height: 101 },
+  { fontSize: 25, height: 26 },
+  { fontSize: 65, height: 66 },
+  { fontSize: 39, height: 40 },
+  { fontSize: 86, height: 88 },
+  { fontSize: 29, height: 30 }
 ]
 const neonColors = ['#effff4', '#70f7ff', '#31ff80', '#fa73da', '#ffdf5f', '#2dacf9']
 
@@ -28,7 +29,9 @@ export function getTitleFontSize(title: string) {
 }
 
 export function makeRowTexts(title: string, description: string) {
-  const source = [...`${title} ${description}`.toUpperCase().replace(/\s+/g, ' ').trim()]
+  const source = [
+    ...`${title} ${description}`.toUpperCase().replace(/[、。]/g, '').replace(/\s+/g, ' ').trim()
+  ]
   const totalLength = Math.max(source.length, rowTemplates.length * 42)
   const characters = Array.from(
     { length: totalLength },
@@ -44,6 +47,10 @@ export function makeRowTexts(title: string, description: string) {
     offset += length
     return text
   })
+}
+
+export function fillRowText(text: string) {
+  return text.repeat(rowTextRepeatCount)
 }
 
 function shuffle<T>(items: T[], next: () => number) {
@@ -107,13 +114,13 @@ export async function renderSvg(title: string, description: string, date: string
             color: style.color,
             fontSize: style.fontSize,
             lineHeight: 1,
-            letterSpacing: '-0.08em',
+            letterSpacing: '-0.12em',
             overflow: 'hidden',
             textShadow: `0 0 12px ${style.color}`,
             whiteSpace: 'nowrap'
           }}
         >
-          {rowTexts[index]}
+          {fillRowText(rowTexts[index])}
         </div>
       ))}
       <div

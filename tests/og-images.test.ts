@@ -2,6 +2,7 @@ import { readdir, readFile } from 'node:fs/promises'
 import { describe, expect, it } from 'vitest'
 import { type BlogPostRecord, parseBlogPost } from '../app/lib/blog-post'
 import {
+  fillRowText,
   formatOgCheckError,
   getTitleFontSize,
   makeRowTexts,
@@ -42,6 +43,17 @@ describe('OG image generation', () => {
 
     expect(text.startsWith(source)).toBe(true)
     expect(text.slice(0, source.length * 2)).toBe(source.repeat(2))
+  })
+
+  it('removes Japanese punctuation from image text', () => {
+    const text = makeRowTexts('タイトル、', '説明。').join('')
+
+    expect(text).not.toMatch(/[、。]/)
+    expect(text.startsWith('タイトル 説明')).toBe(true)
+  })
+
+  it('repeats each row enough to cover the full image width', () => {
+    expect(fillRowText('A'.repeat(42))).toHaveLength(42 * 8)
   })
 
   it('renders the same PNG bytes for the same input', async () => {
