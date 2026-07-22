@@ -36,6 +36,7 @@ const postIdentities: Record<string, PostIdentity> = {
   'google-tag-manager-overview': animal('🦓', 'ZEBRA://TAG', 'シマウマ'),
   'gpt-english-email-tips': animal('🐤', 'CHICK://MAIL', 'ヒヨコ'),
   'gpt4-tetris-prompt': animal('🦙', 'LLAMA://BLOCKS', 'リャマ'),
+  'how-to-reset-colima': animal('🦦', 'OTTER://COLIMA', 'カワウソ'),
   'lambdatest-e2e-platform': animal('🐏', 'RAM://E2E', 'ヒツジ'),
   'langchain-typescript-chatgpt-search': animal('🐍', 'SERPENT://CHAIN', 'ヘビ'),
   'localization-writing-structure': animal('🦆', 'DUCK://LOCALE', 'カモ'),
@@ -44,6 +45,11 @@ const postIdentities: Record<string, PostIdentity> = {
   'multiple-pwa-service-workers-domain': animal('🐝', 'BEE://WORKERS', 'ミツバチ'),
   'nightmarejs-phantomjs-puppeteer-performance': animal('🐎', 'STALLIØN://RACE', 'ウマ'),
   'online-english-conversation': animal('🦭', 'SEAL://TALK', 'アザラシ'),
+  'people-who-use-enter-to-send-need-to-think-about-people-who-use-it-to-convert': animal(
+    '🦨',
+    'SKUNK://IME',
+    'スカンク'
+  ),
   'perspective-drawing-introduction': animal('🦒', 'GIRAFFE://VANISH', 'キリン'),
   'react-router-renewal': animal('🦊', 'FØX://ROUTER', 'キツネ'),
   'resume-writing-notes': animal('🦔', 'HEDGEHØG://CV', 'ハリネズミ'),

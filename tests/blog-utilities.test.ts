@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { parseBlogPosts, sortBlogPostsNewestFirst } from '../app/lib/blog-post'
 import { filterPostsByTag, getTagFilters } from '../app/lib/blog-tags'
 import { getPostAccent } from '../app/lib/post-accent'
 import {
@@ -55,13 +56,7 @@ describe('blog utilities', () => {
   })
 
   it('gives every published article its own animal identity', () => {
-    const slugs = Object.keys(
-      import.meta.glob<string>('../content/blog/*.md', {
-        eager: true,
-        query: '?raw',
-        import: 'default'
-      })
-    ).map((path) => path.split('/').at(-1)?.replace(/\.md$/, '') ?? '')
+    const slugs = getPublishedPosts().map(({ slug }) => slug)
     const identities = slugs.map(getPostIdentity)
 
     expect(new Set(identities.map(({ author }) => author))).toHaveLength(slugs.length)
@@ -69,6 +64,25 @@ describe('blog utilities', () => {
     expect(new Set(identities.map(({ species }) => species))).toHaveLength(slugs.length)
     expect(identities.every(({ species }) => species !== 'なかま')).toBe(true)
     expect(getPostSpecies('react-router-renewal')).toBe('キツネ')
+  })
+
+  it('does not repeat an accent color between consecutive visible articles', () => {
+    const posts = getPublishedPosts()
+    const timelines = [
+      { label: 'all articles', posts },
+      ...Array.from(new Set(posts.flatMap(({ tags }) => tags))).map((name) => ({
+        label: name,
+        posts: filterPostsByTag(posts, name)
+      }))
+    ]
+
+    for (const timeline of timelines) {
+      for (let index = 1; index < timeline.posts.length; index += 1) {
+        expect(getPostAccent(timeline.posts[index].slug), timeline.label).not.toBe(
+          getPostAccent(timeline.posts[index - 1].slug)
+        )
+      }
+    }
   })
 
   it('builds canonical absolute, post, and OG image URLs', () => {
@@ -95,3 +109,14 @@ describe('blog utilities', () => {
     expect(shouldOpenPostModal({ ...click, altKey: true })).toBe(false)
   })
 })
+
+function getPublishedPosts() {
+  const sources = import.meta.glob<string>('../content/blog/*.md', {
+    eager: true,
+    query: '?raw',
+    import: 'default'
+  })
+  const posts = parseBlogPosts(Object.entries(sources).map(([path, source]) => ({ path, source })))
+
+  return sortBlogPostsNewestFirst(posts.filter((post) => !post.draft))
+}
