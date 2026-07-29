@@ -12,11 +12,11 @@
     "Noto Sans JP", sans-serif;
   --font-mono: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
   --bg: #020403;
-  --panel: #07100b;
-  --panel-strong: #0b1911;
-  --rail: #010504;
-  --sidebar: #06100a;
-  --chat: #020805;
+  --panel: rgba(7, 16, 11, 0.78);
+  --panel-strong: rgba(11, 25, 17, 0.86);
+  --rail: rgba(1, 5, 4, 0.82);
+  --sidebar: rgba(6, 16, 10, 0.76);
+  --chat: rgba(2, 8, 5, 0.7);
   --hover: rgba(112, 247, 255, 0.07);
   --text: #d8e8dd;
   --text-strong: #effff4;
@@ -42,6 +42,64 @@
     var(--yellow),
     var(--green)
   );
+}
+
+body {
+  background: var(--bg);
+}
+
+.paint-background {
+  position: fixed;
+  z-index: 0;
+  inset: 0;
+  pointer-events: none;
+  background-color: var(--bg);
+}
+
+.paint-background__image {
+  position: absolute;
+  z-index: 0;
+  top: 0;
+  left: 0;
+  width: auto;
+  max-width: none;
+  height: 100%;
+  user-select: none;
+  -webkit-mask-image: linear-gradient(90deg, #000 0%, #000 76%, transparent 100%);
+  mask-image: linear-gradient(90deg, #000 0%, #000 76%, transparent 100%);
+}
+
+.paint-background::before,
+.paint-background::after {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  content: "";
+}
+
+.paint-background::before {
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.paint-background::after {
+  background: linear-gradient(
+    90deg,
+    rgba(0, 0, 0, 0.62) 0%,
+    transparent 18%,
+    transparent 82%,
+    rgba(0, 0, 0, 0.62) 100%
+  ), linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 0.58) 0%,
+    transparent 20%,
+    transparent 80%,
+    rgba(0, 0, 0, 0.66) 100%
+  );
+}
+
+.app-content {
+  position: relative;
+  z-index: 1;
 }
 
 :root,

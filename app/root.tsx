@@ -1,8 +1,22 @@
-import { isRouteErrorResponse, Links, Meta, Outlet, Scripts, ScrollRestoration } from 'react-router'
+import {
+  isRouteErrorResponse,
+  Links,
+  Meta,
+  Outlet,
+  Scripts,
+  ScrollRestoration,
+  useRouteLoaderData
+} from 'react-router'
+import paintImages from 'virtual:paint-images'
+import { selectPaintBackground } from '~/lib/paint-background'
 import { useCspNonce } from '~/lib/security-headers'
 import { bodyClassName, headingResetClassName, siteShellClassName } from '~/lib/styles'
 import type { Route } from './+types/root'
 import './app.css'
+
+export function loader() {
+  return { paintBackground: selectPaintBackground(paintImages) }
+}
 
 export const links: Route.LinksFunction = () => [
   { rel: 'icon', type: 'image/png', href: '/favicon.png' },
@@ -20,6 +34,7 @@ export const links: Route.LinksFunction = () => [
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const nonce = useCspNonce()
+  const loaderData = useRouteLoaderData<typeof loader>('root')
 
   return (
     <html lang="en">
@@ -30,7 +45,15 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <Links nonce={nonce} />
       </head>
       <body className={bodyClassName}>
-        {children}
+        <div className="paint-background">
+          <img
+            className="paint-background__image"
+            src={loaderData?.paintBackground ?? paintImages[0]}
+            alt=""
+            aria-hidden="true"
+          />
+        </div>
+        <div className="app-content">{children}</div>
         <ScrollRestoration nonce={nonce} />
         <Scripts nonce={nonce} />
       </body>
