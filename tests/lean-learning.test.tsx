@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { buildCodeGuide, LeanCode } from '../app/components/lean-learning-shell'
+import { buildCodeGuide, buildCommentedCode, LeanCode } from '../app/components/lean-learning-shell'
 import {
   getLeanLesson,
   getLeanLessonNeighbors,
@@ -90,6 +90,35 @@ describe('Lean code guide', () => {
     expect(buildCodeGuide('someUnknownExpression')).toEqual([
       expect.objectContaining({ token: 'コード全体' })
     ])
+  })
+
+  it('adds an explanatory comment to every non-empty line in each supported language', () => {
+    const examples = [
+      ['def double (n : Nat) : Nat :=\n  n + n', 'lean', '--'],
+      ['const value: unknown = JSON.parse(stdout);\nreturn value;', 'typescript', '//'],
+      ['name = "access-policy"\nroot = "Main"', 'toml', '#'],
+      ['lake build\nnpm test', 'bash', '#']
+    ] as const
+
+    for (const [source, language, marker] of examples) {
+      const commented = buildCommentedCode(source, language)
+
+      expect(commented.split('\n').every((line) => !line.trim() || line.includes(marker))).toBe(
+        true
+      )
+    }
+  })
+
+  it('preserves blank separators and extends existing comments with an explanation', () => {
+    expect(buildCommentedCode('#eval double 3  -- 6\n\n-- 同じ証明')).toContain(
+      '#eval double 3  -- 6 / 式を評価し、計算結果を表示します。\n\n-- 同じ証明 / '
+    )
+  })
+
+  it('does not mistake a comment marker inside a string for an existing comment', () => {
+    expect(buildCommentedCode('const url = "https://example.com";', 'typescript')).toContain(
+      '"https://example.com";  // '
+    )
   })
 })
 

@@ -364,6 +364,296 @@ export function buildCodeGuide(source: string, language: LeanCodeLanguage = 'lea
       ]
 }
 
+function explainLeanLine(line: string) {
+  if (line.startsWith('--')) {
+    return 'Leanが実行しない注釈で、この例の意図や出力を示します。'
+  }
+  if (line.startsWith('import ')) {
+    return '後続のコードで使う定義を、このモジュールから読み込みます。'
+  }
+  if (line.startsWith('universe ')) {
+    return '任意の型階層を扱うための宇宙変数を宣言します。'
+  }
+
+  const declaration = line.match(
+    /^(def|theorem|structure|inductive)\s+([\p{L}_][\p{L}\p{N}_₀-₉]*)/u
+  )
+  if (declaration) {
+    const [, keyword, name] = declaration
+    const actions: Record<string, string> = {
+      def: `計算できる定義「${name}」の型と本体を書き始めます。`,
+      theorem: `証明する定理「${name}」の命題を書き始めます。`,
+      structure: `複数のフィールドを持つ型「${name}」を宣言します。`,
+      inductive: `コンストラクタで値を作る帰納型「${name}」を宣言します。`
+    }
+
+    return actions[keyword]
+  }
+  if (line.startsWith('example')) {
+    return '名前を残さず、この命題または式が型検査を通るか確認します。'
+  }
+  if (line.startsWith('#check')) {
+    return '式を実行せず、Leanが推論した型を表示します。'
+  }
+  if (line.startsWith('#eval')) {
+    return '式を評価し、計算結果を表示します。'
+  }
+  if (line.startsWith('#print axioms')) {
+    return '定理が最終的に依存している公理を一覧表示します。'
+  }
+  if (line.startsWith('#print')) {
+    return '登録済みの宣言を、Leanが保持する形で表示します。'
+  }
+  if (line.startsWith('#synth')) {
+    return '必要な型クラスのインスタンスをLeanに探索させます。'
+  }
+  if (line.startsWith('|')) {
+    if (line.endsWith('=>')) {
+      return 'このパターンに一致する分岐を始め、処理を次の行へ続けます。'
+    }
+
+    return line.includes('=>')
+      ? 'このパターンに一致した入力の結果を、右辺で定義します。'
+      : 'この帰納型の値を作るコンストラクタを追加します。'
+  }
+  if (line.startsWith('deriving ')) {
+    return '宣言した型から、指定した機能の実装を自動生成します。'
+  }
+  if (line.startsWith('intro ')) {
+    return '含意の前提を仮定として受け取り、残りを新しいゴールにします。'
+  }
+  if (line.startsWith('exact ')) {
+    return '現在のゴールと同じ型を持つ証明項を、そのまま渡します。'
+  }
+  if (line.startsWith('apply ')) {
+    return '結論がゴールに合う定理を使い、必要な前提を新しいゴールにします。'
+  }
+  if (line === 'constructor') {
+    return '連言などのゴールを、構成要素ごとのサブゴールに分けます。'
+  }
+  if (line.startsWith('cases ')) {
+    return '値をコンストラクタごとの場合に分けて調べます。'
+  }
+  if (line.startsWith('induction ')) {
+    return '再帰的な値を場合分けし、再帰部分に帰納法の仮定を用意します。'
+  }
+  if (line.startsWith('simp only')) {
+    return '列挙した規則だけを使い、ゴールを簡約します。'
+  }
+  if (line.startsWith('simp')) {
+    return '定義や既知の補題を使い、ゴールを単純な形へ変えます。'
+  }
+  if (line === 'rfl' || line.endsWith('=> rfl')) {
+    return '両辺を計算すると同じ形になることを使い、等式を閉じます。'
+  }
+  if (line.startsWith('refine ')) {
+    return '証明項の分かっている部分を与え、未確定部分を新しいゴールにします。'
+  }
+  if (line === 'decide') {
+    return '判定可能な命題を計算し、その結果から証明を作ります。'
+  }
+  if (line === 'sorry') {
+    return '未完成の証明を公理で仮置きします。本番の証明には残せません。'
+  }
+  if (line.startsWith('fun ')) {
+    return '入力から証明または値を返す無名関数を構成します。'
+  }
+  if (line.startsWith('if ')) {
+    return '条件を判定し、成立する場合の値を次の行で返します。'
+  }
+  if (line === 'else') {
+    return '直前の条件が成立しない場合の処理へ分岐します。'
+  }
+  if (line.startsWith('let ')) {
+    return '後続の処理で使う局所的な名前へ、計算結果を束縛します。'
+  }
+  if (line.startsWith('IO.println')) {
+    return '計算結果をJSON文字列に変換し、標準出力へ書き出します。'
+  }
+  if (line === 'n + n') {
+    return '入力nを自身に足し、2倍した自然数を定義の結果にします。'
+  }
+  if (line === 'f (f n)') {
+    return '関数fを入力nへ2回適用し、その結果を返します。'
+  }
+  if (line === 'reprStr value') {
+    return '型クラスから得た表示機能を使い、値を文字列へ変換します。'
+  }
+  if (line === 'Vector.replicate n value') {
+    return 'valueをn個並べ、長さnが型に記録されたVectorを作ります。'
+  }
+  if (line === 'h hp') {
+    return '含意の証明hへpの証明hpを渡し、ゴールqの証明を得ます。'
+  }
+  if (line === 'hasValidKey') {
+    return '入力された鍵の有効性を、そのまま判定結果として返します。'
+  }
+  if (line === 'true') {
+    return '入力に関係なく常にtrueを返す、意図的に壊した実装です。'
+  }
+  if (line === '_') {
+    return 'まだ入力していないタクティクの位置をプレースホルダーで示します。'
+  }
+  if (line.startsWith('{')) {
+    return '構造体の各フィールドへ値を入れ、新しい値を組み立てます。'
+  }
+  if (line.startsWith('·')) {
+    return '分割された現在のサブゴールに対する証明を書きます。'
+  }
+  if (line.startsWith('(')) {
+    return '前の宣言に必要な引数または仮定を追加します。'
+  }
+  if (/^[\p{L}_][\p{L}\p{N}_.?₀-₉]*\s*:/u.test(line)) {
+    return 'この名前が保持する値の型を指定します。'
+  }
+  if (line.includes(':= by')) {
+    return '左側の命題に、タクティクで組み立てる証明を与えます。'
+  }
+  if (line.endsWith(':= do')) {
+    return '副作用を順番に実行するIO処理の本体を始めます。'
+  }
+  if (line.includes(':=')) {
+    return '左側で宣言した名前へ、右側の定義本体を与えます。'
+  }
+  if (line.includes('=>')) {
+    return '左側の入力またはパターンに対する結果を右側へ書きます。'
+  }
+  if (line.endsWith(':')) {
+    return '宣言する型または命題が、次の行へ続きます。'
+  }
+
+  return '直前の宣言を継続し、この式を定義本体または命題の一部として使います。'
+}
+
+function explainTypeScriptLine(line: string) {
+  if (line.startsWith('//')) {
+    return '実行されない注釈として、この処理の意図を示します。'
+  }
+  if (line.startsWith('import ')) {
+    return 'Node.jsの別モジュールから、必要な機能を読み込みます。'
+  }
+  if (line.startsWith('type ')) {
+    return 'Leanから受け取る値の形をTypeScriptの型として定義します。'
+  }
+  if (line.startsWith('export async function ')) {
+    return '外部から呼べる非同期関数を宣言し、Promiseで結果を返します。'
+  }
+  if (line.startsWith('function ')) {
+    return '未知の値を実行時に検査する関数を宣言します。'
+  }
+  if (line.startsWith('const ')) {
+    return line.includes('JSON.parse')
+      ? '標準出力のJSONを解析し、まだ未検証のunknownとして受け取ります。'
+      : '右辺の値を、再代入しない局所変数へ束縛します。'
+  }
+  if (line.startsWith('if ')) {
+    return '期待する条件を満たさない場合を検出し、処理を早期終了します。'
+  }
+  if (line.startsWith('return ')) {
+    return '検証または処理の結果を呼び出し元へ返します。'
+  }
+  if (line.startsWith('&&')) {
+    return '前行の条件に加え、reasonが文字列であることも確認します。'
+  }
+  if (line === ');') {
+    return '複数行に分けた関数呼び出しをここで閉じます。'
+  }
+  if (line === '}') {
+    return 'この関数の処理範囲をここで閉じます。'
+  }
+  if (line.startsWith('"./')) {
+    return 'シェルを介さず直接起動するLean実行ファイルのパスです。'
+  }
+  if (line === '[role],') {
+    return '外部入力を、実行ファイルへ渡す引数の配列にします。'
+  }
+  if (line.startsWith('{ timeout:')) {
+    return '外部プロセスが長時間停止しないよう、実行時間に上限を設けます。'
+  }
+
+  return '直前の宣言または関数呼び出しを、この値や条件で継続します。'
+}
+
+function explainTomlLine(line: string) {
+  if (line.startsWith('#')) {
+    return '設定としては読み込まれない注釈です。'
+  }
+  if (line === '[[lean_exe]]') {
+    return 'Leanの実行可能ファイルを作る設定ブロックを始めます。'
+  }
+  if (line.startsWith('name')) {
+    return 'パッケージまたは現在のターゲットの名前を指定します。'
+  }
+  if (line.startsWith('version')) {
+    return 'このパッケージのバージョンを指定します。'
+  }
+  if (line.startsWith('defaultTargets')) {
+    return '通常のビルドで作るターゲットを指定します。'
+  }
+  if (line.startsWith('root')) {
+    return '実行可能ファイルの入口になるLeanモジュールを指定します。'
+  }
+
+  return 'Lakeがビルド時に参照する設定値です。'
+}
+
+function explainShellLine(line: string) {
+  if (line.startsWith('#')) {
+    return '直前のコマンドから得られる出力例を示します。'
+  }
+  if (line.startsWith('lake new ')) {
+    return '指定した名前で、練習用のLeanプロジェクトを作成します。'
+  }
+  if (line.startsWith('cd ')) {
+    return '以降のコマンドを実行するディレクトリへ移動します。'
+  }
+  if (line.startsWith('lake lean ')) {
+    return '指定したLeanファイルを読み込み、定義と証明を型検査します。'
+  }
+  if (line === 'lake build') {
+    return 'Leanプロジェクト全体をビルドし、証明を含めて型検査します。'
+  }
+  if (line.startsWith('./')) {
+    return 'ビルド済みのLean実行ファイルへ、この引数を渡して起動します。'
+  }
+  if (line === 'npm run typecheck') {
+    return 'TypeScriptの型検査を実行します。'
+  }
+  if (line === 'npm test') {
+    return 'TypeScriptプロジェクトの自動テストを実行します。'
+  }
+
+  return 'このコマンドをシェルで実行し、次の検証段階へ進みます。'
+}
+
+export function buildCommentedCode(source: string, language: LeanCodeLanguage = 'lean') {
+  const marker = language === 'lean' ? '--' : language === 'typescript' ? '//' : '#'
+
+  return source
+    .split('\n')
+    .map((sourceLine) => {
+      const line = sourceLine.trim()
+      if (!line) return sourceLine
+
+      const explanation =
+        language === 'lean'
+          ? explainLeanLine(line)
+          : language === 'typescript'
+            ? explainTypeScriptLine(line)
+            : language === 'toml'
+              ? explainTomlLine(line)
+              : explainShellLine(line)
+      const markerIndex = sourceLine.indexOf(marker)
+      const hasLineComment =
+        markerIndex >= 0 && (markerIndex === 0 || /\s/.test(sourceLine[markerIndex - 1]))
+
+      return hasLineComment
+        ? `${sourceLine} / ${explanation}`
+        : `${sourceLine}  ${marker} ${explanation}`
+    })
+    .join('\n')
+}
+
 export function LeanCode({
   children,
   label = 'Lean',
@@ -377,6 +667,7 @@ export function LeanCode({
 }) {
   const language = detectCodeLanguage(label)
   const guide = buildCodeGuide(children, language)
+  const commentedCode = buildCommentedCode(children, language)
 
   return (
     <figure className={`lean-code${status ? ` lean-code--${status}` : ''}`}>
@@ -389,7 +680,7 @@ export function LeanCode({
         )}
       </figcaption>
       <pre>
-        <PrismCode code={children} language={language} />
+        <PrismCode code={commentedCode} language={language} />
       </pre>
       {guide.length > 0 && (
         <details className="lean-code__guide" open={guideOpen}>

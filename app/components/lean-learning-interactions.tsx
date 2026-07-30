@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { LeanCode } from '~/components/lean-learning-shell'
+import { buildCommentedCode, LeanCode } from '~/components/lean-learning-shell'
 import { PrismCode, PrismTokens } from '~/components/lean-syntax-highlight'
 
 export function ProofPipeline() {
@@ -9,21 +9,21 @@ export function ProofPipeline() {
       label: 'proposition',
       title: '解錠してよい条件を書く',
       body: '「有効な鍵がないなら、解錠しない」をLeanが読める命題にします。',
-      code: 'mayUnlock false = false'
+      code: 'mayUnlock false = false -- 無効な鍵では解錠しない、という命題です。'
     },
     {
       tab: '2. 証明',
       label: 'proof',
       title: 'その主張を導く手順を書く',
       body: 'rflは、両辺を計算すると同じ形になることを使います。',
-      code: 'by\n  rfl'
+      code: 'by -- タクティクによる証明を始めます。\n  rfl -- 両辺の計算結果が同じことを使います。'
     },
     {
       tab: '3. 確認',
       label: 'kernel',
       title: '小さなカーネルが検査する',
       body: '証明手順から作られた証明項が、主張の型を持つかを確認します。',
-      code: '✓ proof accepted'
+      code: '✓ proof accepted -- 証明項が命題の型を持つと確認されました。'
     }
   ] as const
   const [stage, setStage] = useState(0)
@@ -52,16 +52,24 @@ export function ProofPipeline() {
             <code className="language-lean">
               <PrismTokens
                 code={
-                  'def mayUnlock (hasValidKey : Bool) : Bool :=\n  hasValidKey\n\ntheorem noKeyNoUnlock :\n  '
+                  'def mayUnlock (hasValidKey : Bool) : Bool := -- 解錠判定の関数を定義します。\n  hasValidKey -- 渡された鍵の有効性をそのまま返します。\n\ntheorem noKeyNoUnlock : -- 鍵がなければ解錠しない性質を宣言します。\n  '
                 }
                 language="lean"
               />
               <mark className={stage === 0 ? 'is-lit' : undefined}>
                 <PrismTokens code="mayUnlock false = false" language="lean" />
               </mark>
-              <PrismTokens code={' :=\n  '} language="lean" />
+              <PrismTokens
+                code={' := -- 無効な鍵に対する戻り値を命題にし、証明を与えます。\n  '}
+                language="lean"
+              />
               <mark className={stage === 1 ? 'is-lit' : undefined}>
-                <PrismTokens code={'by\n    rfl'} language="lean" />
+                <PrismTokens
+                  code={
+                    'by -- タクティクによる証明を始めます。\n    rfl -- 計算後の両辺が同じ形になることを使います。'
+                  }
+                  language="lean"
+                />
               </mark>
             </code>
           </pre>
@@ -281,14 +289,14 @@ ${step >= 2 ? '  exact hp' : '  _'}`
       <div className="proof-stepper__code">
         <span>Main.lean</span>
         <pre>
-          <PrismCode code={code} language="lean" />
+          <PrismCode code={buildCommentedCode(code)} language="lean" />
         </pre>
       </div>
       <div className="proof-state">
         <div>
           <span>CONTEXT</span>
           <pre>
-            <PrismCode code={current.context} language="lean" />
+            <PrismCode code={buildCommentedCode(current.context)} language="lean" />
           </pre>
         </div>
         <div>
