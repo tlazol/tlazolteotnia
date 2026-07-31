@@ -43,6 +43,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <Meta />
         <Links nonce={nonce} />
+        <script
+          async
+          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9662593190813034"
+          crossOrigin="anonymous"
+          nonce={nonce}
+        />
       </head>
       <body className={bodyClassName}>
         <div className="paint-background">

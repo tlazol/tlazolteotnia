@@ -18,8 +18,8 @@ export function createHtmlSecurityHeaders(nonce: string) {
 }
 
 function createContentSecurityPolicy(nonce: string) {
-  const scriptSrc = ["'self'", `'nonce-${nonce}'`]
-  const connectSrc = ["'self'"]
+  const scriptSrc = ["'self'", `'nonce-${nonce}'`, 'https://pagead2.googlesyndication.com']
+  const connectSrc = ["'self'", 'https://ep1.adtrafficquality.google']
 
   if (import.meta.env.DEV) {
     scriptSrc.push("'unsafe-eval'")
@@ -38,6 +38,7 @@ function createContentSecurityPolicy(nonce: string) {
     "font-src 'self' https://fonts.gstatic.com data:",
     "img-src 'self' data: https:",
     `connect-src ${connectSrc.join(' ')}`,
+    "frame-src 'self' https://googleads.g.doubleclick.net https://*.adtrafficquality.google https://www.google.com",
     "base-uri 'self'",
     "object-src 'none'",
     "frame-ancestors 'none'",
