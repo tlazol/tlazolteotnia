@@ -3,3 +3,6 @@ declare module 'virtual:paint-images' {
 
   export default paintImages
 }
+
+declare module 'prismjs/components/prism-bash'
+declare module 'prismjs/components/prism-toml'

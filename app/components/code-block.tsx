@@ -1,7 +1,4 @@
-import Prism from 'prismjs'
-import 'prismjs/components/prism-bash'
-import 'prismjs/components/prism-json'
-import { Highlight, type PrismTheme } from 'prism-react-renderer'
+import { Highlight, Prism, type PrismTheme } from 'prism-react-renderer'
 import { parseCodeInfo } from '~/lib/markdown'
 import {
   codeBlockClassName,
@@ -9,6 +6,9 @@ import {
   codeBlockLineClassName,
   codeBlockPreClassName
 } from '~/lib/styles'
+
+Reflect.set(globalThis, 'Prism', Prism)
+await import('prismjs/components/prism-bash')
 
 Prism.manual = true
 
