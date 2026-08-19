@@ -1,3 +1,4 @@
+import paintImages from 'virtual:paint-images'
 import {
   isRouteErrorResponse,
   Links,
@@ -7,9 +8,9 @@ import {
   ScrollRestoration,
   useRouteLoaderData
 } from 'react-router'
-import paintImages from 'virtual:paint-images'
 import { selectPaintBackground } from '~/lib/paint-background'
 import { useCspNonce } from '~/lib/security-headers'
+import { siteName } from '~/lib/site'
 import { bodyClassName, headingResetClassName, siteShellClassName } from '~/lib/styles'
 import type { Route } from './+types/root'
 import './app.css'
@@ -20,6 +21,18 @@ export function loader() {
 
 export const links: Route.LinksFunction = () => [
   { rel: 'icon', type: 'image/png', href: '/favicon.png' },
+  {
+    rel: 'alternate',
+    type: 'application/rss+xml',
+    href: '/rss.xml',
+    title: `${siteName} RSS`
+  },
+  {
+    rel: 'alternate',
+    type: 'application/atom+xml',
+    href: '/atom.xml',
+    title: `${siteName} Atom`
+  },
   { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
   {
     rel: 'preconnect',

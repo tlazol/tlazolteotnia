@@ -2,8 +2,8 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { assertPaintImages, discoverPaintImages } from '../vite.config'
 import { selectPaintBackground } from '~/lib/paint-background'
+import { assertPaintImages, discoverPaintImages } from '../vite.config'
 
 const temporaryDirectories: string[] = []
 

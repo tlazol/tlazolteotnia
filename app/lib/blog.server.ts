@@ -17,6 +17,7 @@ const blogSources = import.meta.glob<string>('/content/blog/*.md', {
 
 type BlogPostCache = {
   postsBySlug: Map<string, BlogPost>
+  posts: BlogPost[]
   summaries: BlogPostSummary[]
 }
 
@@ -39,6 +40,12 @@ export async function getBlogPost(slug: string): Promise<BlogPost | null> {
   return post
 }
 
+export async function getBlogFeedPosts(): Promise<BlogPost[]> {
+  const cache = await getBlogPostCache()
+
+  return cache.posts
+}
+
 async function getBlogPostCache() {
   blogPostCachePromise ??= buildBlogPostCache().catch((error) => {
     blogPostCachePromise = null
@@ -50,18 +57,20 @@ async function getBlogPostCache() {
 
 async function buildBlogPostCache(): Promise<BlogPostCache> {
   const posts = await readAllPosts()
-  const publishedPosts = posts.filter((post) => !post.draft)
+  const publishedPosts = sortBlogPostsNewestFirst(posts.filter((post) => !post.draft)).map(
+    toPublicBlogPost
+  )
   const postsBySlug = new Map<string, BlogPost>()
 
   for (const post of publishedPosts) {
-    const publicPost = toPublicBlogPost(post)
-    postsBySlug.set(publicPost.slug, publicPost)
+    postsBySlug.set(post.slug, post)
   }
 
   return {
     postsBySlug,
-    summaries: sortBlogPostsNewestFirst(publishedPosts).map((post) => {
-      const { body: _body, ...summary } = toPublicBlogPost(post)
+    posts: publishedPosts,
+    summaries: publishedPosts.map((post) => {
+      const { body: _body, ...summary } = post
       return summary
     })
   }

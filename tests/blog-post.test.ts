@@ -105,7 +105,6 @@ describe('blog post parser', () => {
       'why-not-just-try-yourself',
       'still-dont-know-best-way-to-count-documents-in-documentdb',
       'migration-to-cloudflare',
-      'chaos-zero-nightmare-is-good',
       'react-router-renewal',
       'gpt-english-email-tips',
       'langchain-typescript-chatgpt-search',

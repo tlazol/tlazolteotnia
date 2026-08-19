@@ -5,6 +5,8 @@ export default [
   route('api/reactions/:slug', 'routes/api.reactions.$slug.ts'),
   route('app/lean-learning', 'routes/lean-learning.tsx'),
   route('app/lean-learning/:lesson', 'routes/lean-learning.$lesson.tsx'),
+  route('rss.xml', 'routes/rss.xml.ts'),
+  route('atom.xml', 'routes/atom.xml.ts'),
   route('blog', 'routes/blog.tsx'),
   route('blog/:slug', 'routes/blog.$slug.tsx')
 ] satisfies RouteConfig

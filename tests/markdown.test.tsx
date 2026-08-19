@@ -58,6 +58,17 @@ describe('MarkdownBody', () => {
     expect(html).toContain('title="title"')
   })
 
+  it('resolves relative links and images when a base URL is provided', () => {
+    const html = render(
+      '[post](/blog/post) [part](#part) ![image](/images/a.png)',
+      'https://0rga.org/blog/current'
+    )
+
+    expect(html).toContain('href="https://0rga.org/blog/post"')
+    expect(html).toContain('href="https://0rga.org/blog/current#part"')
+    expect(html).toContain('src="https://0rga.org/images/a.png"')
+  })
+
   it('clamps article headings to h2 through h6', () => {
     expect(render('# One\n\n###### Six')).toContain('<h2>One</h2>')
     expect(render('# One\n\n###### Six')).toContain('<h6>Six</h6>')
@@ -97,6 +108,6 @@ describe('MarkdownBody', () => {
   })
 })
 
-function render(markdown: string) {
-  return renderToStaticMarkup(<MarkdownBody body={markdown} />)
+function render(markdown: string, baseUrl?: string) {
+  return renderToStaticMarkup(<MarkdownBody body={markdown} baseUrl={baseUrl} />)
 }

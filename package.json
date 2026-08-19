@@ -25,6 +25,7 @@
     "check": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run validate:content && npm run og:check"
   },
   "dependencies": {
+    "feed": "^6.0.0",
     "isbot": "^5.1.44",
     "marked": "^18.0.5",
     "prism-react-renderer": "^2.4.1",
