@@ -81,7 +81,12 @@ function renderBlock(token: Token, key: number, baseUrl?: string): ReactNode {
               {table.rows.map((row, rowIndex) => (
                 <tr key={rowIndex}>
                   {row.map((cell, cellIndex) => (
-                    <td key={cellIndex}>{renderInline(cell.tokens, baseUrl)}</td>
+                    <td
+                      className={isEmojiOnly(cell.text) ? 'markdown-table__emoji' : undefined}
+                      key={cellIndex}
+                    >
+                      {renderInline(cell.tokens, baseUrl)}
+                    </td>
                   ))}
                 </tr>
               ))}
@@ -105,6 +110,10 @@ function renderBlock(token: Token, key: number, baseUrl?: string): ReactNode {
       return null
     }
   }
+}
+
+function isEmojiOnly(value: string) {
+  return /^\p{Extended_Pictographic}\uFE0F?$/u.test(value.trim())
 }
 
 function renderInline(tokens: Token[], baseUrl?: string): ReactNode[] {

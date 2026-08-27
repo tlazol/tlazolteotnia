@@ -25,6 +25,13 @@ describe('MarkdownBody', () => {
     expect(html).toContain('<div class="markdown-table"><table>')
   })
 
+  it('enlarges table cells that contain only an emoji', () => {
+    const html = render('| Skill | Rating |\n| - | - |\n| HTML | 🤗 |\n| CSS | 🙂 good |')
+
+    expect(html).toContain('<td class="markdown-table__emoji">🤗</td>')
+    expect(html).toContain('<td>🙂 good</td>')
+  })
+
   it('does not render block or inline raw HTML', () => {
     const html = render('<script>alert(1)</script>\n\nText <b>unsafe</b> end')
 

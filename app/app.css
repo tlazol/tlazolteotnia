@@ -830,6 +830,11 @@ body {
   transition: background-color 160ms ease;
 }
 
+.markdown-table td.markdown-table__emoji {
+  font-size: 2.25rem;
+  line-height: 1;
+}
+
 .markdown-table th + th,
 .markdown-table td + td {
   border-left: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
