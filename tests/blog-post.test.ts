@@ -100,6 +100,7 @@ describe('blog post parser', () => {
     expect(
       sortBlogPostsNewestFirst(posts.filter((post) => !post.draft)).map((post) => post.slug)
     ).toEqual([
+      'react-router-to-tanstack-start',
       'how-to-reset-colima',
       'people-who-use-enter-to-send-need-to-think-about-people-who-use-it-to-convert',
       'why-not-just-try-yourself',

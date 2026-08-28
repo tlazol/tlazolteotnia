@@ -1,3 +1,4 @@
+import { Link } from '@tanstack/react-router'
 import { type ReactNode, useState } from 'react'
 import {
   FaBars,
@@ -9,7 +10,6 @@ import {
   FaXmark,
   FaXTwitter
 } from 'react-icons/fa6'
-import { Link } from '@tanstack/react-router'
 import { artStationUrl, authorAccount, authorName, siteName, xUrl } from '#/lib/site'
 
 export type TopicChannel = {

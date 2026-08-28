@@ -1,6 +1,6 @@
+import { Link } from '@tanstack/react-router'
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { FaArrowUpRightFromSquare, FaXmark } from 'react-icons/fa6'
-import { Link } from '@tanstack/react-router'
 import { ArticleReactionFooter } from '#/components/article-reaction-footer'
 import { ReactionBar } from '#/components/reaction-bar'
 import { TagList } from '#/components/tag-list'

@@ -1,6 +1,5 @@
 import { readdir, readFile } from 'node:fs/promises'
 import { describe, expect, it } from 'vitest'
-import { type BlogPostRecord, parseBlogPost } from '../src/lib/blog-post'
 import {
   fillRowText,
   formatOgCheckError,
@@ -9,6 +8,7 @@ import {
   renderOgPng,
   selectPosts
 } from '../scripts/generate-og-images'
+import { type BlogPostRecord, parseBlogPost } from '../src/lib/blog-post'
 
 describe('OG image generation', () => {
   const published = makePost('published')

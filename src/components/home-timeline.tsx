@@ -1,3 +1,4 @@
+import { Link, useNavigate, useSearch } from '@tanstack/react-router'
 import { type MouseEvent, useCallback, useEffect, useState } from 'react'
 import {
   FaArrowUpRightFromSquare,
@@ -7,12 +8,11 @@ import {
   FaThumbtack,
   FaWandMagicSparkles
 } from 'react-icons/fa6'
-import { Link, useNavigate, useSearch } from '@tanstack/react-router'
 import { CommunityLayout, type TopicChannel } from '#/components/community-layout'
 import { PostModal } from '#/components/post-modal'
 import { ReactionBar } from '#/components/reaction-bar'
-import type { BlogPost, BlogPostSummary } from '#/lib/blog-post'
 import { getModalPostData } from '#/lib/blog.functions'
+import type { BlogPost, BlogPostSummary } from '#/lib/blog-post'
 import { filterPostsByTag, getTagFilters } from '#/lib/blog-tags'
 import { getPostAccent } from '#/lib/post-accent'
 import { getPostAuthor, getPostEmoji } from '#/lib/post-identity'

@@ -1,6 +1,6 @@
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useCallback, useState } from 'react'
 import { FaArrowLeftLong, FaFileLines, FaHashtag, FaWandMagicSparkles } from 'react-icons/fa6'
-import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { ArticleReactionFooter } from '#/components/article-reaction-footer'
 import { CommunityLayout, type TopicChannel } from '#/components/community-layout'
 import { MarkdownBody } from '#/components/markdown-body'

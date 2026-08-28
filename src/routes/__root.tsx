@@ -1,5 +1,5 @@
 import paintImages from 'virtual:paint-images'
-import { HeadContent, Outlet, Scripts, createRootRoute, useRouter } from '@tanstack/react-router'
+import { createRootRoute, HeadContent, Outlet, Scripts, useRouter } from '@tanstack/react-router'
 import { selectPaintBackground } from '#/lib/paint-background'
 import { siteName } from '#/lib/site'
 import { bodyClassName, headingResetClassName, siteShellClassName } from '#/lib/styles'

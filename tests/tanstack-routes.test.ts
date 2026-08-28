@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { createCspNonce, createHtmlSecurityHeaders } from '#/lib/security-headers'
 import { requireRouteData } from '#/lib/route-helpers'
+import { createCspNonce, createHtmlSecurityHeaders } from '#/lib/security-headers'
 import { getLegacyBlogRedirect } from '#/routes/blog'
 
 describe('TanStack route and server integration primitives', () => {

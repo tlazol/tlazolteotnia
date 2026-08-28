@@ -1,5 +1,5 @@
-import { FaAngleRight, FaCopyright } from 'react-icons/fa6'
 import { Link } from '@tanstack/react-router'
+import { FaAngleRight, FaCopyright } from 'react-icons/fa6'
 import {
   artStationUrl,
   authorName,
