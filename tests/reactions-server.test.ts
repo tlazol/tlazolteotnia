@@ -1,15 +1,8 @@
-import { RouterContextProvider } from 'react-router'
 import { describe, expect, it } from 'vitest'
-import {
-  dbContext,
-  reactionCountsCacheContext,
-  reactionSecretContext,
-  waitUntilContext
-} from '~/lib/cloudflare-context'
-import { createReaction, getPostReactions, readReactionEmoji } from '~/lib/reactions.server'
-import { action as reactionAction, loader as reactionLoader } from '~/routes/api.reactions.$slug'
-import { loader as postLoader } from '~/routes/blog.$slug'
-import { loader as homeLoader } from '~/routes/home'
+import type { RuntimeDependencies } from '#/lib/cloudflare-context'
+import { loadHomeData, loadPostData } from '#/lib/blog-data.server'
+import { handleGetReactions, handlePostReaction } from '#/lib/reaction-api.server'
+import { createReaction, getPostReactions, readReactionEmoji } from '#/lib/reactions.server'
 
 class FakeD1 {
   readonly votes = new Set<string>()
@@ -162,12 +155,13 @@ function cacheKey(request: RequestInfo | URL) {
   return request instanceof Request ? request.url : String(request)
 }
 
-function makeContext(db: FakeD1, cache?: FakeCache) {
-  const context = new RouterContextProvider()
-  context.set(dbContext, db as unknown as D1Database)
-  if (cache) context.set(reactionCountsCacheContext, cache as unknown as Cache)
-  context.set(reactionSecretContext, 'test-secret-at-least-long-enough')
-  return context
+function makeContext(db: FakeD1, cache?: FakeCache): RuntimeDependencies {
+  return {
+    db: db as unknown as D1Database,
+    reactionCountsCache: (cache as unknown as Cache) ?? null,
+    reactionCookieSecret: 'test-secret-at-least-long-enough',
+    waitUntil: null
+  }
 }
 
 function request(cookie?: string) {
@@ -236,24 +230,41 @@ describe('reaction server', () => {
     expect(restored.reactions).toEqual([{ emoji: '🎉', count: 1, reacted: true }])
   })
 
+  it('returns the public GET and POST API response shapes', async () => {
+    const context = makeContext(new FakeD1())
+    const getResponse = await handleGetReactions(context, request(), 'react-router-renewal')
+    expect(getResponse.status).toBe(200)
+    expect(getResponse.headers.get('Cache-Control')).toBe('private, no-store')
+    expect(await getResponse.json()).toEqual({ reactions: [], reactedEmojis: [] })
+
+    const form = new FormData()
+    form.set('emoji', '👍')
+    const postResponse = await handlePostReaction(
+      context,
+      new Request('https://example.com', { method: 'POST', body: form }),
+      'react-router-renewal'
+    )
+    expect(postResponse.status).toBe(200)
+    expect(await postResponse.json()).toEqual({
+      reaction: { emoji: '👍', count: 1, reacted: true },
+      created: true
+    })
+  })
+
   it('returns 400 for invalid emoji and 404 for unknown posts', async () => {
     const context = makeContext(new FakeD1())
     const invalid = new FormData()
     invalid.set('emoji', '❌')
     await expect(
-      reactionAction({
+      handlePostReaction(
         context,
-        params: { slug: 'react-router-renewal' },
-        request: new Request('https://example.com', { method: 'POST', body: invalid })
-      } as unknown as Parameters<typeof reactionAction>[0])
+        new Request('https://example.com', { method: 'POST', body: invalid }),
+        'react-router-renewal'
+      )
     ).rejects.toMatchObject({ status: 400 })
-    await expect(
-      reactionLoader({
-        context,
-        params: { slug: 'missing-post' },
-        request: request()
-      } as unknown as Parameters<typeof reactionLoader>[0])
-    ).rejects.toMatchObject({ status: 404 })
+    await expect(handleGetReactions(context, request(), 'missing-post')).rejects.toMatchObject({
+      status: 404
+    })
   })
 
   it('keeps reads available and returns a short write error when D1 fails', async () => {
@@ -262,22 +273,18 @@ describe('reaction server', () => {
         throw new Error('D1 unavailable')
       }
     } as unknown as FakeD1)
-    const readResult = await reactionLoader({
-      context,
-      params: { slug: 'react-router-renewal' },
-      request: request()
-    } as unknown as Parameters<typeof reactionLoader>[0])
-    expect(readResult.data).toEqual({ reactions: [], reactedEmojis: [] })
+    const readResult = await handleGetReactions(context, request(), 'react-router-renewal')
+    expect(await readResult.json()).toEqual({ reactions: [], reactedEmojis: [] })
 
     const form = new FormData()
     form.set('emoji', '👍')
-    const writeResult = await reactionAction({
+    const writeResult = await handlePostReaction(
       context,
-      params: { slug: 'react-router-renewal' },
-      request: new Request('https://example.com', { method: 'POST', body: form })
-    } as unknown as Parameters<typeof reactionAction>[0])
-    expect(writeResult.init?.status).toBe(503)
-    expect(writeResult.data).toEqual({ error: 'リアクションを送信できませんでした。' })
+      new Request('https://example.com', { method: 'POST', body: form }),
+      'react-router-renewal'
+    )
+    expect(writeResult.status).toBe(503)
+    expect(await writeResult.json()).toEqual({ error: 'リアクションを送信できませんでした。' })
   })
 
   it('renders home and post loaders with empty reactions when D1 reads fail', async () => {
@@ -286,17 +293,11 @@ describe('reaction server', () => {
         throw new Error('D1 unavailable')
       }
     } as unknown as FakeD1)
-    const home = await homeLoader({ context, request: request() } as unknown as Parameters<
-      typeof homeLoader
-    >[0])
-    expect(home.data.posts.length).toBeGreaterThan(0)
-    expect(home.data.reactionsBySlug).toEqual({})
+    const home = await loadHomeData(context, request())
+    expect(home.posts.length).toBeGreaterThan(0)
+    expect(home.reactionsBySlug).toEqual({})
 
-    const post = await postLoader({
-      context,
-      params: { slug: 'react-router-renewal' },
-      request: request()
-    } as unknown as Parameters<typeof postLoader>[0])
+    const post = await loadPostData(context, request(), 'react-router-renewal')
     expect(post).toMatchObject({ post: { slug: 'react-router-renewal' }, reactions: [] })
   })
 
@@ -305,18 +306,12 @@ describe('reaction server', () => {
     const cache = new FakeCache()
     const context = makeContext(db, cache)
     db.counts.set('react-router-renewal|👍', 1)
-    const first = await homeLoader({
-      context,
-      request: request()
-    } as unknown as Parameters<typeof homeLoader>[0])
-    expect(first.data.reactionsBySlug['react-router-renewal']?.[0]?.count).toBe(1)
+    const first = await loadHomeData(context, request())
+    expect(first.reactionsBySlug['react-router-renewal']?.[0]?.count).toBe(1)
 
     db.counts.set('react-router-renewal|👍', 2)
-    const cached = await homeLoader({
-      context,
-      request: request()
-    } as unknown as Parameters<typeof homeLoader>[0])
-    expect(cached.data.reactionsBySlug['react-router-renewal']?.[0]?.count).toBe(1)
+    const cached = await loadHomeData(context, request())
+    expect(cached.reactionsBySlug['react-router-renewal']?.[0]?.count).toBe(1)
     expect(db.listReads).toBe(1)
     expect(db.voteListReads).toBe(2)
   })
@@ -326,14 +321,12 @@ describe('reaction server', () => {
     const cache = new DeferredCache()
     const context = makeContext(db, cache)
     const backgroundTasks: Promise<unknown>[] = []
-    context.set(waitUntilContext, (task) => backgroundTasks.push(task))
+    context.waitUntil = (task) => backgroundTasks.push(task)
     db.counts.set('react-router-renewal|👍', 1)
 
-    const home = await homeLoader({ context, request: request() } as unknown as Parameters<
-      typeof homeLoader
-    >[0])
+    const home = await loadHomeData(context, request())
 
-    expect(home.data.reactionsBySlug['react-router-renewal']?.[0]?.count).toBe(1)
+    expect(home.reactionsBySlug['react-router-renewal']?.[0]?.count).toBe(1)
     expect(backgroundTasks).toHaveLength(1)
     expect(cache.entries).toHaveLength(0)
     cache.releasePut?.()
@@ -349,16 +342,12 @@ describe('reaction server', () => {
     const nextVisitor = request(`reaction_visitor=${'b'.repeat(43)}`)
     await createReaction(context, firstVisitor, 'react-router-renewal', '👍')
 
-    const first = await homeLoader({ context, request: firstVisitor } as unknown as Parameters<
-      typeof homeLoader
-    >[0])
-    expect(first.data.reactionsBySlug['react-router-renewal']?.[0]?.count).toBe(1)
+    const first = await loadHomeData(context, firstVisitor)
+    expect(first.reactionsBySlug['react-router-renewal']?.[0]?.count).toBe(1)
 
     await createReaction(context, nextVisitor, 'react-router-renewal', '👍')
-    const refreshed = await homeLoader({ context, request: firstVisitor } as unknown as Parameters<
-      typeof homeLoader
-    >[0])
-    expect(refreshed.data.reactionsBySlug['react-router-renewal']?.[0]?.count).toBe(2)
+    const refreshed = await loadHomeData(context, firstVisitor)
+    expect(refreshed.reactionsBySlug['react-router-renewal']?.[0]?.count).toBe(2)
     expect(db.listReads).toBe(2)
   })
 
@@ -369,20 +358,14 @@ describe('reaction server', () => {
     const cookie = `reaction_visitor=${'a'.repeat(43)}`
     await createReaction(context, request(cookie), 'react-router-renewal', '👍')
 
-    const home = await homeLoader({
-      context,
-      request: request(cookie)
-    } as unknown as Parameters<typeof homeLoader>[0])
+    const home = await loadHomeData(context, request(cookie))
 
-    expect(home.data.reactionsBySlug['react-router-renewal']).toEqual([
+    expect(home.reactionsBySlug['react-router-renewal']).toEqual([
       { emoji: '👍', count: 1, reacted: true }
     ])
 
-    const otherVisitor = await homeLoader({
-      context,
-      request: request(`reaction_visitor=${'b'.repeat(43)}`)
-    } as unknown as Parameters<typeof homeLoader>[0])
-    expect(otherVisitor.data.reactionsBySlug['react-router-renewal']).toEqual([
+    const otherVisitor = await loadHomeData(context, request(`reaction_visitor=${'b'.repeat(43)}`))
+    expect(otherVisitor.reactionsBySlug['react-router-renewal']).toEqual([
       { emoji: '👍', count: 1, reacted: false }
     ])
     expect(db.listReads).toBe(1)

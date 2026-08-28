@@ -9,51 +9,20 @@
       "**/*.tsx",
       "**/*.jsx",
       "**/*.json",
-      "**/*.rest",
-      "!.react-router",
+      "!src/routeTree.gen.ts",
       "!.playwright-cli",
       "!.wrangler",
-      "!build",
-      "!offline_bundle-dev",
-      "!offline_bundle-prod",
-      "!offline_bundle-test"
+      "!dist"
     ]
   },
-  "formatter": {
-    "enabled": true,
-    "indentStyle": "space",
-    "indentWidth": 2,
-    "lineWidth": 100,
-    "includes": [
-      "**/*.ts",
-      "**/*.js",
-      "**/*.tsx",
-      "**/*.jsx",
-      "**/*.json",
-      "**/*.rest",
-      "!.react-router",
-      "!.playwright-cli",
-      "!.wrangler",
-      "!build",
-      "!offline_bundle-dev",
-      "!offline_bundle-prod",
-      "!offline_bundle-test"
-    ]
-  },
+  "formatter": { "enabled": true, "indentStyle": "space", "indentWidth": 2, "lineWidth": 100 },
   "linter": {
     "enabled": true,
     "rules": {
       "recommended": true,
-      "a11y": {
-        "useKeyWithClickEvents": "off"
-      },
-      "suspicious": {
-        "noExplicitAny": "off",
-        "noArrayIndexKey": "off"
-      },
-      "correctness": {
-        "useExhaustiveDependencies": "off"
-      }
+      "a11y": { "useKeyWithClickEvents": "off" },
+      "suspicious": { "noExplicitAny": "off", "noArrayIndexKey": "off" },
+      "correctness": { "useExhaustiveDependencies": "off" }
     }
   },
   "javascript": {
@@ -64,9 +33,7 @@
       "semicolons": "asNeeded",
       "arrowParentheses": "always",
       "bracketSameLine": false,
-      "indentStyle": "space",
       "quoteStyle": "single",
-      "attributePosition": "auto",
       "bracketSpacing": true
     }
   }

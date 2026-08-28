@@ -1,6 +1,6 @@
 import { readdir, readFile } from 'node:fs/promises'
 import { describe, expect, it } from 'vitest'
-import { type BlogPostRecord, parseBlogPost } from '../app/lib/blog-post'
+import { type BlogPostRecord, parseBlogPost } from '../src/lib/blog-post'
 import {
   fillRowText,
   formatOgCheckError,

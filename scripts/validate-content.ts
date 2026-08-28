@@ -1,8 +1,8 @@
 import { readdir, readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { BlogPostValidationError, parseBlogPosts } from '../app/lib/blog-post'
-import { formatContentValidationIssue, validateContent } from '../app/lib/content-validation'
+import { BlogPostValidationError, parseBlogPosts } from '../src/lib/blog-post'
+import { formatContentValidationIssue, validateContent } from '../src/lib/content-validation'
 
 const projectDirectory = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const contentDirectory = path.join(projectDirectory, 'content/blog')

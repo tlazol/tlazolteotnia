@@ -5,7 +5,7 @@ import {
   parseBlogPost,
   parseBlogPosts,
   sortBlogPostsNewestFirst
-} from '../app/lib/blog-post'
+} from '../src/lib/blog-post'
 
 const validFrontmatter = [
   '---',

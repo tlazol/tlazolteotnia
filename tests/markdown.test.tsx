@@ -1,13 +1,13 @@
 import { readFile } from 'node:fs/promises'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { MarkdownBody } from '../app/components/markdown-body'
-import { parseBlogPost } from '../app/lib/blog-post'
+import { MarkdownBody } from '../src/components/markdown-body'
+import { parseBlogPost } from '../src/lib/blog-post'
 import {
   getUnknownMarkdownTokenPolicy,
   isSafeMarkdownUrl,
   parseCodeInfo
-} from '../app/lib/markdown'
+} from '../src/lib/markdown'
 
 describe('MarkdownBody', () => {
   it('renders paragraphs, inline formatting, lists, tables, quotes, rules, and breaks', () => {

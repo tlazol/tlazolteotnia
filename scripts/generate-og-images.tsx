@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promis
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { type BlogPostRecord, parseBlogPosts } from '../app/lib/blog-post'
+import { type BlogPostRecord, parseBlogPosts } from '../src/lib/blog-post'
 import { renderOgPng } from './og-image'
 
 export { fillRowText, getTitleFontSize, makeRowTexts, renderOgPng, renderSvg } from './og-image'

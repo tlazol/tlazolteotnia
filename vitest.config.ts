@@ -5,12 +5,6 @@ import { defineConfig } from 'vitest/config'
 const projectDirectory = path.dirname(fileURLToPath(import.meta.url))
 
 export default defineConfig({
-  resolve: {
-    alias: {
-      '~': path.join(projectDirectory, 'app')
-    }
-  },
-  test: {
-    environment: 'node'
-  }
+  resolve: { alias: { '#': path.join(projectDirectory, 'src') } },
+  test: { environment: 'node' }
 })

@@ -4,7 +4,7 @@ import {
   mergeReaction,
   REACTION_EMOJIS,
   sortReactionCounts
-} from '~/lib/reactions'
+} from '#/lib/reactions'
 
 describe('reactions', () => {
   it('uses the specified 50 emoji as its allowlist', () => {

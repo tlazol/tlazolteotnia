@@ -30,3 +30,16 @@ offline_bundle*
 *.log
 *.cpuprofile
 *screenshot*.png
+
+# tanstack
+dist
+dist-ssr
+*.local
+.nitro
+.tanstack
+.wrangler
+.playwright-cli
+.output
+.vinxi
+__unconfig*
+todos.json

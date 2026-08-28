@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { getBlogFeedPosts } from '../app/lib/blog.server'
-import { createBlogFeedResponse } from '../app/lib/blog-feed.server'
+import { getBlogFeedPosts } from '../src/lib/blog.server'
+import { createBlogFeedResponse } from '../src/lib/blog-feed.server'
 
 describe('blog feeds', () => {
   it('publishes every post with summaries and full content as RSS', async () => {

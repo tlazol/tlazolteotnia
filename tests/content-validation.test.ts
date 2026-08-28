@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { type BlogPostRecord, parseBlogPost } from '../app/lib/blog-post'
-import { validateContent } from '../app/lib/content-validation'
+import { type BlogPostRecord, parseBlogPost } from '../src/lib/blog-post'
+import { validateContent } from '../src/lib/content-validation'
 
 describe('content validation', () => {
   it('accepts valid public links and existing images while ignoring code fences', () => {

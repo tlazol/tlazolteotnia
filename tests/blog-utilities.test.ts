@@ -1,20 +1,20 @@
 import { describe, expect, it } from 'vitest'
-import { parseBlogPosts, sortBlogPostsNewestFirst } from '../app/lib/blog-post'
-import { filterPostsByTag, getTagFilters } from '../app/lib/blog-tags'
-import { getPostAccent } from '../app/lib/post-accent'
+import { parseBlogPosts, sortBlogPostsNewestFirst } from '../src/lib/blog-post'
+import { filterPostsByTag, getTagFilters } from '../src/lib/blog-tags'
+import { getPostAccent } from '../src/lib/post-accent'
 import {
   getPostAuthor,
   getPostEmoji,
   getPostIdentity,
   getPostSpecies
-} from '../app/lib/post-identity'
-import { shouldOpenPostModal } from '../app/lib/post-modal'
+} from '../src/lib/post-identity'
+import { shouldOpenPostModal } from '../src/lib/post-modal'
 import {
   getAbsoluteUrl,
   getBlogPostOgImageUrl,
   getBlogPostUrl,
   getCopyrightYears
-} from '../app/lib/site'
+} from '../src/lib/site'
 
 describe('blog utilities', () => {
   it('counts tags and sorts them by count and then name', () => {
