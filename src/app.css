@@ -713,6 +713,95 @@ body {
   display: none;
 }
 
+.lights-out-console {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(112, 247, 255, 0.2);
+  border-radius: 1.25rem;
+  background: linear-gradient(145deg, rgba(13, 27, 20, 0.94), rgba(2, 8, 5, 0.96));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 24px 70px rgba(0, 0, 0, 0.34),
+    0 0 42px rgba(112, 247, 255, 0.05);
+}
+
+.lights-out-console::before {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(115deg, transparent 24%, rgba(255, 255, 255, 0.035) 43%, transparent 62%);
+  content: "";
+}
+
+.lights-out-board {
+  position: relative;
+  border: 1px solid rgba(83, 103, 91, 0.48);
+  border-radius: 1rem;
+  background: linear-gradient(145deg, rgba(0, 3, 2, 0.96), rgba(9, 19, 14, 0.96));
+  box-shadow: inset 0 0 34px rgba(0, 0, 0, 0.72), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.lights-out-cell {
+  position: relative;
+  display: grid;
+  aspect-ratio: 1;
+  min-width: 0;
+  place-items: center;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid rgba(83, 103, 91, 0.62);
+  border-radius: 0.72rem;
+  background: radial-gradient(circle at 48% 42%, rgba(33, 55, 43, 0.54), rgba(3, 8, 5, 0.98) 67%);
+  box-shadow: inset 0 2px 5px rgba(255, 255, 255, 0.035), inset 0 -4px 7px rgba(0, 0, 0, 0.48),
+    0 3px 8px rgba(0, 0, 0, 0.34);
+  cursor: pointer;
+  transition: border-color 150ms ease, box-shadow 150ms ease, transform 120ms ease;
+}
+
+.lights-out-cell:not(:disabled):active {
+  transform: translateY(1px) scale(0.97);
+}
+
+.lights-out-cell__lamp {
+  width: 44%;
+  aspect-ratio: 1;
+  border: 1px solid rgba(83, 103, 91, 0.64);
+  border-radius: 50%;
+  background: #07100b;
+  box-shadow: inset 0 2px 4px rgba(255, 255, 255, 0.04), inset 0 -2px 4px rgba(0, 0, 0, 0.72);
+  transition: background-color 170ms ease, border-color 170ms ease, box-shadow 170ms ease,
+    transform 170ms ease;
+}
+
+.lights-out-cell--on {
+  border-color: rgba(255, 223, 95, 0.5);
+  box-shadow: inset 0 1px 5px rgba(255, 255, 255, 0.07), inset 0 -4px 7px rgba(0, 0, 0, 0.38),
+    0 0 18px rgba(255, 223, 95, 0.13);
+}
+
+.lights-out-cell--on .lights-out-cell__lamp {
+  border-color: rgba(255, 246, 181, 0.98);
+  background: #fff1a6;
+  box-shadow: 0 0 8px rgba(255, 241, 166, 0.95), 0 0 22px rgba(255, 223, 95, 0.78),
+    0 0 38px rgba(255, 223, 95, 0.34), inset 0 0 5px white;
+}
+
+.lights-out-cell--preview:not(:disabled) {
+  border-color: rgba(112, 247, 255, 0.68);
+  box-shadow: inset 0 0 0 1px rgba(112, 247, 255, 0.16), 0 0 18px rgba(112, 247, 255, 0.16);
+}
+
+.lights-out-cell--preview:not(:disabled) .lights-out-cell__lamp {
+  border-color: rgba(112, 247, 255, 0.8);
+  transform: scale(1.1);
+}
+
+.lights-out-cell:disabled {
+  cursor: default;
+}
+
+.lights-out-cell:focus-visible {
+  z-index: 1;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

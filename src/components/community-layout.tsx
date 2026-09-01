@@ -5,6 +5,7 @@ import {
   FaChevronDown,
   FaHashtag,
   FaHouse,
+  FaLightbulb,
   FaPalette,
   FaUserGroup,
   FaXmark,
@@ -20,10 +21,11 @@ export type TopicChannel = {
 }
 
 type CommunityLayoutProps = {
-  activeSection: 'home' | 'blog'
+  activeSection: 'home' | 'blog' | 'lights-out'
   channelLabel: string
   channelMeta: string
   children: ReactNode
+  detailsEnabled?: boolean
   rightSidebar?: ReactNode
   statusLabel?: string
   topics?: TopicChannel[]
@@ -34,17 +36,19 @@ export function CommunityLayout({
   channelLabel,
   channelMeta,
   children,
+  detailsEnabled = true,
   rightSidebar,
   statusLabel = 'signal live',
   topics = []
 }: CommunityLayoutProps) {
   const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false)
   const [showDetails, setShowDetails] = useState(true)
+  const detailsVisible = detailsEnabled && showDetails
 
   return (
     <main
       className={`grid min-h-svh w-full grid-cols-1 overflow-x-clip ${
-        showDetails
+        detailsVisible
           ? 'min-[900px]:grid-cols-[72px_236px_minmax(0,1fr)] min-[1240px]:grid-cols-[72px_236px_minmax(0,1fr)_280px]'
           : 'min-[900px]:grid-cols-[72px_236px_minmax(0,1fr)]'
       }`}
@@ -116,19 +120,21 @@ export function CommunityLayout({
               <span className="online-spectrum size-2 rounded-full" />
               {statusLabel}
             </span>
-            <button
-              aria-label={showDetails ? 'Hide details' : 'Show details'}
-              aria-pressed={showDetails}
-              className={`hidden size-8 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent transition-colors min-[1240px]:flex ${
-                showDetails
-                  ? 'text-[var(--cyan)]'
-                  : 'text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text-strong)]'
-              }`}
-              onClick={() => setShowDetails((visible) => !visible)}
-              type="button"
-            >
-              <FaUserGroup aria-hidden="true" />
-            </button>
+            {detailsEnabled && (
+              <button
+                aria-label={showDetails ? 'Hide details' : 'Show details'}
+                aria-pressed={showDetails}
+                className={`hidden size-8 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent transition-colors min-[1240px]:flex ${
+                  showDetails
+                    ? 'text-[var(--cyan)]'
+                    : 'text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text-strong)]'
+                }`}
+                onClick={() => setShowDetails((visible) => !visible)}
+                type="button"
+              >
+                <FaUserGroup aria-hidden="true" />
+              </button>
+            )}
           </div>
         </header>
 
@@ -157,7 +163,7 @@ export function CommunityLayout({
         <div className="relative z-10">{children}</div>
       </section>
 
-      {showDetails && (
+      {detailsVisible && (
         <aside
           className="hidden min-w-0 border-l border-[rgba(112,247,255,0.12)] bg-[var(--sidebar)] px-4 pt-5 min-[1240px]:block"
           aria-label="Channel details"
@@ -221,7 +227,7 @@ function ChannelNavigation({
   onNavigate,
   topics
 }: {
-  activeSection: 'home' | 'blog'
+  activeSection: 'home' | 'blog' | 'lights-out'
   onNavigate?: () => void
   topics: TopicChannel[]
 }) {
@@ -235,6 +241,13 @@ function ChannelNavigation({
           label="top"
           onClick={onNavigate}
           to="/"
+        />
+        <ChannelLink
+          active={activeSection === 'lights-out'}
+          icon={<FaLightbulb />}
+          label="lights-out"
+          onClick={onNavigate}
+          to="/app/lights-out"
         />
       </div>
 
@@ -278,7 +291,7 @@ function ChannelLink({
   icon: ReactNode
   label: string
   onClick?: () => void
-  to: '/'
+  to: '/' | '/app/lights-out'
 }) {
   return (
     <Link

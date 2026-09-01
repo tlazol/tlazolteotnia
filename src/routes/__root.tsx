@@ -1,5 +1,12 @@
 import paintImages from 'virtual:paint-images'
-import { createRootRoute, HeadContent, Outlet, Scripts, useRouter } from '@tanstack/react-router'
+import {
+  createRootRoute,
+  HeadContent,
+  Outlet,
+  Scripts,
+  useLocation,
+  useRouter
+} from '@tanstack/react-router'
 import { selectPaintBackground } from '#/lib/paint-background'
 import { siteName } from '#/lib/site'
 import { bodyClassName, headingResetClassName, siteShellClassName } from '#/lib/styles'
@@ -38,6 +45,9 @@ export const Route = createRootRoute({
 
 function RootDocument({ children }: { children: React.ReactNode }) {
   const { paintBackground } = Route.useLoaderData()
+  const showPaintBackground = useLocation({
+    select: (location) => location.pathname !== '/app/lights-out'
+  })
   return (
     <html lang="en">
       <head>
@@ -45,12 +55,14 @@ function RootDocument({ children }: { children: React.ReactNode }) {
       </head>
       <body className={bodyClassName}>
         <div className="paint-background">
-          <img
-            className="paint-background__image"
-            src={paintBackground}
-            alt=""
-            aria-hidden="true"
-          />
+          {showPaintBackground && (
+            <img
+              className="paint-background__image"
+              src={paintBackground}
+              alt=""
+              aria-hidden="true"
+            />
+          )}
         </div>
         <div className="app-content">{children}</div>
         <Scripts />
