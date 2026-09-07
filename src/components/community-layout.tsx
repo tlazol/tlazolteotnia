@@ -26,6 +26,7 @@ type CommunityLayoutProps = {
   channelMeta: string
   children: ReactNode
   detailsEnabled?: boolean
+  headerOverlay?: boolean
   rightSidebar?: ReactNode
   statusLabel?: string
   topics?: TopicChannel[]
@@ -37,6 +38,7 @@ export function CommunityLayout({
   channelMeta,
   children,
   detailsEnabled = true,
+  headerOverlay = false,
   rightSidebar,
   statusLabel = 'signal live',
   topics = []
@@ -89,7 +91,13 @@ export function CommunityLayout({
       </aside>
 
       <section className="community-chat relative min-w-0 bg-[var(--chat)]">
-        <header className="sticky top-0 z-30 flex min-h-14 items-center justify-between gap-4 border-b border-[var(--line)] px-3 backdrop-blur-xl min-[680px]:px-4">
+        <header
+          className={`${
+            headerOverlay
+              ? 'absolute inset-x-0 bg-[linear-gradient(180deg,rgba(0,3,10,0.88),rgba(0,3,10,0.52))]'
+              : 'sticky'
+          } top-0 z-30 flex min-h-14 items-center justify-between gap-4 border-b border-[var(--line)] px-3 backdrop-blur-xl min-[680px]:px-4`}
+        >
           <div className="flex min-w-0 items-center gap-2.5">
             <button
               aria-controls="mobile-channel-navigation"
