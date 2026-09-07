@@ -1,10 +1,11 @@
+import { createClientOnlyFn } from '@tanstack/react-start'
 import {
+  type KeyboardEvent,
+  type PointerEvent,
   useCallback,
   useEffect,
   useRef,
-  useState,
-  type KeyboardEvent,
-  type PointerEvent
+  useState
 } from 'react'
 import type {
   Mesh,
@@ -41,6 +42,8 @@ type PointerStart = {
 }
 
 type MeshStandardMaterialConstructor = typeof import('three')['MeshStandardMaterial']
+
+const loadLightsOutThree = createClientOnlyFn(() => import('#/lib/lights-out-three.client'))
 
 const keyDirections: Partial<Record<string, LightsOutDirection>> = {
   ArrowUp: 'up',
@@ -124,7 +127,7 @@ export function LightsOutCube({ board, cleared, hintedCell, onPress }: LightsOut
           Vector2,
           Vector3,
           WebGLRenderer
-        } = await import('#/lib/lights-out-three.client')
+        } = await loadLightsOutThree()
         if (disposed) return
 
         const scene = new Scene()
