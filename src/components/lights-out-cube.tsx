@@ -315,8 +315,13 @@ export function LightsOutCube({ board, cleared, hintedCell, onPress }: LightsOut
 
   function handlePointerDown(event: PointerEvent<HTMLCanvasElement>) {
     keyboardFocusedRef.current = false
+    const index = pickCell(event.clientX, event.clientY)
+    if (index !== null) {
+      activeCellRef.current = index
+      setActiveCell(index)
+    }
     pointerStartRef.current = {
-      index: pickCell(event.clientX, event.clientY),
+      index,
       x: event.clientX,
       y: event.clientY
     }
