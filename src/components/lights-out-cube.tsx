@@ -154,7 +154,7 @@ export function LightsOutCube({ board, cleared, hintedCell, onPress }: LightsOut
         controls.dampingFactor = 0.07
         controls.enablePan = false
         controls.minDistance = 6.4
-        controls.maxDistance = 10.5
+        controls.maxDistance = 18
         controls.rotateSpeed = 0.72
         controls.zoomSpeed = 0.7
         controlsRef.current = controls
