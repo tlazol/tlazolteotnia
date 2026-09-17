@@ -9,6 +9,11 @@ import {
 
 Reflect.set(globalThis, 'Prism', Prism)
 await import('prismjs/components/prism-bash')
+await import('prismjs/components/prism-markdown')
+await import('prismjs/components/prism-sql')
+await import('prismjs/components/prism-toml')
+await import('prismjs/components/prism-typescript')
+await import('prismjs/components/prism-tsx')
 
 Prism.manual = true
 

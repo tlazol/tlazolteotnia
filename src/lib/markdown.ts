@@ -2,11 +2,24 @@ import { siteOrigin } from '#/lib/site'
 
 const safeProtocols = new Set(['http:', 'https:', 'mailto:', 'tel:'])
 const plainCodeLanguages = new Set(['text', 'txt', 'plain', 'plaintext'])
-const supportedCodeLanguages = new Set(['bash', 'css', 'javascript', 'json', 'markup'])
+const supportedCodeLanguages = new Set([
+  'bash',
+  'css',
+  'javascript',
+  'json',
+  'markdown',
+  'markup',
+  'sql',
+  'toml',
+  'typescript',
+  'tsx'
+])
 const codeLanguageAliases: Record<string, string> = {
   console: 'bash',
   html: 'markup',
-  js: 'javascript'
+  js: 'javascript',
+  md: 'markdown',
+  ts: 'typescript'
 }
 
 export type CodeInfo = {

@@ -84,9 +84,15 @@ describe('MarkdownBody', () => {
   it('parses code aliases, filenames, plain text, and unknown languages', () => {
     expect(parseCodeInfo('js:app.js')).toEqual({ label: 'app.js', language: 'javascript' })
     expect(parseCodeInfo('console')).toEqual({ label: 'console', language: 'bash' })
+    expect(parseCodeInfo('ts:app.ts')).toEqual({ label: 'app.ts', language: 'typescript' })
+    expect(parseCodeInfo('tsx:app.tsx')).toEqual({ label: 'app.tsx', language: 'tsx' })
+    expect(parseCodeInfo('sql')).toEqual({ label: 'sql', language: 'sql' })
     expect(parseCodeInfo('text')).toEqual({ label: 'text', language: undefined })
     expect(parseCodeInfo('unknown:file.xyz')).toEqual({ label: 'file.xyz', language: undefined })
     expect(render('```js:app.js\nconst value = 1\n```')).toContain('language-javascript')
+    expect(render('```ts:app.ts\nconst value: string = \'ok\'\n```')).toContain(
+      'language-typescript'
+    )
     expect(render('```unknown:file.xyz\nplain\n```')).toContain('<code>plain</code>')
   })
 
