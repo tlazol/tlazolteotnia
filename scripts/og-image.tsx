@@ -116,6 +116,8 @@ export async function renderSvg(title: string, description: string, date: string
             lineHeight: 1,
             letterSpacing: '-0.12em',
             overflow: 'hidden',
+            maskImage:
+              'linear-gradient(to right, #000 0%, #000 90%, transparent 97%, transparent 100%)',
             textShadow: glitchTextShadow,
             whiteSpace: 'nowrap'
           }}
@@ -126,7 +128,7 @@ export async function renderSvg(title: string, description: string, date: string
       <div
         style={{
           position: 'absolute',
-          right: 14,
+          right: 28,
           bottom: 12,
           display: 'flex',
           background: '#111111',
