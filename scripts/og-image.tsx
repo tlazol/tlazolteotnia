@@ -18,7 +18,8 @@ const rowTemplates = [
   { fontSize: 29, height: 30 }
 ]
 const textColor = '#ffffff'
-const glitchTextShadow = '-4px 0 0 #00e5ff, 4px 0 0 #ff2fcf, 0 0 10px #ffffff'
+const glitchTextShadow =
+  '-8px 1px 0 #00e5ff, 8px -1px 0 #ff2fcf, -2px 0 0 #00e5ff, 2px 0 0 #ff2fcf, 0 0 8px #ffffff'
 
 export function getTitleFontSize(title: string) {
   const length = [...title].length
