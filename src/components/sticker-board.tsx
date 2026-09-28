@@ -97,10 +97,15 @@ export function StickerBoard({ posts }: { posts: BlogPostSummary[] }) {
         await document.fonts.load('400 31px "WDXL Lubrifont JP N"', characters)
         await document.fonts.load('600 9px "IBM Plex Mono"', '0123456789.')
         if (cancelled || !canvas.current) return
-        renderer.current = module.createStickerScene(canvas.current, layout.stickers, () => {
-          setReady(false)
-          setFailed(true)
-        })
+        renderer.current = module.createStickerScene(
+          canvas.current,
+          layout.stickers,
+          () => {
+            setReady(false)
+            setFailed(true)
+          },
+          { eyes: true }
+        )
         renderer.current.update(currentView.current, latest.current.size, -1)
         setReady(true)
       } catch (error) {

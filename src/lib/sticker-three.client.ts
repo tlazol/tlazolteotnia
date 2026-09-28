@@ -35,7 +35,7 @@ function sparkle(ctx: CanvasRenderingContext2D, x: number, y: number, radius: nu
   ctx.fill()
 }
 
-function createStickerTexture(sticker: Sticker) {
+function createStickerTexture(sticker: Sticker, eyes: boolean) {
   const { width, height, seed, lines, fontSize } = sticker
   const finish = seed % 3
   const canvas = document.createElement('canvas')
@@ -154,7 +154,7 @@ function createStickerTexture(sticker: Sticker) {
 
   ctx.fillStyle = '#302942'
   ctx.font = '700 9px "IBM Plex Mono", monospace'
-  ctx.fillText('0RGA / NOTES', width / 2, 36)
+  if (!eyes) ctx.fillText('0RGA / NOTES', width / 2, 36)
   ctx.font = '600 9px "IBM Plex Mono", monospace'
   ctx.fillText(sticker.post.date.replaceAll('-', '.'), width / 2, height - 40)
   ctx.fillStyle = finish === 1 ? '#fff9dd' : '#ffffff'
@@ -180,7 +180,8 @@ function createStickerTexture(sticker: Sticker) {
 export function createStickerScene(
   canvas: HTMLCanvasElement,
   stickers: Sticker[],
-  onError: () => void
+  onError: () => void,
+  { eyes = false }: { eyes?: boolean } = {}
 ) {
   const renderer = new WebGLRenderer({
     canvas,
@@ -200,19 +201,24 @@ export function createStickerScene(
   let view: BoardView = { x: 0, y: 0, zoom: 1 }
   let hovered = -1
   let frame = 0
+  let idleTimer = 0
   let activeUntil = 0
+  let gazeUntil = 0
   let disposed = false
   const pointer = new Vector2(0.5, 0.5)
+  const eyePointer = new Vector2()
   const surface = canvas.parentElement
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
 
   function dispose() {
     disposed = true
     cancelAnimationFrame(frame)
+    window.clearTimeout(idleTimer)
     canvas.removeEventListener('webglcontextlost', lost)
     document.removeEventListener('visibilitychange', visibility)
     reducedMotion.removeEventListener('change', requestRender)
     surface?.removeEventListener('pointermove', move)
+    surface?.removeEventListener('pointerleave', leave)
     geometry.dispose()
     for (const mesh of meshes) mesh.material.dispose()
     for (const texture of textures) texture.dispose()
@@ -221,7 +227,7 @@ export function createStickerScene(
 
   try {
     for (const sticker of stickers) {
-      const texture = createStickerTexture(sticker)
+      const texture = createStickerTexture(sticker, eyes)
       textures.push(texture)
       const material = new ShaderMaterial({
         side: DoubleSide,
@@ -233,6 +239,9 @@ export function createStickerScene(
           activity: { value: 0 },
           pointer: { value: new Vector2(0.5, 0.5) },
           finish: { value: sticker.seed % 3 },
+          eyes: { value: eyes ? 1 : 0 },
+          eyeOpen: { value: 1 },
+          gaze: { value: new Vector2() },
           dimensions: { value: new Vector2(sticker.width * 2, sticker.height * 2) }
         },
         vertexShader: `varying vec2 vUv;
@@ -255,6 +264,9 @@ export function createStickerScene(
           uniform float finish;
           uniform vec2 pointer;
           uniform vec2 dimensions;
+          uniform float eyes;
+          uniform float eyeOpen;
+          uniform vec2 gaze;
           varying vec2 vUv;
           varying float vCurl;
           float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -276,6 +288,20 @@ export function createStickerScene(
             color += laminate * (0.08 + activity * 0.24) * opaque;
             color *= 1.0 - vCurl * 0.28;
             color += pow(vCurl, 3.0) * 0.35;
+            if (eyes > 0.5) {
+              // Work in sticker pixels so the eyes stay the same size on every title.
+              vec2 eye = vec2((vUv.x - 0.5) * dimensions.x * 0.5,
+                (1.0 - vUv.y) * dimensions.y * 0.5 - 35.0) - gaze;
+              eye.x = abs(eye.x) - 12.0;
+              vec2 halfSize = vec2(4.8, mix(0.65, 8.0 + activity, eyeOpen));
+              float radius = min(2.2, halfSize.y);
+              vec2 d = abs(eye) - halfSize + radius;
+              float distance = length(max(d, 0.0)) + min(max(d.x, d.y), 0.0) - radius;
+              float aa = max(0.35, fwidth(distance));
+              // Apply monochrome ink after the foil lighting, with a fine white keyline.
+              color = mix(color, vec3(1.0), 1.0 - smoothstep(0.8 - aa, 0.8 + aa, distance));
+              color = mix(color, vec3(0.025), 1.0 - smoothstep(-aa, aa, distance));
+            }
             gl_FragColor = vec4(color, base.a);
           }`
       })
@@ -309,18 +335,51 @@ export function createStickerScene(
       if (Math.abs(next - target) >= 0.002) animating = true
       if (reducedMotion.matches) mesh.material.uniforms.pointer.value.set(0.5, 0.5)
       else if (index === hovered) mesh.material.uniforms.pointer.value.copy(pointer)
+      if (eyes) {
+        const sticker = stickers[index]
+        const gaze = mesh.material.uniforms.gaze.value as Vector2
+        const phase = (sticker.seed % 1000) / 1000
+        const seconds = now / 1000
+        const blink = (seconds + phase * 7) % (3.6 + phase * 2.8)
+        mesh.material.uniforms.eyeOpen.value = reducedMotion.matches
+          ? 1
+          : 1 - Math.max(0, 1 - Math.abs(blink - 0.12) / 0.12)
+        if (reducedMotion.matches) gaze.set(0, 0)
+        else {
+          let x = Math.sin(seconds * 0.65 + phase * Math.PI * 2) * 3
+          let y = Math.sin(seconds * 0.43 + phase * Math.PI * 2) * 0.8
+          if (now < gazeUntil) {
+            const dx = (eyePointer.x - view.x) / view.zoom - sticker.x
+            const dy = (eyePointer.y - view.y) / view.zoom - sticker.y
+            const cosine = Math.cos(sticker.angle)
+            const sine = Math.sin(sticker.angle)
+            x = Math.tanh((dx * cosine + dy * sine) / 160) * 4
+            y = Math.tanh((-dx * sine + dy * cosine + sticker.height / 2 - 35) / 160) * 1.5
+          }
+          gaze.x += (x - gaze.x) * 0.16
+          gaze.y += (y - gaze.y) * 0.16
+        }
+      }
       mesh.renderOrder = index === hovered ? stickers.length : index
     })
     renderer.render(scene, camera)
     if (!reducedMotion.matches && (now < activeUntil || animating))
       frame = requestAnimationFrame(render)
+    else if (eyes && stickers.length && !reducedMotion.matches)
+      idleTimer = window.setTimeout(requestRender, 1000 / 30)
   }
 
   function move(event: PointerEvent) {
-    if (hovered < 0 || reducedMotion.matches) return
+    if (reducedMotion.matches) return
+    const rect = canvas.getBoundingClientRect()
+    if (eyes) {
+      eyePointer.set(event.clientX - rect.left, event.clientY - rect.top)
+      gazeUntil = performance.now() + 2200
+      requestRender()
+    }
+    if (hovered < 0) return
     const sticker = stickers[hovered]
     if (!sticker) return
-    const rect = canvas.getBoundingClientRect()
     const x = (event.clientX - rect.left - view.x) / view.zoom - sticker.x
     const y = (event.clientY - rect.top - view.y) / view.zoom - sticker.y
     const cosine = Math.cos(sticker.angle)
@@ -333,7 +392,12 @@ export function createStickerScene(
     requestRender()
   }
 
+  function leave() {
+    gazeUntil = 0
+  }
+
   function requestRender() {
+    window.clearTimeout(idleTimer)
     if (!disposed && !document.hidden && !frame) frame = requestAnimationFrame(render)
   }
   function lost(event: Event) {
@@ -344,6 +408,7 @@ export function createStickerScene(
   function visibility() {
     if (document.hidden) {
       cancelAnimationFrame(frame)
+      window.clearTimeout(idleTimer)
       frame = 0
     } else requestRender()
   }
@@ -351,6 +416,7 @@ export function createStickerScene(
   document.addEventListener('visibilitychange', visibility)
   reducedMotion.addEventListener('change', requestRender)
   surface?.addEventListener('pointermove', move)
+  surface?.addEventListener('pointerleave', leave)
 
   return {
     update(nextView: BoardView, nextSize: BoardSize, nextHovered: number) {
