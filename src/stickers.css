@@ -158,6 +158,7 @@ body::after {
   padding: 110px 28px 100px;
 }
 .sticker-link {
+  position: relative;
   padding: 24px;
   color: #e1d5ef;
   border: 1px solid #ffffff25;
@@ -205,6 +206,61 @@ body::after {
   outline: 3px dashed #f4f4f7;
   outline-offset: 3px;
   background: #ffffff08;
+}
+.sticker-sparkle {
+  position: absolute;
+  width: 32px;
+  height: 32px;
+  fill: #fffbe8;
+  filter: drop-shadow(0 0 6px #fff0bba6);
+  pointer-events: none;
+  animation: sticker-twinkle 3.2s ease-in-out infinite;
+}
+.sticker-sparkle--top {
+  top: -8px;
+  left: 22%;
+  animation-delay: -0.4s;
+}
+.sticker-sparkle--right {
+  top: 20%;
+  right: -7px;
+  width: 40px;
+  height: 40px;
+  animation-delay: -1.2s;
+}
+.sticker-sparkle--bottom {
+  right: 24%;
+  bottom: -10px;
+  width: 24px;
+  height: 24px;
+  fill: #c3f4ff;
+  filter: drop-shadow(0 0 6px #96e5ef99);
+  animation-delay: -2s;
+}
+.sticker-sparkle--left {
+  top: 54%;
+  left: -12px;
+  fill: #f2ddff;
+  filter: drop-shadow(0 0 6px #e8c8ff99);
+  animation-delay: -2.8s;
+}
+@keyframes sticker-twinkle {
+  0%,
+  100% {
+    opacity: 0.15;
+    transform: scale(0.45) rotate(-12deg);
+  }
+  45%,
+  55% {
+    opacity: 1;
+    transform: scale(1) rotate(12deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sticker-sparkle {
+    animation: none;
+    opacity: 0.85;
+  }
 }
 .board-footer {
   position: fixed;
