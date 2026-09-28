@@ -318,8 +318,22 @@ export function StickerBoard({ posts }: { posts: BlogPostSummary[] }) {
         }}
       >
         <canvas ref={canvas} className="sticker-canvas" aria-hidden="true" tabIndex={-1} />
+        {!ready && !failed && visiblePosts.length > 0 && (
+          <div className="sticker-loading" role="status">
+            <span className="sr-only">ステッカーを読み込んでいます</span>
+            <div className="sticker-loading__icon" aria-hidden="true">
+              <span className="sticker-loading__eyes" />
+              <span className="sticker-loading__dots">
+                <i />
+                <i />
+                <i />
+              </span>
+            </div>
+          </div>
+        )}
         <div
           className="sticker-links"
+          hidden={!ready && !failed}
           style={
             ready
               ? { transform: `translate(${view.x}px, ${view.y}px) scale(${view.zoom})` }

@@ -151,6 +151,84 @@ body::after {
 .is-ready .sticker-canvas {
   display: block;
 }
+.sticker-loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+.sticker-loading__icon {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 16px;
+  width: 92px;
+  height: 80px;
+  border: 4px solid #fff;
+  border-radius: 28px 18px 26px 16px;
+  background:
+    repeating-linear-gradient(125deg, #fff0 0 2px, #ffffff38 2px 3px, #fff0 3px 5px),
+    linear-gradient(125deg, #e8c8ff, #96e5ef 28%, #f9f4b4 50%, #efb4d9 72%, #a7b4ed);
+  background-size: 100% 100%, 200% 200%;
+  box-shadow: inset 0 0 0 2px #ffffff80, 0 7px 14px #0005;
+  transform: rotate(-8deg);
+  animation: sticker-loading-foil 2.4s ease-in-out infinite;
+}
+.sticker-loading__eyes {
+  width: 6px;
+  height: 11px;
+  margin-right: 16px;
+  background: #27213b;
+  box-shadow: 16px 0 #27213b;
+}
+.sticker-loading__dots {
+  display: flex;
+  gap: 7px;
+}
+.sticker-loading__dots i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #27213b;
+  animation: sticker-loading-dot 1.2s ease-in-out infinite;
+}
+.sticker-loading__dots i:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.sticker-loading__dots i:nth-child(3) {
+  animation-delay: 0.3s;
+}
+@keyframes sticker-loading-foil {
+  0%,
+  100% {
+    background-position: 0 0, 0% 50%;
+  }
+  50% {
+    background-position: 0 0, 100% 50%;
+  }
+}
+@keyframes sticker-loading-dot {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+  30% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sticker-loading__icon,
+  .sticker-loading__dots i {
+    animation: none;
+  }
+}
+.sticker-links[hidden] {
+  display: none;
+}
 .sticker-links {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
