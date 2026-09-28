@@ -45,27 +45,49 @@ function createStickerTexture(sticker: Sticker, eyes: boolean) {
   if (!ctx) throw new Error('Canvas 2D unavailable')
   ctx.scale(2, 2)
   const colors = palettes[(seed >>> 8) % palettes.length]
-  ctx.font = `400 ${fontSize}px "WDXL Lubrifont JP N", sans-serif`
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
-  const widths = lines.map((line) => Math.min(width - 68, ctx.measureText(line).width))
-  const lineHeight = fontSize * 1.18
-  const top = 64
+  const lineHeight = fontSize * 1.22
+  // Treat the title as interlocking lettering, with a reproducible rhythm per sticker.
+  const lettering = lines.map((line, index) => {
+    const direction = (index + seed) % 2 ? 1 : -1
+    const size = fontSize * (1.13 + ((seed + index * 7) % 4) * 0.03)
+    const rhythm = [1.16, 0.92, 1.04, 0.98, 1.1, 0.94]
+    let measured = 0
+    const glyphs = Array.from(line.trim()).map((char, charIndex) => {
+      const beat = (charIndex + index * 2 + (seed % rhythm.length)) % rhythm.length
+      // Keep Latin x-heights close enough for words to read as a unit.
+      const emphasis = /[A-Za-z0-9]/.test(char) ? 1 + (rhythm[beat] - 1) * 0.5 : rhythm[beat]
+      const glyphSize = size * emphasis
+      const bold = beat === 0 || beat === 4
+      ctx.font = `400 ${glyphSize}px "WDXL Lubrifont JP N", sans-serif`
+      const glyphWidth = ctx.measureText(char).width
+      const x = measured + glyphWidth / 2
+      measured += glyphWidth - size * 0.015
+      return { char, size: glyphSize, bold, x, y: (size - glyphSize) * 0.4 }
+    })
+    if (glyphs.length) measured += size * 0.015
+    for (const glyph of glyphs) glyph.x -= measured / 2
+    const targetWidth = width - 90 - ((seed + index * 13) % 3) * 9
+    const scaleX = Math.min(1.35, targetWidth / Math.max(1, measured))
+    const x = width / 2 + direction * 7
+    const y = 66 + index * lineHeight
+    const angle = direction * (0.5 + ((seed >>> 4) % 3) * 0.3)
+    const transform = new DOMMatrix().translate(x, y).rotate(angle).skewX(-3)
+    return { glyphs, size, scaleX, width: measured * scaleX, transform }
+  })
   const outline = new Path2D()
   // Overlapping lobes are filled as a union before any outline is drawn.
   // Stroking the individual paths would leave seams through the printed artwork.
   if (finish === 1) {
     outline.roundRect(25, 23, width - 50, height - 50, [44, 22, 44, 22])
   } else {
-    lines.forEach((_, index) => {
-      const w = widths[index] + 28
-      outline.roundRect(
-        (width - w) / 2,
-        top + index * lineHeight - lineHeight / 2 - 4,
-        w,
-        lineHeight + 13,
-        18
-      )
+    lettering.forEach((row) => {
+      const lobe = new Path2D()
+      const top = Math.min(...row.glyphs.map((glyph) => glyph.y - glyph.size / 2), 0) - 4
+      const bottom = Math.max(...row.glyphs.map((glyph) => glyph.y + glyph.size / 2), 0) + 8
+      lobe.roundRect(-row.width / 2 - 12, top, row.width + 24, bottom - top, 16)
+      outline.addPath(lobe, row.transform)
     })
     outline.roundRect(width / 2 - 58, 23, 116, 38, 18)
     outline.roundRect(width / 2 - 57, height - 78, 114, 50, 15)
@@ -128,16 +150,30 @@ function createStickerTexture(sticker: Sticker, eyes: boolean) {
   }
 
   ctx.lineJoin = 'round'
-  lines.forEach((line, index) => {
-    const y = top + index * lineHeight
-    const textWidth = width - 68
+  const positionLettering = (row: (typeof lettering)[number]) => {
+    const { a, b, c, d, e, f } = row.transform
+    ctx.transform(a, b, c, d, e, f)
+    ctx.scale(row.scaleX, 1)
+  }
+  // Lay down all outlines first so overlapping rows cannot erase each other's ink.
+  lettering.forEach((row) => {
+    ctx.save()
+    positionLettering(row)
     ctx.strokeStyle = finish === 1 ? colors[2] : '#27213b'
-    ctx.lineWidth = finish === 1 ? 4 : 7
-    // A small extrusion gives the lettering a printed, dimensional face.
-    for (let depth = 4; depth >= 0; depth--) {
-      ctx.strokeText(line, width / 2 + depth * 0.45, y + depth, textWidth)
+    for (const glyph of row.glyphs) {
+      ctx.font = `400 ${glyph.size}px "WDXL Lubrifont JP N", sans-serif`
+      ctx.lineWidth = (finish === 1 ? 4 : 5) + (glyph.bold ? glyph.size * 0.018 : 0)
+      // A small extrusion gives the lettering a printed, dimensional face.
+      for (let depth = 2; depth >= 0; depth--) {
+        ctx.strokeText(glyph.char, glyph.x + depth * 0.45, glyph.y + depth)
+      }
     }
-    const ink = ctx.createLinearGradient(0, y - fontSize / 2, 0, y + fontSize / 2)
+    ctx.restore()
+  })
+  lettering.forEach((row, index) => {
+    ctx.save()
+    positionLettering(row)
+    const ink = ctx.createLinearGradient(0, -row.size / 2, 0, row.size / 2)
     if (finish === 2) {
       ink.addColorStop(0, '#ffffff')
       ink.addColorStop(0.42, '#dce9f1')
@@ -149,7 +185,17 @@ function createStickerTexture(sticker: Sticker, eyes: boolean) {
       ink.addColorStop(1, finish === 1 ? '#ffe2ad' : palettes[(seed + index) % palettes.length][1])
     }
     ctx.fillStyle = ink
-    ctx.fillText(line, width / 2, y, textWidth)
+    ctx.strokeStyle = ink
+    for (const glyph of row.glyphs) {
+      ctx.font = `400 ${glyph.size}px "WDXL Lubrifont JP N", sans-serif`
+      // This display face has one weight; expand only the accented glyphs' ink.
+      if (glyph.bold) {
+        ctx.lineWidth = glyph.size * 0.018
+        ctx.strokeText(glyph.char, glyph.x, glyph.y)
+      }
+      ctx.fillText(glyph.char, glyph.x, glyph.y)
+    }
+    ctx.restore()
   })
 
   ctx.fillStyle = '#302942'

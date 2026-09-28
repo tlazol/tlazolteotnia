@@ -60,7 +60,7 @@ export function layoutStickers(posts: BlogPostSummary[]) {
     const width = 320 + (seed % 3) * 18
     const lines = wrapStickerTitle(post.title, 9 + (seed % 2))
     const fontSize = lines.length > 5 ? 27 : 31
-    const height = 108 + lines.length * fontSize * 1.18
+    const height = 144 + Math.max(0, lines.length - 1) * fontSize * 1.22
     const x = column * 390 + 195 + ((seed % 17) - 8)
     const y = bottoms[column] + height / 2 + 34
     bottoms[column] += height + 58
