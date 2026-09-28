@@ -39,6 +39,17 @@ describe('sticker board', () => {
     }
   })
 
+  it('uses all four eye counts and keeps them consistent on the board and article pages', () => {
+    const board = layoutStickers(posts)
+    expect([...new Set(board.stickers.map((sticker) => sticker.eyeCount))].sort()).toEqual([
+      1, 2, 3, 4
+    ])
+    for (const sticker of board.stickers) {
+      const article = layoutStickers([sticker.post]).stickers[0]
+      expect(article.eyeCount).toBe(sticker.eyeCount)
+    }
+  })
+
   it('preserves long Japanese titles and avoids splitting ordinary English words', () => {
     const title = 'TypeScriptでChatGPTを使う方法について'
     const lines = wrapStickerTitle(title)

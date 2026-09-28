@@ -286,6 +286,7 @@ export function createStickerScene(
           pointer: { value: new Vector2(0.5, 0.5) },
           finish: { value: sticker.seed % 3 },
           eyes: { value: eyes ? 1 : 0 },
+          eyeCount: { value: sticker.eyeCount },
           eyeOpen: { value: 1 },
           gaze: { value: new Vector2() },
           dimensions: { value: new Vector2(sticker.width * 2, sticker.height * 2) }
@@ -311,6 +312,7 @@ export function createStickerScene(
           uniform vec2 pointer;
           uniform vec2 dimensions;
           uniform float eyes;
+          uniform float eyeCount;
           uniform float eyeOpen;
           uniform vec2 gaze;
           varying vec2 vUv;
@@ -338,7 +340,10 @@ export function createStickerScene(
               // Work in sticker pixels so the eyes stay the same size on every title.
               vec2 eye = vec2((vUv.x - 0.5) * dimensions.x * 0.5,
                 (1.0 - vUv.y) * dimensions.y * 0.5 - 35.0) - gaze;
-              eye.x = abs(eye.x) - 12.0;
+              float spacing = eyeCount > 3.5 ? 18.0 : 24.0;
+              float firstEye = -0.5 * (eyeCount - 1.0) * spacing;
+              float nearestEye = clamp(floor((eye.x - firstEye) / spacing + 0.5), 0.0, eyeCount - 1.0);
+              eye.x -= firstEye + nearestEye * spacing;
               vec2 halfSize = vec2(4.8, mix(0.65, 8.0 + activity, eyeOpen));
               float radius = min(2.2, halfSize.y);
               vec2 d = abs(eye) - halfSize + radius;

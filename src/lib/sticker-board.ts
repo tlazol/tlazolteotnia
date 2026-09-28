@@ -10,6 +10,7 @@ export type Sticker = {
   height: number
   angle: number
   seed: number
+  eyeCount: number
   lines: string[]
   fontSize: number
 }
@@ -67,6 +68,7 @@ export function layoutStickers(posts: BlogPostSummary[]) {
       height,
       angle: (((seed % 19) - 9) / 9) * maxAngle,
       seed,
+      eyeCount: 1 + ((seed >>> 16) % 4),
       lines,
       fontSize
     }
