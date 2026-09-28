@@ -1,14 +1,14 @@
 import { ClientOnly, createFileRoute } from '@tanstack/react-router'
 import { useState } from 'react'
 import { FaLightbulb, FaRotate } from 'react-icons/fa6'
-import { CommunityLayout } from '#/components/community-layout'
 import { LightsOutCube, LightsOutCubeFallback } from '#/components/lights-out-cube'
+import { SiteHeader } from '#/components/site-header'
 import {
   createSolvableBoard,
   findShortestSolution,
   isBoardCleared,
-  pressCell,
-  type LightsOutBoard
+  type LightsOutBoard,
+  pressCell
 } from '#/lib/lights-out'
 import { siteName } from '#/lib/site'
 
@@ -58,14 +58,8 @@ function LightsOutPage() {
   }
 
   return (
-    <CommunityLayout
-      activeSection="lights-out"
-      channelLabel="lights-out"
-      channelMeta="Turn every signal dark."
-      detailsEnabled={false}
-      headerOverlay
-      statusLabel={cleared ? 'all clear' : 'game active'}
-    >
+    <main className="game-page">
+      <SiteHeader />
       <div className="min-h-svh w-full" data-post-accent="pink">
         <section className="w-full">
           <h1 className="sr-only">Lights Out</h1>
@@ -110,7 +104,7 @@ function LightsOutPage() {
           </div>
         </section>
       </div>
-    </CommunityLayout>
+    </main>
   )
 }
 

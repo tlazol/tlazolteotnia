@@ -18,7 +18,7 @@ export function ArticleReactionFooter({
       className="mt-14 mb-4 border-t border-[color-mix(in_srgb,var(--post-accent)_28%,var(--line))] pt-7 pb-2 [font-family:var(--font-ui)]"
     >
       <p className="m-0 text-[0.62rem] font-bold tracking-[0.14em] text-[var(--post-accent)] uppercase [font-family:var(--font-mono)]">
-        End of transmission
+        Thanks for reading
       </p>
       <h2
         className="mt-2 mb-0 text-[1.25rem] font-bold tracking-[-0.025em] text-[var(--text-strong)] [font-family:var(--font-display)]"

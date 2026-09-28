@@ -1,19 +1,10 @@
-import paintImages from 'virtual:paint-images'
-import {
-  createRootRoute,
-  HeadContent,
-  Outlet,
-  Scripts,
-  useLocation,
-  useRouter
-} from '@tanstack/react-router'
-import { selectPaintBackground } from '#/lib/paint-background'
+import { createRootRoute, HeadContent, Outlet, Scripts, useRouter } from '@tanstack/react-router'
 import { siteName } from '#/lib/site'
 import { bodyClassName, headingResetClassName, siteShellClassName } from '#/lib/styles'
 import appCss from '../app.css?url'
+import stickersCss from '../stickers.css?url'
 
 export const Route = createRootRoute({
-  loader: () => ({ paintBackground: selectPaintBackground(paintImages) }),
   head: () => ({
     meta: [
       { charSet: 'utf-8' },
@@ -21,6 +12,7 @@ export const Route = createRootRoute({
     ],
     links: [
       { rel: 'stylesheet', href: appCss },
+      { rel: 'stylesheet', href: stickersCss },
       { rel: 'icon', type: 'image/png', href: '/favicon.png' },
       { rel: 'alternate', type: 'application/rss+xml', href: '/rss.xml', title: `${siteName} RSS` },
       {
@@ -33,7 +25,7 @@ export const Route = createRootRoute({
       { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossOrigin: 'anonymous' },
       {
         rel: 'stylesheet',
-        href: 'https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@600;700&display=swap'
+        href: 'https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700;900&family=Space+Grotesk:wght@600;700&display=swap'
       }
     ]
   }),
@@ -44,26 +36,12 @@ export const Route = createRootRoute({
 })
 
 function RootDocument({ children }: { children: React.ReactNode }) {
-  const { paintBackground } = Route.useLoaderData()
-  const showPaintBackground = useLocation({
-    select: (location) => location.pathname !== '/app/lights-out'
-  })
   return (
-    <html lang="en">
+    <html lang="ja">
       <head>
         <HeadContent />
       </head>
       <body className={bodyClassName}>
-        <div className="paint-background">
-          {showPaintBackground && (
-            <img
-              className="paint-background__image"
-              src={paintBackground}
-              alt=""
-              aria-hidden="true"
-            />
-          )}
-        </div>
         <div className="app-content">{children}</div>
         <Scripts />
       </body>

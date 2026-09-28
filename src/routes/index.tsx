@@ -1,11 +1,12 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { HomeTimeline } from '#/components/home-timeline'
 import { getHomeData } from '#/lib/blog.functions'
 import { authorName, siteName, siteOrigin } from '#/lib/site'
+import { StickerBoard } from '../components/sticker-board'
 
 export const Route = createFileRoute('/')({
-  validateSearch: (search: Record<string, unknown>): { topic?: string } => ({
-    topic: typeof search.topic === 'string' && search.topic ? search.topic : undefined
+  validateSearch: (search: Record<string, unknown>): { topic?: string; q?: string } => ({
+    topic: typeof search.topic === 'string' && search.topic ? search.topic : undefined,
+    q: typeof search.q === 'string' && search.q ? search.q : undefined
   }),
   loader: () => getHomeData(),
   head: () => ({
@@ -18,6 +19,6 @@ export const Route = createFileRoute('/')({
 })
 
 function Home() {
-  const { posts, reactionsBySlug } = Route.useLoaderData()
-  return <HomeTimeline posts={posts} reactionsBySlug={reactionsBySlug} />
+  const { posts } = Route.useLoaderData()
+  return <StickerBoard posts={posts} />
 }
