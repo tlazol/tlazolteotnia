@@ -1,13 +1,13 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useCallback, useState } from 'react'
 import { ArticleReactionFooter } from '#/components/article-reaction-footer'
+import { ArticleSticker } from '#/components/article-sticker'
 import { BackToBoard } from '#/components/back-to-board'
 import { MarkdownBody } from '#/components/markdown-body'
 import { SiteHeader } from '#/components/site-header'
 import { getPostData } from '#/lib/blog.functions'
 import type { BlogPost as BlogPostData } from '#/lib/blog-post'
 import { getPostAccent } from '#/lib/post-accent'
-import { getPostEmoji } from '#/lib/post-identity'
 import { mergeReaction, type ReactionCount } from '#/lib/reactions'
 import { requireRouteData } from '#/lib/route-helpers'
 import {
@@ -77,14 +77,11 @@ function Article({ post, reactions }: { post: BlogPostData; reactions: ReactionC
         <BackToBoard />
         <article>
           <header className="article-heading">
-            <span className="article-emblem" aria-hidden="true">
-              {getPostEmoji(post.slug)}
-            </span>
+            <ArticleSticker post={post} />
             <p className="article-byline">
               <time dateTime={post.date}>{post.date.replaceAll('-', '.')}</time>
               <span>{authorName}</span>
             </p>
-            <h1>{post.title}</h1>
             <p className="article-description">{post.description}</p>
             <ul className="article-tags" aria-label="タグ">
               {post.tags.map((tag) => (
