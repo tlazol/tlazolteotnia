@@ -48,6 +48,55 @@ describe('sticker board', () => {
     expect(wrapStickerTitle('a'.repeat(200)).join('')).toBe('a'.repeat(200))
   })
 
+  it('places the newest article in the center and older articles clockwise without overlaps', () => {
+    const reversed = [...posts].reverse()
+    const board = layoutStickers(reversed)
+    expect(reversed).toEqual([...posts].reverse())
+    expect(board.stickers.map((item) => item.post.date)).toEqual(posts.map((post) => post.date))
+    const [newest, ...older] = board.stickers
+    expect(newest.x).toBe(board.width / 2)
+    expect(newest.y).toBe(board.height / 2)
+    expect(older[0].x).toBe(newest.x)
+    expect(older[0].y).toBeLessThan(newest.y)
+    for (let index = 1; index < older.length; index++) {
+      const a = older[index - 1]
+      const b = older[index]
+      const cross = (a.x - newest.x) * (b.y - newest.y) - (a.y - newest.y) * (b.x - newest.x)
+      expect(cross).toBeGreaterThan(0)
+      expect(Math.hypot(b.x - newest.x, b.y - newest.y)).toBeGreaterThan(0)
+    }
+    const rectangles = board.stickers.map((item) => ({
+      x: item.x,
+      y: item.y,
+      width:
+        Math.abs(Math.cos(item.angle)) * item.width + Math.abs(Math.sin(item.angle)) * item.height,
+      height:
+        Math.abs(Math.cos(item.angle)) * item.height + Math.abs(Math.sin(item.angle)) * item.width
+    }))
+    rectangles.forEach((a, index) => {
+      for (const b of rectangles.slice(index + 1)) {
+        expect(
+          Math.abs(a.x - b.x) >= (a.width + b.width) / 2 ||
+            Math.abs(a.y - b.y) >= (a.height + b.height) / 2
+        ).toBe(true)
+      }
+    })
+  })
+
+  it('centers the newest article in the initial desktop and mobile viewport', () => {
+    for (const selected of [posts, posts.slice(0, 2), posts.slice(0, 1)]) {
+      const board = layoutStickers(selected)
+      for (const size of [
+        { width: 1440, height: 900 },
+        { width: 390, height: 844 }
+      ]) {
+        const view = initialBoardView(size, board)
+        expect(view.x + board.stickers[0].x * view.zoom).toBeCloseTo(size.width / 2)
+        expect(view.y + board.stickers[0].y * view.zoom).toBeCloseTo(size.height / 2)
+      }
+    }
+  })
+
   it('combines tags and normalized search across title, description and tags', () => {
     const sample = [
       {

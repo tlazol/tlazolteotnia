@@ -1,4 +1,4 @@
-import type { BlogPostSummary } from './blog-post'
+import { type BlogPostSummary, sortBlogPostsNewestFirst } from './blog-post'
 
 export type BoardView = { x: number; y: number; zoom: number }
 export type BoardSize = { width: number; height: number }
@@ -52,23 +52,17 @@ export function wrapStickerTitle(title: string, maxUnits = 10) {
 }
 
 export function layoutStickers(posts: BlogPostSummary[]) {
-  const columns = Math.min(5, Math.max(1, Math.ceil(Math.sqrt(posts.length))))
-  const bottoms = Array.from({ length: columns }, (_, index) => (index % 2) * 70)
-  const stickers = posts.map((post): Sticker => {
+  const stickers = sortBlogPostsNewestFirst(posts).map((post): Sticker => {
     const seed = hashSlug(post.slug)
-    const column = bottoms.indexOf(Math.min(...bottoms))
     const width = 320 + (seed % 3) * 18
     const lines = wrapStickerTitle(post.title, 9 + (seed % 2))
     const fontSize = lines.length > 5 ? 27 : 31
     const height = 144 + Math.max(0, lines.length - 1) * fontSize * 1.22
-    const x = column * 390 + 195 + ((seed % 17) - 8)
-    const y = bottoms[column] + height / 2 + 34
-    bottoms[column] += height + 58
     const maxAngle = Math.min((9 * Math.PI) / 180, Math.asin(Math.min(1, (370 - width) / height)))
     return {
       post,
-      x,
-      y,
+      x: 0,
+      y: 0,
       width,
       height,
       angle: (((seed % 19) - 9) / 9) * maxAngle,
@@ -77,7 +71,42 @@ export function layoutStickers(posts: BlogPostSummary[]) {
       fontSize
     }
   })
-  return { stickers, width: columns * 390, height: Math.max(0, ...bottoms) + 24 }
+  const extents = stickers.map((sticker) => ({
+    width:
+      Math.abs(Math.cos(sticker.angle)) * sticker.width +
+      Math.abs(Math.sin(sticker.angle)) * sticker.height,
+    height:
+      Math.abs(Math.cos(sticker.angle)) * sticker.height +
+      Math.abs(Math.sin(sticker.angle)) * sticker.width
+  }))
+  const horizontalSpacing = Math.max(0, ...extents.map((item) => item.width)) + 24
+  const verticalSpacing = Math.max(0, ...extents.map((item) => item.height)) + 24
+  let ring = 1
+  let slot = 0
+  let halfWidth = 0
+  let halfHeight = 0
+  // Five more slots per ring keep the spacing steady as the circumference grows.
+  stickers.forEach((sticker, index) => {
+    if (index > 0) {
+      const count = ring * 5
+      const angle = (slot / count) * Math.PI * 2
+      sticker.x = Math.sin(angle) * ring * horizontalSpacing
+      sticker.y = -Math.cos(angle) * ring * verticalSpacing
+      slot++
+      if (slot === count) {
+        ring++
+        slot = 0
+      }
+    }
+    halfWidth = Math.max(halfWidth, Math.abs(sticker.x) + extents[index].width / 2 + 24)
+    halfHeight = Math.max(halfHeight, Math.abs(sticker.y) + extents[index].height / 2 + 24)
+  })
+  // Symmetric bounds keep the newest article at the board's center, even on a partial ring.
+  for (const sticker of stickers) {
+    sticker.x += halfWidth
+    sticker.y += halfHeight
+  }
+  return { stickers, width: halfWidth * 2, height: halfHeight * 2 }
 }
 
 export function filterStickerPosts(posts: BlogPostSummary[], topic: string, query: string) {
@@ -106,7 +135,15 @@ export function fitBoard(size: BoardSize, bounds: BoardSize): BoardView {
 
 export function initialBoardView(size: BoardSize, bounds: BoardSize): BoardView {
   const zoom = size.width < 600 ? 0.82 : 0.95
-  return clampBoardView({ x: 16, y: 100, zoom }, size, bounds)
+  return clampBoardView(
+    {
+      x: (size.width - bounds.width * zoom) / 2,
+      y: (size.height - bounds.height * zoom) / 2,
+      zoom
+    },
+    size,
+    bounds
+  )
 }
 
 export function clampBoardView(view: BoardView, size: BoardSize, bounds: BoardSize): BoardView {
@@ -120,8 +157,8 @@ export function clampBoardView(view: BoardView, size: BoardSize, bounds: BoardSi
         ? (size.width - width) / 2
         : Math.max(size.width - width - 40, Math.min(40, view.x)),
     y:
-      height <= size.height - 150
-        ? 84 + (size.height - 150 - height) / 2
+      height <= size.height - 120
+        ? (size.height - height) / 2
         : Math.max(size.height - height - 60, Math.min(100, view.y))
   }
 }
