@@ -51,9 +51,14 @@ export function ArticleSticker({ post }: { post: BlogPostSummary }) {
         await document.fonts.load('400 31px "WDXL Lubrifont JP N"', post.title)
         await document.fonts.load('600 9px "IBM Plex Mono"', '0123456789.')
         if (cancelled || !target) return
-        renderer = module.createStickerScene(target, [{ ...sticker, x: 0, y: 0 }], () => {
-          setReady(false)
-        })
+        renderer = module.createStickerScene(
+          target,
+          [{ ...sticker, x: 0, y: 0 }],
+          () => {
+            setReady(false)
+          },
+          { eyes: true }
+        )
         update()
         setReady(true)
       } catch {

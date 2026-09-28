@@ -240,64 +240,12 @@ export function StickerBoard({ posts }: { posts: BlogPostSummary[] }) {
     }
   }
 
-  const tags = [...new Set(posts.flatMap((post) => post.tags))].sort((a, b) =>
-    a.localeCompare(b, 'ja')
-  )
   const clear = () => navigate({ search: {}, replace: true })
 
   return (
     <main className="sticker-page">
       <h1 className="sr-only">記事のステッカーボード</h1>
-      <SiteHeader>
-        <form
-          className="sticker-search"
-          onSubmit={(event) => {
-            event.preventDefault()
-            const form = new FormData(event.currentTarget)
-            void navigate({
-              search: {
-                topic: topic || undefined,
-                q: String(form.get('q') ?? '').trim() || undefined
-              },
-              replace: true
-            })
-          }}
-        >
-          <label htmlFor="sticker-search">記事を探す</label>
-          <div>
-            <input
-              id="sticker-search"
-              name="q"
-              type="search"
-              placeholder="タイトル、キーワード…"
-              defaultValue={q}
-              key={q}
-            />
-            <button type="submit" aria-label="検索">
-              ↗
-            </button>
-          </div>
-          <label htmlFor="sticker-topic">タグ</label>
-          <select
-            id="sticker-topic"
-            value={topic}
-            onChange={(event) =>
-              void navigate({
-                search: { q: q || undefined, topic: event.target.value || undefined },
-                replace: true
-              })
-            }
-          >
-            <option value="">すべての記事</option>
-            {topic && !tags.includes(topic) && <option value={topic}>{topic}</option>}
-            {tags.map((tag) => (
-              <option key={tag} value={tag}>
-                {tag}
-              </option>
-            ))}
-          </select>
-        </form>
-      </SiteHeader>
+      <SiteHeader />
       <div
         ref={surface}
         className={`sticker-surface${ready ? ' is-ready' : ''}${dragging ? ' is-dragging' : ''}`}

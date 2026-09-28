@@ -1,8 +1,8 @@
 import { Link } from '@tanstack/react-router'
-import { type ReactNode, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { artStationUrl, authorAccount, authorName, siteName, xUrl } from '#/lib/site'
 
-export function SiteHeader({ children }: { children?: ReactNode }) {
+export function SiteHeader() {
   const [open, setOpen] = useState(false)
   const header = useRef<HTMLElement>(null)
   const toggle = useRef<HTMLButtonElement>(null)
@@ -47,11 +47,6 @@ export function SiteHeader({ children }: { children?: ReactNode }) {
       </div>
       {open && (
         <div className="site-menu" id="site-menu">
-          {children ?? (
-            <Link to="/" onClick={() => setOpen(false)}>
-              記事を探す ↗
-            </Link>
-          )}
           <div className="site-menu__profile">
             <strong>{authorName}</strong>
             <span>@{authorAccount} · Art, code & little experiments.</span>
