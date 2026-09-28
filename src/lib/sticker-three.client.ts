@@ -201,7 +201,8 @@ function createStickerTexture(sticker: Sticker, eyes: boolean) {
   ctx.fillStyle = '#302942'
   ctx.font = '700 9px "IBM Plex Mono", monospace'
   if (!eyes) ctx.fillText('0RGA / NOTES', width / 2, 36)
-  ctx.font = '600 9px "IBM Plex Mono", monospace'
+  ctx.fillStyle = '#211b30'
+  ctx.font = '700 12px "IBM Plex Mono", monospace'
   ctx.fillText(sticker.post.date.replaceAll('-', '.'), width / 2, height - 40)
   ctx.fillStyle = finish === 1 ? '#fff9dd' : '#ffffff'
   sparkle(ctx, width / 2 - 46, 36, 6)

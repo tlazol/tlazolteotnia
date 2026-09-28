@@ -49,7 +49,7 @@ export function ArticleSticker({ post }: { post: BlogPostSummary }) {
       try {
         const module = await loadRenderer()
         await document.fonts.load('400 31px "WDXL Lubrifont JP N"', post.title)
-        await document.fonts.load('600 9px "IBM Plex Mono"', '0123456789.')
+        await document.fonts.load('700 12px "IBM Plex Mono"', '0123456789.')
         if (cancelled || !target) return
         renderer = module.createStickerScene(
           target,
