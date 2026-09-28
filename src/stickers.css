@@ -165,6 +165,9 @@ body::after {
   text-decoration: none;
   overflow-wrap: anywhere;
 }
+.sticker-link span {
+  font-family: "WDXL Lubrifont JP N", sans-serif;
+}
 .sticker-link time {
   display: block;
   color: #b3afbd;

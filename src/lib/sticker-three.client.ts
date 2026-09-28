@@ -45,7 +45,7 @@ function createStickerTexture(sticker: Sticker) {
   if (!ctx) throw new Error('Canvas 2D unavailable')
   ctx.scale(2, 2)
   const colors = palettes[(seed >>> 8) % palettes.length]
-  ctx.font = `900 ${fontSize}px "Noto Sans JP", sans-serif`
+  ctx.font = `400 ${fontSize}px "WDXL Lubrifont JP N", sans-serif`
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
   const widths = lines.map((line) => Math.min(width - 68, ctx.measureText(line).width))

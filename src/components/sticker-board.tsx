@@ -94,7 +94,7 @@ export function StickerBoard({ posts }: { posts: BlogPostSummary[] }) {
         const characters = [
           ...new Set(layout.stickers.flatMap((item) => Array.from(item.post.title)))
         ].join('')
-        await document.fonts.load('900 31px "Noto Sans JP"', characters)
+        await document.fonts.load('400 31px "WDXL Lubrifont JP N"', characters)
         await document.fonts.load('600 9px "IBM Plex Mono"', '0123456789.')
         if (cancelled || !canvas.current) return
         renderer.current = module.createStickerScene(canvas.current, layout.stickers, () => {
