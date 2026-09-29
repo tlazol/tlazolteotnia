@@ -2,6 +2,7 @@ import { type BlogPostSummary, sortBlogPostsNewestFirst } from './blog-post'
 
 export type BoardView = { x: number; y: number; zoom: number }
 export type BoardSize = { width: number; height: number }
+const stickerShapes = ['die-cut', 'rounded', 'ticket', 'beveled', 'scalloped', 'ribbon'] as const
 export type Sticker = {
   post: BlogPostSummary
   x: number
@@ -10,6 +11,7 @@ export type Sticker = {
   height: number
   angle: number
   seed: number
+  shape: (typeof stickerShapes)[number]
   eyeCount: number
   lines: string[]
   fontSize: number
@@ -55,10 +57,10 @@ export function wrapStickerTitle(title: string, maxUnits = 10) {
 export function layoutStickers(posts: BlogPostSummary[]) {
   const stickers = sortBlogPostsNewestFirst(posts).map((post): Sticker => {
     const seed = hashSlug(post.slug)
-    const width = 320 + (seed % 3) * 18
+    const width = 288 + (seed % 3) * 18
     const lines = wrapStickerTitle(post.title, 9 + (seed % 2))
     const fontSize = lines.length > 5 ? 27 : 31
-    const height = 144 + Math.max(0, lines.length - 1) * fontSize * 1.22
+    const height = 128 + Math.max(0, lines.length - 1) * fontSize * 1.22
     const maxAngle = Math.min((9 * Math.PI) / 180, Math.asin(Math.min(1, (370 - width) / height)))
     return {
       post,
@@ -68,6 +70,7 @@ export function layoutStickers(posts: BlogPostSummary[]) {
       height,
       angle: (((seed % 19) - 9) / 9) * maxAngle,
       seed,
+      shape: stickerShapes[(seed >>> 20) % stickerShapes.length],
       eyeCount: 1 + ((seed >>> 16) % 4),
       lines,
       fontSize
@@ -82,7 +85,7 @@ export function layoutStickers(posts: BlogPostSummary[]) {
       Math.abs(Math.sin(sticker.angle)) * sticker.width
   }))
   const horizontalSpacing = Math.max(0, ...extents.map((item) => item.width)) + 20
-  const verticalSpacing = Math.max(0, ...extents.map((item) => item.height)) + 16
+  const verticalSpacing = Math.max(0, ...extents.map((item) => item.height)) + 20
   let ring = 1
   let slot = 0
   let halfWidth = 0

@@ -50,6 +50,23 @@ describe('sticker board', () => {
     }
   })
 
+  it('uses six compact shapes consistently across filtering and article pages', () => {
+    const board = layoutStickers(posts)
+    expect(new Set(board.stickers.map((sticker) => sticker.shape))).toEqual(
+      new Set(['die-cut', 'rounded', 'ticket', 'beveled', 'scalloped', 'ribbon'])
+    )
+    for (const sticker of board.stickers) {
+      const article = layoutStickers([sticker.post]).stickers[0]
+      expect(article.shape).toBe(sticker.shape)
+      expect(article.width).toBe(sticker.width)
+      expect(article.height).toBe(sticker.height)
+      expect(sticker.width).toBeLessThanOrEqual(324)
+      expect(sticker.height).toBeLessThan(
+        144 + Math.max(0, sticker.lines.length - 1) * sticker.fontSize * 1.22
+      )
+    }
+  })
+
   it('preserves long Japanese titles and avoids splitting ordinary English words', () => {
     const title = 'TypeScriptでChatGPTを使う方法について'
     const lines = wrapStickerTitle(title)

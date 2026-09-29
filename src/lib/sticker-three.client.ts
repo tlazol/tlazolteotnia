@@ -68,10 +68,10 @@ function createStickerTexture(sticker: Sticker, eyes: boolean) {
     })
     if (glyphs.length) measured += size * 0.015
     for (const glyph of glyphs) glyph.x -= measured / 2
-    const targetWidth = width - 90 - ((seed + index * 13) % 3) * 9
+    const targetWidth = width - 58 - ((seed + index * 13) % 3) * 9
     const scaleX = Math.min(1.35, targetWidth / Math.max(1, measured))
     const x = width / 2 + direction * 7
-    const y = 66 + index * lineHeight
+    const y = 64 + index * lineHeight
     const angle = direction * (0.5 + ((seed >>> 4) % 3) * 0.3)
     const transform = new DOMMatrix().translate(x, y).rotate(angle).skewX(-3)
     return { glyphs, size, scaleX, width: measured * scaleX, transform }
@@ -79,18 +79,97 @@ function createStickerTexture(sticker: Sticker, eyes: boolean) {
   const outline = new Path2D()
   // Overlapping lobes are filled as a union before any outline is drawn.
   // Stroking the individual paths would leave seams through the printed artwork.
-  if (finish === 1) {
-    outline.roundRect(25, 23, width - 50, height - 50, [44, 22, 44, 22])
-  } else {
+  if (sticker.shape === 'die-cut') {
     lettering.forEach((row) => {
       const lobe = new Path2D()
-      const top = Math.min(...row.glyphs.map((glyph) => glyph.y - glyph.size / 2), 0) - 4
-      const bottom = Math.max(...row.glyphs.map((glyph) => glyph.y + glyph.size / 2), 0) + 8
-      lobe.roundRect(-row.width / 2 - 12, top, row.width + 24, bottom - top, 16)
+      const top = Math.min(...row.glyphs.map((glyph) => glyph.y - glyph.size / 2), 0) - 2
+      const bottom = Math.max(...row.glyphs.map((glyph) => glyph.y + glyph.size / 2), 0) + 4
+      lobe.roundRect(-row.width / 2 - 7, top, row.width + 14, bottom - top, 12)
       outline.addPath(lobe, row.transform)
     })
-    outline.roundRect(width / 2 - 58, 23, 116, 38, 18)
-    outline.roundRect(width / 2 - 57, height - 78, 114, 50, 15)
+    outline.roundRect(width / 2 - 54, 23, 108, 34, 14)
+    outline.roundRect(width / 2 - 52, height - 59, 104, 39, 12)
+  } else {
+    // Fit the silhouette to the lettering, leaving only room for its ink and edge cuts.
+    const left =
+      Math.min(width / 2 - 52, ...lettering.map((row) => row.transform.e - row.width / 2)) - 12
+    const right =
+      Math.max(width / 2 + 52, ...lettering.map((row) => row.transform.e + row.width / 2)) + 12
+    const top = 23
+    const bottom = height - 20
+    const middle = (top + bottom) / 2
+    switch (sticker.shape) {
+      case 'rounded':
+        outline.roundRect(left, top, right - left, bottom - top, [26, 12, 26, 12])
+        break
+      case 'ticket': {
+        const notch = 8
+        outline.moveTo(left + 8, top)
+        outline.lineTo(right - 8, top)
+        outline.quadraticCurveTo(right, top, right, top + 8)
+        outline.lineTo(right, middle - notch)
+        outline.arc(right, middle, notch, -Math.PI / 2, Math.PI / 2, true)
+        outline.lineTo(right, bottom - 8)
+        outline.quadraticCurveTo(right, bottom, right - 8, bottom)
+        outline.lineTo(left + 8, bottom)
+        outline.quadraticCurveTo(left, bottom, left, bottom - 8)
+        outline.lineTo(left, middle + notch)
+        outline.arc(left, middle, notch, Math.PI / 2, -Math.PI / 2, true)
+        outline.lineTo(left, top + 8)
+        outline.quadraticCurveTo(left, top, left + 8, top)
+        outline.closePath()
+        break
+      }
+      case 'beveled': {
+        const cut = 16
+        outline.moveTo(left + cut, top)
+        outline.lineTo(right - cut, top)
+        outline.lineTo(right, top + cut)
+        outline.lineTo(right, bottom - cut)
+        outline.lineTo(right - cut, bottom)
+        outline.lineTo(left + cut, bottom)
+        outline.lineTo(left, bottom - cut)
+        outline.lineTo(left, top + cut)
+        outline.closePath()
+        break
+      }
+      case 'scalloped': {
+        const corners = [
+          [left, top],
+          [right, top],
+          [right, bottom],
+          [left, bottom]
+        ]
+        outline.moveTo(left, top)
+        corners.forEach(([x, y], index) => {
+          const [endX, endY] = corners[(index + 1) % corners.length]
+          const dx = endX - x
+          const dy = endY - y
+          const length = Math.hypot(dx, dy)
+          const steps = Math.max(1, Math.round(length / 18))
+          for (let step = 1; step <= steps; step++) {
+            const midpoint = (step - 0.5) / steps
+            outline.quadraticCurveTo(
+              x + dx * midpoint - (dy / length) * 7,
+              y + dy * midpoint + (dx / length) * 7,
+              x + (dx * step) / steps,
+              y + (dy * step) / steps
+            )
+          }
+        })
+        outline.closePath()
+        break
+      }
+      case 'ribbon':
+        outline.moveTo(left, top)
+        outline.lineTo(right, top)
+        outline.lineTo(right - 9, middle)
+        outline.lineTo(right, bottom)
+        outline.lineTo(left, bottom)
+        outline.lineTo(left + 9, middle)
+        outline.closePath()
+        break
+    }
   }
   ctx.fillStyle = '#fff'
   ctx.fill(outline)
@@ -141,12 +220,13 @@ function createStickerTexture(sticker: Sticker, eyes: boolean) {
     enamel.addColorStop(0.5, colors[1])
     enamel.addColorStop(1, colors[0])
     ctx.fillStyle = enamel
-    ctx.beginPath()
-    ctx.roundRect(32, 30, width - 64, height - 64, [38, 17, 38, 17])
-    ctx.fill()
-    ctx.strokeStyle = '#ffffff9a'
-    ctx.lineWidth = 1
-    ctx.stroke()
+    ctx.save()
+    ctx.clip(outline)
+    ctx.fill(outline)
+    ctx.strokeStyle = foil
+    ctx.lineWidth = 8
+    ctx.stroke(outline)
+    ctx.restore()
   }
 
   ctx.lineJoin = 'round'
@@ -203,10 +283,10 @@ function createStickerTexture(sticker: Sticker, eyes: boolean) {
   if (!eyes) ctx.fillText('0RGA / NOTES', width / 2, 36)
   ctx.fillStyle = '#211b30'
   ctx.font = '700 12px "IBM Plex Mono", monospace'
-  ctx.fillText(sticker.post.date.replaceAll('-', '.'), width / 2, height - 40)
+  ctx.fillText(sticker.post.date.replaceAll('-', '.'), width / 2, height - 30)
   ctx.fillStyle = finish === 1 ? '#fff9dd' : '#ffffff'
   sparkle(ctx, width / 2 - 46, 36, 6)
-  sparkle(ctx, width / 2 + 46, height - 40, 5)
+  sparkle(ctx, width / 2 + 46, height - 30, 5)
 
   // A broad reflected softbox is part of the laminate, even without animation.
   ctx.save()
