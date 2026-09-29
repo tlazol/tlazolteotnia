@@ -180,16 +180,21 @@ function createStickerTexture(sticker: Sticker, eyes: boolean) {
   if (!maskCtx) throw new Error('Canvas 2D unavailable')
   maskCtx.drawImage(canvas, 0, 0)
   ctx.clearRect(0, 0, width, height)
-  ctx.shadowColor = '#00000080'
-  ctx.shadowBlur = 12
-  ctx.shadowOffsetY = 9
-  ctx.fill(outline)
+  for (let angle = 0; angle < Math.PI * 2; angle += Math.PI / 16) {
+    ctx.drawImage(mask, Math.cos(angle) * 7.5, Math.sin(angle) * 7.5, width, height)
+  }
+
+  // Cast a short contact shadow from the full white edge, not just the printed area.
+  maskCtx.clearRect(0, 0, mask.width, mask.height)
+  maskCtx.drawImage(canvas, 0, 0)
+  ctx.clearRect(0, 0, width, height)
+  ctx.shadowColor = '#000000a6'
+  ctx.shadowBlur = 6
+  ctx.shadowOffsetY = 6
+  ctx.drawImage(mask, 0, 0, width, height)
   ctx.shadowColor = 'transparent'
   ctx.shadowBlur = 0
   ctx.shadowOffsetY = 0
-  for (let angle = 0; angle < Math.PI * 2; angle += Math.PI / 16) {
-    ctx.drawImage(mask, Math.cos(angle) * 5, Math.sin(angle) * 5, width, height)
-  }
 
   const foil = ctx.createLinearGradient(0, height, width, 0)
   // Preserve each article's original stock color independently of its embossed finish.
@@ -263,7 +268,11 @@ function createStickerTexture(sticker: Sticker, eyes: boolean) {
   sparkle(ctx, width / 2 + 46, height - 30, 5)
 
   // The foil is exposed around the opaque ink. Keep this independent of the topcoat.
+  // Rebuild the material mask from the print so the wider white edge stays matte.
+  maskCtx.clearRect(0, 0, mask.width, mask.height)
   maskCtx.scale(2, 2)
+  maskCtx.fillStyle = stickerMaterial.edge
+  maskCtx.fill(outline)
   maskCtx.globalCompositeOperation = 'destination-out'
   maskCtx.textAlign = 'center'
   maskCtx.textBaseline = 'middle'
