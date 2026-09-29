@@ -10,7 +10,7 @@ import {
   Vector2,
   WebGLRenderer
 } from 'three'
-import type { BoardSize, BoardView, Sticker } from './sticker-board'
+import { type BoardSize, type BoardView, hologramFinishes, type Sticker } from './sticker-board'
 
 const palettes = [
   ['#ffbddd', '#f45caa', '#5e1646'],
@@ -194,7 +194,7 @@ function createStickerTexture(sticker: Sticker, eyes: boolean) {
   }
 
   const foil = ctx.createLinearGradient(0, height, width, 0)
-  const spectrum = ['#b8c9e3', '#eeccf6', '#96e5ef', '#f9f4b4', '#efb4d9', '#a7b4ed', '#daf7ed']
+  const spectrum = ['#8c9fdf', '#e9a5f5', '#65e7ef', '#f9ec93', '#f694cd', '#929dec', '#a1f4d7']
   spectrum.forEach((color, index) => {
     foil.addColorStop(index / (spectrum.length - 1), color)
   })
@@ -214,31 +214,19 @@ function createStickerTexture(sticker: Sticker, eyes: boolean) {
   }
   ctx.restore()
 
-  if (finish === 1) {
-    const enamel = ctx.createLinearGradient(0, 30, width, height)
-    enamel.addColorStop(0, colors[0])
-    enamel.addColorStop(0.5, colors[1])
-    enamel.addColorStop(1, colors[0])
-    ctx.fillStyle = enamel
-    ctx.save()
-    ctx.clip(outline)
-    ctx.fill(outline)
-    ctx.strokeStyle = foil
-    ctx.lineWidth = 8
-    ctx.stroke(outline)
-    ctx.restore()
-  }
-
   ctx.lineJoin = 'round'
-  const positionLettering = (row: (typeof lettering)[number]) => {
+  const positionLettering = (
+    context: CanvasRenderingContext2D,
+    row: (typeof lettering)[number]
+  ) => {
     const { a, b, c, d, e, f } = row.transform
-    ctx.transform(a, b, c, d, e, f)
-    ctx.scale(row.scaleX, 1)
+    context.transform(a, b, c, d, e, f)
+    context.scale(row.scaleX, 1)
   }
   // Lay down all outlines first so overlapping rows cannot erase each other's ink.
   lettering.forEach((row) => {
     ctx.save()
-    positionLettering(row)
+    positionLettering(ctx, row)
     ctx.strokeStyle = finish === 1 ? colors[2] : '#27213b'
     for (const glyph of row.glyphs) {
       ctx.font = `400 ${glyph.size}px "WDXL Lubrifont JP N", sans-serif`
@@ -252,7 +240,7 @@ function createStickerTexture(sticker: Sticker, eyes: boolean) {
   })
   lettering.forEach((row, index) => {
     ctx.save()
-    positionLettering(row)
+    positionLettering(ctx, row)
     const ink = ctx.createLinearGradient(0, -row.size / 2, 0, row.size / 2)
     if (finish === 2) {
       ink.addColorStop(0, '#ffffff')
@@ -301,7 +289,28 @@ function createStickerTexture(sticker: Sticker, eyes: boolean) {
   ctx.fillStyle = gloss
   ctx.fillRect(0, 0, width, height)
   ctx.restore()
-  return new CanvasTexture(canvas)
+  // The print and white vinyl edge sit above the foil, rather than refracting with it.
+  maskCtx.scale(2, 2)
+  maskCtx.globalCompositeOperation = 'destination-out'
+  maskCtx.textAlign = 'center'
+  maskCtx.textBaseline = 'middle'
+  maskCtx.lineJoin = 'round'
+  for (const row of lettering) {
+    maskCtx.save()
+    positionLettering(maskCtx, row)
+    for (const glyph of row.glyphs) {
+      maskCtx.font = `400 ${glyph.size}px "WDXL Lubrifont JP N", sans-serif`
+      maskCtx.lineWidth = 6 + (glyph.bold ? glyph.size * 0.018 : 0)
+      maskCtx.strokeText(glyph.char, glyph.x, glyph.y + 1)
+      maskCtx.fillText(glyph.char, glyph.x, glyph.y)
+    }
+    maskCtx.restore()
+  }
+  maskCtx.font = '700 9px "IBM Plex Mono", monospace'
+  if (!eyes) maskCtx.fillText('0RGA / NOTES', width / 2, 36)
+  maskCtx.font = '700 12px "IBM Plex Mono", monospace'
+  maskCtx.fillText(sticker.post.date.replaceAll('-', '.'), width / 2, height - 30)
+  return { art: new CanvasTexture(canvas), foilMask: new CanvasTexture(mask) }
 }
 
 export function createStickerScene(
@@ -355,17 +364,19 @@ export function createStickerScene(
   try {
     for (const sticker of stickers) {
       const texture = createStickerTexture(sticker, eyes)
-      textures.push(texture)
+      textures.push(texture.art, texture.foilMask)
       const material = new ShaderMaterial({
         side: DoubleSide,
         transparent: true,
         depthTest: false,
         uniforms: {
-          art: { value: texture },
+          art: { value: texture.art },
+          foilMask: { value: texture.foilMask },
           time: { value: 0 },
           activity: { value: 0 },
           pointer: { value: new Vector2(0.5, 0.5) },
-          finish: { value: sticker.seed % 3 },
+          hologram: { value: hologramFinishes.indexOf(sticker.hologram) },
+          foilPhase: { value: (sticker.seed % 1000) / 1000 },
           eyes: { value: eyes ? 1 : 0 },
           eyeCount: { value: sticker.eyeCount },
           eyeOpen: { value: 1 },
@@ -387,9 +398,11 @@ export function createStickerScene(
             gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
           }`,
         fragmentShader: `uniform sampler2D art;
+          uniform sampler2D foilMask;
           uniform float time;
           uniform float activity;
-          uniform float finish;
+          uniform float hologram;
+          uniform float foilPhase;
           uniform vec2 pointer;
           uniform vec2 dimensions;
           uniform float eyes;
@@ -399,22 +412,69 @@ export function createStickerScene(
           varying vec2 vUv;
           varying float vCurl;
           float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+          vec3 spectrum(float phase) {
+            return 0.55 + 0.45 * cos(6.2831853 * (phase + vec3(0.0, 0.33, 0.67)));
+          }
           void main() {
             vec4 base = texture2D(art, vUv);
             if (base.a < 0.01) discard;
-            vec2 cell = floor(vUv * dimensions / 2.0);
-            float noise = hash(cell);
-            float light = pow(max(0.0, sin(noise * 80.0 + time * 2.0 + vUv.x * 8.0)), 18.0);
-            float foil = smoothstep(0.42, 0.85, min(base.r, min(base.g, base.b)));
-            float sparkle = step(0.9, noise) * light * foil;
-            float direction = vUv.x * 1.3 + vUv.y * 0.7 + (pointer.x - 0.5) * 0.7 + (pointer.y - 0.5) * 0.3;
-            vec3 iridescence = 0.6 + 0.4 * cos(vec3(0.0, 2.1, 4.2) + direction * 10.0);
-            float laminate = pow(max(0.0, 1.0 - abs(direction - 1.0)), 22.0);
+            vec2 pixel = vUv * dimensions * 0.5;
+            vec2 tilt = pointer - 0.5;
+            float shift = dot(tilt, vec2(0.8, 0.5)) + foilPhase;
+            float direction = vUv.x * 1.3 + vUv.y * 0.7 + shift;
             float opaque = smoothstep(0.8, 1.0, base.a);
-            vec3 color = base.rgb;
-            color += (iridescence - 0.5) * foil * (finish < 0.5 ? 0.3 : 0.13);
-            color += sparkle * iridescence * foil * (0.12 + activity * 0.4);
-            color += laminate * (0.08 + activity * 0.24) * opaque;
+            float foil = texture2D(foilMask, vUv).a * opaque;
+            vec3 reflection;
+            float glint = 0.0;
+            if (hologram < 0.5) {
+              // Triangular facets split the spectrum like embossed prism film.
+              vec2 grid = pixel / 24.0;
+              vec2 cell = floor(grid);
+              vec2 local = fract(grid);
+              float triangle = step(local.x, local.y);
+              float facet = hash(cell + triangle * 37.0);
+              reflection = spectrum(direction * 1.4 + facet * 0.65);
+              reflection *= 0.65 + 0.55 * sin(facet * 18.0 + shift * 8.0);
+              float seam = abs(local.x - local.y);
+              float aa = max(fwidth(local.x - local.y), 0.015);
+              glint = (1.0 - smoothstep(0.0, aa, seam)) * 0.22;
+              glint += pow(max(0.0, sin(facet * 31.0 + shift * 9.0)), 14.0) * 0.5;
+            } else if (hologram < 1.5) {
+              // Different grain sizes retain the glitter at board and article scale.
+              vec2 grid = pixel / 2.0;
+              vec2 cell = floor(grid);
+              float grain = hash(cell);
+              float flash = pow(max(0.0, sin(grain * 70.0 + shift * 12.0 + time * 0.7)), 20.0);
+              vec2 point = fract(grid) - 0.3 - vec2(grain, hash(cell + 19.0)) * 0.4;
+              float aa = max(fwidth(point.x), fwidth(point.y));
+              float fleck = 1.0 - smoothstep(0.06, 0.2 + grain * 0.2 + aa * 0.4, length(point));
+              reflection = mix(spectrum(direction) * 0.7 + 0.15,
+                spectrum(direction + grain * 0.8) * (0.35 + grain * 0.8), fleck * 0.9);
+              glint = fleck * (0.06 + flash * 1.7);
+              vec2 stars = pixel / 17.0;
+              float star = hash(floor(stars));
+              vec2 ray = abs(fract(stars) - 0.5);
+              float cross = exp(-min(ray.x, ray.y) * 65.0) * exp(-max(ray.x, ray.y) * 9.0);
+              glint += cross * step(0.72, star) * pow(max(0.0, sin(star * 40.0 + shift * 10.0 + time)), 8.0);
+            } else if (hologram < 2.5) {
+              // Broad, curved ribbons of diffraction on a smooth silver laminate.
+              float wave = vUv.x * 1.5 + vUv.y * 0.65 + sin(vUv.y * 7.0 + shift * 3.0) * 0.22;
+              reflection = spectrum(wave + shift);
+              glint = pow(max(0.0, cos((wave + shift) * 12.0)), 18.0) * 0.65;
+            } else {
+              // Repeating concentric rosettes resemble laser-etched holographic foil.
+              vec2 rings = fract(pixel / 48.0) - 0.5;
+              float radius = length(rings);
+              float phase = radius * 8.0 - shift * 2.0;
+              float grooves = 0.5 + 0.5 * cos(phase * 6.2831853);
+              // Fade fine grooves when zoomed out to avoid moire.
+              grooves = mix(0.5, grooves, 1.0 - smoothstep(0.18, 0.5, fwidth(phase)));
+              reflection = spectrum(radius * 2.5 + direction + shift) * (0.65 + grooves * 0.5);
+              glint = pow(grooves, 12.0) * 0.45;
+            }
+            float laminate = pow(max(0.0, 1.0 - abs(direction - 1.0 - foilPhase)), 28.0);
+            vec3 color = mix(base.rgb, base.rgb * (0.48 + reflection * 0.95), foil * 0.78);
+            color += (reflection * 0.14 + glint * 0.6 + laminate * (0.3 + activity * 0.3)) * foil;
             color *= 1.0 - vCurl * 0.28;
             color += pow(vCurl, 3.0) * 0.35;
             if (eyes > 0.5) {

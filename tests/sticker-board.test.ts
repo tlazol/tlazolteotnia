@@ -67,6 +67,16 @@ describe('sticker board', () => {
     }
   })
 
+  it('keeps all four holographic materials consistent across filtering and article pages', () => {
+    const board = layoutStickers(posts)
+    expect(new Set(board.stickers.map((sticker) => sticker.hologram))).toEqual(
+      new Set(['prism', 'glitter', 'aurora', 'laser'])
+    )
+    for (const sticker of board.stickers) {
+      expect(layoutStickers([sticker.post]).stickers[0].hologram).toBe(sticker.hologram)
+    }
+  })
+
   it('preserves long Japanese titles and avoids splitting ordinary English words', () => {
     const title = 'TypeScriptでChatGPTを使う方法について'
     const lines = wrapStickerTitle(title)

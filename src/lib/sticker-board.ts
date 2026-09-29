@@ -3,6 +3,7 @@ import { type BlogPostSummary, sortBlogPostsNewestFirst } from './blog-post'
 export type BoardView = { x: number; y: number; zoom: number }
 export type BoardSize = { width: number; height: number }
 const stickerShapes = ['die-cut', 'rounded', 'ticket', 'beveled', 'scalloped', 'ribbon'] as const
+export const hologramFinishes = ['prism', 'glitter', 'aurora', 'laser'] as const
 export type Sticker = {
   post: BlogPostSummary
   x: number
@@ -12,6 +13,7 @@ export type Sticker = {
   angle: number
   seed: number
   shape: (typeof stickerShapes)[number]
+  hologram: (typeof hologramFinishes)[number]
   eyeCount: number
   lines: string[]
   fontSize: number
@@ -71,6 +73,7 @@ export function layoutStickers(posts: BlogPostSummary[]) {
       angle: (((seed % 19) - 9) / 9) * maxAngle,
       seed,
       shape: stickerShapes[(seed >>> 20) % stickerShapes.length],
+      hologram: hologramFinishes[(seed >>> 12) % hologramFinishes.length],
       eyeCount: 1 + ((seed >>> 16) % 4),
       lines,
       fontSize
