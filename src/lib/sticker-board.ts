@@ -81,8 +81,8 @@ export function layoutStickers(posts: BlogPostSummary[]) {
       Math.abs(Math.cos(sticker.angle)) * sticker.height +
       Math.abs(Math.sin(sticker.angle)) * sticker.width
   }))
-  const horizontalSpacing = Math.max(0, ...extents.map((item) => item.width)) + 24
-  const verticalSpacing = Math.max(0, ...extents.map((item) => item.height)) + 24
+  const horizontalSpacing = Math.max(0, ...extents.map((item) => item.width)) + 20
+  const verticalSpacing = Math.max(0, ...extents.map((item) => item.height)) + 16
   let ring = 1
   let slot = 0
   let halfWidth = 0
