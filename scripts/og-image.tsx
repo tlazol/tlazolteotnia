@@ -4,7 +4,7 @@ import type { ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { BlogPostSummary } from '../src/lib/blog-post'
 import { hashSlug, layoutStickers, type Sticker } from '../src/lib/sticker-board'
-import { foilPalettes, palettes } from '../src/lib/sticker-colors'
+import { foilPalettes, palettes, stickerMaterial } from '../src/lib/sticker-colors'
 
 const imageWidth = 1200
 const imageHeight = 630
@@ -28,26 +28,33 @@ function svg(children: ReactNode, title = 'Article sticker') {
 
 function makeLettering(sticker: Sticker) {
   const { width, seed, lines, fontSize } = sticker
+  const outlineWidth = seed % 3 === 1 ? 4 : 5
   return lines.map((line, index) => {
     const direction = (index + seed) % 2 ? 1 : -1
     const size = fontSize * (1.13 + ((seed + index * 7) % 4) * 0.03)
     const rhythm = [1.16, 0.92, 1.04, 0.98, 1.1, 0.94]
+    const glyphs = Array.from(line.trim()).map((char, charIndex) => {
+      const beat = (charIndex + index * 2 + (seed % rhythm.length)) % rhythm.length
+      const emphasis = /[A-Za-z0-9]/.test(char) ? 1 + (rhythm[beat] - 1) * 0.5 : rhythm[beat]
+      const glyphSize = size * emphasis
+      return {
+        char,
+        size: glyphSize,
+        y: (size - glyphSize) * 0.4,
+        stroke: beat === 0 || beat === 4 ? glyphSize * 0.018 : 0
+      }
+    })
     const text = (outline = false) => (
       <text fontFamily="WDXL Lubrifont JP N" letterSpacing={-size * 0.015}>
-        {Array.from(line.trim()).map((char, charIndex) => {
-          const beat = (charIndex + index * 2 + (seed % rhythm.length)) % rhythm.length
-          const emphasis = /[A-Za-z0-9]/.test(char) ? 1 + (rhythm[beat] - 1) * 0.5 : rhythm[beat]
-          const emphasisStroke = beat === 0 || beat === 4 ? size * emphasis * 0.018 : 0
-          return (
-            <tspan
-              key={charIndex}
-              fontSize={size * emphasis}
-              strokeWidth={(outline ? 5 : 0) + emphasisStroke}
-            >
-              {char}
-            </tspan>
-          )
-        })}
+        {glyphs.map((glyph, charIndex) => (
+          <tspan
+            key={charIndex}
+            fontSize={glyph.size}
+            strokeWidth={(outline ? outlineWidth : 0) + glyph.stroke}
+          >
+            {glyph.char}
+          </tspan>
+        ))}
       </text>
     )
     const bounds = new Resvg(svg(text()), { font: fontOptions }).getBBox()
@@ -59,9 +66,10 @@ function makeLettering(sticker: Sticker) {
     return {
       text,
       width: bounds.width * scaleX,
-      height: bounds.height,
       x,
-      y,
+      cutTop: Math.min(...glyphs.map((glyph) => glyph.y - glyph.size / 2), 0) - 2,
+      cutBottom: Math.max(...glyphs.map((glyph) => glyph.y + glyph.size / 2), 0) + 4,
+      cutTransform: `translate(${x} ${y}) rotate(${angle}) skewX(-3)`,
       transform: `translate(${x} ${y}) rotate(${angle}) skewX(-3) scale(${scaleX} 1) translate(${-bounds.x - bounds.width / 2} ${-bounds.y - bounds.height / 2})`
     }
   })
@@ -81,11 +89,12 @@ function silhouette(sticker: Sticker, rows: ReturnType<typeof makeLettering>) {
           {rows.map((row, index) => (
             <rect
               key={index}
-              x={row.x - row.width / 2 - 9}
-              y={row.y - row.height / 2 - 8}
-              width={row.width + 18}
-              height={row.height + 16}
+              x={-row.width / 2 - 7}
+              y={row.cutTop}
+              width={row.width + 14}
+              height={row.cutBottom - row.cutTop}
               rx={12}
+              transform={row.cutTransform}
             />
           ))}
           <rect x={width / 2 - 54} y={23} width={108} height={34} rx={14} />
@@ -212,6 +221,8 @@ export async function renderSvg(post: BlogPostSummary) {
   const outline = silhouette(sticker, rows)
   const colors = foilPalettes[hashSlug(`foil:${post.slug}`) % foilPalettes.length]
   const finish = seed % 3
+  const glossVector = { x: 0.64 / width, y: -0.76 / height }
+  const glossLength = 1.4 / (glossVector.x ** 2 + glossVector.y ** 2)
   // Account for rotation and the vinyl edge when fitting a portrait sticker into OG.
   const rotatedWidth = Math.abs(Math.cos(angle)) * width + Math.abs(Math.sin(angle)) * height
   const rotatedHeight = Math.abs(Math.sin(angle)) * width + Math.abs(Math.cos(angle)) * height
@@ -220,6 +231,16 @@ export async function renderSvg(post: BlogPostSummary) {
     <>
       <desc>{post.description}</desc>
       <defs>
+        <filter id="contact-shadow" x="-20%" y="-20%" width="140%" height="140%">
+          <feGaussianBlur in="SourceAlpha" stdDeviation={1.5} />
+          <feOffset dy={3} result="offset" />
+          <feFlood floodColor="#000" floodOpacity={0.65} />
+          <feComposite in2="offset" operator="in" />
+          <feMerge>
+            <feMergeNode />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
         <pattern id="grid" width={64} height={64} patternUnits="userSpaceOnUse">
           <path
             d="M0 .5H64M.5 0V64"
@@ -283,13 +304,25 @@ export async function renderSvg(post: BlogPostSummary) {
           <stop offset="18%" stopColor="#e9faff" stopOpacity={0.4} />
           <stop offset="100%" stopColor="#e9faff" stopOpacity={0} />
         </radialGradient>
-        <linearGradient id="gloss" x1="0%" y1="0%" x2="70%" y2="100%">
-          <stop offset="0%" stopColor="#fff" stopOpacity={0} />
-          <stop offset="38%" stopColor="#fff" stopOpacity={0} />
-          <stop offset="46%" stopColor="#fff" stopOpacity={0.4} />
-          <stop offset="49%" stopColor="#fff" stopOpacity={0.02} />
-          <stop offset="73%" stopColor="#fff" stopOpacity={0} />
-          <stop offset="100%" stopColor="#fff" stopOpacity={0.2} />
+        <linearGradient
+          id="gloss"
+          gradientUnits="userSpaceOnUse"
+          x1={0}
+          y1={height}
+          x2={glossVector.x * glossLength}
+          y2={height + glossVector.y * glossLength}
+        >
+          {/* Freeze the same broad softbox, narrow edge, and secondary reflection as the film. */}
+          {Array.from({ length: 141 }, (_, index) => {
+            const position = index / 100
+            const reflection = (center: number, width: number) =>
+              Math.exp(-(((position - center) / width) ** 2))
+            const opacity =
+              reflection(0.72, 0.19) * 0.24 +
+              reflection(0.55, 0.018) * 0.32 +
+              reflection(1.12, 0.07) * 0.12
+            return <stop key={index} offset={index / 140} stopColor="#fff" stopOpacity={opacity} />
+          })}
         </linearGradient>
         <clipPath id="cut">{outline}</clipPath>
         {rows.map((_, index) => (
@@ -314,15 +347,29 @@ export async function renderSvg(post: BlogPostSummary) {
       <g
         transform={`translate(600 302) scale(${scale}) rotate(${(angle * 180) / Math.PI}) translate(${-width / 2} ${-height / 2})`}
       >
-        <g fill="#fff" stroke="#fff" strokeWidth={10} strokeLinejoin="round">
+        <g
+          fill={stickerMaterial.edge}
+          stroke={stickerMaterial.edge}
+          strokeWidth={15}
+          strokeLinejoin="round"
+          filter="url(#contact-shadow)"
+        >
           {outline}
         </g>
         <g clipPath="url(#cut)">
           <rect width={width} height={height} fill="url(#foil)" />
-          <rect width={width} height={height} fill="url(#diffraction)" opacity={0.65} />
-          <g opacity={0.9}>{foilPattern(sticker)}</g>
-          <rect width={width} height={height} fill="url(#facet)" opacity={0.4} />
-          <rect width={width} height={height} fill="url(#foil-grain)" />
+          <rect width={width} height={height} fill="url(#diffraction)" opacity={0.24} />
+          <g opacity={0.65}>{foilPattern(sticker)}</g>
+          <rect width={width} height={height} fill="url(#foil)" opacity={0.28} />
+          <rect width={width} height={height} fill="url(#facet)" opacity={0.16} />
+          <rect
+            width={width}
+            height={height}
+            fill="url(#foil-grain)"
+            opacity={
+              sticker.hologram === 'glitter' ? 1 : sticker.hologram === 'aurora' ? 0.07 : 0.18
+            }
+          />
           {/* Freeze small specular flashes around the print, so the title stays crisp. */}
           {[
             [width * 0.2, 33],
@@ -341,10 +388,16 @@ export async function renderSvg(post: BlogPostSummary) {
             key={index}
             transform={row.transform}
             fill="none"
-            stroke={finish === 1 ? palettes[(seed >>> 8) % palettes.length][2] : '#27213b'}
+            stroke={
+              finish === 1 ? palettes[(seed >>> 8) % palettes.length][2] : stickerMaterial.keyline
+            }
             strokeLinejoin="round"
           >
-            {row.text(true)}
+            {[2, 1, 0].map((depth) => (
+              <g key={depth} transform={`translate(${depth * 0.45} ${depth})`}>
+                {row.text(true)}
+              </g>
+            ))}
           </g>
         ))}
         {rows.map((row, index) => (
@@ -358,21 +411,24 @@ export async function renderSvg(post: BlogPostSummary) {
             {row.text()}
           </g>
         ))}
-        <g clipPath="url(#cut)">
-          <rect width={width} height={height} fill="url(#gloss)" opacity={0.45} />
-        </g>
         {Array.from({ length: eyeCount }, (_, index) => (
-          <rect
+          <g
             key={index}
-            x={width / 2 + (index - (eyeCount - 1) / 2) * (eyeCount > 3 ? 18 : 24) - 4.8}
-            y={27}
-            width={9.6}
-            height={16}
-            rx={2.2}
-            fill="#060606"
-            stroke="#fff"
-            strokeWidth={1.6}
-          />
+            transform={`translate(${width / 2 + (index - (eyeCount - 1) / 2) * (eyeCount > 3 ? 18 : 24)} 35)`}
+          >
+            <rect
+              x={-4.8}
+              y={-8}
+              width={9.6}
+              height={16}
+              rx={2.2}
+              fill="#060606"
+              stroke="#fff"
+              strokeWidth={1.6}
+              paintOrder="stroke fill"
+            />
+            <rect x={-2.5} y={-5.7} width={5} height={9.2} rx={0.6} fill="#fff" />
+          </g>
         ))}
         <text
           x={width / 2}
@@ -381,14 +437,22 @@ export async function renderSvg(post: BlogPostSummary) {
           fontFamily="IBM Plex Mono"
           fontWeight={700}
           fontSize={12}
-          fill="#211b30"
+          fill={stickerMaterial.keyline}
         >
           {post.date.replaceAll('-', '.')}
         </text>
         <path
           d={`M${width / 2 - 46} 30l1.4 4.6 4.6 1.4-4.6 1.4-1.4 4.6-1.4-4.6-4.6-1.4 4.6-1.4Z`}
-          fill="#fff"
+          fill={stickerMaterial.edge}
         />
+        <path
+          d="M0 -5L1.2 -1.2L5 0L1.2 1.2L0 5L-1.2 1.2L-5 0L-1.2 -1.2Z"
+          transform={`translate(${width / 2 + 46} ${height - 30})`}
+          fill={stickerMaterial.edge}
+        />
+        <g clipPath="url(#cut)">
+          <rect width={width} height={height} fill="url(#gloss)" opacity={0.48} />
+        </g>
       </g>
       <text
         x={1160}
