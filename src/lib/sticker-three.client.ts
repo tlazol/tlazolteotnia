@@ -381,6 +381,7 @@ export function createStickerScene(
           dragTilt: { value: dragTilt },
           hologram: { value: hologramFinishes.indexOf(sticker.hologram) },
           foilPhase: { value: (sticker.seed % 1000) / 1000 },
+          motionStyle: { value: hashSlug(`motion:${sticker.post.slug}`) % 6 },
           eyes: { value: eyes ? 1 : 0 },
           eyeCount: { value: sticker.eyeCount },
           eyeOpen: { value: 1 },
@@ -392,6 +393,7 @@ export function createStickerScene(
           uniform float time;
           uniform float motion;
           uniform float foilPhase;
+          uniform float motionStyle;
           uniform float activity;
           uniform vec2 pointer;
           uniform vec2 dimensions;
@@ -406,12 +408,39 @@ export function createStickerScene(
             // Animate the whole piece of vinyl in pixels, regardless of its aspect ratio.
             // Small excursions stay within the transparent padding of the link target.
             float beat = time * (0.85 + foilPhase * 0.45) + foilPhase * 6.2831853;
-            float breathe = sin(beat * 1.4) * 0.014 * motion;
+            float breathe = sin(beat * 1.4) * 0.014;
+            // Take turns performing short gestures, then settle back into the idle sway.
+            float cycle = time / 8.0 + foilPhase;
+            float progress = clamp(fract(cycle) / 0.38, 0.0, 1.0);
+            float pulse = sin(progress * 3.14159265);
+            float envelope = pulse * pulse;
+            float gesture = mod(motionStyle + floor(cycle), 6.0);
+            vec2 travel = vec2(sin(beat * 0.7) * 2.5, sin(beat * 1.15) * 4.0);
+            float rock = sin(beat) * 0.032 + (pointer.x - 0.5) * activity * 0.05;
+            if (gesture < 0.5) {
+              // Two soft hops, with a little squash on landing.
+              float hop = abs(sin(progress * 6.2831853)) * envelope;
+              travel.y += hop * 10.0;
+              breathe -= hop * 0.035;
+            } else if (gesture < 1.5) {
+              rock += sin(progress * 6.2831853) * envelope * 0.09;
+            } else if (gesture < 2.5) {
+              travel.x += sin(progress * 12.5663706) * envelope * 7.0;
+              rock += sin(progress * 12.5663706) * envelope * 0.035;
+            } else if (gesture < 3.5) {
+              rock += sin(progress * 37.6991118) * envelope * 0.045;
+            } else if (gesture < 4.5) {
+              breathe += sin(progress * 6.2831853) * envelope * 0.055;
+              travel.y += envelope * 3.0;
+            } else {
+              travel += vec2(sin(progress * 6.2831853), cos(progress * 6.2831853)) * envelope * 6.0;
+              rock += sin(progress * 6.2831853) * envelope * 0.045;
+            }
             vec2 body = p.xy * dimensions * 0.5;
-            body *= vec2(1.0 + breathe, 1.0 - breathe) * (1.0 + activity * 0.012);
-            float rock = (sin(beat) * 0.032 + (pointer.x - 0.5) * activity * 0.05) * motion;
+            body *= vec2(1.0 + breathe * motion, 1.0 - breathe * motion) * (1.0 + activity * 0.012);
+            rock *= motion;
             body = mat2(cos(rock), sin(rock), -sin(rock), cos(rock)) * body;
-            body += vec2(sin(beat * 0.7) * 2.5, sin(beat * 1.15) * 4.0) * motion;
+            body += travel * motion;
             p.xy = body / (dimensions * 0.5);
             gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
           }`,
@@ -517,7 +546,12 @@ export function createStickerScene(
               float firstEye = -0.5 * (eyeCount - 1.0) * spacing;
               float nearestEye = clamp(floor((eye.x - firstEye) / spacing + 0.5), 0.0, eyeCount - 1.0);
               eye.x -= firstEye + nearestEye * spacing;
-              vec2 halfSize = vec2(4.8, mix(0.65, 8.0 + activity, eyeOpen));
+              float expression = mod(time + foilPhase * 13.0, 13.0);
+              float wink = (1.0 - smoothstep(0.0, 0.22, abs(expression - 2.4))) * motion;
+              float wide = (1.0 - smoothstep(0.25, 0.8, abs(expression - 6.0))) * motion;
+              float sleepy = (1.0 - smoothstep(0.35, 1.0, abs(expression - 10.0))) * motion;
+              float openness = eyeOpen * (1.0 - wink * step(eyeCount - 1.5, nearestEye)) * (1.0 - sleepy * 0.55);
+              vec2 halfSize = vec2(4.8 + wide * 0.8, mix(0.65, 8.0 + activity + wide, openness));
               float radius = min(2.2, halfSize.y);
               vec2 d = abs(eye) - halfSize + radius;
               float distance = length(max(d, 0.0)) + min(max(d.x, d.y), 0.0) - radius;
@@ -525,6 +559,16 @@ export function createStickerScene(
               // Apply monochrome ink after the foil lighting, with a fine white keyline.
               color = mix(color, vec3(1.0), 1.0 - smoothstep(0.8 - aa, 0.8 + aa, distance));
               color = mix(color, vec3(0.025), 1.0 - smoothstep(-aa, aa, distance));
+              // White centers stay inside the black eyes and close with the eyelids.
+              vec2 whiteCenter = vec2(gaze.x * 0.3, -1.1 + gaze.y * 0.35);
+              vec2 whiteSize = vec2(2.5 + wide * 0.3, 4.6);
+              vec2 whiteEdge = abs(eye - whiteCenter) - whiteSize + 0.6;
+              float whiteDistance = length(max(whiteEdge, 0.0)) + min(max(whiteEdge.x, whiteEdge.y), 0.0) - 0.6;
+              float whiteAA = max(0.25, fwidth(whiteDistance));
+              float whiteInk = (1.0 - smoothstep(-whiteAA, whiteAA, whiteDistance))
+                * (1.0 - smoothstep(-1.5 - aa, -1.5 + aa, distance))
+                * smoothstep(0.15, 0.5, openness);
+              color = mix(color, vec3(1.0), whiteInk);
             }
             gl_FragColor = vec4(color, base.a);
           }`
@@ -577,9 +621,12 @@ export function createStickerScene(
         const phase = (sticker.seed % 1000) / 1000
         const seconds = now / 1000
         const blink = (seconds + phase * 7) % (3.6 + phase * 2.8)
+        const blinkClosure = Math.max(0, 1 - Math.abs(blink - 0.12) / 0.12)
+        const doubleBlink =
+          sticker.seed % 3 === 0 ? Math.max(0, 1 - Math.abs(blink - 0.42) / 0.1) : 0
         mesh.material.uniforms.eyeOpen.value = reducedMotion.matches
           ? 1
-          : 1 - Math.max(0, 1 - Math.abs(blink - 0.12) / 0.12)
+          : 1 - Math.max(blinkClosure, doubleBlink)
         if (reducedMotion.matches) gaze.set(0, 0)
         else {
           let x = Math.sin(seconds * 0.65 + phase * Math.PI * 2) * 3
