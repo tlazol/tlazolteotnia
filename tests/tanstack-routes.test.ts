@@ -31,6 +31,9 @@ describe('TanStack route and server integration primitives', () => {
   it('includes the nonce and all security headers in HTML responses', () => {
     const headers = createHtmlSecurityHeaders('request-nonce')
     expect(headers['Content-Security-Policy']).toContain("'nonce-request-nonce'")
+    expect(headers['Content-Security-Policy']).toContain(
+      "frame-src 'self' https://www.youtube-nocookie.com;"
+    )
     expect(headers).toMatchObject({
       'X-Content-Type-Options': 'nosniff',
       'Referrer-Policy': 'strict-origin-when-cross-origin',

@@ -43,7 +43,7 @@ function createContentSecurityPolicy(nonce: string) {
     "font-src 'self' https://fonts.gstatic.com data:",
     "img-src 'self' data: https:",
     `connect-src ${connectSrc.join(' ')}`,
-    "frame-src 'self'",
+    "frame-src 'self' https://www.youtube-nocookie.com",
     "base-uri 'self'",
     "object-src 'none'",
     "frame-ancestors 'none'",

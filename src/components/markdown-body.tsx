@@ -4,6 +4,7 @@ import { CodeBlock } from '#/components/code-block'
 import {
   getMarkdownHeadingTag,
   getUnknownMarkdownTokenPolicy,
+  getYouTubeEmbedUrl,
   isSafeMarkdownUrl
 } from '#/lib/markdown'
 import { markdownBodyClassName } from '#/lib/styles'
@@ -33,6 +34,28 @@ function renderBlock(token: Token, key: number, baseUrl?: string): ReactNode {
     }
     case 'paragraph': {
       const paragraph = token as Tokens.Paragraph
+      const link = paragraph.tokens.length === 1 ? paragraph.tokens[0] : undefined
+      const embedUrl =
+        link?.type === 'link' && link.text === link.href ? getYouTubeEmbedUrl(link.href) : undefined
+
+      if (embedUrl && link?.type === 'link') {
+        return (
+          <figure key={key}>
+            <iframe
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              allowFullScreen
+              className="aspect-video w-full border-0"
+              loading="lazy"
+              referrerPolicy="strict-origin-when-cross-origin"
+              src={embedUrl}
+              title="YouTube 動画プレーヤー"
+            />
+            <figcaption className="mt-2 text-sm">
+              <a href={link.href}>YouTube で見る</a>
+            </figcaption>
+          </figure>
+        )
+      }
 
       return <p key={key}>{renderInline(paragraph.tokens, baseUrl)}</p>
     }

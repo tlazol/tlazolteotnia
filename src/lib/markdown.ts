@@ -37,6 +37,27 @@ export function isSafeMarkdownUrl(url: string) {
   }
 }
 
+export function getYouTubeEmbedUrl(value: string) {
+  try {
+    const url = new URL(value)
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') return undefined
+
+    const videoId =
+      url.hostname === 'youtu.be'
+        ? url.pathname.slice(1)
+        : (url.hostname === 'www.youtube.com' || url.hostname === 'youtube.com') &&
+            url.pathname === '/watch'
+          ? url.searchParams.get('v')
+          : null
+
+    return videoId && /^[\w-]{11}$/.test(videoId)
+      ? `https://www.youtube-nocookie.com/embed/${videoId}`
+      : undefined
+  } catch {
+    return undefined
+  }
+}
+
 export function parseCodeInfo(info?: string): CodeInfo {
   const rawInfo = info?.trim()
 

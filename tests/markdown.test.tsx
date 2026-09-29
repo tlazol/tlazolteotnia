@@ -10,6 +10,36 @@ import {
 } from '../src/lib/markdown'
 
 describe('MarkdownBody', () => {
+  it.each([
+    '<https://www.youtube.com/watch?v=vDjW_dRyKXY>',
+    'https://youtube.com/watch?v=vDjW_dRyKXY',
+    'https://youtu.be/vDjW_dRyKXY'
+  ])('embeds a standalone YouTube URL: %s', (markdown) => {
+    const html = render(markdown)
+
+    expect(html).toContain('<iframe')
+    expect(html).toContain('src="https://www.youtube-nocookie.com/embed/vDjW_dRyKXY"')
+    expect(html).toContain('title="YouTube 動画プレーヤー"')
+    expect(html).toContain('referrerPolicy="strict-origin-when-cross-origin"')
+    expect(html).toContain('allowFullScreen=""')
+    expect(html).toContain('>YouTube で見る</a>')
+    expect(html).not.toContain('<p><iframe')
+  })
+
+  it.each([
+    '動画はこちら: <https://www.youtube.com/watch?v=vDjW_dRyKXY>',
+    '[参考動画](https://www.youtube.com/watch?v=vDjW_dRyKXY)',
+    '<https://www.youtube.com.evil.example/watch?v=vDjW_dRyKXY>',
+    '<https://www.youtube.com/watch?v=invalid>',
+    '<https://www.youtube.com/playlist?list=vDjW_dRyKXY>',
+    '<https://example.com/watch?v=vDjW_dRyKXY>'
+  ])('keeps ordinary links without embedding: %s', (markdown) => {
+    const html = render(markdown)
+
+    expect(html).not.toContain('<iframe')
+    expect(html).toContain('<a href=')
+  })
+
   it('renders paragraphs, inline formatting, lists, tables, quotes, rules, and breaks', () => {
     const html = render(
       'Text **bold** *em* ~~gone~~  \nline\n\n3. third\n\n> quote\n\n---\n\n| A |\n| - |\n| B |'
