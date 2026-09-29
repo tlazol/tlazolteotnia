@@ -183,6 +183,7 @@ export function StickerBoard({ posts }: { posts: BlogPostSummary[] }) {
     event.currentTarget.setPointerCapture(event.pointerId)
     setDragging(true)
     setHovered(-1)
+    renderer.current?.shimmer(next.x - before.x, next.y - before.y)
     if (pointers.current.size === 2) {
       const after = [...pointers.current.values()]
       const oldCenter = midpoint(previous[0], previous[1])

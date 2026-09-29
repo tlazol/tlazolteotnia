@@ -342,6 +342,8 @@ export function createStickerScene(
   let gazeUntil = 0
   let disposed = false
   const pointer = new Vector2(0.5, 0.5)
+  const dragTilt = new Vector2()
+  const dragTarget = new Vector2()
   const eyePointer = new Vector2()
   const surface = canvas.parentElement
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
@@ -375,6 +377,7 @@ export function createStickerScene(
           time: { value: 0 },
           activity: { value: 0 },
           pointer: { value: new Vector2(0.5, 0.5) },
+          dragTilt: { value: dragTilt },
           hologram: { value: hologramFinishes.indexOf(sticker.hologram) },
           foilPhase: { value: (sticker.seed % 1000) / 1000 },
           eyes: { value: eyes ? 1 : 0 },
@@ -404,6 +407,7 @@ export function createStickerScene(
           uniform float hologram;
           uniform float foilPhase;
           uniform vec2 pointer;
+          uniform vec2 dragTilt;
           uniform vec2 dimensions;
           uniform float eyes;
           uniform float eyeCount;
@@ -419,9 +423,9 @@ export function createStickerScene(
             vec4 base = texture2D(art, vUv);
             if (base.a < 0.01) discard;
             vec2 pixel = vUv * dimensions * 0.5;
-            vec2 tilt = pointer - 0.5;
+            vec2 tilt = pointer - 0.5 + dragTilt;
             float shift = dot(tilt, vec2(0.8, 0.5)) + foilPhase;
-            float direction = vUv.x * 1.3 + vUv.y * 0.7 + shift;
+            float direction = vUv.x * 1.3 + vUv.y * 0.7 + shift + dot(dragTilt, vUv - 0.5) * 0.4;
             float opaque = smoothstep(0.8, 1.0, base.a);
             float foil = texture2D(foilMask, vUv).a * opaque;
             vec3 reflection;
@@ -517,7 +521,18 @@ export function createStickerScene(
     camera.top = -view.y / view.zoom
     camera.bottom = (size.height - view.y) / view.zoom
     camera.updateProjectionMatrix()
-    let animating = false
+    if (reducedMotion.matches) {
+      dragTilt.set(0, 0)
+      dragTarget.set(0, 0)
+    } else {
+      dragTilt.lerp(dragTarget, 0.18)
+      dragTarget.multiplyScalar(0.92)
+    }
+    let animating = dragTilt.lengthSq() + dragTarget.lengthSq() > 0.000001
+    if (!animating) {
+      dragTilt.set(0, 0)
+      dragTarget.set(0, 0)
+    }
     meshes.forEach((mesh, index) => {
       mesh.material.uniforms.time.value = reducedMotion.matches ? 0 : now / 1000
       const target = index === hovered && !reducedMotion.matches ? 1 : 0
@@ -611,6 +626,13 @@ export function createStickerScene(
   surface?.addEventListener('pointerleave', leave)
 
   return {
+    shimmer(deltaX: number, deltaY: number) {
+      if (disposed || reducedMotion.matches) return
+      // Screen-space movement also lights the foil when panning reaches the board edge.
+      dragTarget.x = Math.max(-1, Math.min(1, dragTarget.x + deltaX / 180))
+      dragTarget.y = Math.max(-1, Math.min(1, dragTarget.y - deltaY / 180))
+      requestRender()
+    },
     update(nextView: BoardView, nextSize: BoardSize, nextHovered: number) {
       if (disposed) return
       view = nextView
