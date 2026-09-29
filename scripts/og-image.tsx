@@ -1,5 +1,6 @@
 import { Resvg } from '@resvg/resvg-js'
 import satori from 'satori'
+import { hashSlug, wrapStickerTitle } from '../src/lib/sticker-board'
 
 const imageWidth = 1200
 const imageHeight = 630
@@ -88,6 +89,40 @@ export async function renderSvg(title: string, description: string, date: string
   const rowTexts = makeRowTexts(title, description)
   const dateLabel = date.replaceAll('-', '.')
   const rowStyles = getRowStyles(`${title}\n${description}`)
+  const seed = hashSlug(title)
+  const preferredFontSize = Math.min(84, getTitleFontSize(title))
+  const lines = wrapStickerTitle(title, Math.floor(800 / preferredFontSize))
+  const fontSize = Math.min(preferredFontSize, 360 / Math.max(1, lines.length) / 1.2)
+  const lineHeight = fontSize * 1.2
+  const stickerHeight = lines.length * lineHeight + 112
+  // Each title row extends the same die-cut silhouette; the eyes and date form small tabs.
+  const bands = [
+    { width: 160, height: 48 },
+    ...lines.map((line) => ({
+      width: Math.min(
+        1000,
+        80 +
+          Array.from(line).reduce(
+            (width, char) => width + (/[\u0020-\u007e]/.test(char) ? 0.68 : 1) * fontSize,
+            0
+          )
+      ),
+      height: lineHeight
+    })),
+    { width: 300, height: 64 }
+  ]
+  let bandY = 0
+  const edges = bands.map((band) => {
+    const top = bandY
+    bandY += band.height
+    return { left: (1040 - band.width) / 2, right: (1040 + band.width) / 2, top, bottom: bandY }
+  })
+  const outline = [
+    ...edges.flatMap(({ right, top, bottom }) => [`${right},${top}`, `${right},${bottom}`]),
+    ...[...edges]
+      .reverse()
+      .flatMap(({ left, top, bottom }) => [`${left},${bottom}`, `${left},${top}`])
+  ].join(' ')
 
   return satori(
     <div
@@ -97,7 +132,7 @@ export async function renderSvg(title: string, description: string, date: string
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',
-        background: '#111111',
+        background: '#101114',
         color: '#f7f5ef',
         fontFamily: 'Noto Sans JP',
         fontWeight: 700
@@ -129,17 +164,129 @@ export async function renderSvg(title: string, description: string, date: string
       <div
         style={{
           position: 'absolute',
-          right: 28,
-          bottom: 12,
+          left: 0,
+          top: 0,
+          width: imageWidth,
+          height: imageHeight,
+          background: '#101114a6'
+        }}
+      />
+      <div
+        style={{
+          position: 'absolute',
+          left: 80,
+          top: (imageHeight - stickerHeight) / 2 - 8,
+          width: 1040,
+          height: stickerHeight,
           display: 'flex',
-          background: '#111111',
+          flexDirection: 'column',
+          alignItems: 'center',
+          transform: `rotate(${(seed % 5) - 2 || -2}deg)`
+        }}
+      >
+        <svg
+          width={1040}
+          height={stickerHeight}
+          viewBox={`0 -16 1040 ${stickerHeight + 32}`}
+          style={{ position: 'absolute', top: -16, height: stickerHeight + 32 }}
+          aria-hidden="true"
+        >
+          <defs>
+            <linearGradient id="foil" x1="0%" y1="100%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="#a7b4ed" />
+              <stop offset="18%" stopColor="#efb4d9" />
+              <stop offset="34%" stopColor="#f9f4b4" />
+              <stop offset="49%" stopColor="#96e5ef" />
+              <stop offset="63%" stopColor="#e8c8ff" />
+              <stop offset="78%" stopColor="#f9f4b4" />
+              <stop offset="100%" stopColor="#96e5ef" />
+            </linearGradient>
+            <pattern
+              id="laminate"
+              width="6"
+              height="6"
+              patternUnits="userSpaceOnUse"
+              patternTransform="rotate(35)"
+            >
+              <rect width="1" height="6" fill="#fff" opacity="0.3" />
+            </pattern>
+          </defs>
+          <polygon
+            points={outline}
+            fill="#00e5ff"
+            stroke="#00e5ff"
+            strokeWidth="18"
+            strokeLinejoin="round"
+            transform="translate(-8 5)"
+          />
+          <polygon
+            points={outline}
+            fill="#ff2fcf"
+            stroke="#ff2fcf"
+            strokeWidth="18"
+            strokeLinejoin="round"
+            transform="translate(8 5)"
+          />
+          <polygon
+            points={outline}
+            fill="url(#foil)"
+            stroke="#fff"
+            strokeWidth="12"
+            strokeLinejoin="round"
+          />
+          <polygon points={outline} fill="url(#laminate)" />
+        </svg>
+        <div style={{ display: 'flex', height: 48, alignItems: 'center', gap: 14 }}>
+          {Array.from({ length: 1 + ((seed >>> 16) % 4) }, (_, index) => (
+            <div key={index} style={{ width: 9, height: 20, background: '#27213b' }} />
+          ))}
+        </div>
+        {lines.map((line, index) => (
+          <div
+            key={`${index}-${line}`}
+            style={{
+              display: 'flex',
+              height: lineHeight,
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize,
+              lineHeight: 1.2,
+              whiteSpace: 'nowrap',
+              color: index % 2 ? '#fff7e1' : '#f4e9ff',
+              WebkitTextStroke: '2px #27213b',
+              textShadow: '3px 4px 0 #27213b, -3px 0 0 #00e5ff, 3px 0 0 #ff2fcf'
+            }}
+          >
+            {line.trim()}
+          </div>
+        ))}
+        <div
+          style={{
+            display: 'flex',
+            height: 64,
+            alignItems: 'center',
+            fontSize: 22,
+            letterSpacing: '0.12em',
+            color: '#27213b'
+          }}
+        >
+          {dateLabel}
+        </div>
+      </div>
+      <div
+        style={{
+          position: 'absolute',
+          right: 36,
+          bottom: 22,
+          display: 'flex',
+          background: '#101114',
           color: textColor,
           fontSize: 20,
           letterSpacing: '0.08em',
-          textShadow: glitchTextShadow
+          textShadow: '-2px 0 0 #00e5ff, 2px 0 0 #ff2fcf'
         }}
       >
-        {dateLabel} / TL AZ OL TE OT NIA
+        TL AZ OL TE OT NIA / 0RGA.ORG
       </div>
     </div>,
     {
