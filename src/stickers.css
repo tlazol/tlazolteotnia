@@ -568,7 +568,129 @@ body::after {
 .game-page {
   background: #101114;
 }
+.post-modal {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  max-width: none;
+  height: 100dvh;
+  max-height: none;
+  margin: 0;
+  padding: 24px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+}
+.post-modal[open] {
+  display: grid;
+  place-items: center;
+}
+.post-modal::backdrop {
+  background: rgb(0 0 0 / 30%);
+}
+.post-modal__backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.post-modal__panel {
+  position: relative;
+  width: min(100%, 856px);
+  max-height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid #ffffff26;
+  border-radius: 16px;
+  background: rgb(0 0 0 / 68%);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 24px 100px #0009;
+  scrollbar-color: #77717f transparent;
+}
+.post-modal__toolbar {
+  position: sticky;
+  z-index: 2;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 2px 16px 2px 24px;
+  border-bottom: 1px solid #ffffff18;
+  background: rgb(0 0 0 / 60%);
+  backdrop-filter: blur(16px);
+}
+.post-modal__toolbar a {
+  color: #c8c2d3;
+  font-size: 12px;
+  text-decoration: none;
+}
+.post-modal__close {
+  position: relative;
+  display: grid;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.post-modal__close::before {
+  position: absolute;
+  inset: 10px;
+  background:
+    linear-gradient(115deg, transparent 30%, #ffffffb3 45%, transparent 60%),
+    conic-gradient(
+      from 45deg,
+      #a5f3ef 0deg 90deg,
+      #bb98f5 90deg 180deg,
+      #ffb6e1 180deg 270deg,
+      #fff1ae 270deg 360deg
+    );
+  background-size: 250% 100%, 12px 12px;
+  background-position: 0 0, 0 0;
+  clip-path: polygon(
+    22% 0, 50% 28%, 78% 0, 100% 22%, 72% 50%, 100% 78%,
+    78% 100%, 50% 72%, 22% 100%, 0 78%, 28% 50%, 0 22%
+  );
+  content: "";
+  pointer-events: none;
+  transition: background-position 200ms ease;
+}
+.post-modal__close:hover::before {
+  background-position: 100% 0, 0 0;
+}
+.post-modal__toolbar a:hover {
+  color: #fff;
+  background: #ffffff1a;
+}
+.post-modal__toolbar :is(a, button):focus-visible {
+  outline: 2px solid #e8c8ff;
+  outline-offset: 4px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .post-modal__close::before {
+    transition: none;
+  }
+}
+.article-page.post-modal__article {
+  padding: 4px 32px 40px;
+}
+.post-modal__status {
+  padding: 48px 0;
+  line-height: 1.9;
+}
 @media (max-width: 600px) {
+  .post-modal {
+    padding: 10px;
+    padding-top: max(10px, env(safe-area-inset-top));
+    padding-bottom: max(10px, env(safe-area-inset-bottom));
+  }
+  .article-page.post-modal__article {
+    padding: 0 20px 28px;
+  }
   .site-header {
     top: 16px;
     left: 16px;

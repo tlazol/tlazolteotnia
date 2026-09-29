@@ -1,17 +1,12 @@
-import { createFileRoute, Link } from '@tanstack/react-router'
-import { useCallback, useState } from 'react'
-import { ArticleReactionFooter } from '#/components/article-reaction-footer'
-import { ArticleSticker } from '#/components/article-sticker'
+import { createFileRoute } from '@tanstack/react-router'
+import { ArticleContent } from '#/components/article-content'
 import { BackToBoard } from '#/components/back-to-board'
-import { MarkdownBody } from '#/components/markdown-body'
 import { SiteHeader } from '#/components/site-header'
 import { getPostData } from '#/lib/blog.functions'
 import type { BlogPost as BlogPostData } from '#/lib/blog-post'
 import { getPostAccent } from '#/lib/post-accent'
-import { mergeReaction, type ReactionCount } from '#/lib/reactions'
 import { requireRouteData } from '#/lib/route-helpers'
 import {
-  authorName,
   copyrightCurrentYear,
   getBlogPostOgImageUrl,
   getBlogPostUrl,
@@ -62,44 +57,12 @@ function getPostMeta(post?: BlogPostData) {
 
 function BlogPost() {
   const { post, reactions } = Route.useLoaderData()
-  return <Article key={post.slug} post={post} reactions={reactions} />
-}
-
-function Article({ post, reactions }: { post: BlogPostData; reactions: ReactionCount[] }) {
-  const [currentReactions, setCurrentReactions] = useState(reactions)
-  const updateReaction = useCallback((reaction: ReactionCount) => {
-    setCurrentReactions((current) => mergeReaction(current, reaction))
-  }, [])
   return (
     <>
       <SiteHeader />
       <main className="article-page" data-post-accent={getPostAccent(post.slug)}>
         <BackToBoard />
-        <article>
-          <header className="article-heading">
-            <ArticleSticker post={post} />
-            <p className="article-byline">
-              <time dateTime={post.date}>{post.date.replaceAll('-', '.')}</time>
-              <span>{authorName}</span>
-            </p>
-            <p className="article-description">{post.description}</p>
-            <ul className="article-tags" aria-label="タグ">
-              {post.tags.map((tag) => (
-                <li key={tag}>
-                  <Link to="/" search={{ topic: tag }}>
-                    #{tag}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </header>
-          <MarkdownBody body={post.body} />
-          <ArticleReactionFooter
-            onReaction={updateReaction}
-            reactions={currentReactions}
-            slug={post.slug}
-          />
-        </article>
+        <ArticleContent key={post.slug} post={post} reactions={reactions} />
         <footer className="article-footer">
           <BackToBoard />
           <small>{getCopyrightText(copyrightCurrentYear)}</small>

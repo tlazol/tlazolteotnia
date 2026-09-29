@@ -2,6 +2,7 @@ import { Link, useNavigate, useSearch } from '@tanstack/react-router'
 import { createClientOnlyFn } from '@tanstack/react-start'
 import { type PointerEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { type BlogPostSummary, sortBlogPostsNewestFirst } from '#/lib/blog-post'
+import { shouldOpenPostModal } from '#/lib/post-modal'
 import {
   type BoardSize,
   type BoardView,
@@ -15,6 +16,7 @@ import {
   zoomBoardAt
 } from '#/lib/sticker-board'
 import type { createStickerScene } from '#/lib/sticker-three.client'
+import { PostModal } from './post-modal'
 import { SiteHeader } from './site-header'
 
 const loadRenderer = createClientOnlyFn(() => import('#/lib/sticker-three.client'))
@@ -33,6 +35,7 @@ export function StickerBoard({ posts }: { posts: BlogPostSummary[] }) {
   const [failed, setFailed] = useState(false)
   const [hovered, setHovered] = useState(-1)
   const [dragging, setDragging] = useState(false)
+  const [selectedPost, setSelectedPost] = useState<BlogPostSummary | null>(null)
   const surface = useRef<HTMLDivElement>(null)
   const canvas = useRef<HTMLCanvasElement>(null)
   const renderer = useRef<ReturnType<typeof createStickerScene> | null>(null)
@@ -297,6 +300,13 @@ export function StickerBoard({ posts }: { posts: BlogPostSummary[] }) {
               params={{ slug: sticker.post.slug }}
               preload={false}
               draggable={false}
+              aria-haspopup="dialog"
+              onClick={(event) => {
+                if (!shouldOpenPostModal(event)) return
+                event.preventDefault()
+                event.currentTarget.focus({ preventScroll: true })
+                setSelectedPost(sticker.post)
+              }}
               style={
                 ready
                   ? {
@@ -398,6 +408,13 @@ export function StickerBoard({ posts }: { posts: BlogPostSummary[] }) {
           </fieldset>
         )}
       </footer>
+      {selectedPost && (
+        <PostModal
+          key={selectedPost.slug}
+          post={selectedPost}
+          onClose={() => setSelectedPost(null)}
+        />
+      )}
     </main>
   )
 }
