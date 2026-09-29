@@ -153,7 +153,7 @@ export function fitBoard(size: BoardSize, bounds: BoardSize): BoardView {
 }
 
 export function initialBoardView(size: BoardSize, bounds: BoardSize): BoardView {
-  const zoom = 0.6
+  const zoom = 0.8
   return clampBoardView(
     {
       x: (size.width - bounds.width * zoom) / 2,

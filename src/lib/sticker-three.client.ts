@@ -10,7 +10,13 @@ import {
   Vector2,
   WebGLRenderer
 } from 'three'
-import { type BoardSize, type BoardView, hologramFinishes, type Sticker } from './sticker-board'
+import {
+  type BoardSize,
+  type BoardView,
+  hashSlug,
+  hologramFinishes,
+  type Sticker
+} from './sticker-board'
 
 const palettes = [
   ['#ffbddd', '#f45caa', '#5e1646'],
@@ -19,6 +25,25 @@ const palettes = [
   ['#fff2be', '#ffa766', '#843b36'],
   ['#e6eff5', '#a4b3c7', '#303b55'],
   ['#dcffc4', '#9adc84', '#255647']
+]
+
+const foilPalettes = [
+  ['#ff2b93', '#ff8dce', '#a622ec'],
+  ['#b5ec18', '#eaff78', '#28b970'],
+  ['#ff671f', '#ffd35a', '#f03659'],
+  ['#165bdf', '#5bbaff', '#5240b8'],
+  ['#762adb', '#cf87ff', '#ed38af'],
+  ['#08b8aa', '#79ffe0', '#1489bb'],
+  ['#c48716', '#ffe58a', '#f5b72d'],
+  ['#8996ad', '#f0f5ff', '#b8c5d8'],
+  ['#c91642', '#ff6270', '#ffb89b'],
+  ['#08764e', '#35df83', '#b4f4cc'],
+  ['#99451e', '#efa66b', '#ffcead'],
+  ['#e5cb08', '#ffff8c', '#ffec32'],
+  ['#68c6e7', '#e4ffff', '#a5c3ff'],
+  ['#9476cb', '#e8d6ff', '#c2a6f0'],
+  ['#bc657b', '#ffd4bf', '#eda7b6'],
+  ['#252c65', '#7884c5', '#367a94']
 ]
 
 function sparkle(ctx: CanvasRenderingContext2D, x: number, y: number, radius: number) {
@@ -194,7 +219,9 @@ function createStickerTexture(sticker: Sticker, eyes: boolean) {
   }
 
   const foil = ctx.createLinearGradient(0, height, width, 0)
-  const spectrum = ['#8c9fdf', '#e9a5f5', '#65e7ef', '#f9ec93', '#f694cd', '#929dec', '#a1f4d7']
+  // Color is independent of the embossed pattern and stable when posts are filtered.
+  const foilColors = foilPalettes[hashSlug(`foil:${sticker.post.slug}`) % foilPalettes.length]
+  const spectrum = [foilColors[0], foilColors[1], foilColors[2], foilColors[1], foilColors[0]]
   spectrum.forEach((color, index) => {
     foil.addColorStop(index / (spectrum.length - 1), color)
   })
@@ -478,6 +505,8 @@ export function createStickerScene(
               reflection = spectrum(radius * 2.5 + direction + shift) * (0.65 + grooves * 0.5);
               glint = pow(grooves, 12.0) * 0.45;
             }
+            // Keep the dyed foil's identity while retaining each pattern's diffraction.
+            reflection = mix(reflection, base.rgb * (0.5 + reflection * 0.8), 0.7);
             float laminate = pow(max(0.0, 1.0 - abs(direction - 1.0 - foilPhase)), 28.0);
             vec3 color = mix(base.rgb, base.rgb * (0.48 + reflection * 0.95), foil * 0.78);
             color += (reflection * 0.14 + glint * 0.6 + laminate * (0.3 + activity * 0.3)) * foil;
