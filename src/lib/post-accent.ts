@@ -9,6 +9,7 @@ const accentOverrides: Partial<Record<string, PostAccent>> = {
   'firebase-contentful-markdown-blog': 'green',
   'firebase-multiple-project-initialize': 'pink',
   'glassmorphism-lessons': 'blue',
+  'reducing-smartphone-screen-time': 'blue',
   'rpg-attack-logic': 'yellow',
   'ssml-speakable-characters': 'red',
   'still-dont-know-best-way-to-count-documents-in-documentdb': 'blue',

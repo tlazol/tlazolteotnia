@@ -90,9 +90,7 @@ describe('MarkdownBody', () => {
     expect(parseCodeInfo('text')).toEqual({ label: 'text', language: undefined })
     expect(parseCodeInfo('unknown:file.xyz')).toEqual({ label: 'file.xyz', language: undefined })
     expect(render('```js:app.js\nconst value = 1\n```')).toContain('language-javascript')
-    expect(render('```ts:app.ts\nconst value: string = \'ok\'\n```')).toContain(
-      'language-typescript'
-    )
+    expect(render("```ts:app.ts\nconst value: string = 'ok'\n```")).toContain('language-typescript')
     expect(render('```unknown:file.xyz\nplain\n```')).toContain('<code>plain</code>')
   })
 

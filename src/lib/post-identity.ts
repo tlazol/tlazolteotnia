@@ -53,6 +53,7 @@ const postIdentities: Record<string, PostIdentity> = {
   'perspective-drawing-introduction': animal('🦒', 'GIRAFFE://VANISH', 'キリン'),
   'react-router-to-tanstack-start': animal('🐻', 'BEAR://START', 'クマ'),
   'react-router-renewal': animal('🦊', 'FØX://ROUTER', 'キツネ'),
+  'reducing-smartphone-screen-time': animal('🦥', 'SLØTH://OFFLINE', 'ナマケモノ'),
   'resume-writing-notes': animal('🦔', 'HEDGEHØG://CV', 'ハリネズミ'),
   'rpg-attack-logic': animal('🐅', 'TIGER://CRIT', 'トラ'),
   'ssml-speakable-characters': animal('🐸', 'FRØG://SSML', 'カエル'),

@@ -9,8 +9,8 @@ import {
   getNeighbor,
   isBoardCleared,
   LIGHTS_OUT_CELL_COUNT,
-  LIGHTS_OUT_FACES,
   LIGHTS_OUT_FACE_SIZE,
+  LIGHTS_OUT_FACES,
   pressCell
 } from '#/lib/lights-out'
 
