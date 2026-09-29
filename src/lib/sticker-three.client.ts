@@ -424,7 +424,9 @@ export function createStickerScene(
             if (base.a < 0.01) discard;
             vec2 pixel = vUv * dimensions * 0.5;
             vec2 tilt = pointer - 0.5 + dragTilt;
-            float shift = dot(tilt, vec2(0.8, 0.5)) + foilPhase;
+            // Slowly sweep the foil lighting, with a different rhythm offset per sticker.
+            float shimmer = sin(time * 0.6 + foilPhase * 6.2831853) * 0.28;
+            float shift = dot(tilt, vec2(0.8, 0.5)) + foilPhase + shimmer;
             float direction = vUv.x * 1.3 + vUv.y * 0.7 + shift + dot(dragTilt, vUv - 0.5) * 0.4;
             float opaque = smoothstep(0.8, 1.0, base.a);
             float foil = texture2D(foilMask, vUv).a * opaque;
@@ -572,7 +574,7 @@ export function createStickerScene(
     renderer.render(scene, camera)
     if (!reducedMotion.matches && (now < activeUntil || animating))
       frame = requestAnimationFrame(render)
-    else if (eyes && stickers.length && !reducedMotion.matches)
+    else if (stickers.length && !reducedMotion.matches)
       idleTimer = window.setTimeout(requestRender, 1000 / 30)
   }
 
