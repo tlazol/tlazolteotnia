@@ -87,19 +87,30 @@ export function layoutStickers(posts: BlogPostSummary[]) {
       Math.abs(Math.cos(sticker.angle)) * sticker.height +
       Math.abs(Math.sin(sticker.angle)) * sticker.width
   }))
-  const horizontalSpacing = Math.max(0, ...extents.map((item) => item.width)) + 20
-  const verticalSpacing = Math.max(0, ...extents.map((item) => item.height)) + 20
   let ring = 1
   let slot = 0
   let halfWidth = 0
   let halfHeight = 0
-  // Five more slots per ring keep the spacing steady as the circumference grows.
+  // Keep the clockwise order, packing each sticker against its actual neighbors.
   stickers.forEach((sticker, index) => {
     if (index > 0) {
       const count = ring * 5
       const angle = (slot / count) * Math.PI * 2
-      sticker.x = Math.sin(angle) * ring * horizontalSpacing
-      sticker.y = -Math.cos(angle) * ring * verticalSpacing
+      const neighbors = stickers.slice(0, index)
+      let radius = 0
+      while (
+        neighbors.some(
+          (neighbor, neighborIndex) =>
+            Math.abs(sticker.x - neighbor.x) <
+              (extents[index].width + extents[neighborIndex].width) / 2 + 8 &&
+            Math.abs(sticker.y - neighbor.y) <
+              (extents[index].height + extents[neighborIndex].height) / 2 + 8
+        )
+      ) {
+        radius += 4
+        sticker.x = Math.sin(angle) * radius
+        sticker.y = -Math.cos(angle) * radius
+      }
       slot++
       if (slot === count) {
         ring++
