@@ -1,3 +1,9 @@
+// Shared finishing details; ink and foil colors retain their per-sticker palettes.
+export const stickerMaterial = {
+  keyline: '#282735',
+  edge: '#fafcff'
+}
+
 export const palettes = [
   ['#ffbddd', '#f45caa', '#5e1646'],
   ['#bcf3ff', '#55b8ef', '#163d79'],
