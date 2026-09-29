@@ -264,6 +264,20 @@ body::after {
   outline-offset: 3px;
   background: #ffffff08;
 }
+.sticker-link .sticker-new {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 4px 10px;
+  border: 2px solid #fafcff;
+  border-radius: 8px;
+  background: linear-gradient(120deg, #bcf3ff, #e8c8ff, #fff2be, #bcf3ff);
+  color: #292334;
+  box-shadow: 0 2px 8px #0005;
+  font: 700 16px / 1 "IBM Plex Mono", monospace;
+  white-space: nowrap;
+  pointer-events: none;
+}
 .sticker-sparkle {
   position: absolute;
   width: 32px;

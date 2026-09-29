@@ -108,7 +108,7 @@ export function StickerBoard({ posts }: { posts: BlogPostSummary[] }) {
             setReady(false)
             setFailed(true)
           },
-          { eyes: true }
+          { eyes: true, newestSlug }
         )
         renderer.current.update(currentView.current, latest.current.size, -1)
         setReady(true)
@@ -125,7 +125,7 @@ export function StickerBoard({ posts }: { posts: BlogPostSummary[] }) {
       renderer.current?.dispose()
       renderer.current = null
     }
-  }, [layout])
+  }, [layout, newestSlug])
 
   useEffect(() => {
     renderer.current?.update(view, size, hovered)
@@ -329,18 +329,22 @@ export function StickerBoard({ posts }: { posts: BlogPostSummary[] }) {
             >
               <span>{sticker.post.title}</span>
               <time dateTime={sticker.post.date}>{sticker.post.date}</time>
-              {sticker.post.slug === newestSlug &&
-                ['top', 'right', 'bottom', 'left'].map((position) => (
-                  <svg
-                    key={position}
-                    className={`sticker-sparkle sticker-sparkle--${position}`}
-                    viewBox="0 0 32 32"
-                    aria-hidden="true"
-                    focusable="false"
-                  >
-                    <path d="M16 0 20 12 32 16 20 20 16 32 12 20 0 16 12 12Z" />
-                  </svg>
-                ))}
+              {sticker.post.slug === newestSlug && (
+                <>
+                  <span className="sticker-new">New!!</span>
+                  {['top', 'right', 'bottom', 'left'].map((position) => (
+                    <svg
+                      key={position}
+                      className={`sticker-sparkle sticker-sparkle--${position}`}
+                      viewBox="0 0 32 32"
+                      aria-hidden="true"
+                      focusable="false"
+                    >
+                      <path d="M16 0 20 12 32 16 20 20 16 32 12 20 0 16 12 12Z" />
+                    </svg>
+                  ))}
+                </>
+              )}
             </Link>
           ))}
         </div>

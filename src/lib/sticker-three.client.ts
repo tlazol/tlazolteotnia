@@ -33,7 +33,7 @@ function sparkle(ctx: CanvasRenderingContext2D, x: number, y: number, radius: nu
   ctx.fill()
 }
 
-function createStickerTexture(sticker: Sticker, eyes: boolean) {
+function createStickerTexture(sticker: Sticker, eyes: boolean, isNewest: boolean) {
   const { width, height, seed, lines, fontSize } = sticker
   const finish = seed % 3
   const colors = palettes[(seed >>> 8) % palettes.length]
@@ -86,15 +86,15 @@ function createStickerTexture(sticker: Sticker, eyes: boolean) {
       outline.addPath(lobe, row.transform)
     })
     outline.roundRect(width / 2 - 54, 23, 108, 34, 14)
-    outline.roundRect(width / 2 - 52, height - 59, 104, 39, 12)
+    outline.roundRect(width / 2 - 80, height - 59, 160, 44, 12)
   } else {
     // Fit the silhouette to the lettering, leaving only room for its ink and edge cuts.
     const left =
-      Math.min(width / 2 - 52, ...lettering.map((row) => row.transform.e - row.width / 2)) - 12
+      Math.min(width / 2 - 80, ...lettering.map((row) => row.transform.e - row.width / 2)) - 12
     const right =
-      Math.max(width / 2 + 52, ...lettering.map((row) => row.transform.e + row.width / 2)) + 12
+      Math.max(width / 2 + 80, ...lettering.map((row) => row.transform.e + row.width / 2)) + 12
     const top = 23
-    const bottom = height - 20
+    const bottom = height - 15
     const middle = (top + bottom) / 2
     switch (sticker.shape) {
       case 'rounded':
@@ -168,6 +168,11 @@ function createStickerTexture(sticker: Sticker, eyes: boolean) {
         outline.closePath()
         break
     }
+  }
+  const newLabel = new Path2D()
+  if (isNewest) {
+    newLabel.roundRect(width / 2 + 34, 12, 100, 34, 8)
+    outline.addPath(newLabel)
   }
   ctx.fillStyle = stickerMaterial.edge
   ctx.fill(outline)
@@ -261,11 +266,23 @@ function createStickerTexture(sticker: Sticker, eyes: boolean) {
   ctx.fillStyle = stickerMaterial.keyline
   ctx.font = '700 9px "IBM Plex Mono", monospace'
   if (!eyes) ctx.fillText('0RGA / NOTES', width / 2, 36)
-  ctx.font = '700 12px "IBM Plex Mono", monospace'
+  ctx.font = '700 20px "IBM Plex Mono", monospace'
+  ctx.strokeStyle = stickerMaterial.edge
+  ctx.lineWidth = 4
+  ctx.strokeText(sticker.post.date.replaceAll('-', '.'), width / 2, height - 30)
   ctx.fillText(sticker.post.date.replaceAll('-', '.'), width / 2, height - 30)
   ctx.fillStyle = stickerMaterial.edge
   sparkle(ctx, width / 2 - 46, 36, 6)
-  sparkle(ctx, width / 2 + 46, height - 30, 5)
+  sparkle(ctx, width / 2 + 72, height - 30, 5)
+
+  if (isNewest) {
+    ctx.fillStyle = stickerMaterial.edge
+    ctx.strokeStyle = stickerMaterial.keyline
+    ctx.lineWidth = 4
+    ctx.font = '700 26px "IBM Plex Mono", monospace'
+    ctx.strokeText('New!!', width / 2 + 84, 29)
+    ctx.fillText('New!!', width / 2 + 84, 29)
+  }
 
   // The foil is exposed around the opaque ink. Keep this independent of the topcoat.
   // Rebuild the material mask from the print so the wider white edge stays matte.
@@ -290,8 +307,16 @@ function createStickerTexture(sticker: Sticker, eyes: boolean) {
   }
   maskCtx.font = '700 9px "IBM Plex Mono", monospace'
   if (!eyes) maskCtx.fillText('0RGA / NOTES', width / 2, 36)
-  maskCtx.font = '700 12px "IBM Plex Mono", monospace'
+  maskCtx.font = '700 20px "IBM Plex Mono", monospace'
+  maskCtx.lineWidth = 4
+  maskCtx.strokeText(sticker.post.date.replaceAll('-', '.'), width / 2, height - 30)
   maskCtx.fillText(sticker.post.date.replaceAll('-', '.'), width / 2, height - 30)
+  if (isNewest) {
+    maskCtx.font = '700 26px "IBM Plex Mono", monospace'
+    maskCtx.lineWidth = 4
+    maskCtx.strokeText('New!!', width / 2 + 84, 29)
+    maskCtx.fillText('New!!', width / 2 + 84, 29)
+  }
   // Pack both layers in one texture: red = exposed foil, alpha = clear laminate.
   // Black underneath restores the print's surface without exposing foil through it.
   maskCtx.globalCompositeOperation = 'destination-over'
@@ -304,7 +329,7 @@ export function createStickerScene(
   canvas: HTMLCanvasElement,
   stickers: Sticker[],
   onError: () => void,
-  { eyes = false }: { eyes?: boolean } = {}
+  { eyes = false, newestSlug }: { eyes?: boolean; newestSlug?: string } = {}
 ) {
   const renderer = new WebGLRenderer({
     canvas,
@@ -353,7 +378,7 @@ export function createStickerScene(
 
   try {
     for (const sticker of stickers) {
-      const texture = createStickerTexture(sticker, eyes)
+      const texture = createStickerTexture(sticker, eyes, sticker.post.slug === newestSlug)
       textures.push(texture.art, texture.materialMask)
       const material = new ShaderMaterial({
         side: DoubleSide,
