@@ -402,6 +402,7 @@ export function createStickerScene(
           art: { value: texture.art },
           foilMask: { value: texture.foilMask },
           time: { value: 0 },
+          motion: { value: reducedMotion.matches ? 0 : 1 },
           activity: { value: 0 },
           pointer: { value: new Vector2(0.5, 0.5) },
           dragTilt: { value: dragTilt },
@@ -415,8 +416,12 @@ export function createStickerScene(
         },
         vertexShader: `varying vec2 vUv;
           varying float vCurl;
+          uniform float time;
+          uniform float motion;
+          uniform float foilPhase;
           uniform float activity;
           uniform vec2 pointer;
+          uniform vec2 dimensions;
           void main() {
             vUv = uv;
             vec3 p = position;
@@ -425,11 +430,22 @@ export function createStickerScene(
             p.x -= vCurl * 0.025;
             p.y += vCurl * 0.085;
             p.y += (uv.x - 0.5) * (pointer.x - 0.5) * activity * 0.025;
+            // Animate the whole piece of vinyl in pixels, regardless of its aspect ratio.
+            // Small excursions stay within the transparent padding of the link target.
+            float beat = time * (0.85 + foilPhase * 0.45) + foilPhase * 6.2831853;
+            float breathe = sin(beat * 1.4) * 0.014 * motion;
+            vec2 body = p.xy * dimensions * 0.5;
+            body *= vec2(1.0 + breathe, 1.0 - breathe) * (1.0 + activity * 0.012);
+            float rock = (sin(beat) * 0.032 + (pointer.x - 0.5) * activity * 0.05) * motion;
+            body = mat2(cos(rock), sin(rock), -sin(rock), cos(rock)) * body;
+            body += vec2(sin(beat * 0.7) * 2.5, sin(beat * 1.15) * 4.0) * motion;
+            p.xy = body / (dimensions * 0.5);
             gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
           }`,
         fragmentShader: `uniform sampler2D art;
           uniform sampler2D foilMask;
           uniform float time;
+          uniform float motion;
           uniform float activity;
           uniform float hologram;
           uniform float foilPhase;
@@ -445,6 +461,12 @@ export function createStickerScene(
           float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
           vec3 spectrum(float phase) {
             return 0.55 + 0.45 * cos(6.2831853 * (phase + vec3(0.0, 0.33, 0.67)));
+          }
+          vec3 shiftHue(vec3 color, float angle) {
+            vec3 axis = normalize(vec3(1.0));
+            float c = cos(angle);
+            return clamp(color * c + cross(axis, color) * sin(angle)
+              + axis * dot(axis, color) * (1.0 - c), 0.0, 1.0);
           }
           void main() {
             vec4 base = texture2D(art, vUv);
@@ -505,10 +527,12 @@ export function createStickerScene(
               reflection = spectrum(radius * 2.5 + direction + shift) * (0.65 + grooves * 0.5);
               glint = pow(grooves, 12.0) * 0.45;
             }
-            // Keep the dyed foil's identity while retaining each pattern's diffraction.
-            reflection = mix(reflection, base.rgb * (0.5 + reflection * 0.8), 0.7);
+            // Cycle the dyed backing, leaving the lettering, date, and vinyl edge untouched.
+            float hue = (time * (0.18 + foilPhase * 0.08) + activity * 0.9) * motion;
+            vec3 dye = shiftHue(base.rgb, hue);
+            reflection = mix(reflection, dye * (0.5 + reflection * 0.8), 0.7);
             float laminate = pow(max(0.0, 1.0 - abs(direction - 1.0 - foilPhase)), 28.0);
-            vec3 color = mix(base.rgb, base.rgb * (0.48 + reflection * 0.95), foil * 0.78);
+            vec3 color = mix(base.rgb, dye * (0.48 + reflection * 0.95), foil * 0.78);
             color += (reflection * 0.14 + glint * 0.6 + laminate * (0.3 + activity * 0.3)) * foil;
             color *= 1.0 - vCurl * 0.28;
             color += pow(vCurl, 3.0) * 0.35;
@@ -566,6 +590,7 @@ export function createStickerScene(
     }
     meshes.forEach((mesh, index) => {
       mesh.material.uniforms.time.value = reducedMotion.matches ? 0 : now / 1000
+      mesh.material.uniforms.motion.value = reducedMotion.matches ? 0 : 1
       const target = index === hovered && !reducedMotion.matches ? 1 : 0
       const activity = mesh.material.uniforms.activity.value
       const next = reducedMotion.matches ? 0 : activity + (target - activity) * 0.16
