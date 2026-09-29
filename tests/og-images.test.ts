@@ -1,13 +1,6 @@
-import { readdir, readFile } from 'node:fs/promises'
+import { readdir } from 'node:fs/promises'
 import { describe, expect, it } from 'vitest'
-import {
-  fillRowText,
-  formatOgCheckError,
-  getTitleFontSize,
-  makeRowTexts,
-  renderOgPng,
-  selectPosts
-} from '../scripts/generate-og-images'
+import { formatOgCheckError, renderOgPng, selectPosts } from '../scripts/generate-og-images'
 import { type BlogPostRecord, parseBlogPost } from '../src/lib/blog-post'
 
 describe('OG image generation', () => {
@@ -26,58 +19,20 @@ describe('OG image generation', () => {
     expect(() => selectPosts([published, draft], 'draft')).toThrow('Post is a draft: draft')
   })
 
-  it.each([
-    [26, 105],
-    [27, 88],
-    [42, 88],
-    [43, 70],
-    [60, 70],
-    [61, 56]
-  ])('uses the expected title size at %i characters', (length, size) => {
-    expect(getTitleFontSize('a'.repeat(length))).toBe(size)
-  })
-
-  it('uses the full title and description before repeating text', () => {
-    const source = 'ABCD EFGH'
-    const text = makeRowTexts('ABCD', 'EFGH').join('')
-
-    expect(text.startsWith(source)).toBe(true)
-    expect(text.slice(0, source.length * 2)).toBe(source.repeat(2))
-  })
-
-  it('removes Japanese punctuation from image text', () => {
-    const text = makeRowTexts('タイトル、', '説明。').join('')
-
-    expect(text).not.toMatch(/[、。]/)
-    expect(text.startsWith('タイトル 説明')).toBe(true)
-  })
-
-  it('repeats each row enough to cover the full image width', () => {
-    expect(fillRowText('A'.repeat(42))).toHaveLength(42 * 8)
-  })
-
   it('renders the same PNG bytes for the same input', async () => {
-    const font = await readFile('scripts/assets/NotoSansCJKjp-Bold.otf')
-    const first = await renderOgPng(
-      'Deterministic title',
-      'Deterministic description',
-      '2026-05-15',
-      font
-    )
-    const second = await renderOgPng(
-      'Deterministic title',
-      'Deterministic description',
-      '2026-05-15',
-      font
-    )
+    const post = { ...published, title: '同じ入力なら同じステッカー' }
+    const first = await renderOgPng(post)
+    const second = await renderOgPng(post)
 
     expect(first.equals(second)).toBe(true)
+    expect(first.subarray(0, 8)).toEqual(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
+    expect(first.readUInt32BE(16)).toBe(1200)
+    expect(first.readUInt32BE(20)).toBe(630)
   }, 20_000)
 
-  it('uses the description when rendering an image', async () => {
-    const font = await readFile('scripts/assets/NotoSansCJKjp-Bold.otf')
-    const first = await renderOgPng('Same title', 'First description', '2026-05-15', font)
-    const second = await renderOgPng('Same title', 'Second description', '2026-05-15', font)
+  it('uses the article slug to choose its sticker design', async () => {
+    const first = await renderOgPng(published)
+    const second = await renderOgPng({ ...published, slug: 'another-article' })
 
     expect(first.equals(second)).toBe(false)
   }, 20_000)

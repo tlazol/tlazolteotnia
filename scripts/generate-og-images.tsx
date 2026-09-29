@@ -5,13 +5,12 @@ import { fileURLToPath } from 'node:url'
 import { type BlogPostRecord, parseBlogPosts } from '../src/lib/blog-post'
 import { renderOgPng } from './og-image'
 
-export { fillRowText, getTitleFontSize, makeRowTexts, renderOgPng, renderSvg } from './og-image'
+export { renderOgPng, renderSvg } from './og-image'
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url))
 const projectDirectory = path.resolve(scriptDirectory, '..')
 const contentDirectory = path.join(projectDirectory, 'content/blog')
 const outputDirectory = path.join(projectDirectory, 'public/images/og')
-const fontPath = path.join(scriptDirectory, 'assets/NotoSansCJKjp-Bold.otf')
 
 async function main() {
   const arguments_ = process.argv.slice(2)
@@ -41,12 +40,11 @@ export async function generateOgImages({
 } = {}) {
   const posts = await readPosts()
   const targetPosts = selectPosts(posts, requestedSlug)
-  const font = await readFile(fontPath)
 
   await mkdir(destinationDirectory, { recursive: true })
 
   for (const post of targetPosts) {
-    const png = await renderOgPng(post.title, post.description, post.date, font)
+    const png = await renderOgPng(post)
     const outputPath = path.join(destinationDirectory, `${post.slug}.png`)
 
     await writeFile(outputPath, png)
