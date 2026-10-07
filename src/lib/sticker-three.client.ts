@@ -706,13 +706,13 @@ export function createStickerScene(
     })
     if (townScene) {
       renderer.clear()
-      townScene.render(renderer)
+      townScene.render(renderer, now, !reducedMotion.matches)
       renderer.clearDepth()
     }
     renderer.render(scene, camera)
     if (!reducedMotion.matches && (now < activeUntil || animating))
       frame = requestAnimationFrame(render)
-    else if (stickers.length && !reducedMotion.matches)
+    else if ((stickers.length || townScene) && !reducedMotion.matches)
       idleTimer = window.setTimeout(requestRender, 1000 / 30)
   }
 
@@ -754,6 +754,7 @@ export function createStickerScene(
   }
   function visibility() {
     if (document.hidden) {
+      townScene?.pause()
       cancelAnimationFrame(frame)
       window.clearTimeout(idleTimer)
       frame = 0

@@ -4,6 +4,8 @@ import {
   Color,
   CylinderGeometry,
   DataTexture,
+  DepthTexture,
+  DynamicDrawUsage,
   ExtrudeGeometry,
   Float32BufferAttribute,
   InstancedMesh,
@@ -16,8 +18,10 @@ import {
   RepeatWrapping,
   RGBAFormat,
   Scene,
+  ShaderMaterial,
   Shape,
   SRGBColorSpace,
+  TorusGeometry,
   type WebGLRenderer,
   WebGLRenderTarget
 } from 'three'
@@ -30,6 +34,7 @@ import {
   onettRoads,
   onettToTown
 } from './town-layout'
+import { type TrafficRoute, trafficPose } from './town-traffic'
 import { createTownCamera, updateTownCamera } from './town-view'
 
 type Part = {
@@ -40,10 +45,19 @@ type Part = {
   height: number
   depth: number
   angle: number
+  pitch: number
   yaw: number
   color: number
+  motion?: 'leg' | 'arm' | 'pedal' | 'wheel'
 }
-type TownShape = 'box' | 'ground' | 'roof' | 'gable' | 'tree' | 'disc'
+type TownShape = 'box' | 'ground' | 'roof' | 'gable' | 'tree' | 'disc' | 'wheel'
+type Resident = {
+  route: TrafficRoute
+  kind: 'car' | 'bicycle' | 'walker'
+  phase: number
+  pose: ReturnType<typeof trafficPose>
+}
+type MovingPart = { part: Part; resident: Resident }
 
 // Sampled from the daytime Onett map; keep these hues independent of scene lighting.
 // https://cdn.wikimg.net/strategywiki/images/1/1e/EarthBound_Onett.png
@@ -178,6 +192,7 @@ export function createTownScene() {
   const geometries = {
     box: new BoxGeometry(1, 1, 1),
     disc: new CylinderGeometry(0.5, 0.5, 1, 20),
+    wheel: new TorusGeometry(0.5, 0.09, 4, 12).rotateY(Math.PI / 2),
     ground: new BoxGeometry(1, 1, 1),
     roof: roofGeometry(),
     gable: roofGeometry(),
@@ -190,11 +205,17 @@ export function createTownScene() {
   const grassMaterial = new MeshBasicMaterial({ map: grassTexture, vertexColors: true })
   const roofMaterial = new MeshBasicMaterial({ map: roofTexture, vertexColors: true })
   const meshes: InstancedMesh[] = []
+  const traffic = new Scene()
+  const residents: Resident[] = []
+  const trafficMeshes: { mesh: InstancedMesh; items: MovingPart[] }[] = []
   const transform = new Object3D()
   const color = new Color()
   let blockKey = ''
   let viewKey = ''
   let dirty = true
+  let elapsed = 0
+  let lastTime: number | undefined
+  let lastMotion = false
 
   // Cache the static town so sticker glints don't redraw thousands of town objects.
   const target = new WebGLRenderTarget(1, 1, {
@@ -203,10 +224,51 @@ export function createTownScene() {
     generateMipmaps: false
   })
   target.texture.colorSpace = SRGBColorSpace
+  target.depthTexture = new DepthTexture(1, 1)
+  const trafficTarget = new WebGLRenderTarget(1, 1, {
+    minFilter: NearestFilter,
+    magFilter: NearestFilter,
+    generateMipmaps: false
+  })
+  trafficTarget.texture.colorSpace = SRGBColorSpace
+  trafficTarget.depthTexture = new DepthTexture(1, 1)
   const backdrop = new Scene()
   const backdropCamera = new OrthographicCamera(-1, 1, 1, -1, 0, 1)
   const backdropGeometry = new PlaneGeometry(2, 2)
-  const backdropMaterial = new MeshBasicMaterial({ map: target.texture, depthTest: false })
+  // Compare the cached town depth with the moving residents so trees and buildings
+  // still occlude them, without rendering the whole town on every animation frame.
+  const backdropMaterial = new ShaderMaterial({
+    depthTest: false,
+    depthWrite: false,
+    uniforms: {
+      townMap: { value: target.texture },
+      townDepth: { value: target.depthTexture },
+      trafficMap: { value: trafficTarget.texture },
+      trafficDepth: { value: trafficTarget.depthTexture }
+    },
+    vertexShader: `
+      varying vec2 vUv;
+      void main() {
+        vUv = uv;
+        gl_Position = vec4(position.xy, 0.0, 1.0);
+      }
+    `,
+    fragmentShader: `
+      uniform sampler2D townMap;
+      uniform sampler2D townDepth;
+      uniform sampler2D trafficMap;
+      uniform sampler2D trafficDepth;
+      varying vec2 vUv;
+      void main() {
+        float townZ = texture2D(townDepth, vUv).r;
+        float trafficZ = texture2D(trafficDepth, vUv).r;
+        gl_FragColor = trafficZ < townZ
+          ? texture2D(trafficMap, vUv)
+          : texture2D(townMap, vUv);
+        #include <colorspace_fragment>
+      }
+    `
+  })
   backdrop.add(new Mesh(backdropGeometry, backdropMaterial))
 
   function rebuild(detailed: boolean) {
@@ -215,13 +277,22 @@ export function createTownScene() {
       mesh.dispose()
     }
     meshes.length = 0
+    for (const { mesh } of trafficMeshes) {
+      traffic.remove(mesh)
+      mesh.dispose()
+    }
+    trafficMeshes.length = 0
+    residents.length = 0
+    const movingParts: Partial<Record<TownShape, MovingPart[]>> = {}
+    let resident: Resident | undefined
     const parts: Record<TownShape, Part[]> = {
       box: [],
       ground: [],
       roof: [],
       gable: [],
       tree: [],
-      disc: []
+      disc: [],
+      wheel: []
     }
     let offsetX = 0
     let offsetZ = 0
@@ -236,9 +307,10 @@ export function createTownScene() {
       height: number,
       depth: number,
       tint: number,
-      angle = 0
+      angle = 0,
+      pitch = 0
     ) {
-      parts[shape].push({
+      const item: Part = {
         x: (x * Math.cos(yaw) + z * Math.sin(yaw)) * scale + offsetX,
         y: y * scale,
         z: (-x * Math.sin(yaw) + z * Math.cos(yaw)) * scale + offsetZ,
@@ -246,9 +318,15 @@ export function createTownScene() {
         height: height * scale,
         depth: depth * scale,
         angle,
+        pitch,
         yaw: shape === 'tree' ? 0 : yaw,
         color: tint
-      })
+      }
+      if (resident) {
+        movingParts[shape] ??= []
+        movingParts[shape].push({ part: item, resident })
+      } else parts[shape].push(item)
+      return item
     }
     const box = (
       x: number,
@@ -258,8 +336,110 @@ export function createTownScene() {
       h: number,
       d: number,
       c: number,
-      angle = 0
-    ) => part('box', x, y, z, w, h, d, c, angle)
+      angle = 0,
+      pitch = 0
+    ) => part('box', x, y, z, w, h, d, c, angle, pitch)
+
+    // Residents use the same chunky geometry and fixed palette as the buildings.
+    // Local +z is the direction of travel; road placement supplies their heading.
+    const shirts = [0xfa0a5c, 0x527afc, 0xfafa74, 0x8a72fc, 0xeff0d3]
+    const skinTones = [0xeaca8c, 0xb27a4c, 0xd29a74]
+    function person(variant: number, riding = false) {
+      const skin = skinTones[variant % skinTones.length]
+      const shirt = shirts[variant % shirts.length]
+      const hair = variant % 3 === 0 ? colors.wood : colors.ink
+      const lift = riding ? 10 : 0
+      const lean = riding ? 5 : 0
+      box(0, 30 + lift, lean, 15, 19, 10, shirt)
+      box(0, 46 + lift, lean + 1, 14, 14, 13, skin)
+      box(0, 53 + lift, lean, 16, 5, 15, hair)
+      box(0, 48 + lift, lean - 5, 15, 9, 4, hair)
+      box(0, 45 + lift, lean + 8, 4, 4, 3, skin)
+      if (variant % 3 === 0) {
+        box(0, 56 + lift, lean, 17, 4, 15, shirt)
+        box(0, 54 + lift, lean + 8, 17, 3, 8, shirt)
+      }
+      for (const side of [-1, 1]) {
+        if (riding) {
+          box(side * 6, 27, 4, 6, 6, 17, colors.window).motion = 'pedal'
+          box(side * 6, 20, 11, 5, 12, 5, colors.window).motion = 'pedal'
+          box(side * 7, 14, 13, 7, 4, 9, colors.ink).motion = 'pedal'
+          box(side * 10, 37, 11, 5, 5, 18, shirt)
+          box(side * 10, 35, 21, 5, 5, 6, skin)
+        } else {
+          box(side * 4, 15, 0, 6, 14, 6, colors.window).motion = 'leg'
+          box(side * 4, 7, 0, 5, 8, 5, colors.window).motion = 'leg'
+          box(side * 4, 3, 2, 7, 4, 10, colors.ink).motion = 'leg'
+          box(side * 10, 30, 0, 5, 11, 6, shirt).motion = 'arm'
+          box(side * 10, 23, 0, 5, 6, 5, skin).motion = 'arm'
+        }
+      }
+      if (!riding && variant % 3 === 1) {
+        box(-12, 17, 2, 9, 12, 10, colors.sand).motion = 'arm'
+        box(-12, 24, 2, 7, 3, 3, colors.wood).motion = 'arm'
+      }
+    }
+
+    function car(variant: number) {
+      const paint = [colors.flower, colors.water, colors.cream, roofs[0]][variant % 4]
+      box(2, 2.7, 2, 35, 0.8, 70, colors.curb)
+      box(0, 12, 0, 30, 12, 64, paint)
+      box(0, 19, 23, 28, 5, 17, paint)
+      box(0, 25, -4, 25, 16, 32, colors.window)
+      box(0, 34, -5, 28, 4, 32, paint)
+      box(0, 26, 13, 22, 10, 2, colors.glass)
+      box(0, 26, -21, 22, 9, 2, colors.glass)
+      for (const side of [-1, 1]) {
+        for (const z of [-21, 21]) {
+          part('disc', side * 15, 9, z, 14, 5, 14, colors.ink, Math.PI / 2)
+          part('disc', side * 18, 9, z, 6, 1, 6, colors.pavement, Math.PI / 2)
+        }
+        box(side * 13, 26, -4, 2, 12, 3, paint)
+        box(side * 17, 22, 10, 5, 4, 6, paint)
+        box(side * 10, 15, 33, 7, 5, 2, colors.cream)
+        box(side * 10, 15, -33, 7, 4, 2, colors.flower)
+        if (detailed) box(side * 16, 17, -8, 1, 2, 6, colors.cream)
+      }
+      box(0, 8, 33, 28, 4, 3, colors.pavement)
+      box(0, 8, -33, 28, 4, 3, colors.pavement)
+      box(0, 14, 34, 9, 4, 1, colors.ink)
+    }
+
+    function cyclist(variant: number) {
+      const frame = shirts[(variant + 2) % shirts.length]
+      // Slim frame tubes keep daylight visible through both wheels and triangles.
+      function tube(y1: number, z1: number, y2: number, z2: number, tint = frame) {
+        box(
+          0,
+          (y1 + y2) / 2,
+          (z1 + z2) / 2,
+          3,
+          Math.hypot(y2 - y1, z2 - z1),
+          3,
+          tint,
+          0,
+          Math.atan2(z2 - z1, y2 - y1)
+        )
+      }
+      for (const z of [-20, 20]) {
+        part('wheel', 0, 12, z, 18, 18, 18, colors.ink).motion = 'wheel'
+        box(0, 12, z, 7, 3, 3, colors.pavement)
+        if (detailed) {
+          box(0, 12, z, 1, 15, 1, colors.curb).motion = 'wheel'
+          box(0, 12, z, 1, 1, 15, colors.curb).motion = 'wheel'
+        }
+      }
+      tube(12, -20, 13, 0)
+      tube(12, -20, 29, -7)
+      tube(13, 0, 29, -7)
+      tube(29, -7, 29, 14)
+      tube(13, 0, 29, 14)
+      tube(12, 20, 34, 13, colors.pavement)
+      box(0, 31, -7, 11, 4, 10, colors.ink)
+      box(0, 35, 18, 23, 3, 3, colors.ink)
+      box(0, 13, 0, 20, 3, 3, colors.window)
+      person(variant, true)
+    }
 
     // Work in facade coordinates so front and side details share the same construction.
     function facade(x: number, z: number, side = false) {
@@ -1113,8 +1293,61 @@ export function createTownScene() {
         box(120, 90, 0, 15, 8, 14, colors.cream)
       }
     }
-    offsetX = offsetZ = 0
-    for (const shape of ['box', 'ground', 'roof', 'gable', 'tree', 'disc'] as const) {
+    // Keep routes and phases stable across detail rebuilds while models stay local.
+    offsetX = offsetZ = yaw = 0
+    for (const [roadIndex, road] of onettRoads.entries()) {
+      if (road.trail) continue
+      for (let segment = 1; segment < road.points.length; segment++) {
+        const a = road.points[segment - 1]
+        const b = road.points[segment]
+        const heading = Math.atan2(b.x - a.x, b.z - a.z)
+        const placements = [
+          { t: 0.24, lane: -19, kind: 'car' },
+          { t: 0.68, lane: 29, kind: 'bicycle' },
+          { t: 0.16, lane: 48, kind: 'walker' },
+          { t: 0.47, lane: -48, kind: 'walker' },
+          { t: 0.79, lane: 48, kind: 'walker' }
+        ] as const
+        for (const [index, placement] of placements.entries()) {
+          // The short hospital approach only has room for a pedestrian.
+          if (road.width < 78 && index !== 2) continue
+          const lane = road.width < 78 ? road.width / 2 + 9 : placement.lane
+          const point = {
+            x: a.x + (b.x - a.x) * placement.t + Math.cos(heading) * lane,
+            z: a.z + (b.z - a.z) * placement.t - Math.sin(heading) * lane
+          }
+          // Leave intersections clear, including sidewalks crossing another street.
+          if (
+            nearestTownRoad(
+              point,
+              onettRoads.filter((other) => other !== road && !other.trail)
+            ).distance < 45
+          )
+            continue
+          const variant = roadIndex + segment + index
+          const route: TrafficRoute = {
+            start: a,
+            end: b,
+            lane,
+            progress: placement.t,
+            speed: placement.kind === 'car' ? 54 : placement.kind === 'bicycle' ? 30 : 12
+          }
+          resident = {
+            route,
+            kind: placement.kind,
+            phase: variant * 1.7,
+            pose: trafficPose(route, elapsed)
+          }
+          residents.push(resident)
+          if (resident.kind === 'car') car(variant)
+          else if (resident.kind === 'bicycle') cyclist(variant)
+          else person(variant)
+        }
+      }
+    }
+    resident = undefined
+    offsetX = offsetZ = yaw = 0
+    for (const shape of ['box', 'ground', 'roof', 'gable', 'tree', 'disc', 'wheel'] as const) {
       const items = parts[shape]
       const mesh = new InstancedMesh(
         geometries[shape],
@@ -1123,7 +1356,7 @@ export function createTownScene() {
       )
       items.forEach((item, index) => {
         transform.position.set(item.x, item.y, item.z)
-        transform.rotation.set(0, item.yaw, item.angle, 'YXZ')
+        transform.rotation.set(item.pitch, item.yaw, item.angle, 'YXZ')
         transform.scale.set(item.width, item.height, item.depth)
         transform.updateMatrix()
         mesh.setMatrixAt(index, transform.matrix)
@@ -1134,6 +1367,54 @@ export function createTownScene() {
       mesh.computeBoundingSphere()
       meshes.push(mesh)
       scene.add(mesh)
+    }
+    for (const shape of ['box', 'disc', 'wheel'] as const) {
+      const items = movingParts[shape] ?? []
+      if (!items.length) continue
+      const mesh = new InstancedMesh(geometries[shape], material, items.length)
+      mesh.instanceMatrix.setUsage(DynamicDrawUsage)
+      // Residents travel outside their initial bounds; let the GPU clip these batches.
+      mesh.frustumCulled = false
+      items.forEach(({ part }, index) => {
+        mesh.setColorAt(index, color.setHex(part.color))
+      })
+      trafficMeshes.push({ mesh, items })
+      traffic.add(mesh)
+    }
+  }
+
+  function animateTraffic() {
+    for (const resident of residents) resident.pose = trafficPose(resident.route, elapsed)
+    for (const { mesh, items } of trafficMeshes) {
+      items.forEach(({ part, resident }, index) => {
+        const { x, z, yaw } = resident.pose
+        const cycle = elapsed * (resident.kind === 'walker' ? 5 : 7) + resident.phase
+        const swing = Math.sin(cycle) * Math.sign(part.x)
+        let y = part.y
+        let localZ = part.z
+        let pitch = part.pitch
+        if (part.motion === 'leg' || part.motion === 'arm') {
+          const direction = part.motion === 'leg' ? 1 : -1
+          localZ += swing * 5 * direction
+          pitch += swing * 0.3 * direction
+          if (part.motion === 'leg') y += Math.max(0, swing) * 2
+        } else if (part.motion === 'pedal') {
+          y += swing * 3
+          localZ += Math.cos(cycle) * Math.sign(part.x) * 3
+        } else if (part.motion === 'wheel') {
+          pitch += (elapsed * resident.route.speed) / 9
+        }
+        transform.position.set(
+          x + part.x * Math.cos(yaw) + localZ * Math.sin(yaw),
+          y,
+          z - part.x * Math.sin(yaw) + localZ * Math.cos(yaw)
+        )
+        transform.rotation.set(pitch, yaw, part.angle, 'YXZ')
+        transform.scale.set(part.width, part.height, part.depth)
+        transform.updateMatrix()
+        mesh.setMatrixAt(index, transform.matrix)
+      })
+      mesh.instanceMatrix.needsUpdate = true
     }
   }
 
@@ -1156,20 +1437,38 @@ export function createTownScene() {
         Math.max(1, Math.ceil(size.width / pixelSize)),
         Math.max(1, Math.ceil(size.height / pixelSize))
       )
+      trafficTarget.setSize(target.width, target.height)
     },
-    render(renderer: WebGLRenderer) {
+    pause() {
+      lastTime = undefined
+    },
+    render(renderer: WebGLRenderer, now: number, motion: boolean) {
+      const previousElapsed = elapsed
+      if (motion && lastMotion && lastTime !== undefined) {
+        elapsed += Math.max(0, Math.min((now - lastTime) / 1000, 0.1))
+      }
+      lastTime = now
+      lastMotion = motion
+      const previousTarget = renderer.getRenderTarget()
+      const updateTraffic = dirty || elapsed !== previousElapsed
       if (dirty) {
-        const previousTarget = renderer.getRenderTarget()
         renderer.setRenderTarget(target)
         renderer.clear()
         renderer.render(scene, camera)
-        renderer.setRenderTarget(previousTarget)
         dirty = false
       }
+      if (updateTraffic) {
+        animateTraffic()
+        renderer.setRenderTarget(trafficTarget)
+        renderer.clear()
+        renderer.render(traffic, camera)
+      }
+      renderer.setRenderTarget(previousTarget)
       renderer.render(backdrop, backdropCamera)
     },
     dispose() {
       for (const mesh of meshes) mesh.dispose()
+      for (const { mesh } of trafficMeshes) mesh.dispose()
       for (const geometry of Object.values(geometries)) geometry.dispose()
       material.dispose()
       grassMaterial.dispose()
@@ -1177,6 +1476,7 @@ export function createTownScene() {
       grassTexture.dispose()
       roofTexture.dispose()
       target.dispose()
+      trafficTarget.dispose()
       backdropGeometry.dispose()
       backdropMaterial.dispose()
     }
