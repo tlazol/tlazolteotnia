@@ -108,7 +108,7 @@ export function StickerBoard({ posts }: { posts: BlogPostSummary[] }) {
             setReady(false)
             setFailed(true)
           },
-          { eyes: true, newestSlug }
+          { eyes: true, newestSlug, town: true }
         )
         renderer.current.update(currentView.current, latest.current.size, -1)
         setReady(true)

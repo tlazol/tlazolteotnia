@@ -86,9 +86,8 @@ body::after {
 }
 .sticker-page {
   min-height: 100svh;
-  background-color: #101114;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64' viewBox='0 0 64 64'%3E%3Cpath d='M0 .5H64M.5 0V64' fill='none' stroke='%23686868' stroke-opacity='.5' stroke-dasharray='1 7' stroke-linecap='round'/%3E%3C/svg%3E");
-  background-size: 64px 64px;
+  background-color: #12f76c;
+  background-image: repeating-linear-gradient(135deg, #ffffff06 0 32px, transparent 32px 64px);
 }
 .sticker-surface {
   position: relative;
@@ -223,6 +222,9 @@ body::after {
   text-decoration: none;
   overflow-wrap: anywhere;
 }
+.sticker-surface:not(.is-ready) .sticker-link {
+  background: #202820f2;
+}
 .sticker-link span {
   font-family: "WDXL Lubrifont JP N", sans-serif;
 }
@@ -351,6 +353,10 @@ body::after {
   display: flex;
   gap: 10px;
   align-items: center;
+  padding: 10px 12px;
+  border: 1px solid #ffffff24;
+  border-radius: 12px;
+  background: #17181ded;
   color: #c1beca;
   font:
     10px "IBM Plex Mono",
@@ -365,7 +371,7 @@ body::after {
 }
 .board-instruction {
   margin-left: 12px;
-  color: #92909d;
+  color: #c1beca;
 }
 .board-caption button {
   pointer-events: auto;
@@ -416,7 +422,11 @@ body::after {
   top: 45%;
   transform: translate(-50%, -50%);
   text-align: center;
-  width: 90%;
+  width: min(90%, 360px);
+  padding: 24px;
+  border: 1px solid #ffffff24;
+  border-radius: 12px;
+  background: #17181ded;
 }
 .sticker-empty button {
   border: 1px solid #ffffff40;

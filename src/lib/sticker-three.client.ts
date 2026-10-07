@@ -18,6 +18,7 @@ import {
   type Sticker
 } from './sticker-board'
 import { foilPalettes, palettes, stickerMaterial } from './sticker-colors'
+import { createTownScene } from './town-three.client'
 
 function sparkle(ctx: CanvasRenderingContext2D, x: number, y: number, radius: number) {
   ctx.beginPath()
@@ -329,7 +330,11 @@ export function createStickerScene(
   canvas: HTMLCanvasElement,
   stickers: Sticker[],
   onError: () => void,
-  { eyes = false, newestSlug }: { eyes?: boolean; newestSlug?: string } = {}
+  {
+    eyes = false,
+    newestSlug,
+    town = false
+  }: { eyes?: boolean; newestSlug?: string; town?: boolean } = {}
 ) {
   const renderer = new WebGLRenderer({
     canvas,
@@ -339,12 +344,14 @@ export function createStickerScene(
   })
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
   renderer.setClearColor(0x101114, 0)
+  renderer.autoClear = !town
   const scene = new Scene()
   const camera = new OrthographicCamera(0, 1, 0, 1, 0.1, 100)
   camera.position.z = 10
   const geometry = new PlaneGeometry(1, 1, 24, 20)
   const meshes: Mesh<PlaneGeometry, ShaderMaterial>[] = []
   const textures: CanvasTexture[] = []
+  let townScene: ReturnType<typeof createTownScene> | undefined
   let size: BoardSize = { width: 1, height: 1 }
   let view: BoardView = { x: 0, y: 0, zoom: 1 }
   let hovered = -1
@@ -373,10 +380,12 @@ export function createStickerScene(
     geometry.dispose()
     for (const mesh of meshes) mesh.material.dispose()
     for (const texture of textures) texture.dispose()
+    townScene?.dispose()
     renderer.dispose()
   }
 
   try {
+    if (town) townScene = createTownScene()
     for (const sticker of stickers) {
       const texture = createStickerTexture(sticker, eyes, sticker.post.slug === newestSlug)
       textures.push(texture.art, texture.materialMask)
@@ -695,6 +704,11 @@ export function createStickerScene(
       }
       mesh.renderOrder = index === hovered ? stickers.length : index
     })
+    if (townScene) {
+      renderer.clear()
+      townScene.render(renderer)
+      renderer.clearDepth()
+    }
     renderer.render(scene, camera)
     if (!reducedMotion.matches && (now < activeUntil || animating))
       frame = requestAnimationFrame(render)
@@ -767,6 +781,7 @@ export function createStickerScene(
         size = nextSize
         renderer.setSize(size.width, size.height, false)
       }
+      townScene?.update(view, size)
       activeUntil = performance.now() + 650
       requestRender()
     },
