@@ -1254,6 +1254,128 @@ export function createTownScene(articles?: TownArticle[]) {
       }
     }
 
+    function cottage(variant: number) {
+      const accent = roofs[variant % roofs.length]
+      // A low, broad porch and a steep roof give the cottages a distinct silhouette.
+      box(12, 1, 15, 218, 1, 194, colors.shadow)
+      box(0, 6, 0, 176, 12, 146, colors.curb)
+      box(0, 48, 0, 164, 78, 134, variant % 2 ? colors.sand : colors.brick)
+      part('roof', 0, 89, 0, 192, 92, 160, accent)
+      part('gable', 0, 90, 81, 178, 83, 3, colors.cream)
+      windowDetail(0, 124, 84, false, false, variant)
+      for (const x of [-52, 52]) windowDetail(x, 49, 68, false, true, variant)
+      windowDetail(83, 48, 0, true)
+      box(0, 34, 71, 27, 51, 6, colors.door)
+      box(0, 45, 75, 17, 20, 2, colors.glass)
+      box(8, 30, 76, 3, 3, 2, colors.sand)
+      box(0, 8, 108, 188, 12, 72, colors.wood)
+      box(0, 4, 154, 45, 8, 22, colors.pavement)
+      box(0, 81, 105, 196, 8, 84, accent, 0, 0.12)
+      for (const x of [-84, 84]) {
+        box(x, 45, 135, 7, 74, 7, colors.cream)
+        box(x, 30, 107, 5, 5, 55, colors.cream)
+        for (const z of [87, 105, 123]) box(x, 21, z, 4, 22, 4, colors.cream)
+      }
+      box(-47, 143, -34, 22, 66, 24, colors.brick)
+      box(-47, 178, -34, 29, 6, 31, colors.cream)
+      if (detailed) {
+        for (let x = -84; x <= 84; x += 14) box(x, 15, 108, 1, 1, 66, colors.sand)
+        planter(-55, 137, colors.flower)
+        planter(55, 137, colors.sand)
+        wallUtilities(83, -31)
+      }
+    }
+
+    function civicShop(
+      kind: 'post-office' | 'cinema' | 'fire-station' | 'market',
+      variant: number
+    ) {
+      const cinema = kind === 'cinema'
+      const fireStation = kind === 'fire-station'
+      const market = kind === 'market'
+      const height = cinema ? 158 : fireStation ? 128 : market ? 82 : 108
+      const accent = cinema ? roofs[variant % roofs.length] : market ? colors.hedge : colors.flower
+      box(14, 1, 18, 270, 1, 210, colors.shadow)
+      box(0, 6, 0, 248, 12, 166, colors.curb)
+      box(0, height / 2 + 12, 0, 236, height, 154, fireStation ? colors.brick : colors.cream)
+      box(0, height + 17, 0, 252, 10, 170, accent)
+      const front = facade(0, 78)
+      if (market) {
+        // Three individual pitched bays and open produce stalls under a striped canopy.
+        for (const x of [-78, 0, 78]) {
+          part('roof', x, height + 22, 0, 80, 44, 176, roofs[(variant + 1) % roofs.length])
+          part('gable', x, height + 22, 89, 74, 38, 3, colors.sand)
+          front(x, 46, 3, 64, 57, 5, colors.window)
+          box(x, 27, 115, 65, 12, 32, colors.wood)
+          shopGoods(x - 16, 113, variant + (x === 0 ? 1 : 0))
+        }
+        for (let i = 0; i < 10; i++) {
+          const tint = i % 2 ? colors.cream : accent
+          front(-108 + i * 24, 78, 29, 24, 7, 65, tint)
+          front(-108 + i * 24, 70, 60, 24, 13, 4, tint)
+        }
+        for (const x of [-115, 115]) box(x, 39, 135, 5, 78, 5, colors.wood)
+        sign('MARKET', 142, 88, accent, 2)
+      } else if (fireStation) {
+        // Twin engine bays and a square hose tower distinguish the fire station.
+        for (const x of [-66, 27]) {
+          front(x, 46, 3, 83, 81, 5, colors.cream)
+          front(x, 44, 7, 73, 71, 3, colors.flower)
+          for (let y = 18; y <= 72; y += 11) front(x, y, 10, 70, 2, 2, colors.brick)
+          front(x, 64, 11, 56, 17, 2, colors.window)
+          for (const dx of [-18, 0, 18]) front(x + dx, 65, 13, 12, 11, 2, colors.glass)
+          box(x, 2, 126, 83, 4, 90, colors.pavement)
+        }
+        box(81, 115, -40, 68, 230, 68, colors.brick)
+        box(81, 234, -40, 80, 9, 80, colors.cream)
+        windowDetail(81, 194, -5)
+        windowDetail(116, 194, -40, true)
+        front(92, 39, 4, 24, 56, 6, colors.door)
+        sign('FIRE', 115, 86, accent, 2)
+      } else if (cinema) {
+        box(0, height + 30, 0, 152, 20, 165, accent)
+        box(0, height + 47, 0, 76, 14, 159, colors.cream)
+        for (const x of [-96, 96]) {
+          front(x, 92, 3, 13, 160, 8, accent)
+          front(x / 1.6, 48, 6, 44, 59, 4, colors.window)
+          front(x / 1.6, 48, 9, 36, 51, 2, colors.sand)
+          front(x / 1.6, 55, 11, 24, 21, 2, accent)
+          front(x / 1.6, 33, 11, 25, 4, 2, colors.cream)
+        }
+        front(0, 37, 4, 56, 60, 5, colors.window)
+        for (const x of [-14, 14]) front(x, 42, 8, 22, 38, 2, colors.glass)
+        front(0, 37, 10, 4, 60, 3, colors.cream)
+        box(0, 86, 108, 220, 13, 65, accent)
+        sign('CINEMA', 105, 141, accent, 2)
+        for (let x = -100; x <= 100; x += 20) box(x, 80, 142, 5, 5, 4, colors.sand)
+        box(0, 3, 122, 98, 6, 80, colors.brick)
+      } else {
+        part('roof', 0, height + 22, 0, 256, 48, 174, roofs[3])
+        for (const x of [-75, 75]) windowDetail(x, 58, 78, false, false, variant)
+        front(0, 39, 4, 40, 58, 6, colors.window)
+        front(0, 42, 8, 30, 43, 3, colors.glass)
+        front(0, 39, 11, 3, 58, 3, colors.cream)
+        box(0, 76, 100, 66, 6, 43, accent)
+        box(0, 5, 114, 60, 10, 64, colors.pavement)
+        // A freestanding red posting box and a rooftop envelope emblem.
+        box(90, 26, 125, 27, 52, 25, accent)
+        box(90, 54, 125, 33, 7, 29, colors.cream)
+        box(90, 42, 139, 18, 4, 2, colors.ink)
+        box(0, 174, 0, 65, 39, 8, colors.cream)
+        for (const side of [-1, 1]) box(side * 14, 174, 6, 35, 4, 3, accent, side * 0.5)
+        sign('POST', 101, 87, accent, 2)
+      }
+      windowDetail(119, 55, -35, true)
+      if (detailed) {
+        if (fireStation) brickwork(119, 0, 154, height, true)
+        if (cinema || fireStation) {
+          parapet(0, height + 26, 0, 244, 162)
+          roofEquipment(-60, height + 23, -32)
+        }
+        wallUtilities(119, 28)
+      }
+    }
+
     function park(x: number, z: number, variant: number) {
       part('ground', x, 2, z, 310, 2, 310, variant % 2 ? 0x8ada74 : colors.grass)
       box(x, 3, z, 30, 2, 310, colors.sand)
@@ -1495,6 +1617,15 @@ export function createTownScene(articles?: TownArticle[]) {
         if (lot.label) sign(lot.label, 10, 200, colors.window, 2)
       } else if (kind === 'townhouse') {
         townhouse(lot.variant)
+      } else if (kind === 'cottage') {
+        cottage(lot.variant)
+      } else if (
+        kind === 'post-office' ||
+        kind === 'cinema' ||
+        kind === 'fire-station' ||
+        kind === 'market'
+      ) {
+        civicShop(kind, lot.variant)
       } else if (kind === 'cafe' || kind === 'florist' || kind === 'workshop') {
         specialtyShop(kind, lot.label ?? kind.toUpperCase())
       } else if (kind === 'city-hall') {
@@ -1527,7 +1658,7 @@ export function createTownScene(articles?: TownArticle[]) {
           0,
           kind === 'hotel' || kind === 'apartment'
             ? 'apartment'
-            : kind === 'hospital'
+            : kind === 'hospital' || kind === 'office'
               ? 'office'
               : 'shop',
           lot.variant

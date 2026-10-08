@@ -16,6 +16,12 @@ export type TownBuildingKind =
   | 'florist'
   | 'workshop'
   | 'townhouse'
+  | 'post-office'
+  | 'cinema'
+  | 'fire-station'
+  | 'market'
+  | 'cottage'
+  | 'office'
 export type TownBuilding = Point & {
   kind: TownBuildingKind
   variant: number
@@ -188,7 +194,34 @@ export const onettBuildings: TownBuilding[] = [
   building('house', 2750, -550, 0, "NESS'S HOUSE", 1.15),
   building('house', 3220, -540, 2, undefined, 1.15),
   building('house', 1550, -980, 3, undefined, 0.6),
-  building('house', 1050, -80, 3, undefined, 0.65)
+  building('house', 1050, -80, 3, undefined, 0.65),
+  // Smaller infill lots add shopfronts and homes between the original landmarks.
+  building('post-office', 942, 993, 0, 'POST', 0.65),
+  building('cottage', 1162, 993, 1, undefined, 0.65),
+  building('market', 1382, 993, 0, 'MARKET', 0.65),
+  building('cottage', 3156, 1199, 3, undefined, 0.65),
+  building('fire-station', 348, 1587, 0, 'FIRE', 0.65),
+  building('townhouse', 568, 1587, 3, undefined, 0.65),
+  building('cinema', 1338, 1587, 0, 'CINEMA', 0.65),
+  building('cafe', 2878, 1587, 0, 'CAFE', 0.65),
+  building('cottage', 3098, 1587, 2, undefined, 0.65),
+  building('market', 165, 1800, 1, 'MARKET', 0.65),
+  building('office', 355, 1800, 0, undefined, 0.65),
+  building('townhouse', 2665, 1800, 1, undefined, 0.65),
+  building('florist', 2885, 1800, 0, 'FLOWERS', 0.65),
+  building('cottage', -239, 2174, 0, undefined, 0.65),
+  building('house', -19, 2174, 1, undefined, 0.65),
+  building('bakery', 1000, 2330, 3, 'BAKERY', 0.65),
+  building('cottage', 1191, 2174, 2, undefined, 0.65),
+  building('post-office', 1741, 2174, 1, 'POST', 0.65),
+  building('townhouse', 1961, 2174, 2, undefined, 0.65),
+  building('house', 2181, 2174, 1, undefined, 0.65),
+  building('workshop', 2401, 2174, 0, 'WORKSHOP', 0.65),
+  building('cottage', 2621, 2174, 3, undefined, 0.65),
+  building('office', 1647, 668, 1, undefined, 0.65),
+  building('cinema', 2243, 682, 1, 'CINEMA', 0.65),
+  building('cottage', 2583, 562, 0, undefined, 0.65),
+  building('house', 2803, 562, 1, undefined, 0.65)
 ]
 
 // Tree belts enclose the town and separate the northern trails from the civic blocks.
