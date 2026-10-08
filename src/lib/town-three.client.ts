@@ -54,7 +54,7 @@ type Part = {
   color: number
   motion?: 'leg' | 'arm' | 'pedal' | 'wheel'
 }
-type TownShape = 'box' | 'ground' | 'roof' | 'gable' | 'tree' | 'disc' | 'wheel'
+type TownShape = 'box' | 'ground' | 'land' | 'roof' | 'gable' | 'tree' | 'disc' | 'wheel'
 type Resident = {
   slug?: string
   time?: number
@@ -88,6 +88,8 @@ const colors = {
   flower: 0xfa0a5c,
   water: 0x52bafc,
   waterHighlight: 0xa2eafa,
+  ocean: 0x388cba,
+  shallows: 0x52bacb,
   sand: 0xeaca8c,
   court: 0xd28a74,
   asphalt: 0x82928c,
@@ -191,15 +193,58 @@ function roofGeometry() {
   return flat
 }
 
+// A headland with stepped coves. Share its outline between the ground,
+// cliff terraces and planting so no trees or grass extend over the water.
+const coastStep = 96
+const coastColumns = Array.from({ length: 100 }, (_, index) => {
+  const x = -2352 + index * coastStep
+  const reach = Math.sqrt(Math.max(0, 1 - ((x - 2400) / 4850) ** 2))
+  const inlet = Math.sin(x / 490) * 160 + Math.sin(x / 173) * 65
+  const bay = Math.exp(-(((x - 4400) / 1150) ** 2)) * 380
+  return {
+    x,
+    north: Math.round((-1000 - reach * 4200 + inlet) / 32) * 32,
+    south: Math.round((-1000 + reach * 3400 + inlet - bay) / 32) * 32,
+    beach: 100 + Math.round(Math.exp(-(((x - 3500) / 1700) ** 2)) * 320)
+  }
+})
+
+function landGeometry() {
+  const positions: number[] = []
+  const uvs: number[] = []
+  for (const { x, north, south } of coastColumns) {
+    const left = x - coastStep / 2
+    const right = x + coastStep / 2
+    for (const [px, pz] of [
+      [left, north],
+      [left, south],
+      [right, north],
+      [right, north],
+      [left, south],
+      [right, south]
+    ]) {
+      positions.push(px, -1, pz)
+      // Match the original grass tile's world scale across every coastal strip.
+      uvs.push(px / 30000, pz / 30000)
+    }
+  }
+  const geometry = new BufferGeometry()
+  geometry.setAttribute('position', new Float32BufferAttribute(positions, 3))
+  geometry.setAttribute('uv', new Float32BufferAttribute(uvs, 2))
+  geometry.computeVertexNormals()
+  return geometry
+}
+
 export function createTownScene(articles?: TownArticle[]) {
   const scene = new Scene()
-  scene.background = new Color(colors.grass)
+  scene.background = new Color(colors.ocean)
   const camera = createTownCamera()
   const geometries = {
     box: new BoxGeometry(1, 1, 1),
     disc: new CylinderGeometry(0.5, 0.5, 1, 20),
     wheel: new TorusGeometry(0.5, 0.09, 4, 12).rotateY(Math.PI / 2),
     ground: new BoxGeometry(1, 1, 1),
+    land: landGeometry(),
     roof: roofGeometry(),
     gable: roofGeometry(),
     tree: treeGeometry()
@@ -211,6 +256,7 @@ export function createTownScene(articles?: TownArticle[]) {
   const grassMaterial = new MeshBasicMaterial({ map: grassTexture, vertexColors: true })
   const roofMaterial = new MeshBasicMaterial({ map: roofTexture, vertexColors: true })
   const meshes: InstancedMesh[] = []
+  const occluders: InstancedMesh[] = []
   const traffic = new Scene()
   const residents: Resident[] = []
   const trafficMeshes: { mesh: InstancedMesh; items: MovingPart[] }[] = []
@@ -294,6 +340,7 @@ export function createTownScene(articles?: TownArticle[]) {
       mesh.dispose()
     }
     meshes.length = 0
+    occluders.length = 0
     for (const { mesh } of trafficMeshes) {
       traffic.remove(mesh)
       mesh.dispose()
@@ -301,10 +348,13 @@ export function createTownScene(articles?: TownArticle[]) {
     trafficMeshes.length = 0
     residents.length = 0
     const movingParts: Partial<Record<TownShape, MovingPart[]>> = {}
+    const forestParts: Partial<Record<TownShape, Part[]>> = {}
+    let distantForest = false
     let resident: Resident | undefined
     const parts: Record<TownShape, Part[]> = {
       box: [],
       ground: [],
+      land: [],
       roof: [],
       gable: [],
       tree: [],
@@ -342,6 +392,9 @@ export function createTownScene(articles?: TownArticle[]) {
       if (resident) {
         movingParts[shape] ??= []
         movingParts[shape].push({ part: item, resident })
+      } else if (distantForest) {
+        forestParts[shape] ??= []
+        forestParts[shape].push(item)
       } else parts[shape].push(item)
       return item
     }
@@ -600,14 +653,23 @@ export function createTownScene(articles?: TownArticle[]) {
       }
     }
 
-    function tree(x: number, z: number, scale = 1) {
-      box(x + 16, 1, z + 12, 74 * scale, 1, 58 * scale, colors.shadow)
-      box(x, 24 * scale, z, 13 * scale, 48 * scale, 13 * scale, colors.trunk)
-      part('tree', x, 86 * scale, z, 57 * scale, 64 * scale, 48 * scale, colors.treeOutline)
+    function tree(x: number, z: number, scale = 1, elevation = 0) {
+      box(x + 16, elevation + 1, z + 12, 74 * scale, 1, 58 * scale, colors.shadow)
+      box(x, elevation + 24 * scale, z, 13 * scale, 48 * scale, 13 * scale, colors.trunk)
+      part(
+        'tree',
+        x,
+        elevation + 86 * scale,
+        z,
+        57 * scale,
+        64 * scale,
+        48 * scale,
+        colors.treeOutline
+      )
       part(
         'tree',
         x + 10 * scale,
-        90 * scale,
+        elevation + 90 * scale,
         z + 10 * scale,
         49 * scale,
         55 * scale,
@@ -617,7 +679,7 @@ export function createTownScene(articles?: TownArticle[]) {
       part(
         'tree',
         x + 5 * scale,
-        106 * scale,
+        elevation + 106 * scale,
         z + 22 * scale,
         31 * scale,
         30 * scale,
@@ -1137,8 +1199,47 @@ export function createTownScene(articles?: TownArticle[]) {
       }
     }
 
-    // The map is finite and authored; a grass ground also covers the board at far zoom.
-    part('ground', 2000, -5, 1500, 30000, 8, 30000, colors.grass)
+    box(2000, -246, -1000, 60000, 8, 60000, colors.ocean)
+    part('land', 0, 0, 0, 1, 1, 1, colors.grass)
+    for (const [index, { x, north, south, beach }] of coastColumns.entries()) {
+      const center = (north + south) / 2
+      const depth = south - north
+      // The submerged shelf, narrow beach, rock strata and grassy rim all follow
+      // the same irregular coast, including the sides of the coves.
+      box(x, -238, center, coastStep + 260, 6, depth + 290, colors.shallows)
+      box(x, -227, center, coastStep + 120, 16, depth + 150, colors.sand)
+      box(x, -172, center, coastStep, 102, depth, colors.wood)
+      box(x, -84, center, coastStep, 74, depth, colors.brick)
+      box(x, -25, center, coastStep, 44, depth, colors.sand)
+      box(x, -5, center, coastStep, 8, depth, colors.hedge)
+      // A broad southern beach and low sandy terraces bring the shore near town.
+      box(x, -238, south + beach / 2, coastStep + 100, 6, beach + 220, colors.shallows)
+      box(x, -227, south + beach / 2, coastStep, 16, beach, colors.sand)
+      box(x, -218, south + beach - 18, coastStep, 2, 32, 0xdab878)
+      box(x - 8, -235, south + beach + 30, 68, 2, 7, colors.waterHighlight)
+      if (beach > 290) {
+        for (let step = 0; step < 5; step++)
+          box(x, -35 - step * 45, south + step * 34, coastStep, 45, 78, colors.sand)
+        box(x + 19, -218, south + beach * 0.72, 24, 2, 4, colors.cream)
+      }
+      for (const edge of [north, south]) {
+        const direction = edge === north ? -1 : 1
+        box(x + 12, -91, edge + direction * 2, 38, 7, 5, colors.wood)
+        box(x - 20, -154, edge + direction * 2, 52, 5, 5, colors.sand)
+        box(x - 9, -218, edge + direction * 85, 63, 2, 6, colors.waterHighlight)
+        if (index % 5 === 0 && (edge === north || beach < 180)) {
+          box(x + 26, -221, edge + direction * 190, 34, 38, 28, colors.treeOutline)
+          box(x + 22, -201, edge + direction * 190, 29, 4, 24, colors.curb)
+        }
+      }
+    }
+    // Sparse broken wave crests give the open sea texture at the widest zoom.
+    for (let i = 0; i < 1800; i++) {
+      const seed = hashSlug(`sea:${i}`)
+      const x = -14000 + (seed % 30000)
+      const z = -13000 + ((seed >>> 12) % 28000)
+      box(x, -240, z, 24 + (seed % 54), 1, 4, colors.shallows)
+    }
     for (const hill of onettHills) {
       const point = onettToTown(hill.x, hill.y)
       offsetX = point.x
@@ -1257,6 +1358,8 @@ export function createTownScene(articles?: TownArticle[]) {
       const key = `${Math.round(bx / 40)}:${Math.round(by / 40)}`
       if (planted.has(key)) return
       const point = onettToTown(bx, by)
+      const coast = coastColumns[Math.round((point.x - coastColumns[0].x) / coastStep)]
+      if (!coast || point.z < coast.north + 60 || point.z > coast.south - 60) return
       if (nearestTownRoad(point, onettRoads).distance < 54 * size) return
       if (
         onettBuildings.some(
@@ -1266,14 +1369,25 @@ export function createTownScene(articles?: TownArticle[]) {
         )
       )
         return
+      let elevation = 0
+      for (const hill of onettHills) {
+        const center = onettToTown(hill.x, hill.y)
+        const dx = Math.abs(point.x - center.x) - hill.width / 2
+        const dz = Math.abs(point.z - center.z) - hill.depth / 2
+        if (dx > 60 || dz > 60) continue
+        if (dx > -60 || dz > -60) return
+        elevation = Math.max(elevation, hill.height + 10)
+      }
       planted.add(key)
-      tree(point.x, point.z, size)
+      tree(point.x, point.z, size, elevation)
     }
     for (const grove of onettGroves) {
+      const townEdge = grove.x < 0 || grove.x > 3000 || grove.y > 2300
       let row = 0
       for (let y = -grove.ry; y <= grove.ry; y += 54, row++) {
         for (let x = -grove.rx; x <= grove.rx; x += 67) {
           if ((x / grove.rx) ** 2 + (y / grove.ry) ** 2 > 1) continue
+          if (townEdge && hashSlug(`grove:${grove.x}:${x}:${y}`) % 100 < 48) continue
           plant(grove.x + x + (row % 2) * 28, grove.y + y, 0.88)
         }
       }
@@ -1284,6 +1398,41 @@ export function createTownScene(articles?: TownArticle[]) {
       const by = -350 + ((seed >>> 12) % 2750)
       plant(bx, by, 0.6 + (seed % 4) * 0.08)
     }
+    // Alternate woodland pockets with open meadows and wildflower patches.
+    // These details are outside the streets; keep them out of resident raycasts.
+    distantForest = true
+    for (const [column, { x, north, south }] of coastColumns.entries()) {
+      for (let z = north + 85, row = 0; z < south - 85; z += 88, row++) {
+        const seed = hashSlug(`forest:${column}:${row}`)
+        const px = x + (seed % 35) - 17
+        const pz = z + ((seed >>> 8) % 29) - 14
+        const by = (pz + 1595) / Math.SQRT2
+        const bx = px - by + 445
+        const fringe = Math.sin(by / 210) * 80 + Math.sin(bx / 290) * 65
+        if (bx > -400 + fringe && bx < 3390 + fringe && by > -380 + fringe && by < 2570 + fringe)
+          continue
+        const woodland = Math.sin(px / 720) + Math.cos(pz / 590) + Math.sin((px + pz) / 310) * 0.45
+        if (woodland > 0.65 && seed % 100 < 72 && pz < south - 220) {
+          plant(bx, by, 0.65 + ((seed >>> 16) % 6) * 0.07)
+          continue
+        }
+        // Keep the hilltops and northern trails clear of ground-level flowers.
+        if (by < -350 || nearestTownRoad({ x: px, z: pz }, onettRoads).distance < 100) continue
+        const flowers = Math.sin(px / 410) * Math.cos(pz / 530)
+        if (woodland > 0.65 || flowers < 0.25 || seed % 5 === 0) continue
+        const tint = [0xffdc74, 0xf08bb1, 0xa99ce5][Math.floor((px + 2500) / 1100) % 3]
+        for (let flower = 0; flower < 7; flower++) {
+          const scatter = hashSlug(`flowers:${column}:${row}:${flower}`)
+          const fx = px + (scatter % 65) - 32
+          const fz = pz + ((scatter >>> 8) % 65) - 32
+          box(fx, 7, fz, 3, 14, 3, colors.hedge)
+          box(fx, 15, fz, 15, 4, 7, tint)
+          box(fx, 15, fz, 7, 4, 15, tint)
+          box(fx, 18, fz, 5, 2, 5, colors.cream)
+        }
+      }
+    }
+    distantForest = false
     // Small civic gardens, bus stops, lamps and signs carry the town's street rhythm.
     for (const [bx, by] of [
       [1260, 1270],
@@ -1381,26 +1530,43 @@ export function createTownScene(articles?: TownArticle[]) {
     }
     resident = undefined
     offsetX = offsetZ = yaw = 0
-    for (const shape of ['box', 'ground', 'roof', 'gable', 'tree', 'disc', 'wheel'] as const) {
-      const items = parts[shape]
-      const mesh = new InstancedMesh(
-        geometries[shape],
-        shape === 'ground' ? grassMaterial : shape === 'roof' ? roofMaterial : material,
-        items.length
-      )
-      items.forEach((item, index) => {
-        transform.position.set(item.x, item.y, item.z)
-        transform.rotation.set(item.pitch, item.yaw, item.angle, 'YXZ')
-        transform.scale.set(item.width, item.height, item.depth)
-        transform.updateMatrix()
-        mesh.setMatrixAt(index, transform.matrix)
-        mesh.setColorAt(index, color.setHex(item.color))
-      })
-      mesh.instanceMatrix.needsUpdate = true
-      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
-      mesh.computeBoundingSphere()
-      meshes.push(mesh)
-      scene.add(mesh)
+    for (const collection of [parts, forestParts]) {
+      for (const shape of [
+        'box',
+        'ground',
+        'land',
+        'roof',
+        'gable',
+        'tree',
+        'disc',
+        'wheel'
+      ] as const) {
+        const items = collection[shape] ?? []
+        if (!items.length) continue
+        const mesh = new InstancedMesh(
+          geometries[shape],
+          shape === 'ground' || shape === 'land'
+            ? grassMaterial
+            : shape === 'roof'
+              ? roofMaterial
+              : material,
+          items.length
+        )
+        items.forEach((item, index) => {
+          transform.position.set(item.x, item.y, item.z)
+          transform.rotation.set(item.pitch, item.yaw, item.angle, 'YXZ')
+          transform.scale.set(item.width, item.height, item.depth)
+          transform.updateMatrix()
+          mesh.setMatrixAt(index, transform.matrix)
+          mesh.setColorAt(index, color.setHex(item.color))
+        })
+        mesh.instanceMatrix.needsUpdate = true
+        if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
+        mesh.computeBoundingSphere()
+        meshes.push(mesh)
+        if (collection === parts) occluders.push(mesh)
+        scene.add(mesh)
+      }
     }
     for (const shape of ['box', 'disc', 'wheel'] as const) {
       const items = movingParts[shape] ?? []
@@ -1491,7 +1657,7 @@ export function createTownScene(articles?: TownArticle[]) {
           screen.set(projected.x, projected.y)
           raycaster.setFromCamera(screen, camera)
           raycaster.far = raycaster.ray.origin.distanceTo(world) - 8
-          visibility.set(slug, raycaster.intersectObjects(meshes, false).length === 0)
+          visibility.set(slug, raycaster.intersectObjects(occluders, false).length === 0)
         }
         return {
           slug,
