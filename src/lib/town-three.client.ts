@@ -1129,6 +1129,131 @@ export function createTownScene(articles?: TownArticle[]) {
       }
     }
 
+    function townhouse(variant: number) {
+      // Narrow adjoining homes have separate doors, stepped cornices and twin gables.
+      for (const side of [-1, 1]) {
+        const x = side * 57
+        const height = side === -1 ? 144 : 168
+        const tint = side === -1 ? colors.brick : colors.sand
+        const roof = roofs[(variant + (side === -1 ? 0 : 1)) % roofs.length]
+        box(x, 6, 0, 114, 12, 162, colors.curb)
+        box(x, height / 2 + 12, 0, 110, height, 150, tint)
+        box(x, height + 15, 0, 116, 6, 160, colors.cream)
+        part('roof', x, height + 18, 0, 116, 48, 164, roof)
+        part('gable', x, height + 18, 83, 106, 43, 3, tint)
+        box(x, height + 33, 86, 18, 16, 3, colors.window)
+        for (const dx of [-49, 49]) box(x + dx, height / 2 + 12, 77, 6, height, 4, colors.cream)
+        windowDetail(x, 109, 76, false, true, variant)
+        windowDetail(x - 23, 49, 76, false, false, variant + 1)
+        box(x + 28, 35, 78, 28, 50, 5, colors.cream)
+        box(x + 28, 35, 82, 21, 44, 3, colors.door)
+        box(x + 28, 47, 84, 13, 13, 2, colors.glass)
+        box(x + 28, 65, 89, 38, 5, 26, roof)
+        box(x + 28, 5, 101, 35, 10, 36, colors.pavement)
+        box(x + 28, 2, 131, 31, 4, 28, colors.pavement)
+        if (detailed) {
+          brickwork(x, 75, 110, height)
+          planter(x - 28, 111, colors.flower)
+          box(x + 33, 31, 85, 3, 3, 2, colors.sand)
+        }
+      }
+      for (const z of [-42, 22]) windowDetail(112, 109, z, true)
+      box(85, 202, -38, 20, 56, 23, colors.brick)
+      box(85, 232, -38, 26, 6, 29, colors.cream)
+    }
+
+    function specialtyShop(kind: 'cafe' | 'florist' | 'workshop', label: string) {
+      const cafe = kind === 'cafe'
+      const florist = kind === 'florist'
+      const width = 224
+      const height = cafe ? 98 : florist ? 82 : 118
+      const tint = cafe ? colors.brick : florist ? colors.cream : colors.wood
+      const accent = cafe ? colors.flower : florist ? colors.hedge : colors.window
+      box(14, 1, 16, width + 36, 1, 188, colors.shadow)
+      box(0, 6, 0, width + 12, 12, 162, colors.curb)
+      box(0, height / 2 + 12, 0, width, height, 150, tint)
+      box(0, height + 16, 0, width + 20, 8, 168, colors.cream)
+      if (cafe) {
+        part('roof', 0, height + 20, 0, width + 24, 64, 174, roofs[3])
+        part('gable', 0, height + 20, 88, width + 12, 58, 3, colors.cream)
+        box(-72, height + 66, -30, 24, 58, 26, colors.brick)
+        box(-72, height + 97, -30, 30, 6, 32, colors.cream)
+      } else if (florist) {
+        // The raised glasshouse roof reads clearly even when fine detail is hidden.
+        box(0, height + 23, 0, width + 10, 6, 158, accent)
+        part('gable', 0, height + 26, 0, 154, 40, 126, colors.glass)
+        box(0, height + 67, 0, 5, 4, 130, colors.cream)
+        const slope = Math.atan2(40, 77)
+        for (const z of [-64, -32, 0, 32, 64]) {
+          for (const side of [-1, 1]) {
+            box(side * 38.5, height + 47, z, Math.hypot(77, 40), 4, 4, colors.cream, -side * slope)
+          }
+        }
+      } else {
+        box(0, height + 24, 0, width + 24, 10, 174, colors.window)
+        parapet(0, height + 33, 0, width + 20, 170)
+        roofEquipment(-64, height + 30, -26)
+        box(77, height + 53, -40, 16, 52, 16, colors.brick)
+        box(77, height + 81, -40, 24, 6, 24, colors.ink)
+      }
+      const front = facade(0, 75)
+      const doorX = cafe || florist ? 63 : -76
+      front(doorX, 39, 3, 35, 58, 5, colors.cream)
+      front(doorX, 39, 7, 27, 50, 3, colors.door)
+      front(doorX, 48, 10, 19, 23, 2, colors.glass)
+      front(doorX + 8, 32, 11, 3, 3, 2, colors.sand)
+      box(doorX, 5, 100, 43, 10, 40, colors.pavement)
+      if (cafe || florist) {
+        front(-35, 45, 3, 112, 57, 6, colors.cream)
+        front(-35, 45, 7, 103, 48, 3, colors.window)
+        for (const dx of [-69, -35, -1]) {
+          front(dx, 49, 10, 23, 31, 2, colors.glass)
+          front(dx + 15, 45, 12, 4, 50, 3, colors.cream)
+        }
+        for (let i = 0; i < 7; i++) {
+          const awning = i % 2 ? colors.cream : accent
+          front(-96 + i * 32, 81, 19, 32, 7, 42, awning)
+          front(-96 + i * 32, 75, 39, 32, 10, 4, awning)
+        }
+        windowDetail(112, 52, -30, true)
+        windowDetail(112, 52, 28, true)
+      } else {
+        // A wide roller door, clerestory windows and a workbench distinguish the workshop.
+        front(25, 45, 3, 120, 70, 6, colors.cream)
+        front(25, 45, 7, 110, 62, 3, colors.curb)
+        for (let y = 20; y < 76; y += 9) front(25, y, 10, 108, 2, 2, colors.window)
+        for (const dx of [-76, -26, 24, 74]) {
+          front(dx, 106, 3, 36, 17, 4, colors.cream)
+          front(dx, 106, 6, 29, 11, 2, colors.glass)
+        }
+        box(29, 30, 117, 96, 6, 29, colors.wood)
+        for (const dx of [-10, 68]) box(dx, 14, 117, 5, 28, 24, colors.window)
+        for (const dx of [0, 19, 38]) box(dx, 37, 117, 14, 8, 19, colors.sand)
+        if (detailed) wallUtilities(112, 0)
+      }
+      sign(label, cafe ? 143 : florist ? 111 : 154, cafe ? 92 : 84, accent, 2)
+      if (florist) {
+        for (const x of [-83, -42, -1, 100]) {
+          planter(x, 121, x === -42 ? colors.sand : colors.flower)
+        }
+        flowerbed(-46, 154)
+      } else if (cafe) {
+        for (const x of [-66, 99]) {
+          part('disc', x, 32, 132, 35, 5, 35, colors.cream)
+          box(x, 16, 132, 5, 32, 5, colors.window)
+          for (const dz of [-23, 23]) {
+            box(x, 16, 132 + dz, 19, 5, 18, colors.wood)
+            for (const dx of [-6, 6]) box(x + dx, 7, 132 + dz, 3, 14, 14, colors.window)
+          }
+          if (detailed) {
+            box(x, 38, 132, 7, 7, 7, colors.pavement)
+            box(x, 42, 132, 5, 1, 5, colors.door)
+          }
+        }
+        if (detailed) brickwork(0, 75, width, height)
+      }
+    }
+
     function park(x: number, z: number, variant: number) {
       part('ground', x, 2, z, 310, 2, 310, variant % 2 ? 0x8ada74 : colors.grass)
       box(x, 3, z, 30, 2, 310, colors.sand)
@@ -1218,6 +1343,7 @@ export function createTownScene(articles?: TownArticle[]) {
       C: '01111/10000/10000/10000/10000/10000/01111',
       D: '11110/10001/10001/10001/10001/10001/11110',
       E: '11111/10000/10000/11110/10000/10000/11111',
+      F: '11111/10000/10000/11110/10000/10000/10000',
       G: '01111/10000/10000/10111/10001/10001/01111',
       H: '10001/10001/10001/11111/10001/10001/10001',
       I: '11111/00100/00100/00100/00100/00100/11111',
@@ -1367,6 +1493,10 @@ export function createTownScene(articles?: TownArticle[]) {
       if (kind === 'house') {
         house(0, 0, lot.variant)
         if (lot.label) sign(lot.label, 10, 200, colors.window, 2)
+      } else if (kind === 'townhouse') {
+        townhouse(lot.variant)
+      } else if (kind === 'cafe' || kind === 'florist' || kind === 'workshop') {
+        specialtyShop(kind, lot.label ?? kind.toUpperCase())
       } else if (kind === 'city-hall') {
         box(0, 81, 0, 360, 162, 174, colors.cream)
         box(0, 169, 0, 380, 14, 190, colors.curb)

@@ -12,6 +12,10 @@ export type TownBuildingKind =
   | 'city-hall'
   | 'library'
   | 'police'
+  | 'cafe'
+  | 'florist'
+  | 'workshop'
+  | 'townhouse'
 export type TownBuilding = Point & {
   kind: TownBuildingKind
   variant: number
@@ -157,21 +161,21 @@ export const onettBuildings: TownBuilding[] = [
   building('hotel', 1840, 1220, 0, 'HOTEL', 1.05),
   building('apartment', 2110, 1150, 1),
   building('apartment', 2360, 1030, 0),
-  building('apartment', 2070, 1000, 2),
-  building('apartment', 100, 1030, 1),
+  building('townhouse', 2070, 1000, 2),
+  building('townhouse', 100, 1030, 1),
   building('apartment', 100, 770, 0),
   building('police', 690, 730, 0, 'POLICE'),
   building('shop', 1100, 705, 0, 'DRUGS'),
   building('burger', 1390, 705, 2, 'BURGER'),
-  building('burger', 1430, 1855, 3, 'BURGER'),
+  building('cafe', 1430, 1855, 3, 'CAFE'),
   building('bakery', 590, 1855, 2, 'BAKERY'),
   building('arcade', 1030, 1840, 1, 'GAME'),
-  building('shop', 1570, 1710, 1, 'SHOP'),
+  building('florist', 1690, 1590, 1, 'FLOWERS'),
   building('apartment', 810, 1680, 2),
-  building('house', 400, 1050, 2),
+  building('workshop', 400, 1050, 2, 'WORKSHOP'),
   building('house', 120, 1230, 0),
   building('house', 2950, 1090, 0),
-  building('house', 2700, 1310, 0),
+  building('townhouse', 2700, 1310, 0),
   building('house', 2440, 1650, 3),
   building('house', 2230, 1850, 0),
   building('house', 2800, 750, 3, undefined, 0.7),
