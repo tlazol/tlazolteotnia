@@ -37,9 +37,10 @@ import {
   onettRoads,
   onettToTown
 } from './town-layout'
-import type { TownArticle } from './town-posts'
+import { createTownNavigation, type TownObstacle, type TownPoint } from './town-navigation'
+import { nearestResidentRoute, type TownArticle } from './town-posts'
 import { type TrafficRoute, trafficPose } from './town-traffic'
-import { createTownCamera, updateTownCamera } from './town-view'
+import { boardToTown, createTownCamera, updateTownCamera } from './town-view'
 
 type Part = {
   x: number
@@ -58,6 +59,7 @@ type TownShape = 'box' | 'ground' | 'land' | 'roof' | 'gable' | 'tree' | 'disc' 
 type Resident = {
   slug?: string
   time?: number
+  returning?: { path: TownPoint[]; route: TrafficRoute }
   route: TrafficRoute
   kind: 'car' | 'bicycle' | 'walker'
   scale: number
@@ -267,16 +269,26 @@ export function createTownScene(articles?: TownArticle[]) {
   const traffic = new Scene()
   const residents: Resident[] = []
   const trafficMeshes: { mesh: InstancedMesh; items: MovingPart[] }[] = []
+  const obstacles: TownObstacle[] = []
+  function containsGround(point: TownPoint) {
+    const coast = coastColumns[Math.round((point.x - coastColumns[0].x) / coastStep)]
+    return !!coast && point.z > coast.north + 12 && point.z < coast.south - 12
+  }
+  let navigation = createTownNavigation(obstacles, containsGround)
   const transform = new Object3D()
   const color = new Color()
   let blockKey = ''
   let viewKey = ''
   let dirty = true
+  let trafficDirty = false
   let elapsed = 0
   let lastTime: number | undefined
   let lastMotion = false
   let selectedSlug: string | null = null
   let focusedSlug: string | null = null
+  let dragged: { resident: Resident; pose: Resident['pose'] } | null = null
+  let zoom = 1
+  const liftHeight = 28
   let visibleSlugs = articles ? new Set(articles.map((article) => article.slug)) : null
   const articleResidents = new Map<string, Resident>()
   const raycaster = new Raycaster()
@@ -354,6 +366,7 @@ export function createTownScene(articles?: TownArticle[]) {
     }
     trafficMeshes.length = 0
     residents.length = 0
+    obstacles.length = 0
     const movingParts: Partial<Record<TownShape, MovingPart[]>> = {}
     const forestParts: Partial<Record<TownShape, Part[]>> = {}
     let distantForest = false
@@ -395,6 +408,29 @@ export function createTownScene(articles?: TownArticle[]) {
         pitch,
         yaw: shape === 'tree' ? 0 : yaw,
         color: tint
+      }
+      // Solid geometry at body height blocks walking; flat roads and grass do not.
+      if (
+        !resident &&
+        item.y + item.height / 2 > 5 &&
+        item.y - item.height * (shape === 'tree' ? 0.8 : 0.5) < 60
+      ) {
+        // Tree geometry spans +/-1 in x and +/-0.25 in z before its 45-degree turn.
+        const extent = shape === 'tree' ? 1.25 / Math.SQRT2 : 0.5
+        const radiusX =
+          (Math.abs(Math.cos(item.yaw)) * item.width + Math.abs(Math.sin(item.yaw)) * item.depth) *
+            extent +
+          12
+        const radiusZ =
+          (Math.abs(Math.sin(item.yaw)) * item.width + Math.abs(Math.cos(item.yaw)) * item.depth) *
+            extent +
+          12
+        obstacles.push({
+          left: item.x - radiusX,
+          right: item.x + radiusX,
+          top: item.z - radiusZ,
+          bottom: item.z + radiusZ
+        })
       }
       if (resident) {
         movingParts[shape] ??= []
@@ -1620,11 +1656,13 @@ export function createTownScene(articles?: TownArticle[]) {
       trafficMeshes.push({ mesh, items })
       traffic.add(mesh)
     }
+    navigation = createTownNavigation(obstacles, containsGround)
   }
 
   function animateTraffic() {
     for (const resident of residents)
-      resident.pose = trafficPose(resident.route, resident.time ?? elapsed)
+      if (resident !== dragged?.resident && !resident.returning)
+        resident.pose = trafficPose(resident.route, resident.time ?? elapsed)
     for (const { mesh, items } of trafficMeshes) {
       items.forEach(({ part, resident }, index) => {
         const { x, z, yaw } = resident.pose
@@ -1647,7 +1685,7 @@ export function createTownScene(articles?: TownArticle[]) {
         }
         transform.position.set(
           x + part.x * Math.cos(yaw) + localZ * Math.sin(yaw),
-          y,
+          y + (resident === dragged?.resident ? liftHeight : 0),
           z - part.x * Math.sin(yaw) + localZ * Math.cos(yaw)
         )
         transform.rotation.set(pitch, yaw, part.angle, 'YXZ')
@@ -1665,6 +1703,38 @@ export function createTownScene(articles?: TownArticle[]) {
   }
 
   return {
+    beginResidentDrag(slug: string) {
+      const resident = articleResidents.get(slug)
+      if (!resident) return
+      dragged = { resident, pose: { ...resident.pose } }
+      trafficDirty = true
+    },
+    moveResidentDrag(dx: number, dy: number) {
+      if (!dragged) return
+      const delta = boardToTown(dx / zoom, dy / zoom)
+      dragged.resident.pose = {
+        ...dragged.resident.pose,
+        x: dragged.resident.pose.x + delta.x,
+        z: dragged.resident.pose.z + delta.z
+      }
+      trafficDirty = true
+      visibilityTime = -Infinity
+    },
+    endResidentDrag(cancel = false) {
+      if (!dragged) return
+      const { resident, pose } = dragged
+      if (cancel) {
+        resident.pose = pose
+      } else {
+        const route = nearestResidentRoute(resident.pose, resident.route, navigation.canStand)
+        const path = navigation.findPath(resident.pose, trafficPose(route, 0))
+        if (path) resident.returning = { path, route }
+        else resident.pose = pose
+      }
+      dragged = null
+      trafficDirty = true
+      visibilityTime = -Infinity
+    },
     select(slug: string | null) {
       selectedSlug = slug
     },
@@ -1689,7 +1759,8 @@ export function createTownScene(articles?: TownArticle[]) {
         const { x, z } = resident.pose
         const riding = resident.kind === 'bicycle'
         const headHeight = (riding ? 56 : 46) * resident.scale
-        world.set(x, headHeight, z)
+        const lifted = resident === dragged?.resident
+        world.set(x, headHeight + (lifted ? liftHeight : 0), z)
         projected.copy(world).project(camera)
         const px = ((projected.x + 1) * viewport.width) / 2
         const py = ((1 - projected.y) * viewport.height) / 2
@@ -1706,13 +1777,15 @@ export function createTownScene(articles?: TownArticle[]) {
           y: py,
           width: (riding ? 64 : 28) * resident.scale,
           bodyHeight: (headHeight + (riding ? 20 * resident.scale : 0)) / Math.SQRT2,
-          footY: headHeight / Math.SQRT2,
-          visible: inView && !!visibleSlugs?.has(slug) && visibility.get(slug) === true
+          footY: (headHeight + (lifted ? liftHeight : 0)) / Math.SQRT2,
+          dropAllowed: !lifted || navigation.canStand(resident.pose),
+          visible: inView && !!visibleSlugs?.has(slug) && (lifted || visibility.get(slug) === true)
         }
       })
     },
     update(view: BoardView, size: BoardSize) {
       viewport = size
+      zoom = view.zoom
       const nextKey = [view.x, view.y, view.zoom, size.width, size.height].join(':')
       if (nextKey === viewKey) return
       viewKey = nextKey
@@ -1744,16 +1817,44 @@ export function createTownScene(articles?: TownArticle[]) {
       const delta = elapsed - previousElapsed
       for (const [slug, resident] of articleResidents) {
         if (
+          resident !== dragged?.resident &&
           resident.slug !== selectedSlug &&
           resident.slug !== focusedSlug &&
           visibleSlugs?.has(slug)
-        )
+        ) {
           resident.time = (resident.time ?? 0) + delta
+          if (resident.returning) {
+            let remaining = delta * resident.route.speed
+            while (resident.returning.path.length) {
+              const next = resident.returning.path[0]
+              const dx = next.x - resident.pose.x
+              const dz = next.z - resident.pose.z
+              const distance = Math.hypot(dx, dz)
+              if (distance > remaining) {
+                if (remaining > 0)
+                  resident.pose = {
+                    x: resident.pose.x + (dx * remaining) / distance,
+                    z: resident.pose.z + (dz * remaining) / distance,
+                    yaw: Math.atan2(dx, dz)
+                  }
+                break
+              }
+              resident.pose = { ...next, yaw: Math.atan2(dx, dz) }
+              remaining -= distance
+              resident.returning.path.shift()
+            }
+            if (!resident.returning.path.length) {
+              resident.route = resident.returning.route
+              resident.time = remaining / resident.route.speed
+              resident.returning = undefined
+            }
+          }
+        }
       }
       lastTime = now
       lastMotion = motion
       const previousTarget = renderer.getRenderTarget()
-      const updateTraffic = dirty || elapsed !== previousElapsed
+      const updateTraffic = dirty || trafficDirty || elapsed !== previousElapsed
       if (dirty) {
         renderer.setRenderTarget(target)
         renderer.clear()
@@ -1762,6 +1863,7 @@ export function createTownScene(articles?: TownArticle[]) {
       }
       if (updateTraffic) {
         animateTraffic()
+        trafficDirty = false
         renderer.setRenderTarget(trafficTarget)
         renderer.clear()
         renderer.render(traffic, camera)

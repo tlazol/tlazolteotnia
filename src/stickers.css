@@ -553,10 +553,19 @@ body::after {
   padding: 0;
   border: 0;
   background: transparent;
-  cursor: pointer;
+  cursor: grab;
   visibility: hidden;
   transition-property: none;
   -webkit-tap-highlight-color: transparent;
+}
+.town-person.is-lifted {
+  z-index: 2;
+  cursor: grabbing;
+}
+.town-person.is-lifted[data-drop-allowed="false"] .town-person__ring {
+  border-color: #ff485e;
+  background: #ff485e55;
+  box-shadow: 0 0 12px #ff485e;
 }
 .town-person__ring {
   position: absolute;
@@ -571,7 +580,7 @@ body::after {
   box-shadow: 0 0 12px #e8c8ff;
   opacity: 0;
 }
-.town-person:is(:hover, :focus-visible, [aria-expanded="true"]) .town-person__ring {
+.town-person:is(:hover, :focus-visible, [aria-expanded="true"], .is-lifted) .town-person__ring {
   opacity: 1;
 }
 .town-person:focus-visible {

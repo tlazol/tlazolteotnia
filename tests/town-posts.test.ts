@@ -1,16 +1,18 @@
 import { InstancedMesh, Matrix4, Vector3, type WebGLRenderer } from 'three'
 import { describe, expect, it, vi } from 'vitest'
 import type { BlogPostSummary } from '../src/lib/blog-post'
-import { onettBuildings } from '../src/lib/town-layout'
+import { nearestTownRoad, onettBuildings, onettRoads } from '../src/lib/town-layout'
 import {
   clampTownView,
   fitTown,
   layoutTownArticles,
+  nearestResidentRoute,
   placeTownBubble,
   townBounds,
   townToBoard
 } from '../src/lib/town-posts'
 import { createTownScene } from '../src/lib/town-three.client'
+import { trafficPose } from '../src/lib/town-traffic'
 import { createTownCamera, updateTownCamera } from '../src/lib/town-view'
 
 const posts: BlogPostSummary[] = Array.from({ length: 46 }, (_, i) => ({
@@ -30,6 +32,138 @@ const renderer = {
 } as unknown as WebGLRenderer
 
 describe('article residents', () => {
+  it.each([
+    'walker',
+    'bicycle'
+  ] as const)('returns a %s dropped by any building to an existing road and keeps its full circuit there', (kind) => {
+    const article = layoutTownArticles(posts).find((person) => person.kind === kind)
+    if (!article) throw new Error('Resident missing')
+    const original = structuredClone(article.route)
+    for (const point of [...onettBuildings, { x: -10000, z: 10000 }]) {
+      const route = nearestResidentRoute(point, article.route)
+      expect(route.speed).toBe(article.route.speed)
+      expect(Math.abs(route.lane)).toBe(Math.abs(article.route.lane))
+      expect(
+        onettRoads.some((road) =>
+          road.points.some(
+            (start, index) => start === route.start && road.points[index + 1] === route.end
+          )
+        )
+      ).toBe(true)
+      for (let time = 0; time <= 1000; time += 20) {
+        expect(nearestTownRoad(trafficPose(route, time), onettRoads).distance).toBeLessThanOrEqual(
+          0
+        )
+      }
+    }
+    expect(article.route).toEqual(original)
+  })
+
+  it.each([
+    'walker',
+    'bicycle'
+  ] as const)('leaves a dropped %s on the grass, walks back without jumps, and then follows the road', (kind) => {
+    for (const zoom of [1, 0.3, 2.5]) {
+      const article = layoutTownArticles([{ ...posts[0], slug: 'retired-programmer' }])[0]
+      article.kind = kind
+      article.route.lane = kind === 'bicycle' ? 29 : 48
+      const town = createTownScene([article])
+      try {
+        town.update({ ...view, zoom }, size)
+        town.render(renderer, 0, false)
+        const before = town.projectResidents(0)[0]
+        town.beginResidentDrag(article.slug)
+        town.moveResidentDrag(140 * zoom, -70 * zoom)
+        town.render(renderer, 100, false)
+        const lifted = town.projectResidents(100)[0]
+        expect(lifted.dropAllowed).toBe(true)
+        expect(lifted.x - before.x).toBeCloseTo(140 * zoom)
+        expect(lifted.y - before.y).toBeCloseTo((-70 - 28 / Math.SQRT2) * zoom)
+        const held = town.residentPosition(article.slug)
+        town.endResidentDrag()
+        town.render(renderer, 200, false)
+        expect(town.residentPosition(article.slug)).toEqual(held)
+        if (!held) throw new Error('Resident missing')
+        expect(nearestTownRoad(held, onettRoads).distance).toBeGreaterThan(0)
+        town.render(renderer, 300, true)
+        town.render(renderer, 400, true)
+        const walkingBack = town.residentPosition(article.slug)
+        expect(walkingBack).not.toEqual(held)
+        town.update({ ...view, zoom: zoom === 0.3 ? 1 : 0.3 }, size)
+        town.render(renderer, 500, false)
+        expect(town.residentPosition(article.slug)).toEqual(walkingBack)
+        town.beginResidentDrag(article.slug)
+        town.moveResidentDrag(-100, 80)
+        town.render(renderer, 600, true)
+        const carried = town.residentPosition(article.slug)
+        town.render(renderer, 700, true)
+        expect(town.residentPosition(article.slug)).toEqual(carried)
+        town.endResidentDrag(true)
+        town.render(renderer, 800, false)
+        expect(town.residentPosition(article.slug)).toEqual(walkingBack)
+        town.render(renderer, 900, true)
+        let previous = town.residentPosition(article.slug)
+        for (let now = 1000; now <= 60900; now += 100) {
+          town.render(renderer, now, true)
+          const next = town.residentPosition(article.slug)
+          if (!previous || !next) throw new Error('Resident missing')
+          expect(Math.hypot(next.x - previous.x, next.z - previous.z)).toBeLessThanOrEqual(
+            article.route.speed * 0.1 + 0.001
+          )
+          if (now >= 40000)
+            expect(nearestTownRoad(next, onettRoads).distance).toBeLessThanOrEqual(0)
+          previous = next
+        }
+        expect(previous).not.toEqual(walkingBack)
+      } finally {
+        town.dispose()
+      }
+    }
+  })
+
+  it('rejects drops on buildings and water and restores the previous walk', () => {
+    const article = layoutTownArticles(posts)[0]
+    const town = createTownScene([article])
+    try {
+      town.update(view, size)
+      town.render(renderer, 0, false)
+      const original = town.residentPosition(article.slug)
+      if (!original) throw new Error('Resident missing')
+      const from = townToBoard(original.x, original.z)
+      for (const point of [...onettBuildings, { x: -20000, z: -20000 }]) {
+        const to = townToBoard(point.x, point.z)
+        town.beginResidentDrag(article.slug)
+        town.moveResidentDrag(to.x - from.x, to.y - from.y)
+        town.render(renderer, 100, false)
+        expect(town.projectResidents(100)[0].dropAllowed).toBe(false)
+        town.endResidentDrag()
+        town.render(renderer, 200, false)
+        expect(town.residentPosition(article.slug)).toEqual(original)
+      }
+    } finally {
+      town.dispose()
+    }
+  })
+
+  it('resumes walking from the original position after cancelling a first drag', () => {
+    const article = layoutTownArticles(posts)[0]
+    const town = createTownScene([article])
+    try {
+      town.update(view, size)
+      town.render(renderer, 0, true)
+      const before = { ...town.residentPosition(article.slug) }
+      town.beginResidentDrag(article.slug)
+      town.moveResidentDrag(100, 100)
+      town.render(renderer, 100, true)
+      town.endResidentDrag(true)
+      expect(town.residentPosition(article.slug)).toEqual(before)
+      town.render(renderer, 200, true)
+      expect(town.residentPosition(article.slug)).not.toEqual(before)
+    } finally {
+      town.dispose()
+    }
+  })
+
   it('creates exactly one identity per article, stable across sorting and filtering', () => {
     const full = layoutTownArticles(posts)
     expect(full).toHaveLength(46)

@@ -64,6 +64,18 @@ export function createArticleTown(
   canvas.addEventListener('webglcontextlost', contextLost)
 
   return {
+    beginResidentDrag(slug: string) {
+      town.beginResidentDrag(slug)
+      wake()
+    },
+    moveResidentDrag(dx: number, dy: number) {
+      town.moveResidentDrag(dx, dy)
+      wake()
+    },
+    endResidentDrag(cancel = false) {
+      town.endResidentDrag(cancel)
+      wake()
+    },
     update(view: BoardView, size: BoardSize) {
       if (!size.width || !size.height) return
       hasSize = true

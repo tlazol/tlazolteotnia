@@ -35,6 +35,7 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
   const [ready, setReady] = useState(false)
   const [failed, setFailed] = useState(false)
   const [dragging, setDragging] = useState(false)
+  const [draggedSlug, setDraggedSlug] = useState<string | null>(null)
   const [activeSlug, setActiveSlug] = useState<string | null>(null)
   const [selectedPost, setSelectedPost] = useState<BlogPostSummary | null>(null)
   const [listOpen, setListOpen] = useState(false)
@@ -53,6 +54,8 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
   const pointers = useRef(new Map<number, Point>())
   const origin = useRef<Point | null>(null)
   const didDrag = useRef(false)
+  const residentDrag = useRef<{ slug: string; pointerId: number; started: boolean } | null>(null)
+  const releasedResident = useRef<string | null>(null)
   const lastPositions = useRef<ResidentScreenPosition[]>([])
   const latest = useRef({ size, activeSlug, topic, q, visiblePosts })
   latest.current = { size, activeSlug, topic, q, visiblePosts }
@@ -81,6 +84,7 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
         button.style.setProperty('--foot-y', `${position.y + position.footY * zoom - top}px`)
         button.style.transform = `translate(${position.x - width / 2}px, ${top}px)`
         button.style.visibility = position.visible ? 'visible' : 'hidden'
+        button.dataset.dropAllowed = String(position.dropAllowed)
         button.tabIndex = position.visible ? 0 : -1
       }
       if (position.slug === state.activeSlug && bubble.current) {
@@ -207,6 +211,7 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
     function wheel(event: WheelEvent) {
       if (event.target instanceof Element && event.target.closest('.town-bubble')) return
       event.preventDefault()
+      if (residentDrag.current) return
       const rect = element?.getBoundingClientRect()
       if (!rect) return
       const delta =
@@ -236,7 +241,15 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
     if (!pointers.current.size) {
       didDrag.current = false
       origin.current = point(event)
+      const person = event.target instanceof Element ? event.target.closest('.town-person') : null
+      const slug = person?.getAttribute('data-slug')
+      if (slug) {
+        residentDrag.current = { slug, pointerId: event.pointerId, started: false }
+        renderer.current?.focus(slug)
+        event.currentTarget.setPointerCapture(event.pointerId)
+      }
     }
+    if (residentDrag.current && residentDrag.current.pointerId !== event.pointerId) return
     pointers.current.set(event.pointerId, point(event))
     if (pointers.current.size > 1) {
       didDrag.current = true
@@ -255,6 +268,18 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
     if (!didDrag.current) return
     event.currentTarget.setPointerCapture(event.pointerId)
     setDragging(true)
+    const resident = residentDrag.current
+    if (resident) {
+      const start = resident.started ? before : (origin.current ?? before)
+      if (!resident.started) {
+        resident.started = true
+        setActiveSlug(null)
+        setDraggedSlug(resident.slug)
+        renderer.current?.beginResidentDrag(resident.slug)
+      }
+      renderer.current?.moveResidentDrag(next.x - start.x, next.y - start.y)
+      return
+    }
     renderer.current?.focus(null)
     if (pointers.current.size === 2) {
       const after = [...pointers.current.values()]
@@ -280,6 +305,20 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
       })
   }
   function pointerUp(event: PointerEvent<HTMLDivElement>) {
+    if (!pointers.current.has(event.pointerId)) return
+    const resident = residentDrag.current
+    if (resident?.pointerId === event.pointerId) {
+      if (resident.started) releasedResident.current = resident.slug
+      renderer.current?.endResidentDrag(event.type !== 'pointerup')
+      renderer.current?.focus(null)
+      residentDrag.current = null
+      setDraggedSlug(null)
+      if (!resident.started && event.type === 'pointerup') {
+        setActiveSlug(activeSlug === resident.slug ? null : resident.slug)
+        // Pointer capture retargets the click to the surface; handle this tap here.
+        didDrag.current = true
+      }
+    }
     if (!didDrag.current && event.target === event.currentTarget) setActiveSlug(null)
     pointers.current.delete(event.pointerId)
     if (event.currentTarget.hasPointerCapture(event.pointerId))
@@ -327,7 +366,7 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
                 if (element) buttons.current.set(post.slug, element)
                 else buttons.current.delete(post.slug)
               }}
-              className={`town-person${post.slug === sorted[0]?.slug ? ' is-new' : ''}`}
+              className={`town-person${post.slug === sorted[0]?.slug ? ' is-new' : ''}${post.slug === draggedSlug ? ' is-lifted' : ''}`}
               type="button"
               data-slug={post.slug}
               aria-label={`${post.title} の住人に話しかける`}
@@ -335,9 +374,11 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
               aria-controls={activeSlug === post.slug ? 'town-bubble' : undefined}
               onClick={() => setActiveSlug(activeSlug === post.slug ? null : post.slug)}
               onPointerEnter={() => {
-                if (!pointers.current.size) renderer.current?.focus(post.slug)
+                if (!pointers.current.size && releasedResident.current !== post.slug)
+                  renderer.current?.focus(post.slug)
               }}
               onPointerLeave={(event) => {
+                if (releasedResident.current === post.slug) releasedResident.current = null
                 if (!event.currentTarget.matches(':focus-visible')) renderer.current?.focus(null)
               }}
               onFocus={(event) => {
@@ -486,7 +527,7 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
         <div className="board-caption">
           <span className="board-caption__dot" />
           <span>{String(visiblePosts.length).padStart(2, '0')} 記事</span>
-          <span className="town-instruction">人をクリックして記事を読む</span>
+          <span className="town-instruction">人をクリックで記事・ドラッグで移動</span>
           {(topic || q) && (
             <Link to="/" search={{}} replace aria-label="絞り込みを解除">
               解除 ×

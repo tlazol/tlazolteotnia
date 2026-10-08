@@ -10,13 +10,12 @@ export type TownArticle = {
   route: TrafficRoute
 }
 
+const residentRoadSegments = onettRoads
+  .filter((road) => !road.trail && road.width >= 78)
+  .flatMap((road) => road.points.slice(1).map((end, index) => ({ start: road.points[index], end })))
+
 // Derive identities from the complete catalogue; filtering never reassigns a resident.
 export function layoutTownArticles(posts: BlogPostSummary[]): TownArticle[] {
-  const segments = onettRoads
-    .filter((road) => !road.trail && road.width >= 78)
-    .flatMap((road) =>
-      road.points.slice(1).map((end, index) => ({ start: road.points[index], end }))
-    )
   return posts.map(({ slug }) => {
     const seed = hashSlug(slug)
     const riding = (seed >>> 16) % 4 === 0
@@ -25,13 +24,43 @@ export function layoutTownArticles(posts: BlogPostSummary[]): TownArticle[] {
       variant: seed % 30,
       kind: riding ? 'bicycle' : 'walker',
       route: {
-        ...segments[seed % segments.length],
+        ...residentRoadSegments[seed % residentRoadSegments.length],
         lane: (seed & 16 ? 1 : -1) * (riding ? 29 : 48),
         progress: 0.08 + (((seed >>> 8) % 1000) / 1000) * 0.84,
         speed: (riding ? 28 : 10) + (seed % 5)
       }
     }
   })
+}
+
+// Choose a lane to rejoin after walking back from the drop location.
+export function nearestResidentRoute(
+  point: { x: number; z: number },
+  route: TrafficRoute,
+  canStand: (point: { x: number; z: number }) => boolean = () => true
+) {
+  let nearest = route
+  let distance = Infinity
+  for (const segment of residentRoadSegments) {
+    for (const lane of [-Math.abs(route.lane), Math.abs(route.lane)]) {
+      const candidate = { ...route, ...segment, lane, progress: 0 }
+      const start = trafficPose(candidate, 0)
+      const end = trafficPose({ ...candidate, progress: 1 }, 0)
+      const dx = end.x - start.x
+      const dz = end.z - start.z
+      candidate.progress = Math.max(
+        0,
+        Math.min(1, ((point.x - start.x) * dx + (point.z - start.z) * dz) / (dx * dx + dz * dz))
+      )
+      const pose = trafficPose(candidate, 0)
+      const nextDistance = Math.hypot(point.x - pose.x, point.z - pose.z)
+      if (nextDistance < distance && canStand(pose)) {
+        nearest = candidate
+        distance = nextDistance
+      }
+    }
+  }
+  return nearest
 }
 
 export function townToBoard(x: number, z: number, height = 0) {
