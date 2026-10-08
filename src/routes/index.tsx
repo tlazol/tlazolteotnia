@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { getHomeData } from '#/lib/blog.functions'
 import { authorName, siteName, siteOrigin } from '#/lib/site'
-import { StickerBoard } from '../components/sticker-board'
+import { ArticleTown } from '../components/article-town'
 
 export const Route = createFileRoute('/')({
   validateSearch: (search: Record<string, unknown>): { topic?: string; q?: string } => ({
@@ -20,5 +20,5 @@ export const Route = createFileRoute('/')({
 
 function Home() {
   const { posts } = Route.useLoaderData()
-  return <StickerBoard posts={posts} />
+  return <ArticleTown posts={posts} />
 }

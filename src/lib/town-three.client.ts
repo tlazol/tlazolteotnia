@@ -15,6 +15,7 @@ import {
   Object3D,
   OrthographicCamera,
   PlaneGeometry,
+  Raycaster,
   RepeatWrapping,
   RGBAFormat,
   Scene,
@@ -22,6 +23,8 @@ import {
   Shape,
   SRGBColorSpace,
   TorusGeometry,
+  Vector2,
+  Vector3,
   type WebGLRenderer,
   WebGLRenderTarget
 } from 'three'
@@ -34,6 +37,7 @@ import {
   onettRoads,
   onettToTown
 } from './town-layout'
+import type { TownArticle } from './town-posts'
 import { type TrafficRoute, trafficPose } from './town-traffic'
 import { createTownCamera, updateTownCamera } from './town-view'
 
@@ -52,6 +56,8 @@ type Part = {
 }
 type TownShape = 'box' | 'ground' | 'roof' | 'gable' | 'tree' | 'disc' | 'wheel'
 type Resident = {
+  slug?: string
+  time?: number
   route: TrafficRoute
   kind: 'car' | 'bicycle' | 'walker'
   phase: number
@@ -185,7 +191,7 @@ function roofGeometry() {
   return flat
 }
 
-export function createTownScene() {
+export function createTownScene(articles?: TownArticle[]) {
   const scene = new Scene()
   scene.background = new Color(colors.grass)
   const camera = createTownCamera()
@@ -216,6 +222,17 @@ export function createTownScene() {
   let elapsed = 0
   let lastTime: number | undefined
   let lastMotion = false
+  let selectedSlug: string | null = null
+  let focusedSlug: string | null = null
+  let visibleSlugs = articles ? new Set(articles.map((article) => article.slug)) : null
+  const articleResidents = new Map<string, Resident>()
+  const raycaster = new Raycaster()
+  const projected = new Vector3()
+  const world = new Vector3()
+  const screen = new Vector2()
+  let viewport: BoardSize = { width: 0, height: 0 }
+  const visibility = new Map<string, boolean>()
+  let visibilityTime = -Infinity
 
   // Cache the static town so sticker glints don't redraw thousands of town objects.
   const target = new WebGLRenderTarget(1, 1, {
@@ -1309,6 +1326,7 @@ export function createTownScene() {
           { t: 0.79, lane: 48, kind: 'walker' }
         ] as const
         for (const [index, placement] of placements.entries()) {
+          if (articles && placement.kind === 'walker') continue
           // The short hospital approach only has room for a pedestrian.
           if (road.width < 78 && index !== 2) continue
           const lane = road.width < 78 ? road.width / 2 + 9 : placement.lane
@@ -1344,6 +1362,22 @@ export function createTownScene() {
           else person(variant)
         }
       }
+    }
+    for (const article of articles ?? []) {
+      resident = articleResidents.get(article.slug)
+      if (!resident) {
+        resident = {
+          slug: article.slug,
+          time: 0,
+          route: article.route,
+          kind: 'walker',
+          phase: article.variant * 1.7,
+          pose: trafficPose(article.route, 0)
+        }
+        articleResidents.set(article.slug, resident)
+      }
+      residents.push(resident)
+      person(article.variant)
     }
     resident = undefined
     offsetX = offsetZ = yaw = 0
@@ -1384,11 +1418,13 @@ export function createTownScene() {
   }
 
   function animateTraffic() {
-    for (const resident of residents) resident.pose = trafficPose(resident.route, elapsed)
+    for (const resident of residents)
+      resident.pose = trafficPose(resident.route, resident.time ?? elapsed)
     for (const { mesh, items } of trafficMeshes) {
       items.forEach(({ part, resident }, index) => {
         const { x, z, yaw } = resident.pose
-        const cycle = elapsed * (resident.kind === 'walker' ? 5 : 7) + resident.phase
+        const cycle =
+          (resident.time ?? elapsed) * (resident.kind === 'walker' ? 5 : 7) + resident.phase
         const swing = Math.sin(cycle) * Math.sign(part.x)
         let y = part.y
         let localZ = part.z
@@ -1410,7 +1446,12 @@ export function createTownScene() {
           z - part.x * Math.sin(yaw) + localZ * Math.cos(yaw)
         )
         transform.rotation.set(pitch, yaw, part.angle, 'YXZ')
-        transform.scale.set(part.width, part.height, part.depth)
+        const visible = !resident.slug || visibleSlugs?.has(resident.slug)
+        transform.scale.set(
+          visible ? part.width : 0,
+          visible ? part.height : 0,
+          visible ? part.depth : 0
+        )
         transform.updateMatrix()
         mesh.setMatrixAt(index, transform.matrix)
       })
@@ -1419,10 +1460,53 @@ export function createTownScene() {
   }
 
   return {
+    select(slug: string | null) {
+      selectedSlug = slug
+    },
+    focus(slug: string | null) {
+      focusedSlug = slug
+    },
+    filter(slugs: string[]) {
+      visibleSlugs = new Set(slugs)
+      dirty = true
+      visibilityTime = -Infinity
+    },
+    residentPosition(slug: string) {
+      return articleResidents.get(slug)?.pose
+    },
+    projectResidents(now: number) {
+      const checkVisibility = now - visibilityTime >= 180
+      if (checkVisibility) {
+        visibilityTime = now
+        scene.updateMatrixWorld()
+      }
+      return [...articleResidents.entries()].map(([slug, resident]) => {
+        const { x, z } = resident.pose
+        world.set(x, 46, z)
+        projected.copy(world).project(camera)
+        const px = ((projected.x + 1) * viewport.width) / 2
+        const py = ((1 - projected.y) * viewport.height) / 2
+        const inView = px >= 0 && px <= viewport.width && py >= 70 && py < viewport.height - 70
+        if (checkVisibility && inView && visibleSlugs?.has(slug)) {
+          screen.set(projected.x, projected.y)
+          raycaster.setFromCamera(screen, camera)
+          raycaster.far = raycaster.ray.origin.distanceTo(world) - 8
+          visibility.set(slug, raycaster.intersectObjects(meshes, false).length === 0)
+        }
+        return {
+          slug,
+          x: px,
+          y: py,
+          visible: inView && !!visibleSlugs?.has(slug) && visibility.get(slug) === true
+        }
+      })
+    },
     update(view: BoardView, size: BoardSize) {
+      viewport = size
       const nextKey = [view.x, view.y, view.zoom, size.width, size.height].join(':')
       if (nextKey === viewKey) return
       viewKey = nextKey
+      visibilityTime = -Infinity
       dirty = true
       updateTownCamera(camera, view, size)
       const detailed = view.zoom >= 0.45
@@ -1446,6 +1530,15 @@ export function createTownScene() {
       const previousElapsed = elapsed
       if (motion && lastMotion && lastTime !== undefined) {
         elapsed += Math.max(0, Math.min((now - lastTime) / 1000, 0.1))
+      }
+      const delta = elapsed - previousElapsed
+      for (const [slug, resident] of articleResidents) {
+        if (
+          resident.slug !== selectedSlug &&
+          resident.slug !== focusedSlug &&
+          visibleSlugs?.has(slug)
+        )
+          resident.time = (resident.time ?? 0) + delta
       }
       lastTime = now
       lastMotion = motion

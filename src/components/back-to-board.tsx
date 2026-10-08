@@ -9,7 +9,7 @@ export function BackToBoard() {
   }, [])
   return (
     <Link className="back-to-board" to="/" search={search}>
-      ← ステッカーボードに戻る
+      ← 街に戻る
     </Link>
   )
 }

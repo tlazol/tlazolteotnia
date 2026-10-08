@@ -57,7 +57,7 @@ export function SiteHeader() {
               if (event.target instanceof Element && event.target.closest('a')) setOpen(false)
             }}
           >
-            <Link to="/">Stickers</Link>
+            <Link to="/">Town</Link>
             <Link to="/app/lights-out">Lights Out ↗</Link>
             <a href={artStationUrl}>ArtStation ↗</a>
             <a href={xUrl}>X / Twitter ↗</a>

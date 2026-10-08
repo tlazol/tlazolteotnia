@@ -53,7 +53,7 @@ export function PostModal({ post, onClose }: { post: BlogPostSummary; onClose: (
       <button
         className="post-modal__backdrop"
         type="button"
-        aria-label="記事を閉じてボードに戻る"
+        aria-label="記事を閉じて街に戻る"
         tabIndex={-1}
         onClick={onClose}
       />
