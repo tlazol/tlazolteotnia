@@ -326,7 +326,9 @@ export function createTownScene(articles?: TownArticle[]) {
       townMap: { value: target.texture },
       townDepth: { value: target.depthTexture },
       trafficMap: { value: trafficTarget.texture },
-      trafficDepth: { value: trafficTarget.depthTexture }
+      trafficDepth: { value: trafficTarget.depthTexture },
+      texelSize: { value: new Vector2(1, 1) },
+      outlineDepth: { value: 0 }
     },
     vertexShader: `
       varying vec2 vUv;
@@ -340,13 +342,33 @@ export function createTownScene(articles?: TownArticle[]) {
       uniform sampler2D townDepth;
       uniform sampler2D trafficMap;
       uniform sampler2D trafficDepth;
+      uniform vec2 texelSize;
+      uniform float outlineDepth;
       varying vec2 vUv;
+
+      float visibleDepth(vec2 uv) {
+        return min(texture2D(townDepth, uv).r, texture2D(trafficDepth, uv).r);
+      }
+
       void main() {
-        float townZ = texture2D(townDepth, vUv).r;
-        float trafficZ = texture2D(trafficDepth, vUv).r;
+        // Sample at pixel centers so the contour shares the town's coarse grid.
+        vec2 uv = (floor(vUv / texelSize) + 0.5) * texelSize;
+        float townZ = texture2D(townDepth, uv).r;
+        float trafficZ = texture2D(trafficDepth, uv).r;
         gl_FragColor = trafficZ < townZ
-          ? texture2D(trafficMap, vUv)
-          : texture2D(townMap, vUv);
+          ? texture2D(trafficMap, uv)
+          : texture2D(townMap, uv);
+        float depth = min(townZ, trafficZ);
+        float neighborDepth = max(
+          max(visibleDepth(uv + vec2(texelSize.x, 0.0)),
+              visibleDepth(uv - vec2(texelSize.x, 0.0))),
+          max(visibleDepth(uv + vec2(0.0, texelSize.y)),
+              visibleDepth(uv - vec2(0.0, texelSize.y)))
+        );
+        // Ink only the nearer side: a single pixel, without a halo through occluders.
+        float outline = step(outlineDepth, neighborDepth - depth);
+        // Darken the surface color so each contour keeps its material's hue.
+        gl_FragColor.rgb *= mix(1.0, 0.45, outline);
         #include <colorspace_fragment>
       }
     `
@@ -2066,6 +2088,11 @@ export function createTownScene(articles?: TownArticle[]) {
         Math.max(1, Math.ceil(size.height / pixelSize))
       )
       trafficTarget.setSize(target.width, target.height)
+      backdropMaterial.uniforms.texelSize.value.set(1 / target.width, 1 / target.height)
+      // Ignore the ordinary depth slope of flat ground at every zoom level.
+      const worldPixelSize = size.height / target.height / view.zoom
+      backdropMaterial.uniforms.outlineDepth.value =
+        Math.max(3, worldPixelSize * 1.5) / (camera.far - camera.near)
     },
     pause() {
       lastTime = undefined
