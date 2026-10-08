@@ -60,10 +60,17 @@ type Resident = {
   time?: number
   route: TrafficRoute
   kind: 'car' | 'bicycle' | 'walker'
+  scale: number
   phase: number
   pose: ReturnType<typeof trafficPose>
 }
 type MovingPart = { part: Part; resident: Resident }
+
+// Boy, girl, young man, young woman, older man, older woman.
+function personScale(variant: number) {
+  const appearance = variant % 6
+  return appearance < 2 ? 0.72 : appearance >= 4 ? 0.92 : 1
+}
 
 // Sampled from the daytime Onett map; keep these hues independent of scene lighting.
 // https://cdn.wikimg.net/strategywiki/images/1/1e/EarthBound_Onett.png
@@ -415,19 +422,46 @@ export function createTownScene(articles?: TownArticle[]) {
     const shirts = [0xfa0a5c, 0x527afc, 0xfafa74, 0x8a72fc, 0xeff0d3]
     const skinTones = [0xeaca8c, 0xb27a4c, 0xd29a74]
     function person(variant: number, riding = false) {
+      const appearance = variant % 6
+      const child = appearance < 2
+      const older = appearance >= 4
+      const longHair = appearance === 1 || appearance === 3
       const skin = skinTones[variant % skinTones.length]
       const shirt = shirts[variant % shirts.length]
-      const hair = variant % 3 === 0 ? colors.wood : colors.ink
+      const hair = older ? colors.pavement : variant % 3 === 0 ? colors.wood : colors.ink
       const lift = riding ? 10 : 0
       const lean = riding ? 5 : 0
       box(0, 30 + lift, lean, 15, 19, 10, shirt)
       box(0, 46 + lift, lean + 1, 14, 14, 13, skin)
       box(0, 53 + lift, lean, 16, 5, 15, hair)
       box(0, 48 + lift, lean - 5, 15, 9, 4, hair)
+      if (longHair) {
+        box(0, 41 + lift, lean - 6, 17, 14, 6, hair)
+        for (const side of [-1, 1]) box(side * 7, 45 + lift, lean, 4, 12, 11, hair)
+        if (child) {
+          for (const side of [-1, 1]) {
+            box(side * 11, 43 + lift, lean - 5, 6, 12, 7, hair)
+            box(side * 10, 49 + lift, lean - 5, 6, 3, 7, shirt)
+          }
+        }
+      }
+      if (appearance === 5) box(0, 54 + lift, lean - 8, 10, 10, 9, hair)
+      if (appearance === 4) box(0, 54 + lift, lean + 2, 11, 4, 10, skin)
       box(0, 45 + lift, lean + 8, 4, 4, 3, skin)
-      if (variant % 3 === 0) {
+      if (older) {
+        for (const side of [-1, 1]) {
+          box(side * 4, 48 + lift, lean + 8, 6, 5, 2, colors.ink)
+          box(side * 4, 48 + lift, lean + 9, 3, 2, 1, colors.glass)
+        }
+        box(0, 48 + lift, lean + 8, 3, 2, 2, colors.ink)
+      }
+      if (appearance === 0) {
         box(0, 56 + lift, lean, 17, 4, 15, shirt)
         box(0, 54 + lift, lean + 8, 17, 3, 8, shirt)
+      }
+      if (!riding && (appearance === 3 || appearance === 5)) {
+        box(0, 21, 0, 19, 12, 13, shirt)
+        box(0, 16, 0, 23, 5, 15, shirt)
       }
       for (const side of [-1, 1]) {
         if (riding) {
@@ -438,7 +472,7 @@ export function createTownScene(articles?: TownArticle[]) {
           box(side * 10, 35, 21, 5, 5, 6, skin)
         } else {
           box(side * 4, 15, 0, 6, 14, 6, colors.window).motion = 'leg'
-          box(side * 4, 7, 0, 5, 8, 5, colors.window).motion = 'leg'
+          box(side * 4, 7, 0, 5, 8, 5, child ? skin : colors.window).motion = 'leg'
           box(side * 4, 3, 2, 7, 4, 10, colors.ink).motion = 'leg'
           box(side * 10, 30, 0, 5, 11, 6, shirt).motion = 'arm'
           box(side * 10, 23, 0, 5, 6, 5, skin).motion = 'arm'
@@ -1475,7 +1509,7 @@ export function createTownScene(articles?: TownArticle[]) {
           { t: 0.79, lane: 48, kind: 'walker' }
         ] as const
         for (const [index, placement] of placements.entries()) {
-          if (articles && placement.kind === 'walker') continue
+          if (articles && placement.kind !== 'car') continue
           // The short hospital approach only has room for a pedestrian.
           if (road.width < 78 && index !== 2) continue
           const lane = road.width < 78 ? road.width / 2 + 9 : placement.lane
@@ -1502,10 +1536,12 @@ export function createTownScene(articles?: TownArticle[]) {
           resident = {
             route,
             kind: placement.kind,
+            scale: placement.kind === 'car' ? 1 : personScale(variant),
             phase: variant * 1.7,
             pose: trafficPose(route, elapsed)
           }
           residents.push(resident)
+          scale = resident.scale
           if (resident.kind === 'car') car(variant)
           else if (resident.kind === 'bicycle') cyclist(variant)
           else person(variant)
@@ -1519,14 +1555,17 @@ export function createTownScene(articles?: TownArticle[]) {
           slug: article.slug,
           time: 0,
           route: article.route,
-          kind: 'walker',
+          kind: article.kind,
+          scale: personScale(article.variant),
           phase: article.variant * 1.7,
           pose: trafficPose(article.route, 0)
         }
         articleResidents.set(article.slug, resident)
       }
       residents.push(resident)
-      person(article.variant)
+      scale = resident.scale
+      if (resident.kind === 'bicycle') cyclist(article.variant)
+      else person(article.variant)
     }
     resident = undefined
     offsetX = offsetZ = yaw = 0
@@ -1604,7 +1643,7 @@ export function createTownScene(articles?: TownArticle[]) {
           y += swing * 3
           localZ += Math.cos(cycle) * Math.sign(part.x) * 3
         } else if (part.motion === 'wheel') {
-          pitch += (elapsed * resident.route.speed) / 9
+          pitch += ((resident.time ?? elapsed) * resident.route.speed) / 9
         }
         transform.position.set(
           x + part.x * Math.cos(yaw) + localZ * Math.sin(yaw),
@@ -1648,7 +1687,9 @@ export function createTownScene(articles?: TownArticle[]) {
       }
       return [...articleResidents.entries()].map(([slug, resident]) => {
         const { x, z } = resident.pose
-        world.set(x, 46, z)
+        const riding = resident.kind === 'bicycle'
+        const headHeight = (riding ? 56 : 46) * resident.scale
+        world.set(x, headHeight, z)
         projected.copy(world).project(camera)
         const px = ((projected.x + 1) * viewport.width) / 2
         const py = ((1 - projected.y) * viewport.height) / 2
@@ -1663,6 +1704,9 @@ export function createTownScene(articles?: TownArticle[]) {
           slug,
           x: px,
           y: py,
+          width: (riding ? 64 : 28) * resident.scale,
+          bodyHeight: (headHeight + (riding ? 20 * resident.scale : 0)) / Math.SQRT2,
+          footY: headHeight / Math.SQRT2,
           visible: inView && !!visibleSlugs?.has(slug) && visibility.get(slug) === true
         }
       })

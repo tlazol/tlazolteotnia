@@ -72,13 +72,13 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
       const button = buttons.current.get(position.slug)
       if (button) {
         const zoom = currentView.current.zoom
-        const width = Math.max(44, 28 * zoom)
-        const bodyHeight = (46 / Math.SQRT2) * zoom
+        const width = Math.max(44, position.width * zoom)
+        const bodyHeight = position.bodyHeight * zoom
         const height = Math.max(44, bodyHeight + 20 * zoom)
         const top = position.y - 10 * zoom - (height - bodyHeight - 20 * zoom) / 2
         button.style.width = `${width}px`
         button.style.height = `${height}px`
-        button.style.setProperty('--foot-y', `${position.y + bodyHeight - top}px`)
+        button.style.setProperty('--foot-y', `${position.y + position.footY * zoom - top}px`)
         button.style.transform = `translate(${position.x - width / 2}px, ${top}px)`
         button.style.visibility = position.visible ? 'visible' : 'hidden'
         button.tabIndex = position.visible ? 0 : -1

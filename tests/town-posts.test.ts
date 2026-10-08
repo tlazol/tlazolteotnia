@@ -1,5 +1,5 @@
-import { Vector3, type WebGLRenderer } from 'three'
-import { describe, expect, it } from 'vitest'
+import { InstancedMesh, Matrix4, Vector3, type WebGLRenderer } from 'three'
+import { describe, expect, it, vi } from 'vitest'
 import type { BlogPostSummary } from '../src/lib/blog-post'
 import { onettBuildings } from '../src/lib/town-layout'
 import {
@@ -38,38 +38,52 @@ describe('article residents', () => {
       expect(person).toEqual(full.find((candidate) => candidate.slug === person.slug))
     }
     expect(layoutTownArticles([])).toEqual([])
+    expect(new Set(full.map((person) => person.kind))).toEqual(new Set(['walker', 'bicycle']))
+    for (const person of full) {
+      expect(Math.abs(person.route.lane)).toBe(person.kind === 'bicycle' ? 29 : 48)
+    }
   })
 
-  it('stops a selected person, preserves their pose across detail rebuilds, and resumes without teleporting', () => {
-    const town = createTownScene(layoutTownArticles(posts))
+  it.each([
+    'walker',
+    'bicycle'
+  ] as const)('stops a selected %s, preserves their pose across detail rebuilds, and resumes without teleporting', (kind) => {
+    const articles = layoutTownArticles(posts)
+    const selected = articles.find((article) => article.kind === kind)
+    if (!selected) throw new Error('Article resident missing')
+    const otherSlug = articles.find((article) => article.slug !== selected.slug)?.slug
+    if (!otherSlug) throw new Error('Other resident missing')
+    const town = createTownScene(articles)
     try {
       town.update(view, size)
       town.render(renderer, 0, true)
       town.render(renderer, 100, true)
-      town.select(posts[0].slug)
-      const stopped = town.residentPosition(posts[0].slug)
-      const other = town.residentPosition(posts[1].slug)
+      town.select(selected.slug)
+      const stopped = town.residentPosition(selected.slug)
+      const other = town.residentPosition(otherSlug)
       town.render(renderer, 200, true)
-      expect(town.residentPosition(posts[0].slug)).toEqual(stopped)
-      expect(town.residentPosition(posts[1].slug)).not.toEqual(other)
+      expect(town.residentPosition(selected.slug)).toEqual(stopped)
+      expect(town.residentPosition(otherSlug)).not.toEqual(other)
       town.update({ ...view, zoom: 0.3 }, size)
       town.render(renderer, 300, true)
-      expect(town.residentPosition(posts[0].slug)).toEqual(stopped)
+      expect(town.residentPosition(selected.slug)).toEqual(stopped)
       town.select(null)
       town.render(renderer, 400, true)
-      const resumed = town.residentPosition(posts[0].slug)
+      const resumed = town.residentPosition(selected.slug)
       if (!resumed || !stopped) throw new Error('Article resident missing')
-      expect(Math.hypot(resumed.x - stopped.x, resumed.z - stopped.z)).toBeLessThanOrEqual(1.5)
+      expect(Math.hypot(resumed.x - stopped.x, resumed.z - stopped.z)).toBeLessThanOrEqual(
+        selected.route.speed * 0.1 + 0.001
+      )
       expect(resumed).not.toEqual(stopped)
-      town.filter([posts[0].slug])
-      const hidden = town.residentPosition(posts[1].slug)
+      town.filter([selected.slug])
+      const hidden = town.residentPosition(otherSlug)
       town.render(renderer, 500, true)
-      expect(town.residentPosition(posts[1].slug)).toEqual(hidden)
+      expect(town.residentPosition(otherSlug)).toEqual(hidden)
       expect(
         town
           .projectResidents(500)
           .filter((person) => person.visible)
-          .every((person) => person.slug === posts[0].slug)
+          .every((person) => person.slug === selected.slug)
       ).toBe(true)
     } finally {
       town.dispose()
@@ -82,6 +96,7 @@ describe('article residents', () => {
       {
         slug: 'behind-building',
         variant: 0,
+        kind: 'walker',
         route: {
           start: { x: building.x - 48, z: building.z - 40 },
           end: { x: building.x - 48, z: building.z + 120 },
@@ -100,6 +115,42 @@ describe('article residents', () => {
       expect(positions.find((person) => person.slug === 'behind-building')?.visible).toBe(false)
       expect(positions.find((person) => person.slug === 'retired-programmer')?.visible).toBe(true)
     } finally {
+      town.dispose()
+    }
+  })
+
+  it('gives every bicycle an article and stops or hides its wheels with the rider', () => {
+    const rider = layoutTownArticles(posts).find((article) => article.kind === 'bicycle')
+    if (!rider) throw new Error('Cyclist missing')
+    const town = createTownScene([rider])
+    let wheels: InstancedMesh | undefined
+    const renderSpy = vi.spyOn(renderer, 'render').mockImplementation((scene) => {
+      for (const mesh of scene.children) {
+        if (mesh instanceof InstancedMesh && mesh.geometry.type === 'TorusGeometry') wheels = mesh
+      }
+    })
+    try {
+      town.update(view, size)
+      town.render(renderer, 0, true)
+      if (!wheels) throw new Error('Bicycle wheels missing')
+      expect(wheels.count).toBe(2)
+      town.select(rider.slug)
+      const stopped = [...wheels.instanceMatrix.array]
+      town.render(renderer, 100, true)
+      expect([...wheels.instanceMatrix.array]).toEqual(stopped)
+      town.select(null)
+      town.render(renderer, 200, true)
+      expect([...wheels.instanceMatrix.array]).not.toEqual(stopped)
+      town.filter([])
+      town.render(renderer, 300, true)
+      const matrix = new Matrix4()
+      for (let i = 0; i < wheels.count; i++) {
+        wheels.getMatrixAt(i, matrix)
+        expect(matrix.determinant()).toBe(0)
+      }
+      expect(town.projectResidents(300).every((person) => !person.visible)).toBe(true)
+    } finally {
+      renderSpy.mockRestore()
       town.dispose()
     }
   })

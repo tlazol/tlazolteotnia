@@ -3,7 +3,12 @@ import { type BoardSize, type BoardView, hashSlug } from './sticker-board'
 import { onettBuildings, onettRoads } from './town-layout'
 import { type TrafficRoute, trafficPose } from './town-traffic'
 
-export type TownArticle = { slug: string; variant: number; route: TrafficRoute }
+export type TownArticle = {
+  slug: string
+  variant: number
+  kind: 'walker' | 'bicycle'
+  route: TrafficRoute
+}
 
 // Derive identities from the complete catalogue; filtering never reassigns a resident.
 export function layoutTownArticles(posts: BlogPostSummary[]): TownArticle[] {
@@ -14,14 +19,16 @@ export function layoutTownArticles(posts: BlogPostSummary[]): TownArticle[] {
     )
   return posts.map(({ slug }) => {
     const seed = hashSlug(slug)
+    const riding = (seed >>> 16) % 4 === 0
     return {
       slug,
       variant: seed % 30,
+      kind: riding ? 'bicycle' : 'walker',
       route: {
         ...segments[seed % segments.length],
-        lane: seed & 16 ? 48 : -48,
+        lane: (seed & 16 ? 1 : -1) * (riding ? 29 : 48),
         progress: 0.08 + (((seed >>> 8) % 1000) / 1000) * 0.84,
-        speed: 10 + (seed % 5)
+        speed: (riding ? 28 : 10) + (seed % 5)
       }
     }
   })

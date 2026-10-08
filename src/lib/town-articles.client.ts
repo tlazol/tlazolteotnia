@@ -3,7 +3,9 @@ import type { BoardSize, BoardView } from './sticker-board'
 import type { TownArticle } from './town-posts'
 import { createTownScene } from './town-three.client'
 
-export type ResidentScreenPosition = { slug: string; x: number; y: number; visible: boolean }
+export type ResidentScreenPosition = ReturnType<
+  ReturnType<typeof createTownScene>['projectResidents']
+>[number]
 
 export function createArticleTown(
   canvas: HTMLCanvasElement,
