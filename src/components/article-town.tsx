@@ -43,6 +43,8 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
   const previousAutomaticSlug = useRef<string | null>(null)
   const [selectedPost, setSelectedPost] = useState<BlogPostSummary | null>(null)
   const [listOpen, setListOpen] = useState(false)
+  const loading = !ready && !failed
+  const listVisible = failed || (ready && listOpen)
   const [query, setQuery] = useState(q)
   const activePost = visiblePosts.find((post) => post.slug === activeSlug)
   const surface = useRef<HTMLDivElement>(null)
@@ -407,6 +409,12 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
         }}
       >
         <canvas ref={canvas} className="sticker-canvas" aria-hidden="true" tabIndex={-1} />
+        {loading && (
+          <div className="town-loading" role="status">
+            <span className="town-loading__spinner" aria-hidden="true" />
+            <p>街を読み込んでいます…</p>
+          </div>
+        )}
         {ready &&
           visiblePosts.map((post) => (
             <button
@@ -479,8 +487,9 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
         ref={listToggle}
         className="town-list-toggle"
         type="button"
-        aria-expanded={listOpen || !ready}
+        aria-expanded={listVisible}
         aria-controls="town-article-list"
+        disabled={loading}
         onClick={() => setListOpen(!listOpen)}
       >
         <span aria-hidden="true">☷</span> 記事一覧 <small>{visiblePosts.length}</small>
@@ -489,7 +498,7 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
         id="town-article-list"
         className="town-list"
         aria-labelledby="town-list-heading"
-        hidden={ready && !listOpen}
+        hidden={!listVisible}
       >
         <div className="town-list__heading">
           <div>
@@ -511,9 +520,9 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
             </button>
           )}
         </div>
-        {!ready && (
+        {failed && (
           <p role="status" className="town-list__status">
-            {failed ? '街を表示できないため、記事一覧を表示しています。' : '街を読み込んでいます…'}
+            街を表示できないため、記事一覧を表示しています。
           </p>
         )}
         <form
