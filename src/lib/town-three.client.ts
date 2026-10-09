@@ -8,8 +8,10 @@ import {
   DynamicDrawUsage,
   ExtrudeGeometry,
   Float32BufferAttribute,
+  FloatType,
   InstancedMesh,
   LinearFilter,
+  LinearMipmapLinearFilter,
   Mesh,
   MeshBasicMaterial,
   NearestFilter,
@@ -141,10 +143,12 @@ function tileTexture(kind: 'grass' | 'roof') {
   }
   const texture = new DataTexture(pixels, 16, 16, RGBAFormat)
   texture.colorSpace = SRGBColorSpace
-  texture.magFilter = texture.minFilter = NearestFilter
+  texture.magFilter = NearestFilter
+  // Small grass patches repeat the tile below pixel size; mipmaps prevent shimmer.
+  texture.minFilter = kind === 'grass' ? LinearMipmapLinearFilter : NearestFilter
   texture.wrapS = texture.wrapT = RepeatWrapping
   texture.repeat.set(kind === 'roof' ? 3 : 375, kind === 'roof' ? 3 : 375)
-  texture.generateMipmaps = false
+  texture.generateMipmaps = kind === 'grass'
   texture.needsUpdate = true
   return texture
 }
@@ -329,7 +333,8 @@ export function createTownScene(articles?: TownArticle[]) {
     generateMipmaps: false
   })
   target.texture.colorSpace = SRGBColorSpace
-  target.depthTexture = new DepthTexture(1, 1)
+  // Preserve thin surface layers across the camera's wide depth range in both passes.
+  target.depthTexture = new DepthTexture(1, 1, FloatType)
   const trafficTarget = new WebGLRenderTarget(1, 1, {
     minFilter: LinearFilter,
     magFilter: LinearFilter,
@@ -337,7 +342,7 @@ export function createTownScene(articles?: TownArticle[]) {
     generateMipmaps: false
   })
   trafficTarget.texture.colorSpace = SRGBColorSpace
-  trafficTarget.depthTexture = new DepthTexture(1, 1)
+  trafficTarget.depthTexture = new DepthTexture(1, 1, FloatType)
   const backdrop = new Scene()
   const backdropCamera = new OrthographicCamera(-1, 1, 1, -1, 0, 1)
   const backdropGeometry = new PlaneGeometry(2, 2)
@@ -568,7 +573,8 @@ export function createTownScene(articles?: TownArticle[]) {
       sculpt(0, 40 + lift, lean, 6, 6, 7, skin)
       sculpt(0, 47 + lift, lean + 1, 20, 18, 17, skin)
       sculpt(0, 54 + lift, lean - 1, 21, 8, 18, hair)
-      sculpt(0, 48 + lift, lean - 6, 20, 13, 7, hair)
+      // Hair must extend past the head's side/front planes, not share their depth.
+      sculpt(0, 48 + lift, lean - 6, 21, 13, 7, hair)
       for (const side of [-1, 1]) {
         sculpt(side * 10, 46 + lift, lean + 1, 4, 6, 5, skin)
         // Small inset eyes stay legible without a large protruding face.
@@ -587,7 +593,7 @@ export function createTownScene(articles?: TownArticle[]) {
         for (const side of [-1, 1]) {
           sculpt(side * 8, 46 + lift, lean - 1, 6, child ? 14 : 17, 13, hair)
         }
-        sculpt(-4, 52 + lift, lean + 7, 12, 6, 5, hair)
+        sculpt(-4, 52 + lift, lean + 7.5, 13, 6, 5, hair)
         sculpt(6, 52 + lift, lean + 7, 5, 5, 4, hair)
         sculpt(10, 51 + lift, lean + 1, 3, 4, 7, hat)
         box(0, 36 + lift, lean + 6, 7, 4, 1, accent)
@@ -596,7 +602,7 @@ export function createTownScene(articles?: TownArticle[]) {
           box(0, 27 + lift, lean + 6.5, 11, 6, 1, bottom)
         }
       } else if (appearance === 2) {
-        sculpt(-4, 55 + lift, lean + 3, 13, 7, 13, hair)
+        sculpt(-4, 55 + lift, lean + 3.5, 13, 7, 13, hair)
         box(0, 32 + lift, lean + 6.1, 7, 12, 1, accent)
         for (const side of [-1, 1]) box(side * 5, 35 + lift, lean + 6.5, 3, 6, 1, bottom)
         box(5, 29 + lift, lean + 6.5, 4, 1.5, 1, accent)
@@ -612,7 +618,7 @@ export function createTownScene(articles?: TownArticle[]) {
         sculpt(0, 53 + lift, lean - 10, 9, 8, 9, hair)
         sculpt(0, 45 + lift, lean - 12, 8, 14, 8, hair)
         sculpt(0, 53 + lift, lean - 8, 10, 3, 4, hat)
-        sculpt(-5, 52 + lift, lean + 7, 11, 6, 5, hair)
+        sculpt(-5, 52 + lift, lean + 7.5, 11, 6, 5, hair)
         sculpt(-9, 48 + lift, lean + 2, 4, 9, 8, hair)
         box(0, 31 + lift, lean + 6.2, 7, 13, 1, accent)
         for (const y of [27, 32]) box(5, y + lift, lean + 6.5, 1.5, 1.5, 1, accent)
@@ -1657,7 +1663,8 @@ export function createTownScene(articles?: TownArticle[]) {
       box(x, -172, center, coastStep, 102, depth, colors.wood)
       box(x, -84, center, coastStep, 74, depth, colors.brick)
       box(x, -25, center, coastStep, 44, depth, colors.sand)
-      box(x, -5, center, coastStep, 8, depth, colors.hedge)
+      // Keep the rim below the grass at y = -1 so their top faces never coincide.
+      box(x, -6, center, coastStep, 8, depth, colors.hedge)
       // A broad southern beach and low sandy terraces bring the shore near town.
       box(x, -238, south + beach / 2, coastStep + 100, 6, beach + 220, colors.shallows)
       box(x, -227, south + beach / 2, coastStep, 16, beach, colors.sand)
