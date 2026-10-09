@@ -31,7 +31,7 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
   const articles = useMemo(() => layoutTownArticles(sorted), [sorted])
   const visiblePosts = useMemo(() => filterStickerPosts(sorted, topic, q), [sorted, topic, q])
   const [size, setSize] = useState<BoardSize>({ width: 0, height: 0 })
-  const [view, setView] = useState<BoardView>({ x: 0, y: 0, zoom: 1 })
+  const [zoom, setZoom] = useState(1)
   const [ready, setReady] = useState(false)
   const [failed, setFailed] = useState(false)
   const [dragging, setDragging] = useState(false)
@@ -51,7 +51,7 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
   const listHeading = useRef<HTMLHeadingElement>(null)
   const buttons = useRef(new Map<string, HTMLButtonElement>())
   const renderer = useRef<ReturnType<typeof createArticleTown> | null>(null)
-  const currentView = useRef(view)
+  const currentView = useRef<BoardView>({ x: 0, y: 0, zoom: 1 })
   const previousSize = useRef<BoardSize | null>(null)
   const pointers = useRef(new Map<number, Point>())
   const origin = useRef<Point | null>(null)
@@ -65,7 +65,8 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
   function updateView(next: BoardView) {
     const clamped = clampTownView(next, latest.current.size)
     currentView.current = clamped
-    setView(clamped)
+    renderer.current?.update(clamped, latest.current.size)
+    setZoom(clamped.zoom)
     boardSession.view = clamped
     boardSession.key = 'town'
   }
@@ -174,9 +175,6 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
     }
   }, [articles])
 
-  useEffect(() => {
-    renderer.current?.update(view, size)
-  }, [view, size, ready])
   useEffect(() => {
     renderer.current?.filter(visiblePosts.map((post) => post.slug))
     setActiveSlug(null)
@@ -570,7 +568,7 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
             >
               −
             </button>
-            <span>{Math.round(view.zoom * 100)}%</span>
+            <span>{Math.round(zoom * 100)}%</span>
             <button
               type="button"
               aria-label="拡大"

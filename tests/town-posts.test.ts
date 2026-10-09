@@ -1,4 +1,4 @@
-import { InstancedMesh, Matrix4, Vector3, type WebGLRenderer } from 'three'
+import { InstancedMesh, Matrix4, Raycaster, Vector3, type WebGLRenderer } from 'three'
 import { describe, expect, it, vi } from 'vitest'
 import type { BlogPostSummary } from '../src/lib/blog-post'
 import {
@@ -55,6 +55,70 @@ const streetResident: TownArticle = {
 }
 
 describe('article residents', () => {
+  it('reuses occlusion checks during camera movement but refreshes moving residents', () => {
+    const town = createTownScene([streetResident])
+    const raycast = vi.spyOn(Raycaster.prototype, 'intersectObjects').mockReturnValue([])
+    try {
+      town.update(view, size)
+      town.render(renderer, 0, false)
+      const initial = town.projectResidents(0)[0]
+      expect(initial.visible).toBe(true)
+      expect(raycast).toHaveBeenCalledTimes(1)
+
+      town.follow(null)
+      const pose = town.residentPosition(streetResident.slug)
+      if (!pose) throw new Error('Resident missing')
+      const point = townToBoard(pose.x, pose.z, 28)
+      for (let step = 1; step <= 5; step++) {
+        const zoom = 1 + step * 0.05
+        town.update(
+          { x: size.width / 2 - point.x * zoom + step * 10, y: 400 - point.y * zoom, zoom },
+          size
+        )
+        town.render(renderer, step * 16, false)
+        expect(town.projectResidents(step * 16)[0].visible).toBe(true)
+      }
+      expect(raycast).toHaveBeenCalledTimes(1)
+      expect(town.projectResidents(180)[0].visible).toBe(true)
+      expect(raycast).toHaveBeenCalledTimes(2)
+
+      town.follow(streetResident.slug)
+      town.render(renderer, 196, true)
+      town.projectResidents(196)
+      town.render(renderer, 212, true)
+      town.projectResidents(212)
+      expect(raycast).toHaveBeenCalledTimes(2)
+
+      town.update({ ...view, zoom: 0.3 }, size)
+      town.render(renderer, 228, false)
+      town.projectResidents(228)
+      expect(raycast).toHaveBeenCalledTimes(3)
+    } finally {
+      raycast.mockRestore()
+      town.dispose()
+    }
+  })
+
+  it('checks residents entering the viewport before the next visibility refresh', () => {
+    const town = createTownScene([streetResident])
+    const raycast = vi.spyOn(Raycaster.prototype, 'intersectObjects').mockReturnValue([])
+    try {
+      town.follow(null)
+      town.update({ x: -100000, y: -100000, zoom: 1 }, size)
+      town.render(renderer, 0, false)
+      expect(town.projectResidents(0)[0].visible).toBe(false)
+      expect(raycast).not.toHaveBeenCalled()
+
+      town.follow(streetResident.slug)
+      town.render(renderer, 16, false)
+      expect(town.projectResidents(16)[0].visible).toBe(true)
+      expect(raycast).toHaveBeenCalledTimes(1)
+    } finally {
+      raycast.mockRestore()
+      town.dispose()
+    }
+  })
+
   it.each([
     'walker',
     'bicycle'

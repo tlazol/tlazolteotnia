@@ -2182,6 +2182,8 @@ export function createTownScene(articles?: TownArticle[]) {
       return articleResidents.get(slug)?.pose
     },
     projectResidents(now: number) {
+      // Pan and zoom preserve the orthographic viewing direction. Keep occlusion
+      // checks on their own cadence, including while the camera follows a resident.
       const checkVisibility = now - visibilityTime >= 180
       if (checkVisibility) {
         visibilityTime = now
@@ -2197,7 +2199,7 @@ export function createTownScene(articles?: TownArticle[]) {
         const px = ((projected.x + 1) * viewport.width) / 2
         const py = ((1 - projected.y) * viewport.height) / 2
         const inView = px >= 0 && px <= viewport.width && py >= 70 && py < viewport.height - 70
-        if (checkVisibility && inView && visibleSlugs?.has(slug)) {
+        if ((checkVisibility || !visibility.has(slug)) && inView && visibleSlugs?.has(slug)) {
           screen.set(projected.x, projected.y)
           raycaster.setFromCamera(screen, camera)
           raycaster.far = raycaster.ray.origin.distanceTo(world) - 8
@@ -2222,7 +2224,6 @@ export function createTownScene(articles?: TownArticle[]) {
       const nextKey = [view.x, view.y, view.zoom, size.width, size.height].join(':')
       if (nextKey === viewKey) return
       viewKey = nextKey
-      visibilityTime = -Infinity
       dirty = true
       updateTownCamera(camera, view, size)
       const detailed = view.zoom >= 0.45
@@ -2230,6 +2231,7 @@ export function createTownScene(articles?: TownArticle[]) {
       if (nextBlockKey !== blockKey) {
         rebuild(detailed)
         blockKey = nextBlockKey
+        visibilityTime = -Infinity
       }
       // Use CSS-pixel resolution with MSAA to smooth edges while bounding GPU cost.
       target.setSize(Math.max(1, Math.ceil(size.width)), Math.max(1, Math.ceil(size.height)))
@@ -2309,7 +2311,6 @@ export function createTownScene(articles?: TownArticle[]) {
         if (next.x !== currentView.x || next.y !== currentView.y) {
           currentView = next
           viewKey = ''
-          visibilityTime = -Infinity
           dirty = true
           updateTraffic = true
           updateTownCamera(camera, currentView, viewport)
