@@ -46,10 +46,10 @@ const streetResident: TownArticle = {
   variant: 15,
   kind: 'walker',
   route: {
-    start: onettRoads[0].points[0],
-    end: onettRoads[0].points[1],
+    start: onettRoads[11].points[0],
+    end: onettRoads[11].points[1],
     lane: -48,
-    progress: 0.58148,
+    progress: 0.4,
     speed: 10
   }
 }
@@ -450,6 +450,15 @@ describe('article residents', () => {
 describe('town viewport and conversations', () => {
   it('follows the newest resident, switches targets, and stays put after unlocking or filtering', () => {
     const articles = layoutTownArticles(posts.slice(0, 2))
+    // Follow behavior needs interior routes, away from camera clamping at the town edge.
+    articles.forEach((article, index) => {
+      article.route = {
+        ...article.route,
+        start: onettRoads[1].points[0],
+        end: onettRoads[1].points[1],
+        progress: 0.35 + index * 0.3
+      }
+    })
     const town = createTownScene(articles)
     try {
       town.update(view, size)

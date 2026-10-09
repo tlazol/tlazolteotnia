@@ -36,7 +36,7 @@ export function onettToTown(x: number, y: number): Point {
   return { x: x + y - 445, z: y * Math.SQRT2 - 1595 }
 }
 
-// The street grid uses board coordinates from the daytime Onett map.
+// Streets use board coordinates from the daytime Onett map.
 // Reference: https://www.ssbwiki.com/images/5/50/OnettEB.png
 function road(width: number, points: [number, number][], trail = false): TownRoad {
   return { width, points: points.map(([x, y]) => onettToTown(x, y)), trail }
@@ -45,7 +45,11 @@ function road(width: number, points: [number, number][], trail = false): TownRoa
 // Street frontages are shared by the road mesh and the lots along it.
 const northStreet = road(78, [
   [-100, 850],
-  [3050, 850]
+  [700, 850]
+])
+const northEastStreet = road(78, [
+  [1010, 850],
+  [2750, 850]
 ])
 const civicStreet = road(78, [
   [-350, 1450],
@@ -53,21 +57,31 @@ const civicStreet = road(78, [
 ])
 const southStreet = road(78, [
   [-500, 2000],
-  [2800, 2000]
+  [1320, 2000]
+])
+const southEastLane = road(58, [
+  [1830, 2090],
+  [2790, 2090]
 ])
 const westLane = road(58, [
   [-150, 1150],
   [600, 1150],
-  [1550, 1150],
-  [2550, 1150],
-  [3150, 1150]
+  [1465, 1150]
+])
+const eastLane = road(58, [
+  [1762, 1138],
+  [2552, 1138],
+  [3202, 1138]
 ])
 const marketLane = road(58, [
   [-660, 1710],
   [40, 1710],
-  [990, 1710],
-  [1990, 1710],
-  [2890, 1710]
+  [870, 1710]
+])
+const marketEastLane = road(58, [
+  [1110, 1720],
+  [1980, 1720],
+  [2880, 1720]
 ])
 const coastLane = road(58, [
   [-550, 2300],
@@ -80,7 +94,7 @@ const libraryLane = road(
   [
     [100, 500],
     [595, 500],
-    [3100, 500]
+    [3200, 500]
   ],
   true
 )
@@ -88,7 +102,7 @@ const hillLane = road(
   28,
   [
     [1150, -100],
-    [3350, -100]
+    [3450, -100]
   ],
   true
 )
@@ -97,22 +111,19 @@ export const onettRoads: TownRoad[] = [
   northStreet,
   civicStreet,
   southStreet,
+  // Short avenues stop inside neighborhoods instead of crossing every block.
   road(78, [
-    [900, 850],
+    [600, 1150],
     [300, 1450],
-    [-250, 2000],
-    [-550, 2300]
+    [-90, 1840]
   ]),
   road(78, [
     [1850, 850],
     [1250, 1450],
-    [700, 2000],
-    [400, 2300]
+    [1130, 1570]
   ]),
   road(78, [
-    [2850, 850],
-    [2250, 1450],
-    [1700, 2000],
+    [1980, 1720],
     [1400, 2300]
   ]),
   westLane,
@@ -120,6 +131,20 @@ export const onettRoads: TownRoad[] = [
   coastLane,
   libraryLane,
   hillLane,
+  northEastStreet,
+  eastLane,
+  marketEastLane,
+  southEastLane,
+  // Offset residential lanes join at their far ends, leaving open-ended branches.
+  road(58, [
+    [3202, 1138],
+    [3000, 1450]
+  ]),
+  road(58, [
+    [2790, 2090],
+    [2580, 2300],
+    [2500, 2300]
+  ]),
   // The northern footpaths meet the streets at ground level, below the hills.
   road(
     28,
@@ -129,7 +154,21 @@ export const onettRoads: TownRoad[] = [
       [1850, 850]
     ],
     true
-  )
+  ),
+  // A diagonal perimeter street follows the western edge of the neighborhoods.
+  road(58, [
+    [-100, 850],
+    [-150, 1150],
+    [-350, 1450],
+    [-660, 1710],
+    [-500, 2000],
+    [-550, 2300]
+  ]),
+  // The hillside road rejoins the library lane east of the residential lots.
+  road(58, [
+    [3450, -100],
+    [3200, 500]
+  ])
 ]
 
 // Local bounds include eaves, fences, porches and shop furniture, not just walls.
@@ -192,29 +231,29 @@ export const onettBuildings: TownBuilding[] = [
   building('hospital', civicStreet, 920, 0, 'HOSPITAL', 1.05),
   building('hotel', civicStreet, 2650, 0, 'HOTEL', 1.05),
   building('apartment', civicStreet, 2990, 1),
-  building('apartment', westLane, 2580, 0),
-  building('townhouse', westLane, 2940, 2),
+  building('apartment', eastLane, 2580, 0),
+  building('townhouse', eastLane, 2940, 2),
   building('townhouse', westLane, 870, 1),
   building('apartment', northStreet, 470, 0),
   building('police', northStreet, 960, 0, 'POLICE'),
-  building('shop', northStreet, 1530, 0, 'DRUGS'),
-  building('burger', northStreet, 1825, 2, 'BURGER', 0.9),
+  building('shop', northEastStreet, 1530, 0, 'DRUGS'),
+  building('burger', northEastStreet, 1825, 2, 'BURGER', 0.9),
   building('cafe', southStreet, 2700, 3, 'CAFE'),
   building('bakery', southStreet, 1590, 2, 'BAKERY'),
   building('arcade', southStreet, 1940, 1, 'GAME', 0.85),
-  building('florist', marketLane, 2530, 1, 'FLOWERS', 0.9),
+  building('florist', marketEastLane, 2530, 1, 'FLOWERS', 0.9),
   building('apartment', marketLane, 2020, 2, undefined, 0.85),
   building('workshop', westLane, 1530, 2, 'WORKSHOP'),
   building('house', westLane, 1850, 0),
-  building('house', westLane, 3530, 0),
+  building('house', eastLane, 3530, 0),
   building('townhouse', civicStreet, 3500, 0),
-  building('house', marketLane, 3910, 3, undefined, 0.9),
-  building('house', southStreet, 3700, 0),
-  building('house', northStreet, 2970, 3, undefined, 0.7),
-  building('house', northStreet, 2690, 0, undefined, 0.7),
+  building('house', marketEastLane, 3910, 3, undefined, 0.9),
+  building('house', southEastLane, 3700, 0),
+  building('house', northEastStreet, 2970, 3, undefined, 0.7),
+  building('house', northEastStreet, 2690, 0, undefined, 0.7),
   building('house', coastLane, 1540, 0, undefined, 0.7),
   building('house', coastLane, 1770, 3, undefined, 0.7),
-  building('house', civicStreet, 660, 3, undefined, 0.6),
+  building('house', westLane, 655, 3, undefined, 0.6),
   building('library', libraryLane, 430, 1),
   building('library', libraryLane, 1010, 1),
   building('house', hillLane, 1940, 0, "NESS'S HOUSE", 1.15),
@@ -225,16 +264,16 @@ export const onettBuildings: TownBuilding[] = [
   building('post-office', westLane, 2100, 0, 'POST', 0.65),
   building('cottage', civicStreet, 2070, 1, undefined, 0.65),
   building('market', civicStreet, 2400, 0, 'MARKET', 0.65),
-  building('cottage', westLane, 3790, 3, undefined, 0.65),
+  building('cottage', eastLane, 3790, 3, undefined, 0.65),
   building('fire-station', marketLane, 1530, 0, 'FIRE', 0.65),
   building('townhouse', marketLane, 1760, 3, undefined, 0.65),
-  building('cinema', marketLane, 2800, 0, 'CINEMA', 0.65),
-  building('cafe', marketLane, 3470, 0, 'CAFE', 0.65),
-  building('cottage', marketLane, 3680, 2, undefined, 0.65),
+  building('cinema', marketEastLane, 2800, 0, 'CINEMA', 0.65),
+  building('cafe', marketEastLane, 3470, 0, 'CAFE', 0.65),
+  building('cottage', marketEastLane, 3680, 2, undefined, 0.65),
   building('market', marketLane, 1080, 1, 'MARKET', 0.65),
   building('office', southStreet, 2440, 0, undefined, 0.65),
-  building('townhouse', southStreet, 3940, 1, undefined, 0.65),
-  building('florist', southStreet, 4190, 0, 'FLOWERS', 0.65),
+  building('townhouse', southEastLane, 3940, 1, undefined, 0.65),
+  building('florist', southEastLane, 4190, 0, 'FLOWERS', 0.65),
   building('cottage', coastLane, 2010, 0, undefined, 0.65),
   building('house', coastLane, 2420, 1, undefined, 0.65),
   building('bakery', coastLane, 2640, 3, 'BAKERY', 0.65),
@@ -244,8 +283,8 @@ export const onettBuildings: TownBuilding[] = [
   building('house', coastLane, 3660, 1, undefined, 0.65),
   building('workshop', coastLane, 3900, 0, 'WORKSHOP', 0.65),
   building('cottage', coastLane, 4150, 3, undefined, 0.65),
-  building('office', northStreet, 2080, 1, undefined, 0.65),
-  building('cinema', northStreet, 2420, 1, 'CINEMA', 0.65),
+  building('office', northEastStreet, 2080, 1, undefined, 0.65),
+  building('cinema', northEastStreet, 2420, 1, 'CINEMA', 0.65),
   building('cottage', libraryLane, 2690, 0, undefined, 0.65),
   building('house', libraryLane, 2930, 1, undefined, 0.65)
 ]
@@ -298,7 +337,7 @@ export function townBuildingAccess(lot: TownBuilding) {
 export const onettParks = [
   { x: 1480, z: libraryLane.points[0].z - 124, frontage: libraryLane.points[0].z - 14 },
   { x: 850, z: marketLane.points[0].z - 177, frontage: marketLane.points[0].z - 47 },
-  { x: 3060, z: marketLane.points[0].z - 177, frontage: marketLane.points[0].z - 47 }
+  { x: 3060, z: marketEastLane.points[0].z - 177, frontage: marketEastLane.points[0].z - 47 }
 ]
 
 // Tree belts enclose the town and separate the northern trails from the civic blocks.
