@@ -2176,7 +2176,7 @@ export function createTownScene(articles?: TownArticle[]) {
     for (const [bx, by] of [
       [1260, 1270],
       [2400, 760],
-      [1930, 1740]
+      [1780, 1740]
     ]) {
       const point = onettToTown(bx, by)
       offsetX = point.x
