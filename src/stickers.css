@@ -647,15 +647,15 @@ body::after {
   width: min(320px, calc(100% - 24px));
   max-height: calc(100dvh - 190px);
   padding: 12px;
-  border: 3px solid #fff;
-  border-radius: 20px;
-  background:
-    repeating-linear-gradient(125deg, #fff0 0 3px, #ffffff45 3px 4px, #fff0 4px 7px),
-    linear-gradient(125deg, #96e5ef, #e8c8ff 25%, #fff5d4 48%, #efb4d9 70%, #96e5ef);
-  background-size: 100% 100%, 250% 250%;
-  box-shadow: inset 0 0 0 1px #fff9, 0 6px 0 #44325424, 0 12px 30px #263d3b45;
-  color: #30263e;
-  animation: town-foil 8s ease-in-out infinite;
+  border: 3px solid #f8f0d8;
+  border-radius: 8px;
+  background: #181818;
+  box-shadow:
+    inset 0 0 0 2px #797568,
+    0 0 0 2px #181818,
+    0 0 0 4px #b8b0a0,
+    4px 6px 0 4px #18181860;
+  color: #f8f0d8;
   cursor: auto;
   touch-action: pan-y;
   user-select: text;
@@ -663,41 +663,45 @@ body::after {
 .town-bubble::after {
   position: absolute;
   left: var(--tail-x);
-  bottom: -12px;
-  width: 18px;
-  height: 18px;
-  border-right: 3px solid #fff;
-  border-bottom: 3px solid #fff;
-  background: #e8d9fa;
-  transform: translateX(-50%) rotate(45deg);
+  bottom: -15px;
+  width: 20px;
+  height: 12px;
+  background: #f8f0d8;
+  clip-path: polygon(
+    0 0, 100% 0, 100% 3px, 80% 3px, 80% 6px, 65% 6px, 65% 9px, 55% 9px,
+    55% 100%, 45% 100%, 45% 9px, 35% 9px, 35% 6px, 20% 6px, 20% 3px, 0 3px
+  );
+  transform: translateX(-50%);
+  pointer-events: none;
   content: "";
 }
 .town-bubble[data-side="below"]::after {
   bottom: auto;
-  top: -12px;
-  transform: translateX(-50%) rotate(225deg);
+  top: -15px;
+  transform: translateX(-50%) rotate(180deg);
 }
 .town-bubble__meta {
   display: flex;
   align-items: center;
   gap: 8px;
   padding-left: 6px;
+  color: #b8b0a0;
   font: 600 10px "IBM Plex Mono", monospace;
 }
 .town-bubble__meta > span {
-  border-radius: 4px;
   padding: 2px 5px;
-  background: #ffffffa8;
+  background: #f8f0d8;
+  color: #181818;
 }
 .town-bubble__meta button {
   margin-left: auto;
   width: 32px;
   height: 32px;
   border: 0;
-  border-radius: 50%;
-  background: #ffffff65;
-  color: #493b5c;
-  font: 22px / 1 sans-serif;
+  border-radius: 2px;
+  background: transparent;
+  color: #f8f0d8;
+  font: 22px / 1 "IBM Plex Mono", monospace;
   cursor: pointer;
 }
 .town-bubble > a {
@@ -707,21 +711,35 @@ body::after {
   max-height: calc(100dvh - 256px);
   overflow-y: auto;
   margin-top: 5px;
-  padding: 14px 16px 10px;
-  border: 1px solid #fff;
-  border-radius: 11px;
-  background: #fffef2e6;
-  color: #30263e;
+  padding: 8px 8px 10px;
+  border-radius: 2px;
+  color: #f8f0d8;
   text-decoration: none;
 }
-.town-bubble > a:hover {
-  background: #fffef9;
+.town-bubble > a:hover, .town-bubble__meta button:hover {
+  background: #2b2b26;
 }
 .town-bubble__title {
+  position: relative;
   display: block;
+  padding-left: 22px;
   font: 400 25px / 1.4 "WDXL Lubrifont JP N", sans-serif;
+  text-shadow: 1px 1px #000;
   overflow-wrap: anywhere;
-  text-wrap: balance;
+}
+.town-bubble__title::before {
+  position: absolute;
+  top: 12px;
+  left: 0;
+  width: 12px;
+  height: 12px;
+  background: currentColor;
+  clip-path: polygon(
+    4px 0, 8px 0, 8px 2px, 10px 2px, 10px 4px, 12px 4px, 12px 8px, 10px 8px,
+    10px 10px, 8px 10px, 8px 12px, 4px 12px, 4px 10px, 2px 10px, 2px 8px, 0 8px,
+    0 4px, 2px 4px, 2px 2px, 4px 2px
+  );
+  content: "";
 }
 .town-bubble__read {
   display: flex;
@@ -729,14 +747,22 @@ body::after {
   align-items: center;
   gap: 16px;
   margin-top: 14px;
-  color: #65516f;
+  padding-left: 22px;
+  color: #b8b0a0;
   font-size: 10px;
 }
 .town-bubble__read > span {
-  font-size: 18px;
+  width: 12px;
+  height: 8px;
+  background: #f8f0d8;
+  clip-path: polygon(
+    0 0, 100% 0, 100% 2px, 10px 2px, 10px 4px, 8px 4px, 8px 6px, 7px 6px,
+    7px 100%, 5px 100%, 5px 6px, 4px 6px, 4px 4px, 2px 4px, 2px 2px, 0 2px
+  );
+  font-size: 0;
 }
 .town-bubble :is(a, button):focus-visible {
-  outline: 2px solid #685286;
+  outline: 2px solid #f8f0d8;
   outline-offset: 3px;
 }
 .town-list-toggle {
@@ -905,19 +931,6 @@ body::after {
 .town-instruction {
   margin-left: 10px;
   font: 11px "Noto Sans JP", sans-serif;
-}
-@keyframes town-foil {
-  0%, 100% {
-    background-position: 0 0, 0% 50%;
-  }
-  50% {
-    background-position: 0 0, 100% 50%;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .town-bubble {
-    animation: none;
-  }
 }
 @media (max-width: 600px) {
   .town-list-toggle {
