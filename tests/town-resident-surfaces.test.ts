@@ -9,6 +9,7 @@ import {
   type WebGLRenderer
 } from 'three'
 import { describe, expect, it } from 'vitest'
+import { townPersonStyle, townPersonStyles } from '../src/lib/town-person'
 import type { TownArticle } from '../src/lib/town-posts'
 import { createTownScene } from '../src/lib/town-three.client'
 import { trafficPose } from '../src/lib/town-traffic'
@@ -17,19 +18,22 @@ describe('resident head surfaces', () => {
   it.each([
     'walker',
     'bicycle'
-  ] as const)('keeps visible hair and skin surfaces apart on every %s hairstyle', (kind) => {
-    const articles: TownArticle[] = Array.from({ length: 6 }, (_, variant) => ({
-      slug: `hairstyle-${variant}`,
-      variant,
-      kind,
-      route: {
-        start: { x: -1000 - variant * 100, z: -1100 },
-        end: { x: -1000 - variant * 100, z: -900 },
-        lane: -19,
-        progress: 0.5,
-        speed: 10
-      }
-    }))
+  ] as const)('keeps visible hair and skin surfaces apart on every %s costume', (kind) => {
+    const articles: TownArticle[] = Array.from(
+      { length: townPersonStyles.length },
+      (_, variant) => ({
+        slug: `hairstyle-${variant}`,
+        variant,
+        kind,
+        route: {
+          start: { x: -1000 - variant * 100, z: -1100 },
+          end: { x: -1000 - variant * 100, z: -900 },
+          lane: -19,
+          progress: 0.5,
+          speed: 10
+        }
+      })
+    )
     const town = createTownScene(articles)
     const heads: Mesh[][] = articles.map(() => [])
     const matrix = new Matrix4()
@@ -48,8 +52,9 @@ describe('resident head surfaces', () => {
             position.setFromMatrixPosition(matrix)
             articles.forEach((article, variant) => {
               const pose = trafficPose(article.route, 0)
-              const scale = variant < 2 ? 0.72 : 1
+              const scale = townPersonStyle(variant).scale
               const lift = kind === 'bicycle' ? 10 : 0
+              const lean = kind === 'bicycle' ? -7 : 0
               if (
                 Math.abs(position.x - pose.x) > 25 ||
                 Math.abs(position.z - pose.z) > 25 ||
@@ -63,7 +68,8 @@ describe('resident head surfaces', () => {
               mesh.userData.tint = color.getHex()
               mesh.userData.scalp =
                 Math.abs(position.x - pose.x) < 0.001 &&
-                Math.abs(position.y - (47 + lift) * scale) < 0.001
+                Math.abs(position.y - (47 + lift) * scale) < 0.001 &&
+                Math.abs(position.z - pose.z - (lean + 1) * scale) < 0.001
               heads[variant].push(mesh)
             })
           }
@@ -75,7 +81,7 @@ describe('resident head surfaces', () => {
       town.render(renderer, 0, false)
       for (const [variant, article] of articles.entries()) {
         const pose = trafficPose(article.route, 0)
-        const scale = variant < 2 ? 0.72 : 1
+        const scale = townPersonStyle(variant).scale
         const lift = kind === 'bicycle' ? 10 : 0
         const lean = kind === 'bicycle' ? -7 : 0
         expect(heads[variant].length).toBeGreaterThan(0)

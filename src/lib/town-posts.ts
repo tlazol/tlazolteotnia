@@ -1,6 +1,7 @@
 import type { BlogPostSummary } from './blog-post'
 import { type BoardSize, type BoardView, hashSlug } from './sticker-board'
 import { onettBuildings, onettHills, onettRoads, onettToTown } from './town-layout'
+import { townPersonStyles } from './town-person'
 import { type TrafficRoute, trafficPose } from './town-traffic'
 
 export type TownArticle = {
@@ -72,7 +73,7 @@ export function layoutTownArticles(
     const slot = Math.floor(index / segments.length)
     return {
       slug,
-      variant: seed % 30,
+      variant: seed % townPersonStyles.length,
       kind: riding ? 'bicycle' : 'walker',
       route: {
         start: segment.start,

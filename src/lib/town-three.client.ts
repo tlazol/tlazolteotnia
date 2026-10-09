@@ -41,6 +41,7 @@ import {
   onettToTown
 } from './town-layout'
 import { createTownNavigation, type TownObstacle, type TownPoint } from './town-navigation'
+import { townPersonStyle } from './town-person'
 import { clampTownView, nearestResidentRoute, type TownArticle, townToBoard } from './town-posts'
 import { avoidTraffic, type TrafficBody, type TrafficRoute, trafficPose } from './town-traffic'
 import { boardToTown, createTownCamera, updateTownCamera } from './town-view'
@@ -69,10 +70,8 @@ type Resident = TrafficBody & {
 }
 type MovingPart = { part: Part; resident: Resident }
 
-// Two child silhouettes and four young-adult silhouettes.
 function personScale(variant: number) {
-  const appearance = variant % 6
-  return appearance < 2 ? 0.72 : 1
+  return townPersonStyle(variant).scale
 }
 
 // Sampled from the daytime Onett map; keep these hues independent of scene lighting.
@@ -530,12 +529,19 @@ export function createTownScene(articles?: TownArticle[]) {
       0xfa786f, 0x58d692
     ]
     function person(variant: number, riding = false) {
-      const appearance = variant % 6
-      const child = appearance < 2
-      const skirt = !riding && (appearance === 1 || appearance === 3 || appearance === 5)
+      const style = townPersonStyle(variant)
+      const { role } = style
+      const appearance = style.hair
+      const child = style.scale <= 0.72
+      const skirt = !riding && style.skirt
+      const helmet = role === 'astronaut' || role === 'knight' || role === 'robot'
+      const bareHead = role === 'alien'
       // Independent, stable seeds let every silhouette use every palette colour.
       const identity = resident?.slug ?? String(variant)
-      const skin = skinTones[(hashSlug(`skin:${identity}`) >>> 8) % skinTones.length]
+      const skin =
+        role === 'robot'
+          ? 0xb2ced7
+          : skinTones[(hashSlug(`skin:${identity}`) >>> 8) % skinTones.length]
       const outfitColor = (palette: readonly number[], slot: string) =>
         palette[(hashSlug(`${slot}:${identity}`) >>> 8) % palette.length]
       const shirt = outfitColor(clothingColors, 'top')
@@ -555,7 +561,11 @@ export function createTownScene(articles?: TownArticle[]) {
       )
       const sole = outfitColor([0xeff0d3, 0x393846, 0xf9ce58, 0xfa91c3, 0x8dddb6, 0xb4eafa], 'sole')
       const sleeve = hashSlug(`sleeve:${identity}`) % 3 === 0 ? accent : shirt
-      const hair = hairColors[(hashSlug(`hair:${identity}`) >>> 16) % hairColors.length]
+      const hair = helmet
+        ? 0xb2ced7
+        : bareHead
+          ? skin
+          : hairColors[(hashSlug(`hair:${identity}`) >>> 16) % hairColors.length]
       const lift = riding ? 10 : 0
       const lean = riding ? -7 : 0
       const sculpt = (
@@ -585,14 +595,14 @@ export function createTownScene(articles?: TownArticle[]) {
       }
       sculpt(0, 44 + lift, lean + 10, 3, 3, 3, skin)
 
-      if (appearance === 0) {
+      if (role === 'cap-child') {
         sculpt(0, 56 + lift, lean - 1, 22, 7, 19, hat)
         sculpt(0, 54 + lift, lean + 10, 23, 3, 12, hat)
         box(0, 57 + lift, lean + 8.6, 5, 3, 1, accent)
         for (const y of [27, 33]) box(0, y + lift, lean + 6.1, 16, 3, 1, accent)
         // A little canvas backpack also makes the child recognisable from behind.
         sculpt(0, 31 + lift, lean - 8, 12, 13, 6, bag)
-      } else if (appearance === 1 || appearance === 3) {
+      } else if (!helmet && !bareHead && (appearance === 1 || appearance === 3)) {
         for (const side of [-1, 1]) {
           sculpt(side * 8, 46 + lift, lean - 1, 6, child ? 14 : 17, 13, hair)
         }
@@ -604,19 +614,19 @@ export function createTownScene(articles?: TownArticle[]) {
           for (const side of [-1, 1]) box(side * 5, 31 + lift, lean + 6.3, 3, 12, 1, bottom)
           box(0, 27 + lift, lean + 6.5, 11, 6, 1, bottom)
         }
-      } else if (appearance === 2) {
+      } else if (!helmet && !bareHead && appearance === 2) {
         sculpt(-4, 55 + lift, lean + 3.5, 13, 7, 13, hair)
         box(0, 32 + lift, lean + 6.1, 7, 12, 1, accent)
         for (const side of [-1, 1]) box(side * 5, 35 + lift, lean + 6.5, 3, 6, 1, bottom)
         box(5, 29 + lift, lean + 6.5, 4, 1.5, 1, accent)
-      } else if (appearance === 4) {
+      } else if (!helmet && !bareHead && appearance === 4) {
         // A swept crop and a hoodie with contrasting drawstrings.
         sculpt(-5, 56 + lift, lean + 3, 12, 7, 12, hair)
         sculpt(3, 54 + lift, lean + 7, 10, 6, 6, hair)
         sculpt(0, 37 + lift, lean - 6, 15, 7, 8, shirt)
         for (const side of [-1, 1]) box(side * 3, 34 + lift, lean + 6.2, 1, 7, 1, accent)
         box(0, 27 + lift, lean + 6.2, 10, 4, 1, accent)
-      } else if (appearance === 5) {
+      } else if (!helmet && !bareHead && appearance === 5) {
         // A high ponytail, side fringe and a light cardigan.
         sculpt(0, 53 + lift, lean - 10, 9, 8, 9, hair)
         sculpt(0, 45 + lift, lean - 12, 8, 14, 8, hair)
@@ -650,11 +660,270 @@ export function createTownScene(articles?: TownArticle[]) {
           sculpt(side * 11, 22, 1, 6, 5, 6, skin).motion = 'arm'
         }
       }
-      if (!riding && appearance === 2) {
+      if (!riding && role === 'casual') {
         // The satchel is worn at the hip, so it moves with the torso, not the hand.
         box(-8, 31, 6.6, 2, 17, 1.5, bag)
         sculpt(-11, 22, 1, 7, 11, 11, bag)
         sculpt(-11, 25, 2, 8, 4, 11, accent)
+      }
+
+      // Costume coordinates follow the seated torso as well as the walking body.
+      const costume = (
+        x: number,
+        y: number,
+        z: number,
+        w: number,
+        h: number,
+        d: number,
+        c: number
+      ) => sculpt(x, y + lift, z + lean, w, h, d, c)
+      const trim = (x: number, y: number, z: number, w: number, h: number, d: number, c: number) =>
+        box(x, y + lift, z + lean, w, h, d, c)
+      const ivory = 0xf4efd9
+      const metal = 0xb2ced7
+      const gold = 0xfacb58
+      function brimmedHat(tint: number, width = 28) {
+        costume(0, 57, 1, 23, 9, 21, tint)
+        costume(0, 54, 3, width, 3, 26, tint)
+        trim(0, 57, 11.7, 21, 2, 1, accent)
+      }
+      function backpack(tint: number, width = 16) {
+        costume(0, 31, -10, width, 18, 9, tint)
+        costume(0, 36, -14, width + 1, 5, 3, accent)
+        for (const side of [-1, 1]) trim(side * 6, 32, 6.8, 2, 14, 2, tint)
+      }
+      function bow(y: number, z: number, tint: number) {
+        for (const side of [-1, 1]) costume(side * 4, y, z, 7, 6, 3, tint)
+        costume(0, y, z + 1, 3, 4, 3, gold)
+      }
+      function cape(tint: number) {
+        costume(0, 32, -10, 22, 16, 4, tint)
+        costume(0, riding ? 24 : 19, riding ? -13 : -11, 26, riding ? 7 : 12, 4, tint)
+        costume(0, 38, -5, 23, 4, 14, tint)
+      }
+      function pointedHat(tint: number) {
+        brimmedHat(tint, 31)
+        costume(0, 64, 0, 18, 10, 17, tint)
+        costume(-2, 71, 0, 11, 8, 11, tint)
+        costume(-4, 77, 0, 5, 6, 6, tint)
+        trim(0, 63, 8.7, 4, 4, 1, gold)
+      }
+      // Walking props share the hand's pivot. Riders strap them to their backs.
+      function staff(tint: number, magical = true) {
+        const x = 14
+        const z = riding ? -13 : 2
+        const shaft = costume(x, 29, z, 3, 42, 3, tint)
+        const tip = costume(x, 52, z, 8, 9, 8, magical ? accent : metal)
+        if (!riding) shaft.motion = tip.motion = 'arm'
+        if (magical) {
+          const cross = costume(x, 52, z, 12, 3, 4, gold)
+          if (!riding) cross.motion = 'arm'
+        }
+      }
+      switch (role) {
+        case 'kindergartner':
+          brimmedHat(gold)
+          costume(0, 30, 0, 20, 19, 14, shirt)
+          trim(0, 36, 7.4, 13, 4, 2, ivory)
+          trim(5, 32, 8.6, 4, 4, 1, gold)
+          costume(-12, 23, 1, 7, 10, 11, bag)
+          trim(-7, 31, 8, 2, 16, 2, bag)
+          break
+        case 'schoolchild':
+          brimmedHat(hat, 25)
+          backpack(bag, 18)
+          trim(0, 32, 7.6, 5, 7, 1, ivory)
+          break
+        case 'student':
+          // A sailor collar, neckerchief and a square school bag.
+          for (const side of [-1, 1]) trim(side * 5, 36, 7.6, 6, 5, 2, ivory)
+          bow(33, 8.8, hat)
+          costume(0, 37, -8, 19, 4, 5, ivory)
+          backpack(bag, 13)
+          break
+        case 'salaryman':
+        case 'office-lady':
+          costume(0, 30, 0, 20, 19, 14, shirt)
+          trim(0, 32, 7.4, 7, 14, 1, ivory)
+          for (const side of [-1, 1]) trim(side * 5, 35, 8, 4, 7, 2, bottom)
+          if (role === 'salaryman') trim(0, 32, 8.5, 3, 11, 2, hat)
+          else bow(36, 8.5, hat)
+          if (riding) backpack(bag, 13)
+          else {
+            costume(-14, 19, 2, 8, 11, 14, bag).motion = 'arm'
+            costume(-14, 25, 2, 3, 5, 7, gold).motion = 'arm'
+          }
+          break
+        case 'doctor':
+        case 'nurse':
+          costume(0, 28, 0, 21, 23, 14, ivory)
+          trim(0, 32, 7.5, 6, 14, 1, shirt)
+          for (const side of [-1, 1]) trim(side * 5, 33, 8, 2, 9, 2, colors.ink)
+          costume(5, 28, 9, 4, 4, 2, metal)
+          trim(-6, 26, 7.5, 5, 4, 1, bag)
+          if (role === 'nurse') {
+            costume(0, 58, 1, 23, 8, 22, ivory)
+            trim(0, 59, 12.4, 7, 2, 1, hat)
+            trim(0, 59, 12.5, 2, 6, 1, hat)
+          }
+          break
+        case 'chef':
+          costume(0, 60, 1, 24, 10, 22, ivory)
+          for (const x of [-7, 0, 7]) costume(x, 68, 1, 11, 12, 21, ivory)
+          costume(0, 29, 0, 20, 21, 14, ivory)
+          trim(0, 38, 8, 12, 3, 2, hat)
+          for (const x of [-4, 4]) {
+            for (const y of [27, 32]) trim(x, y, 7.5, 2, 2, 1, colors.ink)
+          }
+          trim(0, 21, 8, 16, 3, 2, bag)
+          break
+        case 'firefighter':
+        case 'builder':
+          brimmedHat(hat)
+          costume(0, 62, 1, 4, 6, 20, accent)
+          costume(0, 29, 0, 21, 22, 14, shirt)
+          for (const side of [-1, 1]) trim(side * 6, 30, 7.6, 3, 17, 2, gold)
+          trim(0, 24, 8, 20, 3, 2, ivory)
+          if (role === 'firefighter') {
+            for (const side of [-1, 1]) costume(side * 5, 30, -11, 8, 22, 9, metal)
+            trim(0, 57, 12.5, 7, 6, 2, gold)
+          } else {
+            costume(0, 21, 0, 21, 4, 16, bag)
+            costume(-10, 21, 3, 6, 8, 9, bag)
+          }
+          break
+        case 'police':
+          brimmedHat(shirt, 25)
+          trim(0, 57, 12.4, 6, 5, 2, gold)
+          trim(-5, 34, 7.4, 4, 5, 2, gold)
+          costume(0, 22, 0, 20, 3, 14, colors.ink)
+          costume(11, 24, 1, 6, 9, 6, colors.ink)
+          trim(11, 31, 1, 2, 6, 2, colors.ink)
+          break
+        case 'farmer':
+          brimmedHat(gold, 32)
+          trim(0, 28, 7.6, 14, 13, 2, bottom)
+          for (const side of [-1, 1]) trim(side * 6, 35, 7.6, 3, 9, 2, bottom)
+          backpack(bag, 18)
+          for (const x of [-5, 3, 7]) costume(x, 43, -11, 4, 12, 4, 0x387961)
+          break
+        case 'astronaut':
+          costume(0, 30, 0, 24, 22, 17, ivory)
+          costume(0, 48, 1, 27, 25, 24, ivory)
+          costume(0, 48, 13, 21, 15, 4, 0x3556a4)
+          trim(-5, 52, 15.2, 8, 3, 1, 0xa2eafa)
+          costume(0, 32, -12, 21, 22, 10, ivory)
+          trim(0, 31, 9, 12, 10, 2, shirt)
+          for (const x of [-3, 3]) trim(x, 32, 10.4, 2, 3, 1, gold)
+          break
+        case 'alien':
+          costume(0, 51, 1, 25, 21, 21, skin)
+          for (const side of [-1, 1]) {
+            costume(side * 6, 50, 11, 7, 8, 3, colors.ink)
+            costume(side * 8, 64, 1, 2, 11, 2, skin)
+            costume(side * 8, 70, 1, 5, 5, 5, hat)
+          }
+          costume(0, 37, 0, 24, 4, 16, metal)
+          trim(0, 30, 7.2, 7, 5, 2, accent)
+          break
+        case 'magical-girl':
+          for (const side of [-1, 1]) {
+            costume(side * 12, 46, -2, 8, 23, 10, hair)
+            costume(side * 12, 55, -1, 10, 5, 6, hat)
+          }
+          bow(36, 9, hat)
+          costume(0, 56, 9, 17, 3, 3, gold)
+          costume(0, 59, 9, 4, 5, 4, accent)
+          if (!riding) costume(0, 18, 0, 24, 4, 16, ivory)
+          staff(hat)
+          break
+        case 'hero':
+        case 'knight':
+          cape(hat)
+          costume(0, 30, 0, 21, 18, 15, role === 'knight' ? metal : shirt)
+          costume(0, 22, 0, 21, 4, 15, bag)
+          trim(0, 22, 8.2, 5, 4, 2, gold)
+          costume(-14, 30, 1, 5, 19, 17, metal)
+          costume(-17, 30, 1, 2, 12, 10, hat)
+          // A sheathed sword stays on the back, clear of moving hands and handlebars.
+          costume(10, 34, -12, 4, 32, 4, metal)
+          costume(10, 49, -12, 12, 3, 5, gold)
+          costume(10, 54, -12, 3, 8, 3, bag)
+          if (role === 'knight') {
+            costume(0, 47, 10, 22, 17, 4, metal)
+            trim(0, 49, 12.4, 16, 3, 1, colors.ink)
+            costume(0, 63, 0, 5, 13, 18, hat)
+          } else costume(0, 54, 10, 21, 4, 3, gold)
+          break
+        case 'wizard':
+        case 'witch':
+          pointedHat(hat)
+          cape(shirt)
+          if (!riding) {
+            costume(0, 20, 0, 21, 13, 14, shirt)
+            costume(0, 12, 0, 24, 7, 16, shirt)
+          }
+          if (role === 'wizard') {
+            costume(0, 41, 10, 13, 9, 5, ivory)
+            costume(0, 35, 10, 7, 9, 5, ivory)
+            staff(bag)
+          } else {
+            staff(bag, false)
+            const broom = costume(14, 10, riding ? -13 : 2, 9, 13, 7, gold)
+            if (!riding) broom.motion = 'arm'
+          }
+          break
+        case 'ninja':
+          costume(0, 48, 1, 26, 23, 22, shirt)
+          trim(0, 49, 12.3, 17, 6, 1, skin)
+          for (const side of [-1, 1]) trim(side * 4, 49, 13, 2, 3, 1, colors.ink)
+          costume(0, 54, 1, 27, 4, 23, hat)
+          costume(8, 49, -13, 5, 14, 4, hat)
+          costume(0, 24, 0, 20, 4, 14, hat)
+          costume(9, 34, -11, 4, 30, 4, bag)
+          costume(9, 51, -11, 4, 7, 4, metal)
+          break
+        case 'pirate':
+          brimmedHat(hat, 32)
+          costume(0, 63, 2, 22, 9, 10, hat)
+          trim(0, 63, 7.4, 5, 5, 1, ivory)
+          trim(-4, 47, 10.8, 6, 6, 2, colors.ink)
+          trim(0, 50, 10.9, 20, 1.5, 1, colors.ink)
+          costume(0, 24, 0, 21, 5, 14, hat)
+          trim(0, 24, 7.6, 5, 4, 2, gold)
+          // A small parrot perched on the shoulder.
+          costume(-13, 43, -1, 6, 10, 7, accent)
+          costume(-13, 49, 1, 7, 6, 8, hat)
+          costume(-13, 48, 5, 3, 3, 4, gold)
+          break
+        case 'fairy':
+          for (const side of [-1, 1]) {
+            costume(side * 12, 39, -10, 15, 20, 4, 0xa2eafa)
+            costume(side * 10, 25, -10, 12, 12, 4, 0xe7b1e0)
+            costume(side * 8, 57, 3, 7, 5, 7, hat)
+          }
+          bow(35, 8, hat)
+          staff(gold)
+          break
+        case 'vampire':
+          cape(hat)
+          for (const side of [-1, 1]) costume(side * 10, 41, -4, 5, 13, 9, hat)
+          trim(0, 32, 7.8, 7, 13, 2, ivory)
+          bow(37, 9, bottom)
+          for (const side of [-1, 1]) trim(side * 3, 42, 10.8, 2, 3, 1, ivory)
+          break
+        case 'robot':
+          costume(0, 30, 0, 23, 22, 16, metal)
+          costume(0, 48, 1, 25, 23, 22, metal)
+          trim(0, 49, 12.4, 20, 8, 2, colors.ink)
+          for (const side of [-1, 1]) trim(side * 5, 49, 13.6, 4, 4, 1, hat)
+          trim(0, 42, 12.4, 9, 2, 1, colors.ink)
+          costume(0, 64, 0, 3, 10, 3, metal)
+          costume(0, 70, 0, 6, 6, 6, hat)
+          trim(0, 31, 8.5, 14, 10, 2, shirt)
+          trim(0, 32, 9.8, 8, 3, 1, accent)
+          for (const side of [-1, 1]) costume(side * 14, 48, 0, 5, 9, 9, hat)
+          break
       }
     }
 
