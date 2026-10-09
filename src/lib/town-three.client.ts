@@ -37,8 +37,11 @@ import {
   onettBuildings,
   onettGroves,
   onettHills,
+  onettParks,
   onettRoads,
-  onettToTown
+  onettToTown,
+  townBuildingAccess,
+  townBuildingBounds
 } from './town-layout'
 import { createTownNavigation, type TownObstacle, type TownPoint } from './town-navigation'
 import { townPersonStyle } from './town-person'
@@ -1410,7 +1413,8 @@ export function createTownScene(articles?: TownArticle[]) {
         for (const dz of [-48, 4, 56]) {
           windowDetail(x + width / 2, y, z + dz, true, false, variant + floor)
         }
-        if (kind === 'apartment') {
+        // Upper floors have balconies; the ground-floor entrance stays open.
+        if (kind === 'apartment' && floor > 0) {
           box(x, y - 18, z + 96, width + 12, 7, 30, colors.cream)
           box(x, y - 2, z + 111, width + 12, 3, 4, colors.window)
           box(x, y - 14, z + 111, width + 12, 3, 4, colors.cream)
@@ -2016,13 +2020,25 @@ export function createTownScene(articles?: TownArticle[]) {
     }
 
     for (const lot of onettBuildings) {
+      // The entrance paths meet the sidewalk without paving over the carriageway.
+      for (const access of townBuildingAccess(lot)) {
+        box(
+          access.x,
+          1.2,
+          (access.start + access.end) / 2,
+          access.width,
+          1,
+          access.end - access.start,
+          colors.pavement
+        )
+      }
       offsetX = lot.x
       offsetZ = lot.z
       scale = lot.scale
       const kind = lot.kind
       if (kind === 'house') {
         house(0, 0, lot.variant)
-        if (lot.label) sign(lot.label, 10, 200, colors.window, 2)
+        if (lot.label) sign(lot.label, 96, 86, colors.window, 2)
       } else if (kind === 'townhouse') {
         townhouse(lot.variant)
       } else if (kind === 'cottage') {
@@ -2087,6 +2103,8 @@ export function createTownScene(articles?: TownArticle[]) {
           for (let x = -130; x <= 130; x += 16) box(x, 30, -140, 4, 66, 8, roofs[0])
         }
       }
+      offsetX = offsetZ = 0
+      scale = 1
     }
     offsetX = offsetZ = yaw = 0
     scale = 1
@@ -2099,13 +2117,27 @@ export function createTownScene(articles?: TownArticle[]) {
       const point = onettToTown(bx, by)
       const coast = coastColumns[Math.round((point.x - coastColumns[0].x) / coastStep)]
       if (!coast || point.z < coast.north + 60 || point.z > coast.south - 60) return
-      if (nearestTownRoad(point, onettRoads).distance < 54 * size) return
+      if (nearestTownRoad(point, onettRoads).distance < 70 * size) return
       if (
-        onettBuildings.some(
-          (lot) =>
-            Math.abs(point.x - lot.x) < 220 * lot.scale &&
-            Math.abs(point.z - lot.z) < 220 * lot.scale
+        onettParks.some(
+          (park) =>
+            Math.abs(point.x - park.x) < 150 &&
+            point.z > park.z - 150 &&
+            point.z < park.frontage + 60
         )
+      )
+        return
+      if (
+        onettBuildings.some((lot) => {
+          const bounds = townBuildingBounds(lot)
+          const margin = 65 * size
+          return (
+            point.x > bounds.left - margin &&
+            point.x < bounds.right + margin &&
+            point.z > bounds.back - margin &&
+            point.z < lot.frontage.z + margin
+          )
+        })
       )
         return
       let elevation = 0
@@ -2173,21 +2205,37 @@ export function createTownScene(articles?: TownArticle[]) {
     }
     distantForest = false
     // Small civic gardens, bus stops, lamps and signs carry the town's street rhythm.
-    for (const [bx, by] of [
-      [1260, 1270],
-      [2400, 760],
-      [1780, 1740]
-    ]) {
-      const point = onettToTown(bx, by)
+    for (const point of onettParks) {
       offsetX = point.x
       offsetZ = point.z
       scale = 0.55
       park(0, 0, 2)
+      const end = (point.frontage - point.z + 2) / scale
+      box(0, 2, (155 + end) / 2, 30, 1, end - 155, colors.sand)
     }
     scale = 1
     for (const by of [850, 1450, 2000]) {
       for (let bx = 330; bx < 2800 - (by === 2000 ? 700 : 0); bx += 380) {
         const point = onettToTown(bx, by + 66)
+        // Keep the whole sign/lamp pair off intersections, private lots and entrances.
+        if (
+          [0, 100, 120].some(
+            (dx) => nearestTownRoad({ x: point.x + dx, z: point.z }, onettRoads).distance < 18
+          )
+        )
+          continue
+        if (
+          onettBuildings.some((lot) => {
+            const bounds = townBuildingBounds(lot)
+            return (
+              point.x + 138 > bounds.left &&
+              point.x - 14 < bounds.right &&
+              point.z + 14 > bounds.back &&
+              point.z - 14 < lot.frontage.z
+            )
+          })
+        )
+          continue
         offsetX = point.x
         offsetZ = point.z
         box(0, 30, 0, 4, 60, 4, colors.window)

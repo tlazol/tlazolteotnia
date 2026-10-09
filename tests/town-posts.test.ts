@@ -149,6 +149,10 @@ describe('article residents', () => {
       const article = structuredClone(streetResident)
       article.kind = kind
       article.route.lane = kind === 'bicycle' ? 29 : 48
+      // The lawn beside the northern footpath stays clear of the new streetfront lots.
+      article.route.progress =
+        (onettRoads[4].points[0].x - article.route.start.x - 80) /
+        (article.route.end.x - article.route.start.x - 160)
       const town = createTownScene([article])
       try {
         town.update({ ...view, zoom }, size)
@@ -283,7 +287,7 @@ describe('article residents', () => {
   ])('spreads residents across town and keeps circuits outside hills (%s)', (value) => {
     const articles = randomTownArticles(posts, () => value)
     const positions = articles.map((article) => trafficPose(article.route, 0))
-    expect(Math.min(...positions.map((point) => point.z))).toBeLessThan(-2200)
+    expect(Math.min(...positions.map((point) => point.z))).toBeLessThan(-1600)
     expect(Math.max(...positions.map((point) => point.z))).toBeGreaterThan(1500)
     expect(Math.min(...positions.map((point) => point.x))).toBeLessThan(650)
     expect(Math.max(...positions.map((point) => point.x))).toBeGreaterThan(3100)

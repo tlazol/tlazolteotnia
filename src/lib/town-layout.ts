@@ -27,6 +27,7 @@ export type TownBuilding = Point & {
   variant: number
   label?: string
   scale: number
+  frontage: Point
 }
 
 // Undo the reference map's oblique drawing before placing it in the 3D world.
@@ -35,193 +36,269 @@ export function onettToTown(x: number, y: number): Point {
   return { x: x + y - 445, z: y * Math.SQRT2 - 1595 }
 }
 
-// Fixed landmarks traced from the daytime Onett map, in board coordinates.
+// The street grid uses board coordinates from the daytime Onett map.
 // Reference: https://www.ssbwiki.com/images/5/50/OnettEB.png
 function road(width: number, points: [number, number][], trail = false): TownRoad {
   return { width, points: points.map(([x, y]) => onettToTown(x, y)), trail }
 }
 
+// Street frontages are shared by the road mesh and the lots along it.
+const northStreet = road(78, [
+  [-100, 850],
+  [3050, 850]
+])
+const civicStreet = road(78, [
+  [-350, 1450],
+  [3000, 1450]
+])
+const southStreet = road(78, [
+  [-500, 2000],
+  [2800, 2000]
+])
+const westLane = road(58, [
+  [-150, 1150],
+  [600, 1150],
+  [1550, 1150],
+  [2550, 1150],
+  [3150, 1150]
+])
+const marketLane = road(58, [
+  [-660, 1710],
+  [40, 1710],
+  [990, 1710],
+  [1990, 1710],
+  [2890, 1710]
+])
+const coastLane = road(58, [
+  [-550, 2300],
+  [400, 2300],
+  [1400, 2300],
+  [2500, 2300]
+])
+const libraryLane = road(
+  28,
+  [
+    [100, 500],
+    [595, 500],
+    [3100, 500]
+  ],
+  true
+)
+const hillLane = road(
+  28,
+  [
+    [1150, -100],
+    [3350, -100]
+  ],
+  true
+)
+
 export const onettRoads: TownRoad[] = [
-  road(78, [
-    [250, 850],
-    [2950, 850]
-  ]),
-  road(78, [
-    [-50, 1450],
-    [2900, 1450]
-  ]),
-  road(78, [
-    [-200, 2000],
-    [2200, 2000]
-  ]),
+  northStreet,
+  civicStreet,
+  southStreet,
   road(78, [
     [900, 850],
     [300, 1450],
-    [-250, 2000]
+    [-250, 2000],
+    [-550, 2300]
   ]),
   road(78, [
     [1850, 850],
     [1250, 1450],
-    [700, 2000]
+    [700, 2000],
+    [400, 2300]
   ]),
   road(78, [
     [2850, 850],
     [2250, 1450],
-    [1700, 2000]
+    [1700, 2000],
+    [1400, 2300]
   ]),
-  road(58, [
-    [-200, 1800],
-    [0, 1800]
-  ]),
+  westLane,
+  marketLane,
+  coastLane,
+  libraryLane,
+  hillLane,
+  // The northern footpaths meet the streets at ground level, below the hills.
   road(
     28,
     [
-      [1100, 2000],
-      [840, 2260],
-      [790, 2400]
-    ],
-    true
-  ),
-  road(
-    28,
-    [
-      [1620, 850],
-      [1870, 600],
-      [2310, 600],
-      [2470, 440],
-      [2770, 440]
-    ],
-    true
-  ),
-  road(
-    28,
-    [
-      [1870, 600],
-      [1580, 310],
-      [1170, 310],
-      [1020, 140],
-      [1070, -100]
-    ],
-    true
-  ),
-  road(
-    28,
-    [
-      [250, 600],
-      [470, 600],
-      [610, 740]
-    ],
-    true
-  ),
-  road(
-    28,
-    [
-      [2770, 440],
-      [3010, 160],
-      [2800, -50],
-      [2690, -50],
-      [2440, -300],
-      [2580, -440],
-      [3130, -440]
-    ],
-    true
-  ),
-  road(
-    28,
-    [
-      [2580, -440],
-      [2470, -620],
-      [2760, -900]
-    ],
-    true
-  ),
-  road(
-    28,
-    [
-      [2440, -300],
-      [2040, -300],
-      [1790, -550],
-      [1910, -690],
-      [1700, -900],
-      [1470, -900]
+      [2800, -100],
+      [2200, 500],
+      [1850, 850]
     ],
     true
   )
 ]
 
+// Local bounds include eaves, fences, porches and shop furniture, not just walls.
+export function townBuildingFootprint(kind: TownBuildingKind) {
+  switch (kind) {
+    case 'library':
+    case 'police':
+      return { left: -246, right: 246, back: -190, front: 192 }
+    case 'city-hall':
+      return { left: -194, right: 194, back: -99, front: 174 }
+    case 'house':
+      return { left: -128, right: 151, back: -98, front: 155 }
+    case 'townhouse':
+      return { left: -119, right: 119, back: -86, front: 149 }
+    case 'cottage':
+      return { left: -102, right: 102, back: -84, front: 169 }
+    case 'cafe':
+    case 'florist':
+      return { left: -128, right: 128, back: -91, front: 178 }
+    case 'workshop':
+      return { left: -128, right: 142, back: -91, front: 136 }
+    case 'fire-station':
+      return { left: -132, right: 132, back: -89, front: 175 }
+    case 'cinema':
+      return { left: -132, right: 142, back: -89, front: 166 }
+    case 'post-office':
+    case 'market':
+      return { left: -132, right: 142, back: -92, front: 150 }
+    default:
+      return { left: -140, right: 166, back: kind === 'arcade' ? -148 : -96, front: 193 }
+  }
+}
+
 function building(
   kind: TownBuildingKind,
+  street: TownRoad,
   x: number,
-  y: number,
   variant = 0,
   label?: string,
   scale = 1
 ): TownBuilding {
-  return { ...onettToTown(x, y), kind, variant, label, scale }
+  const frontage = {
+    x,
+    z: street.points[0].z - street.width / 2 - (street.trail ? 0 : 18)
+  }
+  return {
+    x,
+    z: frontage.z - townBuildingFootprint(kind).front * scale - 12,
+    kind,
+    variant,
+    label,
+    scale,
+    frontage
+  }
 }
 
 export const onettBuildings: TownBuilding[] = [
-  building('city-hall', 1060, 1190, 0, 'TOWN HALL', 1.1),
-  building('library', 1930, 445, 0, 'LIBRARY'),
-  building('hospital', -200, 1640, 0, 'HOSPITAL', 1.15),
-  building('hotel', 1840, 1220, 0, 'HOTEL', 1.05),
-  building('apartment', 2110, 1150, 1),
-  building('apartment', 2360, 1030, 0),
-  building('townhouse', 2070, 1000, 2),
-  building('townhouse', 100, 1030, 1),
-  building('apartment', 100, 770, 0),
-  building('police', 690, 730, 0, 'POLICE'),
-  building('shop', 1100, 705, 0, 'DRUGS'),
-  building('burger', 1390, 705, 2, 'BURGER'),
-  building('cafe', 1430, 1855, 3, 'CAFE'),
-  building('bakery', 590, 1855, 2, 'BAKERY'),
-  building('arcade', 1030, 1840, 1, 'GAME'),
-  building('florist', 1690, 1590, 1, 'FLOWERS'),
-  building('apartment', 810, 1680, 2),
-  building('workshop', 400, 1050, 2, 'WORKSHOP'),
-  building('house', 120, 1230, 0),
-  building('house', 2950, 1090, 0),
-  building('townhouse', 2700, 1310, 0),
-  building('house', 2440, 1650, 3),
-  building('house', 2230, 1850, 0),
-  building('house', 2800, 750, 3, undefined, 0.7),
-  building('house', 2570, 730, 0, undefined, 0.7),
-  building('house', 370, 2220, 0, undefined, 0.7),
-  building('house', 600, 2220, 3, undefined, 0.7),
-  building('house', -180, 1290, 3, undefined, 0.6),
-  building('library', 160, 400, 1),
-  building('library', 340, 530, 1),
-  building('house', 2750, -550, 0, "NESS'S HOUSE", 1.15),
-  building('house', 3220, -540, 2, undefined, 1.15),
-  building('house', 1550, -980, 3, undefined, 0.6),
-  building('house', 1050, -80, 3, undefined, 0.65),
-  // Smaller infill lots add shopfronts and homes between the original landmarks.
-  building('post-office', 942, 993, 0, 'POST', 0.65),
-  building('cottage', 1162, 993, 1, undefined, 0.65),
-  building('market', 1382, 993, 0, 'MARKET', 0.65),
-  building('cottage', 3156, 1199, 3, undefined, 0.65),
-  building('fire-station', 348, 1587, 0, 'FIRE', 0.65),
-  building('townhouse', 568, 1587, 3, undefined, 0.65),
-  building('cinema', 1338, 1587, 0, 'CINEMA', 0.65),
-  building('cafe', 2878, 1587, 0, 'CAFE', 0.65),
-  building('cottage', 3098, 1587, 2, undefined, 0.65),
-  building('market', 165, 1800, 1, 'MARKET', 0.65),
-  building('office', 355, 1800, 0, undefined, 0.65),
-  building('townhouse', 2665, 1800, 1, undefined, 0.65),
-  building('florist', 2885, 1800, 0, 'FLOWERS', 0.65),
-  building('cottage', -239, 2174, 0, undefined, 0.65),
-  building('house', -19, 2174, 1, undefined, 0.65),
-  building('bakery', 1000, 2330, 3, 'BAKERY', 0.65),
-  building('cottage', 1191, 2174, 2, undefined, 0.65),
-  building('post-office', 1741, 2174, 1, 'POST', 0.65),
-  building('townhouse', 1961, 2174, 2, undefined, 0.65),
-  building('house', 2181, 2174, 1, undefined, 0.65),
-  building('workshop', 2401, 2174, 0, 'WORKSHOP', 0.65),
-  building('cottage', 2621, 2174, 3, undefined, 0.65),
-  building('office', 1647, 668, 1, undefined, 0.65),
-  building('cinema', 2243, 682, 1, 'CINEMA', 0.65),
-  building('cottage', 2583, 562, 0, undefined, 0.65),
-  building('house', 2803, 562, 1, undefined, 0.65)
+  building('city-hall', civicStreet, 1740, 0, 'TOWN HALL', 1.1),
+  building('library', libraryLane, 1940, 0, 'LIBRARY'),
+  building('hospital', civicStreet, 920, 0, 'HOSPITAL', 1.05),
+  building('hotel', civicStreet, 2650, 0, 'HOTEL', 1.05),
+  building('apartment', civicStreet, 2990, 1),
+  building('apartment', westLane, 2580, 0),
+  building('townhouse', westLane, 2940, 2),
+  building('townhouse', westLane, 870, 1),
+  building('apartment', northStreet, 470, 0),
+  building('police', northStreet, 960, 0, 'POLICE'),
+  building('shop', northStreet, 1530, 0, 'DRUGS'),
+  building('burger', northStreet, 1825, 2, 'BURGER', 0.9),
+  building('cafe', southStreet, 2700, 3, 'CAFE'),
+  building('bakery', southStreet, 1590, 2, 'BAKERY'),
+  building('arcade', southStreet, 1940, 1, 'GAME', 0.85),
+  building('florist', marketLane, 2530, 1, 'FLOWERS', 0.9),
+  building('apartment', marketLane, 2020, 2, undefined, 0.85),
+  building('workshop', westLane, 1530, 2, 'WORKSHOP'),
+  building('house', westLane, 1850, 0),
+  building('house', westLane, 3530, 0),
+  building('townhouse', civicStreet, 3500, 0),
+  building('house', marketLane, 3910, 3, undefined, 0.9),
+  building('house', southStreet, 3700, 0),
+  building('house', northStreet, 2970, 3, undefined, 0.7),
+  building('house', northStreet, 2690, 0, undefined, 0.7),
+  building('house', coastLane, 1540, 0, undefined, 0.7),
+  building('house', coastLane, 1770, 3, undefined, 0.7),
+  building('house', civicStreet, 660, 3, undefined, 0.6),
+  building('library', libraryLane, 430, 1),
+  building('library', libraryLane, 1010, 1),
+  building('house', hillLane, 1940, 0, "NESS'S HOUSE", 1.15),
+  building('house', hillLane, 2590, 2, undefined, 1.15),
+  building('house', hillLane, 1140, 3, undefined, 0.6),
+  building('house', hillLane, 690, 3, undefined, 0.65),
+  // Smaller lots share the same setback and access rules as the landmarks.
+  building('post-office', westLane, 2100, 0, 'POST', 0.65),
+  building('cottage', civicStreet, 2070, 1, undefined, 0.65),
+  building('market', civicStreet, 2400, 0, 'MARKET', 0.65),
+  building('cottage', westLane, 3790, 3, undefined, 0.65),
+  building('fire-station', marketLane, 1530, 0, 'FIRE', 0.65),
+  building('townhouse', marketLane, 1760, 3, undefined, 0.65),
+  building('cinema', marketLane, 2800, 0, 'CINEMA', 0.65),
+  building('cafe', marketLane, 3470, 0, 'CAFE', 0.65),
+  building('cottage', marketLane, 3680, 2, undefined, 0.65),
+  building('market', marketLane, 1080, 1, 'MARKET', 0.65),
+  building('office', southStreet, 2440, 0, undefined, 0.65),
+  building('townhouse', southStreet, 3940, 1, undefined, 0.65),
+  building('florist', southStreet, 4190, 0, 'FLOWERS', 0.65),
+  building('cottage', coastLane, 2010, 0, undefined, 0.65),
+  building('house', coastLane, 2420, 1, undefined, 0.65),
+  building('bakery', coastLane, 2640, 3, 'BAKERY', 0.65),
+  building('cottage', coastLane, 2870, 2, undefined, 0.65),
+  building('post-office', coastLane, 3100, 1, 'POST', 0.65),
+  building('townhouse', coastLane, 3430, 2, undefined, 0.65),
+  building('house', coastLane, 3660, 1, undefined, 0.65),
+  building('workshop', coastLane, 3900, 0, 'WORKSHOP', 0.65),
+  building('cottage', coastLane, 4150, 3, undefined, 0.65),
+  building('office', northStreet, 2080, 1, undefined, 0.65),
+  building('cinema', northStreet, 2420, 1, 'CINEMA', 0.65),
+  building('cottage', libraryLane, 2690, 0, undefined, 0.65),
+  building('house', libraryLane, 2930, 1, undefined, 0.65)
+]
+
+export function townBuildingBounds(lot: TownBuilding) {
+  const footprint = townBuildingFootprint(lot.kind)
+  return {
+    left: lot.x + footprint.left * lot.scale,
+    right: lot.x + footprint.right * lot.scale,
+    back: lot.z + footprint.back * lot.scale,
+    front: lot.z + footprint.front * lot.scale
+  }
+}
+
+// Continue each model's existing entrance paving to the shared sidewalk edge.
+export function townBuildingAccess(lot: TownBuilding) {
+  const entrances =
+    lot.kind === 'townhouse'
+      ? [-29, 85]
+      : lot.kind === 'cafe' || lot.kind === 'florist'
+        ? [63]
+        : lot.kind === 'workshop'
+          ? [-76]
+          : lot.kind === 'fire-station'
+            ? [-66, 27, 92]
+            : lot.kind === 'market'
+              ? [-78, 0, 78]
+              : [0]
+  const start =
+    lot.kind === 'library' || lot.kind === 'police'
+      ? 188
+      : lot.kind === 'house' || lot.kind === 'townhouse'
+        ? 140
+        : lot.kind === 'cottage' || lot.kind === 'city-hall'
+          ? 160
+          : lot.kind === 'cafe' || lot.kind === 'florist' || lot.kind === 'workshop'
+            ? 110
+            : lot.kind === 'market'
+              ? 138
+              : 100
+  return entrances.map((x) => ({
+    x: lot.x + x * lot.scale,
+    start: lot.z + start * lot.scale,
+    end: lot.frontage.z + 2,
+    width: 28 * lot.scale
+  }))
+}
+
+// Gardens occupy spare parcels and open onto the adjoining lane.
+export const onettParks = [
+  { x: 1480, z: libraryLane.points[0].z - 124, frontage: libraryLane.points[0].z - 14 },
+  { x: 850, z: marketLane.points[0].z - 177, frontage: marketLane.points[0].z - 47 },
+  { x: 3060, z: marketLane.points[0].z - 177, frontage: marketLane.points[0].z - 47 }
 ]
 
 // Tree belts enclose the town and separate the northern trails from the civic blocks.
@@ -252,15 +329,17 @@ export function nearestTownRoad(point: Point, roads: TownRoad[]) {
       const b = road.points[i]
       const dx = b.x - a.x
       const dz = b.z - a.z
-      const t = Math.max(
-        0,
-        Math.min(1, ((point.x - a.x) * dx + (point.z - a.z) * dz) / (dx * dx + dz * dz))
-      )
+      const length = Math.hypot(dx, dz)
+      const along = ((point.x - a.x) * dx + (point.z - a.z) * dz) / length
+      const across = ((point.x - a.x) * dz - (point.z - a.z) * dx) / length
+      const t = Math.max(0, Math.min(1, along / length))
       const projected = { x: a.x + t * dx, z: a.z + t * dz }
+      // Match the rendered square end caps, including their sidewalk corners.
+      const halfWidth = road.width / 2 + (road.trail ? 0 : 18)
+      const side = Math.abs(across) - halfWidth
+      const end = Math.abs(along - length / 2) - length / 2 - halfWidth
       const clearance =
-        Math.hypot(point.x - projected.x, point.z - projected.z) -
-        road.width / 2 -
-        (road.trail ? 0 : 18)
+        Math.hypot(Math.max(side, 0), Math.max(end, 0)) + Math.min(Math.max(side, end), 0)
       if (clearance < distance) {
         distance = clearance
         nearest = projected
