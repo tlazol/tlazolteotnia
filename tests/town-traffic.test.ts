@@ -1,7 +1,12 @@
 import type { InstancedMesh, Scene, WebGLRenderer, WebGLRenderTarget } from 'three'
 import { describe, expect, it } from 'vitest'
 import { createTownScene } from '../src/lib/town-three.client'
-import { type TrafficRoute, trafficPose } from '../src/lib/town-traffic'
+import {
+  avoidTraffic,
+  type TrafficBody,
+  type TrafficRoute,
+  trafficPose
+} from '../src/lib/town-traffic'
 
 const route: TrafficRoute = {
   start: { x: 0, z: 0 },
@@ -10,6 +15,115 @@ const route: TrafficRoute = {
   progress: 0,
   speed: 54
 }
+
+describe('town traffic avoidance', () => {
+  const kinds = ['walker', 'bicycle', 'car'] as const
+  const halfWidth = { walker: 15, bicycle: 15, car: 20 }
+  const halfLength = { walker: 17, bicycle: 29, car: 35 }
+
+  // Independently check separating axes of the models' physical footprints.
+  function separated(a: TrafficBody, b: TrafficBody) {
+    return [a.pose.yaw, a.pose.yaw + Math.PI / 2, b.pose.yaw, b.pose.yaw + Math.PI / 2].some(
+      (yaw) => {
+        const extent = (body: TrafficBody) =>
+          (Math.abs(Math.cos(body.pose.yaw - yaw)) * halfLength[body.kind] +
+            Math.abs(Math.sin(body.pose.yaw - yaw)) * halfWidth[body.kind]) *
+          body.scale
+        const distance = Math.abs(
+          (a.pose.x - b.pose.x) * Math.sin(yaw) + (a.pose.z - b.pose.z) * Math.cos(yaw)
+        )
+        return distance >= extent(a) + extent(b)
+      }
+    )
+  }
+
+  for (const first of kinds) {
+    for (const second of kinds) {
+      it(`separates ${first} and ${second} while passing, overtaking and crossing`, () => {
+        for (const angle of [0, Math.PI / 2, Math.PI]) {
+          const a: TrafficBody = { kind: first, scale: 1, pose: { x: 0, z: 0, yaw: 0 } }
+          const b: TrafficBody = { kind: second, scale: 1, pose: { x: 0, z: 0, yaw: angle } }
+          for (let frame = 0; frame < 300; frame++) {
+            const distance = -150 + frame
+            a.pose = { x: 0, z: 0, yaw: 0 }
+            b.pose = { x: Math.sin(angle) * distance, z: Math.cos(angle) * distance, yaw: angle }
+            avoidTraffic([a, b], 1 / 60)
+            expect(separated(a, b), `angle ${angle}, frame ${frame}`).toBe(true)
+          }
+        }
+      })
+    }
+  }
+
+  it('spreads a group that starts in the same place without pushing into a third resident', () => {
+    const bodies: TrafficBody[] = Array.from({ length: 6 }, (_, index) => ({
+      kind: kinds[index % 3],
+      scale: index % 2 ? 0.72 : 1,
+      pose: { x: 0, z: 0, yaw: 0 }
+    }))
+    avoidTraffic(bodies, 0)
+    bodies.forEach((body, index) => {
+      for (const other of bodies.slice(index + 1)) expect(separated(body, other)).toBe(true)
+    })
+  })
+
+  it('tries the other side of an obstacle and leaves a focused resident in place', () => {
+    const a: TrafficBody = { kind: 'walker', scale: 1, pose: { x: 0, z: 0, yaw: 0 } }
+    const b: TrafficBody = { kind: 'bicycle', scale: 1, pose: { x: 0, z: 0, yaw: 0 } }
+    avoidTraffic(
+      [a, b],
+      0,
+      (body) => body === b,
+      (point) => point.x <= 0
+    )
+    expect(a.pose).toEqual({ x: 0, z: 0, yaw: 0 })
+    expect(b.pose.x).toBeLessThan(0)
+    expect(separated(a, b)).toBe(true)
+  })
+
+  it('yields in a narrow crowded lane without overlapping or jumping across the crowd', () => {
+    const bodies: TrafficBody[] = kinds.map((kind, index) => ({
+      kind,
+      scale: 1,
+      pose: { x: 0, z: -index * 120, yaw: 0 }
+    }))
+    const speeds = [12, 30, 54]
+    for (let frame = 0; frame < 600; frame++) {
+      const previous = bodies.map((body) => ({ ...body.pose }))
+      bodies.forEach((body, index) => {
+        body.pose = { x: 0, z: -index * 120 + frame * 0.05 * speeds[index], yaw: 0 }
+      })
+      avoidTraffic(
+        bodies,
+        0.05,
+        () => true,
+        (point) => Math.abs(point.x) <= 12
+      )
+      bodies.forEach((body, index) => {
+        expect(
+          Math.hypot(body.pose.x - previous[index].x, body.pose.z - previous[index].z)
+        ).toBeLessThan(10)
+        for (const other of bodies.slice(index + 1)) expect(separated(body, other)).toBe(true)
+      })
+    }
+  })
+
+  it('smoothly returns to the route once clear, and freezes the detour when paused', () => {
+    const a: TrafficBody = { kind: 'walker', scale: 1, pose: { x: 0, z: 0, yaw: 0 } }
+    const b: TrafficBody = { kind: 'walker', scale: 1, pose: { x: 0, z: 0, yaw: 0 } }
+    avoidTraffic([a, b], 0)
+    const stopped = { ...b.pose }
+    avoidTraffic([a, b], 0, () => false)
+    expect(b.pose).toEqual(stopped)
+    for (let frame = 0; frame < 360; frame++) {
+      const previous = b.pose.x
+      b.pose = { x: 0, z: 200, yaw: 0 }
+      avoidTraffic([b], 1 / 60)
+      expect(Math.abs(b.pose.x - previous)).toBeLessThan(1.5)
+    }
+    expect(Math.abs(b.pose.x)).toBeLessThan(0.01)
+  })
+})
 
 describe('town traffic routes', () => {
   it('travels forward in each lane at the assigned speed', () => {

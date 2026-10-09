@@ -42,7 +42,7 @@ import {
 } from './town-layout'
 import { createTownNavigation, type TownObstacle, type TownPoint } from './town-navigation'
 import { clampTownView, nearestResidentRoute, type TownArticle, townToBoard } from './town-posts'
-import { type TrafficRoute, trafficPose } from './town-traffic'
+import { avoidTraffic, type TrafficBody, type TrafficRoute, trafficPose } from './town-traffic'
 import { boardToTown, createTownCamera, updateTownCamera } from './town-view'
 
 type Part = {
@@ -59,15 +59,13 @@ type Part = {
   motion?: 'leg' | 'arm' | 'pedal' | 'wheel'
 }
 type TownShape = 'box' | 'person' | 'ground' | 'land' | 'roof' | 'gable' | 'tree' | 'disc' | 'wheel'
-type Resident = {
+type Resident = TrafficBody & {
   slug?: string
   time?: number
   returning?: { path: TownPoint[]; route: TrafficRoute }
   route: TrafficRoute
-  kind: 'car' | 'bicycle' | 'walker'
-  scale: number
   phase: number
-  pose: ReturnType<typeof trafficPose>
+  placed?: boolean
 }
 type MovingPart = { part: Part; resident: Resident }
 
@@ -294,6 +292,7 @@ export function createTownScene(articles?: TownArticle[]) {
   const occluders: InstancedMesh[] = []
   const traffic = new Scene()
   const residents: Resident[] = []
+  const ambientResidents = new Map<string, Resident>()
   const trafficMeshes: { mesh: InstancedMesh; items: MovingPart[] }[] = []
   const obstacles: TownObstacle[] = []
   function containsGround(point: TownPoint) {
@@ -1970,13 +1969,15 @@ export function createTownScene(articles?: TownArticle[]) {
             progress: placement.t,
             speed: placement.kind === 'car' ? 54 : placement.kind === 'bicycle' ? 30 : 12
           }
-          resident = {
+          const key = `${roadIndex}:${segment}:${index}`
+          resident = ambientResidents.get(key) ?? {
             route,
             kind: placement.kind,
             scale: placement.kind === 'car' ? 1 : personScale(variant),
             phase: variant * 1.7,
             pose: trafficPose(route, elapsed)
           }
+          ambientResidents.set(key, resident)
           residents.push(resident)
           scale = resident.scale
           if (resident.kind === 'car') car(variant)
@@ -2060,10 +2061,29 @@ export function createTownScene(articles?: TownArticle[]) {
     navigation = createTownNavigation(obstacles, containsGround)
   }
 
-  function animateTraffic() {
-    for (const resident of residents)
-      if (resident !== dragged?.resident && !resident.returning)
-        resident.pose = trafficPose(resident.route, resident.time ?? elapsed)
+  function animateTraffic(delta: number) {
+    const active = residents.filter(
+      (resident) =>
+        resident !== dragged?.resident && (!resident.slug || visibleSlugs?.has(resident.slug))
+    )
+    const moving = new Set(
+      active.filter(
+        (resident) =>
+          !resident.placed ||
+          (delta > 0 &&
+            (!resident.slug || resident.slug === selectedSlug || resident.slug !== focusedSlug))
+      )
+    )
+    for (const resident of moving) {
+      if (!resident.returning) resident.pose = trafficPose(resident.route, resident.time ?? elapsed)
+    }
+    avoidTraffic(
+      active,
+      delta,
+      (body) => moving.has(body),
+      (point) => navigation.canStand(point)
+    )
+    for (const resident of active) resident.placed = true
     for (const { mesh, items } of trafficMeshes) {
       items.forEach(({ part, resident }, index) => {
         const { x, z, yaw } = resident.pose
@@ -2133,8 +2153,11 @@ export function createTownScene(articles?: TownArticle[]) {
       } else {
         const route = nearestResidentRoute(resident.pose, resident.route, navigation.canStand)
         const path = navigation.findPath(resident.pose, trafficPose(route, 0))
-        if (path) resident.returning = { path, route }
-        else resident.pose = pose
+        if (path) {
+          resident.returning = { path, route }
+          resident.avoidance = undefined
+          resident.previousPose = undefined
+        } else resident.pose = pose
       }
       dragged = null
       trafficDirty = true
@@ -2234,6 +2257,12 @@ export function createTownScene(articles?: TownArticle[]) {
         ) {
           resident.time = (resident.time ?? 0) + delta
           if (resident.returning) {
+            if (delta <= 0) continue
+            resident.pose = {
+              ...resident.pose,
+              x: resident.pose.x - (resident.avoidance?.x ?? 0),
+              z: resident.pose.z - (resident.avoidance?.z ?? 0)
+            }
             let remaining = delta * resident.route.speed
             while (resident.returning.path.length) {
               const next = resident.returning.path[0]
@@ -2265,7 +2294,7 @@ export function createTownScene(articles?: TownArticle[]) {
       lastMotion = motion
       const previousTarget = renderer.getRenderTarget()
       let updateTraffic = dirty || trafficDirty || elapsed !== previousElapsed
-      if (updateTraffic) animateTraffic()
+      if (updateTraffic) animateTraffic(delta)
       const followed = followedSlug ? articleResidents.get(followedSlug) : undefined
       if (followed) {
         const point = townToBoard(followed.pose.x, followed.pose.z, 28)
