@@ -100,6 +100,8 @@ describe('blog post parser', () => {
     expect(
       sortBlogPostsNewestFirst(posts.filter((post) => !post.draft)).map((post) => post.slug)
     ).toEqual([
+      'jev-and-gpt-customer-support',
+      'retired-programmer',
       'reducing-smartphone-screen-time',
       'react-router-to-tanstack-start',
       'how-to-reset-colima',

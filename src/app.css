@@ -855,6 +855,48 @@ body {
   margin-bottom: 0;
 }
 
+.mermaid-diagram figcaption {
+  margin-bottom: 1rem;
+  color: var(--post-accent-soft);
+  font-weight: 700;
+}
+
+.mermaid-diagram img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0 auto;
+}
+
+.mermaid-diagram pre {
+  overflow-x: auto;
+}
+
+.markdown-body a[href^="#reference-"] {
+  margin-inline-end: 0.35em;
+}
+
+.markdown-body ol:has([id^="reference-"]) {
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
+
+.markdown-body ol:has([id^="reference-"]) > li {
+  margin-bottom: 0.3rem;
+  break-inside: avoid;
+}
+
+.markdown-body ol:has([id^="reference-"]) > li::marker {
+  content: "[" counter(list-item) "] ";
+}
+
+@media (min-width: 680px) {
+  .markdown-body ol:has([id^="reference-"]) {
+    column-count: 2;
+    column-gap: 2.5rem;
+  }
+}
+
 .markdown-table {
   position: relative;
   max-width: 100%;
@@ -871,17 +913,6 @@ body {
     0 16px 38px rgba(0, 0, 0, 0.2);
   scrollbar-color: color-mix(in srgb, var(--post-accent) 64%, var(--line)) var(--panel);
   scrollbar-width: thin;
-}
-
-.markdown-table::before {
-  position: absolute;
-  top: -1px;
-  left: 1rem;
-  width: 4.5rem;
-  height: 2px;
-  background: var(--post-spectrum);
-  box-shadow: 0 0 12px var(--post-accent-glow);
-  content: "";
 }
 
 .markdown-table table {

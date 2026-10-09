@@ -37,6 +37,7 @@ const postIdentities: Record<string, PostIdentity> = {
   'gpt-english-email-tips': animal('🐤', 'CHICK://MAIL', 'ヒヨコ'),
   'gpt4-tetris-prompt': animal('🦙', 'LLAMA://BLOCKS', 'リャマ'),
   'how-to-reset-colima': animal('🦦', 'OTTER://COLIMA', 'カワウソ'),
+  'jev-and-gpt-customer-support': animal('🐈', 'CAT://DECISION', 'ネコ'),
   'lambdatest-e2e-platform': animal('🐏', 'RAM://E2E', 'ヒツジ'),
   'langchain-typescript-chatgpt-search': animal('🐍', 'SERPENT://CHAIN', 'ヘビ'),
   'localization-writing-structure': animal('🦆', 'DUCK://LOCALE', 'カモ'),
@@ -55,6 +56,7 @@ const postIdentities: Record<string, PostIdentity> = {
   'react-router-renewal': animal('🦊', 'FØX://ROUTER', 'キツネ'),
   'reducing-smartphone-screen-time': animal('🦥', 'SLØTH://OFFLINE', 'ナマケモノ'),
   'resume-writing-notes': animal('🦔', 'HEDGEHØG://CV', 'ハリネズミ'),
+  'retired-programmer': animal('🦛', 'HIPPO://REST', 'カバ'),
   'rpg-attack-logic': animal('🐅', 'TIGER://CRIT', 'トラ'),
   'ssml-speakable-characters': animal('🐸', 'FRØG://SSML', 'カエル'),
   'still-dont-know-best-way-to-count-documents-in-documentdb': animal(

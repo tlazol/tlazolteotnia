@@ -62,12 +62,53 @@ describe('MarkdownBody', () => {
     expect(html).toContain('<td>🙂 good</td>')
   })
 
-  it('does not render block or inline raw HTML', () => {
+  it('renders numbered citations with matching reference anchors', () => {
+    const html = render(
+      'Claim.[[1]](#reference-1)\n\n<a id="reference-1"></a>[1] [Source](https://example.com)'
+    )
+
+    expect(html).toContain('<a href="#reference-1">[1]</a>')
+    expect(html).toContain('id="reference-1"')
+    expect(html).toContain('</span>[1] <a href="https://example.com">Source</a>')
+  })
+
+  it('keeps Mermaid descriptions readable during SSR and in feeds', () => {
+    const html = render(
+      '```mermaid\nflowchart TD\naccTitle: 問い合わせの流れ\naccDescr: 分類して返信する。\nA --> B\n```'
+    )
+
+    expect(html).toContain('<figure class="mermaid-diagram">')
+    expect(html).toContain('<figcaption>問い合わせの流れ</figcaption>')
+    expect(html).toContain('<p>分類して返信する。</p>')
+    expect(html).not.toContain('A --&gt; B')
+  })
+
+  it('preserves reference anchors inside a compact ordered list', () => {
+    const html = render(
+      '1. <a id="reference-1"></a>[First](https://example.com/1)\n2. <a id="reference-2"></a>[Second](https://example.com/2)'
+    )
+
+    expect(html).toContain('<ol start="1"><li>')
+    expect(html).toContain('id="reference-1"')
+    expect(html).toContain('id="reference-2"')
+    expect(html).not.toContain('<li><p>')
+  })
+
+  it('does not render raw HTML other than ID-only anchors', () => {
     const html = render('<script>alert(1)</script>\n\nText <b>unsafe</b> end')
 
     expect(html).not.toContain('<script>')
     expect(html).not.toContain('<b>')
     expect(html).toContain('Text unsafe end')
+  })
+
+  it('rejects anchor markup with additional attributes or unsafe IDs', () => {
+    const html = render(
+      '<a id="bad" onclick="alert(1)"></a>\n\n<a id="bad" href="javascript:alert(1)"></a>\n\n<a id="bad&quote;"></a>'
+    )
+
+    expect(html).not.toContain('<span')
+    expect(html).not.toContain('<a')
   })
 
   it('keeps text and alt text while rejecting unsafe link and image URLs', () => {

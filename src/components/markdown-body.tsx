@@ -1,6 +1,7 @@
 import { marked, type Token, type Tokens } from 'marked'
 import { createElement, Fragment, type ReactNode } from 'react'
 import { CodeBlock } from '#/components/code-block'
+import { MermaidDiagram } from '#/components/mermaid-diagram'
 import {
   getMarkdownHeadingTag,
   getUnknownMarkdownTokenPolicy,
@@ -21,8 +22,9 @@ function renderBlock(token: Token, key: number, baseUrl?: string): ReactNode {
   switch (token.type) {
     case 'space':
     case 'def':
-    case 'html':
       return null
+    case 'html':
+      return renderAnchor(token as Tokens.HTML, key)
     case 'heading': {
       const heading = token as Tokens.Heading
 
@@ -82,6 +84,10 @@ function renderBlock(token: Token, key: number, baseUrl?: string): ReactNode {
     }
     case 'code': {
       const code = token as Tokens.Code
+
+      if (code.lang?.trim() === 'mermaid') {
+        return <MermaidDiagram code={code.text} key={key} />
+      }
 
       return <CodeBlock code={code.text} info={code.lang} key={key} />
     }
@@ -173,7 +179,7 @@ function renderInlineToken(token: Token, key: number, baseUrl?: string): ReactNo
     case 'image':
       return renderImage(token as Tokens.Image, key, baseUrl)
     case 'html':
-      return null
+      return renderAnchor(token as Tokens.HTML, key)
     default: {
       const unknownToken = token as { text?: string }
 
@@ -186,6 +192,13 @@ function renderInlineToken(token: Token, key: number, baseUrl?: string): ReactNo
 
 function renderText(token: Tokens.Text, baseUrl?: string) {
   return token.tokens ? renderInline(token.tokens, baseUrl) : token.text
+}
+
+function renderAnchor(token: Tokens.HTML, key: number) {
+  // Allow only an ID-only anchor; all other raw HTML remains discarded.
+  const id = /^<a id="([A-Za-z][A-Za-z0-9_-]*)">(?:<\/a>)?$/.exec(token.text.trim())?.[1]
+
+  return id ? <span className="scroll-mt-24" id={id} key={key} /> : null
 }
 
 function renderLink(token: Tokens.Link, key: number, baseUrl?: string) {
