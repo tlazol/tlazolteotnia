@@ -1,13 +1,20 @@
 import { InstancedMesh, Matrix4, Vector3, type WebGLRenderer } from 'three'
 import { describe, expect, it, vi } from 'vitest'
 import type { BlogPostSummary } from '../src/lib/blog-post'
-import { nearestTownRoad, onettBuildings, onettRoads } from '../src/lib/town-layout'
+import {
+  nearestTownRoad,
+  onettBuildings,
+  onettHills,
+  onettRoads,
+  onettToTown
+} from '../src/lib/town-layout'
 import {
   clampTownView,
   fitTown,
-  layoutTownArticles,
   nearestResidentRoute,
   placeTownBubble,
+  layoutTownArticles as randomTownArticles,
+  type TownArticle,
   townBounds,
   townToBoard
 } from '../src/lib/town-posts'
@@ -31,6 +38,22 @@ const renderer = {
   render: () => {}
 } as unknown as WebGLRenderer
 
+// Scene interaction tests use repeatable layouts; randomness is tested separately.
+const layoutTownArticles = (catalogue: BlogPostSummary[]) =>
+  randomTownArticles(catalogue, () => 0.5)
+const streetResident: TownArticle = {
+  slug: 'retired-programmer',
+  variant: 15,
+  kind: 'walker',
+  route: {
+    start: onettRoads[0].points[0],
+    end: onettRoads[0].points[1],
+    lane: -48,
+    progress: 0.58148,
+    speed: 10
+  }
+}
+
 describe('article residents', () => {
   it.each([
     'walker',
@@ -42,14 +65,9 @@ describe('article residents', () => {
     for (const point of [...onettBuildings, { x: -10000, z: 10000 }]) {
       const route = nearestResidentRoute(point, article.route)
       expect(route.speed).toBe(article.route.speed)
-      expect(Math.abs(route.lane)).toBe(Math.abs(article.route.lane))
-      expect(
-        onettRoads.some((road) =>
-          road.points.some(
-            (start, index) => start === route.start && road.points[index + 1] === route.end
-          )
-        )
-      ).toBe(true)
+      expect(Math.abs(route.lane)).toBeLessThanOrEqual(Math.abs(article.route.lane))
+      expect(nearestTownRoad(route.start, onettRoads).distance).toBeLessThanOrEqual(0)
+      expect(nearestTownRoad(route.end, onettRoads).distance).toBeLessThanOrEqual(0)
       for (let time = 0; time <= 1000; time += 20) {
         expect(nearestTownRoad(trafficPose(route, time), onettRoads).distance).toBeLessThanOrEqual(
           0
@@ -64,7 +82,7 @@ describe('article residents', () => {
     'bicycle'
   ] as const)('leaves a dropped %s on the grass, walks back without jumps, and then follows the road', (kind) => {
     for (const zoom of [1, 0.3, 2.5]) {
-      const article = layoutTownArticles([{ ...posts[0], slug: 'retired-programmer' }])[0]
+      const article = structuredClone(streetResident)
       article.kind = kind
       article.route.lane = kind === 'bicycle' ? 29 : 48
       const town = createTownScene([article])
@@ -169,13 +187,60 @@ describe('article residents', () => {
     expect(full).toHaveLength(46)
     expect(new Set(full.map((person) => person.slug)).size).toBe(46)
     for (const person of layoutTownArticles([posts[10], posts[0], posts[45]])) {
-      expect(person).toEqual(full.find((candidate) => candidate.slug === person.slug))
+      const original = full.find((candidate) => candidate.slug === person.slug)
+      expect(person.variant).toBe(original?.variant)
+      expect(person.kind).toBe(original?.kind)
     }
     expect(layoutTownArticles([])).toEqual([])
     expect(new Set(full.map((person) => person.kind))).toEqual(new Set(['walker', 'bicycle']))
     for (const person of full) {
-      expect(Math.abs(person.route.lane)).toBe(person.kind === 'bicycle' ? 29 : 48)
+      expect(Math.abs(person.route.lane)).toBeLessThanOrEqual(person.kind === 'bicycle' ? 29 : 48)
     }
+  })
+
+  it('changes positions between visits while keeping each resident’s appearance', () => {
+    const random = vi.spyOn(Math, 'random')
+    try {
+      random.mockReturnValue(0.2)
+      const first = randomTownArticles(posts)
+      random.mockReturnValue(0.8)
+      const second = randomTownArticles(posts)
+      expect(second.map((person) => person.route)).not.toEqual(first.map((person) => person.route))
+      expect(second.map(({ route: _, ...identity }) => identity)).toEqual(
+        first.map(({ route: _, ...identity }) => identity)
+      )
+    } finally {
+      random.mockRestore()
+    }
+  })
+
+  it.each([
+    0, 0.25, 0.5, 0.999
+  ])('spreads residents across town and keeps circuits outside hills (%s)', (value) => {
+    const articles = randomTownArticles(posts, () => value)
+    const positions = articles.map((article) => trafficPose(article.route, 0))
+    expect(Math.min(...positions.map((point) => point.z))).toBeLessThan(-2200)
+    expect(Math.max(...positions.map((point) => point.z))).toBeGreaterThan(1500)
+    expect(Math.min(...positions.map((point) => point.x))).toBeLessThan(650)
+    expect(Math.max(...positions.map((point) => point.x))).toBeGreaterThan(3100)
+    const counts = new Map<string, number>()
+    for (const article of articles) {
+      const key = JSON.stringify([article.route.start, article.route.end])
+      counts.set(key, (counts.get(key) ?? 0) + 1)
+      for (let time = 0; time <= 1000; time += 5) {
+        const point = trafficPose(article.route, time)
+        expect(nearestTownRoad(point, onettRoads).distance).toBeLessThanOrEqual(0.001)
+        for (const hill of onettHills) {
+          const center = onettToTown(hill.x, hill.y)
+          expect(
+            Math.abs(point.x - center.x) < hill.width / 2 + 12 &&
+              Math.abs(point.z - center.z) < hill.depth / 2 + 12
+          ).toBe(false)
+        }
+      }
+    }
+    expect(counts.size).toBeGreaterThan(20)
+    expect(Math.max(...counts.values()) - Math.min(...counts.values())).toBeLessThanOrEqual(1)
   })
 
   it.each([
@@ -242,7 +307,7 @@ describe('article residents', () => {
           speed: 0
         }
       },
-      ...layoutTownArticles([{ ...posts[0], slug: 'retired-programmer' }])
+      structuredClone(streetResident)
     ])
     try {
       town.follow(null)
