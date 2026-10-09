@@ -22,8 +22,6 @@ import { PostModal } from './post-modal'
 import { SiteHeader } from './site-header'
 
 const loadRenderer = createClientOnlyFn(() => import('#/lib/town-articles.client'))
-const AUTO_BUBBLE_DELAY = 4_000
-const AUTO_BUBBLE_DURATION = 6_000
 type Point = { x: number; y: number }
 
 export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
@@ -38,9 +36,7 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
   const [failed, setFailed] = useState(false)
   const [dragging, setDragging] = useState(false)
   const [draggedSlug, setDraggedSlug] = useState<string | null>(null)
-  const [activeSlug, setActiveSlugState] = useState<string | null>(null)
-  const automaticBubble = useRef(false)
-  const previousAutomaticSlug = useRef<string | null>(null)
+  const [activeSlug, setActiveSlug] = useState<string | null>(null)
   const [selectedPost, setSelectedPost] = useState<BlogPostSummary | null>(null)
   const [listOpen, setListOpen] = useState(false)
   const loading = !ready && !failed
@@ -65,11 +61,6 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
   const lastPositions = useRef<ResidentScreenPosition[]>([])
   const latest = useRef({ size, activeSlug, topic, q, visiblePosts })
   latest.current = { size, activeSlug, topic, q, visiblePosts }
-
-  function setActiveSlug(slug: string | null) {
-    automaticBubble.current = false
-    setActiveSlugState(slug)
-  }
 
   function updateView(next: BoardView) {
     const clamped = clampTownView(next, latest.current.size)
@@ -189,50 +180,10 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
     setQuery(q)
   }, [visiblePosts, topic, q])
   useEffect(() => {
-    pendingBubbleFocus.current = automaticBubble.current ? null : activeSlug
+    pendingBubbleFocus.current = activeSlug
     renderer.current?.select(activeSlug)
     positionOverlay(lastPositions.current)
   }, [activeSlug])
-  useEffect(() => {
-    if (!ready || listOpen || selectedPost || dragging) {
-      if (automaticBubble.current) setActiveSlug(null)
-      return
-    }
-    if (activeSlug && !automaticBubble.current) return
-
-    let timer: ReturnType<typeof setTimeout>
-    function advanceBubble() {
-      if (activeSlug) {
-        if (!automaticBubble.current) return
-        // Keep the article link available while someone is interacting with it.
-        if (bubble.current?.matches(':hover, :focus-within')) {
-          timer = setTimeout(advanceBubble, 1_000)
-          return
-        }
-        setActiveSlug(null)
-        return
-      }
-      if (!document.hidden && !pointers.current.size && !document.querySelector('dialog[open]')) {
-        const candidates = lastPositions.current.filter(
-          (position) => position.visible && visiblePosts.some((post) => post.slug === position.slug)
-        )
-        const nextCandidates = candidates.filter(
-          (position) => position.slug !== previousAutomaticSlug.current
-        )
-        const pool = nextCandidates.length ? nextCandidates : candidates
-        const next = pool[Math.floor(Math.random() * pool.length)]
-        if (next) {
-          automaticBubble.current = true
-          previousAutomaticSlug.current = next.slug
-          setActiveSlugState(next.slug)
-          return
-        }
-      }
-      timer = setTimeout(advanceBubble, AUTO_BUBBLE_DELAY)
-    }
-    timer = setTimeout(advanceBubble, activeSlug ? AUTO_BUBBLE_DURATION : AUTO_BUBBLE_DELAY)
-    return () => clearTimeout(timer)
-  }, [ready, listOpen, selectedPost, dragging, activeSlug, visiblePosts])
   useEffect(() => {
     if (listOpen) listHeading.current?.focus()
   }, [listOpen])
