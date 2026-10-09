@@ -70,7 +70,12 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
     boardSession.key = 'town'
   }
 
-  function positionOverlay(positions: ResidentScreenPosition[]) {
+  function positionOverlay(positions: ResidentScreenPosition[], nextView?: BoardView) {
+    if (nextView) {
+      currentView.current = nextView
+      boardSession.view = nextView
+      boardSession.key = 'town'
+    }
     lastPositions.current = positions
     const state = latest.current
     for (const position of positions) {
@@ -234,6 +239,10 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
     const rect = surface.current?.getBoundingClientRect()
     return { x: event.clientX - (rect?.left ?? 0), y: event.clientY - (rect?.top ?? 0) }
   }
+  function selectResident(slug: string) {
+    renderer.current?.follow(slug)
+    setActiveSlug(activeSlug === slug ? null : slug)
+  }
   function pointerDown(event: PointerEvent<HTMLDivElement>) {
     if (!ready || event.button !== 0) return
     if (event.target instanceof Element && event.target.closest('.town-bubble')) {
@@ -249,6 +258,8 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
         residentDrag.current = { slug, pointerId: event.pointerId, started: false }
         renderer.current?.focus(slug)
         event.currentTarget.setPointerCapture(event.pointerId)
+      } else {
+        renderer.current?.follow(null)
       }
     }
     if (residentDrag.current && residentDrag.current.pointerId !== event.pointerId) return
@@ -316,12 +327,12 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
       residentDrag.current = null
       setDraggedSlug(null)
       if (!resident.started && event.type === 'pointerup') {
-        setActiveSlug(activeSlug === resident.slug ? null : resident.slug)
+        selectResident(resident.slug)
         // Pointer capture retargets the click to the surface; handle this tap here.
         didDrag.current = true
       }
     }
-    if (!didDrag.current && event.target === event.currentTarget) setActiveSlug(null)
+    if (!didDrag.current && !resident) setActiveSlug(null)
     pointers.current.delete(event.pointerId)
     if (event.currentTarget.hasPointerCapture(event.pointerId))
       event.currentTarget.releasePointerCapture(event.pointerId)
@@ -380,7 +391,7 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
               aria-label={`${post.title} の住人に話しかける`}
               aria-expanded={activeSlug === post.slug}
               aria-controls={activeSlug === post.slug ? 'town-bubble' : undefined}
-              onClick={() => setActiveSlug(activeSlug === post.slug ? null : post.slug)}
+              onClick={() => selectResident(post.slug)}
               onPointerEnter={() => {
                 if (!pointers.current.size && releasedResident.current !== post.slug)
                   renderer.current?.focus(post.slug)
@@ -549,7 +560,12 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
               type="button"
               aria-label="縮小"
               onClick={() =>
-                updateView(zoomBoardAt(view, 1 / 1.25, { x: size.width / 2, y: size.height / 2 }))
+                updateView(
+                  zoomBoardAt(currentView.current, 1 / 1.25, {
+                    x: size.width / 2,
+                    y: size.height / 2
+                  })
+                )
               }
             >
               −
@@ -559,18 +575,30 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
               type="button"
               aria-label="拡大"
               onClick={() =>
-                updateView(zoomBoardAt(view, 1.25, { x: size.width / 2, y: size.height / 2 }))
+                updateView(
+                  zoomBoardAt(currentView.current, 1.25, { x: size.width / 2, y: size.height / 2 })
+                )
               }
             >
               +
             </button>
-            <button type="button" aria-label="全体表示" onClick={() => updateView(fitTown(size))}>
+            <button
+              type="button"
+              aria-label="全体表示"
+              onClick={() => {
+                renderer.current?.follow(null)
+                updateView(fitTown(size))
+              }}
+            >
               ⛶
             </button>
             <button
               type="button"
               aria-label="初期位置に戻る"
-              onClick={() => updateView(initialTownView(size, articles[0]))}
+              onClick={() => {
+                renderer.current?.follow(articles[0]?.slug ?? null)
+                updateView(initialTownView(size, articles[0]))
+              }}
             >
               ↺
             </button>

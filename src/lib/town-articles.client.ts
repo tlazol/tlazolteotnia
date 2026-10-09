@@ -10,7 +10,7 @@ export type ResidentScreenPosition = ReturnType<
 export function createArticleTown(
   canvas: HTMLCanvasElement,
   articles: TownArticle[],
-  onPositions: (positions: ResidentScreenPosition[]) => void,
+  onPositions: (positions: ResidentScreenPosition[], view: BoardView) => void,
   onFailure: () => void
 ) {
   const renderer = new WebGLRenderer({ canvas, antialias: false, alpha: false })
@@ -34,8 +34,8 @@ export function createArticleTown(
     if (disposed || document.hidden || !hasSize) return
     try {
       renderer.clear()
-      town.render(renderer, now, !reducedMotion.matches)
-      onPositions(town.projectResidents(now))
+      const view = town.render(renderer, now, !reducedMotion.matches)
+      onPositions(town.projectResidents(now), view)
       if (!reducedMotion.matches) timer = setTimeout(wake, 1000 / 30)
     } catch (error) {
       console.error('Town renderer unavailable', error)
@@ -90,6 +90,10 @@ export function createArticleTown(
     },
     select(slug: string | null) {
       town.select(slug)
+      wake()
+    },
+    follow(slug: string | null) {
+      town.follow(slug)
       wake()
     },
     focus(slug: string | null) {

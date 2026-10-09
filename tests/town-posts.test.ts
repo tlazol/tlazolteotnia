@@ -181,7 +181,7 @@ describe('article residents', () => {
   it.each([
     'walker',
     'bicycle'
-  ] as const)('stops a selected %s, preserves their pose across detail rebuilds, and resumes without teleporting', (kind) => {
+  ] as const)('keeps a selected %s moving across focus and detail rebuilds without teleporting', (kind) => {
     const articles = layoutTownArticles(posts)
     const selected = articles.find((article) => article.kind === kind)
     if (!selected) throw new Error('Article resident missing')
@@ -193,15 +193,18 @@ describe('article residents', () => {
       town.render(renderer, 0, true)
       town.render(renderer, 100, true)
       town.select(selected.slug)
-      const stopped = town.residentPosition(selected.slug)
+      town.focus(selected.slug)
+      const before = town.residentPosition(selected.slug)
       const other = town.residentPosition(otherSlug)
       town.render(renderer, 200, true)
-      expect(town.residentPosition(selected.slug)).toEqual(stopped)
+      expect(town.residentPosition(selected.slug)).not.toEqual(before)
       expect(town.residentPosition(otherSlug)).not.toEqual(other)
       town.update({ ...view, zoom: 0.3 }, size)
       town.render(renderer, 300, true)
-      expect(town.residentPosition(selected.slug)).toEqual(stopped)
+      const stopped = town.residentPosition(selected.slug)
+      expect(stopped).not.toEqual(before)
       town.select(null)
+      town.focus(null)
       town.render(renderer, 400, true)
       const resumed = town.residentPosition(selected.slug)
       if (!resumed || !stopped) throw new Error('Article resident missing')
@@ -242,6 +245,7 @@ describe('article residents', () => {
       ...layoutTownArticles([{ ...posts[0], slug: 'retired-programmer' }])
     ])
     try {
+      town.follow(null)
       const viewport = { width: 1600, height: 1200 }
       town.update(fitTown(viewport), viewport)
       town.render(renderer, 0, false)
@@ -253,7 +257,7 @@ describe('article residents', () => {
     }
   })
 
-  it('gives every bicycle an article and stops or hides its wheels with the rider', () => {
+  it('keeps selected bicycle wheels moving and hides them with the rider', () => {
     const rider = layoutTownArticles(posts).find((article) => article.kind === 'bicycle')
     if (!rider) throw new Error('Cyclist missing')
     const town = createTownScene([rider])
@@ -271,7 +275,7 @@ describe('article residents', () => {
       town.select(rider.slug)
       const stopped = [...wheels.instanceMatrix.array]
       town.render(renderer, 100, true)
-      expect([...wheels.instanceMatrix.array]).toEqual(stopped)
+      expect([...wheels.instanceMatrix.array]).not.toEqual(stopped)
       town.select(null)
       town.render(renderer, 200, true)
       expect([...wheels.instanceMatrix.array]).not.toEqual(stopped)
@@ -311,6 +315,47 @@ describe('article residents', () => {
 })
 
 describe('town viewport and conversations', () => {
+  it('follows the newest resident, switches targets, and stays put after unlocking or filtering', () => {
+    const articles = layoutTownArticles(posts.slice(0, 2))
+    const town = createTownScene(articles)
+    try {
+      town.update(view, size)
+      const initial = town.render(renderer, 0, true)
+      const head = town.projectResidents(0)[0]
+      const moving = town.render(renderer, 100, true)
+      expect(moving).not.toEqual(initial)
+      const tracked = town.projectResidents(100)[0]
+      expect(tracked.x).toBeCloseTo(head.x)
+      expect(tracked.y).toBeCloseTo(head.y)
+
+      town.follow(articles[1].slug)
+      town.render(renderer, 200, true)
+      expect(town.projectResidents(200)[1].x).toBeCloseTo(size.width / 2)
+      town.update({ ...moving, zoom: 1.25 }, { width: 390, height: 844 })
+      const resized = town.render(renderer, 300, true)
+      expect(resized.zoom).toBe(1.25)
+      expect(town.projectResidents(300)[1].x).toBeCloseTo(195)
+
+      town.follow(null)
+      const unlockedPose = town.residentPosition(articles[1].slug)
+      expect(town.render(renderer, 400, true)).toEqual(resized)
+      expect(town.residentPosition(articles[1].slug)).not.toEqual(unlockedPose)
+      town.follow(articles[0].slug)
+      const relocked = town.render(renderer, 500, true)
+      town.filter([articles[1].slug])
+      expect(town.render(renderer, 600, true)).toEqual(relocked)
+      town.follow(articles[0].slug)
+      expect(town.render(renderer, 700, true)).toEqual(relocked)
+      town.follow(articles[1].slug)
+      const beforeDrag = town.render(renderer, 800, true)
+      town.beginResidentDrag(articles[1].slug)
+      town.moveResidentDrag(50, 50)
+      expect(town.render(renderer, 900, true)).toEqual(beforeDrag)
+    } finally {
+      town.dispose()
+    }
+  })
+
   it('aligns the head of a resident with its DOM overlay at every zoom', () => {
     const camera = createTownCamera()
     for (const zoom of [0.2, 1, 2.5]) {

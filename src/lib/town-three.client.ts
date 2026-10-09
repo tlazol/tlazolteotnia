@@ -41,7 +41,7 @@ import {
   onettToTown
 } from './town-layout'
 import { createTownNavigation, type TownObstacle, type TownPoint } from './town-navigation'
-import { nearestResidentRoute, type TownArticle } from './town-posts'
+import { clampTownView, nearestResidentRoute, type TownArticle, townToBoard } from './town-posts'
 import { type TrafficRoute, trafficPose } from './town-traffic'
 import { boardToTown, createTownCamera, updateTownCamera } from './town-view'
 
@@ -311,6 +311,8 @@ export function createTownScene(articles?: TownArticle[]) {
   let lastTime: number | undefined
   let lastMotion = false
   let selectedSlug: string | null = null
+  let followedSlug: string | null = articles?.[0]?.slug ?? null
+  let currentView: BoardView = { x: 0, y: 0, zoom: 1 }
   let focusedSlug: string | null = null
   let dragged: { resident: Resident; pose: Resident['pose'] } | null = null
   let zoom = 1
@@ -2108,6 +2110,7 @@ export function createTownScene(articles?: TownArticle[]) {
     beginResidentDrag(slug: string) {
       const resident = articleResidents.get(slug)
       if (!resident) return
+      followedSlug = null
       dragged = { resident, pose: { ...resident.pose } }
       trafficDirty = true
     },
@@ -2140,11 +2143,15 @@ export function createTownScene(articles?: TownArticle[]) {
     select(slug: string | null) {
       selectedSlug = slug
     },
+    follow(slug: string | null) {
+      followedSlug = slug && visibleSlugs?.has(slug) ? slug : null
+    },
     focus(slug: string | null) {
       focusedSlug = slug
     },
     filter(slugs: string[]) {
       visibleSlugs = new Set(slugs)
+      if (followedSlug && !visibleSlugs.has(followedSlug)) followedSlug = null
       dirty = true
       visibilityTime = -Infinity
     },
@@ -2186,6 +2193,7 @@ export function createTownScene(articles?: TownArticle[]) {
       })
     },
     update(view: BoardView, size: BoardSize) {
+      currentView = view
       viewport = size
       zoom = view.zoom
       const nextKey = [view.x, view.y, view.zoom, size.width, size.height].join(':')
@@ -2221,8 +2229,7 @@ export function createTownScene(articles?: TownArticle[]) {
       for (const [slug, resident] of articleResidents) {
         if (
           resident !== dragged?.resident &&
-          resident.slug !== selectedSlug &&
-          resident.slug !== focusedSlug &&
+          (resident.slug === selectedSlug || resident.slug !== focusedSlug) &&
           visibleSlugs?.has(slug)
         ) {
           resident.time = (resident.time ?? 0) + delta
@@ -2257,7 +2264,28 @@ export function createTownScene(articles?: TownArticle[]) {
       lastTime = now
       lastMotion = motion
       const previousTarget = renderer.getRenderTarget()
-      const updateTraffic = dirty || trafficDirty || elapsed !== previousElapsed
+      let updateTraffic = dirty || trafficDirty || elapsed !== previousElapsed
+      if (updateTraffic) animateTraffic()
+      const followed = followedSlug ? articleResidents.get(followedSlug) : undefined
+      if (followed) {
+        const point = townToBoard(followed.pose.x, followed.pose.z, 28)
+        const next = clampTownView(
+          {
+            x: viewport.width / 2 - point.x * zoom,
+            y: viewport.height * 0.56 - point.y * zoom,
+            zoom
+          },
+          viewport
+        )
+        if (next.x !== currentView.x || next.y !== currentView.y) {
+          currentView = next
+          viewKey = ''
+          visibilityTime = -Infinity
+          dirty = true
+          updateTraffic = true
+          updateTownCamera(camera, currentView, viewport)
+        }
+      }
       if (dirty) {
         renderer.setRenderTarget(target)
         renderer.clear()
@@ -2265,7 +2293,6 @@ export function createTownScene(articles?: TownArticle[]) {
         dirty = false
       }
       if (updateTraffic) {
-        animateTraffic()
         trafficDirty = false
         renderer.setRenderTarget(trafficTarget)
         renderer.clear()
@@ -2273,6 +2300,7 @@ export function createTownScene(articles?: TownArticle[]) {
       }
       renderer.setRenderTarget(previousTarget)
       renderer.render(backdrop, backdropCamera)
+      return currentView
     },
     dispose() {
       for (const mesh of meshes) mesh.dispose()
