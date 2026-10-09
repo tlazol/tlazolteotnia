@@ -556,7 +556,7 @@ export function createTownScene(articles?: TownArticle[]) {
       const sleeve = hashSlug(`sleeve:${identity}`) % 3 === 0 ? accent : shirt
       const hair = hairColors[(hashSlug(`hair:${identity}`) >>> 16) % hairColors.length]
       const lift = riding ? 10 : 0
-      const lean = riding ? 5 : 0
+      const lean = riding ? -7 : 0
       const sculpt = (
         x: number,
         y: number,
@@ -569,7 +569,8 @@ export function createTownScene(articles?: TownArticle[]) {
 
       // Broad shoulders, a tucked waist and a short neck separate the main volumes.
       sculpt(0, 30 + lift, lean, 18, 18, 12, shirt)
-      sculpt(0, 23 + lift, lean, 14, 7, 11, bottom)
+      // The seated hips rest on the saddle's top (y=33), centered at z=-7.
+      sculpt(0, riding ? 36.5 : 23, lean, 14, 7, 11, bottom)
       sculpt(0, 40 + lift, lean, 6, 6, 7, skin)
       sculpt(0, 47 + lift, lean + 1, 20, 18, 17, skin)
       // Center the crown over the head and cover its front and corner bevels.
@@ -630,11 +631,12 @@ export function createTownScene(articles?: TownArticle[]) {
       }
       for (const side of [-1, 1]) {
         if (riding) {
-          sculpt(side * 6, 27, 4, 7, 7, 18, bottom).motion = 'pedal'
-          sculpt(side * 6, 20, 11, 6, 12, 6, child ? skin : bottom).motion = 'pedal'
+          // Keep the thighs attached to the seated hips while the lower legs pedal.
+          sculpt(side * 6, 33.5, 1, 7, 7, 22, bottom)
+          sculpt(side * 6, 23, 11, 6, 20, 6, child ? skin : bottom).motion = 'pedal'
           sculpt(side * 7, 14, 13, 8, 5, 11, shoe).motion = 'pedal'
           box(side * 7, 12.5, 13, 8, 2, 10, sole).motion = 'pedal'
-          sculpt(side * 11, 38, 10, 7, 7, 14, sleeve)
+          sculpt(side * 11, 38, 4, 7, 7, 24, sleeve)
           sculpt(side * 10, 36, 19, 5, 5, 9, skin)
         } else {
           sculpt(side * 4.5, 16, 0, 7, 13, 8, skirt ? skin : bottom).motion = 'leg'
@@ -2078,8 +2080,8 @@ export function createTownScene(articles?: TownArticle[]) {
           localZ = offsetY * Math.sin(rotation) + part.z * Math.cos(rotation)
           pitch += rotation
         } else if (part.motion === 'pedal') {
-          y += swing * 3
-          localZ += Math.cos(cycle) * Math.sign(part.x) * 3
+          y += swing * 3 * resident.scale
+          localZ += Math.cos(cycle) * Math.sign(part.x) * 3 * resident.scale
         } else if (part.motion === 'wheel') {
           pitch += ((resident.time ?? elapsed) * resident.route.speed) / 9
         }

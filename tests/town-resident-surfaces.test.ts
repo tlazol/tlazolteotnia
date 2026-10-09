@@ -77,7 +77,7 @@ describe('resident head surfaces', () => {
         const pose = trafficPose(article.route, 0)
         const scale = variant < 2 ? 0.72 : 1
         const lift = kind === 'bicycle' ? 10 : 0
-        const lean = kind === 'bicycle' ? 5 : 0
+        const lean = kind === 'bicycle' ? -7 : 0
         expect(heads[variant].length).toBeGreaterThan(0)
         const ray = new Raycaster()
         // Look down across the crown, including its bevels: skin must not poke through hair.
