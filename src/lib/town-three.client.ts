@@ -9,6 +9,7 @@ import {
   ExtrudeGeometry,
   Float32BufferAttribute,
   InstancedMesh,
+  LinearFilter,
   Mesh,
   MeshBasicMaterial,
   NearestFilter,
@@ -55,7 +56,7 @@ type Part = {
   color: number
   motion?: 'leg' | 'arm' | 'pedal' | 'wheel'
 }
-type TownShape = 'box' | 'ground' | 'land' | 'roof' | 'gable' | 'tree' | 'disc' | 'wheel'
+type TownShape = 'box' | 'person' | 'ground' | 'land' | 'roof' | 'gable' | 'tree' | 'disc' | 'wheel'
 type Resident = {
   slug?: string
   time?: number
@@ -68,10 +69,10 @@ type Resident = {
 }
 type MovingPart = { part: Part; resident: Resident }
 
-// Boy, girl, young man, young woman, older man, older woman.
+// Two child silhouettes and four young-adult silhouettes.
 function personScale(variant: number) {
   const appearance = variant % 6
-  return appearance < 2 ? 0.72 : appearance >= 4 ? 0.92 : 1
+  return appearance < 2 ? 0.72 : 1
 }
 
 // Sampled from the daytime Onett map; keep these hues independent of scene lighting.
@@ -182,6 +183,26 @@ function treeGeometry() {
   return geometry
 }
 
+function personGeometry() {
+  // One bevel per edge: carved toy-like facets, shared by every resident.
+  const shape = new Shape()
+  shape.moveTo(-0.36, -0.36)
+  shape.lineTo(0.36, -0.36)
+  shape.lineTo(0.36, 0.36)
+  shape.lineTo(-0.36, 0.36)
+  shape.closePath()
+  const geometry = new ExtrudeGeometry(shape, {
+    depth: 0.72,
+    bevelEnabled: true,
+    bevelThickness: 0.14,
+    bevelSize: 0.14,
+    bevelSegments: 1,
+    steps: 1
+  })
+  geometry.translate(0, 0, -0.36)
+  return geometry
+}
+
 function roofGeometry() {
   const geometry = new BufferGeometry()
   geometry.setAttribute(
@@ -250,6 +271,7 @@ export function createTownScene(articles?: TownArticle[]) {
   const camera = createTownCamera()
   const geometries = {
     box: new BoxGeometry(1, 1, 1),
+    person: personGeometry(),
     disc: new CylinderGeometry(0.5, 0.5, 1, 20),
     wheel: new TorusGeometry(0.5, 0.09, 4, 12).rotateY(Math.PI / 2),
     ground: new BoxGeometry(1, 1, 1),
@@ -301,15 +323,17 @@ export function createTownScene(articles?: TownArticle[]) {
 
   // Cache the static town so sticker glints don't redraw thousands of town objects.
   const target = new WebGLRenderTarget(1, 1, {
-    minFilter: NearestFilter,
-    magFilter: NearestFilter,
+    minFilter: LinearFilter,
+    magFilter: LinearFilter,
+    samples: 4,
     generateMipmaps: false
   })
   target.texture.colorSpace = SRGBColorSpace
   target.depthTexture = new DepthTexture(1, 1)
   const trafficTarget = new WebGLRenderTarget(1, 1, {
-    minFilter: NearestFilter,
-    magFilter: NearestFilter,
+    minFilter: LinearFilter,
+    magFilter: LinearFilter,
+    samples: 4,
     generateMipmaps: false
   })
   trafficTarget.texture.colorSpace = SRGBColorSpace
@@ -351,8 +375,7 @@ export function createTownScene(articles?: TownArticle[]) {
       }
 
       void main() {
-        // Sample at pixel centers so the contour shares the town's coarse grid.
-        vec2 uv = (floor(vUv / texelSize) + 0.5) * texelSize;
+        vec2 uv = vUv;
         float townZ = texture2D(townDepth, uv).r;
         float trafficZ = texture2D(trafficDepth, uv).r;
         gl_FragColor = trafficZ < townZ
@@ -395,6 +418,7 @@ export function createTownScene(articles?: TownArticle[]) {
     let resident: Resident | undefined
     const parts: Record<TownShape, Part[]> = {
       box: [],
+      person: [],
       ground: [],
       land: [],
       roof: [],
@@ -475,70 +499,152 @@ export function createTownScene(articles?: TownArticle[]) {
       pitch = 0
     ) => part('box', x, y, z, w, h, d, c, angle, pitch)
 
-    // Residents use the same chunky geometry and fixed palette as the buildings.
-    // Local +z is the direction of travel; road placement supplies their heading.
-    const shirts = [0xfa0a5c, 0x527afc, 0xfafa74, 0x8a72fc, 0xeff0d3]
-    const skinTones = [0xeaca8c, 0xb27a4c, 0xd29a74]
+    // Small-town silhouettes: caps, striped tees, denim, cardigans and satchels.
+    // Local +z is the face / direction of travel.
+    const clothingColors = [
+      0x343449, 0xeff0d3, 0x687286, 0xa87b61, 0xfa0a5c, 0xff729f, 0xffb3d4, 0xc44b91, 0xf56c52,
+      0xf99b50, 0xfacb58, 0xfafa74, 0x527afc, 0x3556a4, 0x52bafc, 0xa2eafa, 0x8a72fc, 0xb8a0f2,
+      0xd25afc, 0x713f94, 0x28a68a, 0x68d6ac, 0xb0edca, 0x387961, 0x93ca54, 0xd5ed87, 0x658b44,
+      0xe3b987, 0x9d4563, 0xe6a0a4, 0x437c99, 0xb2ced7
+    ]
+    const shoeColors = [
+      0x393846, 0xf4efd9, 0x655b70, 0x975e43, 0xf34f71, 0xfa91c3, 0xc84992, 0xff8854, 0xf9ce58,
+      0xe9ee91, 0x4569d5, 0x70c9ef, 0xb4eafa, 0x53449b, 0x9d79e4, 0xd7b2ef, 0x36ad96, 0x8dddb6,
+      0xb8df74, 0x487c62, 0xba5871, 0xdc9670, 0x738aab, 0xc1c6d5
+    ]
+    const skinTones = [
+      0xffe1c4, 0xf5cfb0, 0xefbe98, 0xe8b48a, 0xdca078, 0xd39470, 0xc18762, 0xb57753, 0xa66b4b,
+      0x905a42, 0x774a38, 0x603c30,
+      // Pastel aliens share the town's aqua, green and violet accents.
+      0x91d8f0, 0x60bcd4, 0x9aebcc, 0x69c39b, 0xb5d98a, 0xc3aff0, 0xe7b1e0, 0x79a7df
+    ]
+    const hairColors = [
+      0x302b3b, 0x51382f, 0x765044, 0x9a603e, 0xbe783f, 0xd7a85a, 0xf0cc78, 0xa44346, 0xfa5cab,
+      0xff9ed2, 0x52d5f3, 0xa2eafa, 0x28cbb8, 0x8a72fc, 0xc6a0ff, 0x9cea74, 0x527afc, 0xd25afc,
+      0xfa786f, 0x58d692
+    ]
     function person(variant: number, riding = false) {
       const appearance = variant % 6
       const child = appearance < 2
-      const older = appearance >= 4
-      const longHair = appearance === 1 || appearance === 3
-      const skin = skinTones[variant % skinTones.length]
-      const shirt = shirts[variant % shirts.length]
-      const hair = older ? colors.pavement : variant % 3 === 0 ? colors.wood : colors.ink
+      const skirt = !riding && (appearance === 1 || appearance === 3 || appearance === 5)
+      // Independent, stable seeds let every silhouette use every palette colour.
+      const identity = resident?.slug ?? String(variant)
+      const skin = skinTones[(hashSlug(`skin:${identity}`) >>> 8) % skinTones.length]
+      const outfitColor = (palette: readonly number[], slot: string) =>
+        palette[(hashSlug(`${slot}:${identity}`) >>> 8) % palette.length]
+      const shirt = outfitColor(clothingColors, 'top')
+      const bottom = outfitColor(clothingColors, 'bottom')
+      const shoe = outfitColor(shoeColors, 'shoe')
+      const sock = outfitColor(clothingColors, 'sock')
+      const hat = outfitColor(clothingColors, 'hat')
+      const bag = outfitColor(clothingColors, 'bag')
+      // Keep tiny stripes, collars and laces legible against both pastel and dark tops.
+      const shirtLuma =
+        (((shirt >> 16) & 255) * 299 + ((shirt >> 8) & 255) * 587 + (shirt & 255) * 114) / 1000
+      const accent = outfitColor(
+        shirtLuma > 155
+          ? [0x343449, 0x3556a4, 0x713f94, 0x387961, 0x9d4563, 0x437c99]
+          : [0xeff0d3, 0xffb3d4, 0xfafa74, 0xa2eafa, 0xb0edca, 0xd5ed87],
+        'trim'
+      )
+      const sole = outfitColor([0xeff0d3, 0x393846, 0xf9ce58, 0xfa91c3, 0x8dddb6, 0xb4eafa], 'sole')
+      const sleeve = hashSlug(`sleeve:${identity}`) % 3 === 0 ? accent : shirt
+      const hair = hairColors[(hashSlug(`hair:${identity}`) >>> 16) % hairColors.length]
       const lift = riding ? 10 : 0
       const lean = riding ? 5 : 0
-      box(0, 30 + lift, lean, 15, 19, 10, shirt)
-      box(0, 46 + lift, lean + 1, 14, 14, 13, skin)
-      box(0, 53 + lift, lean, 16, 5, 15, hair)
-      box(0, 48 + lift, lean - 5, 15, 9, 4, hair)
-      if (longHair) {
-        box(0, 41 + lift, lean - 6, 17, 14, 6, hair)
-        for (const side of [-1, 1]) box(side * 7, 45 + lift, lean, 4, 12, 11, hair)
-        if (child) {
-          for (const side of [-1, 1]) {
-            box(side * 11, 43 + lift, lean - 5, 6, 12, 7, hair)
-            box(side * 10, 49 + lift, lean - 5, 6, 3, 7, shirt)
-          }
-        }
+      const sculpt = (
+        x: number,
+        y: number,
+        z: number,
+        w: number,
+        h: number,
+        d: number,
+        c: number
+      ) => part('person', x, y, z, w, h, d, c)
+
+      // Broad shoulders, a tucked waist and a short neck separate the main volumes.
+      sculpt(0, 30 + lift, lean, 18, 18, 12, shirt)
+      sculpt(0, 23 + lift, lean, 14, 7, 11, bottom)
+      sculpt(0, 40 + lift, lean, 6, 6, 7, skin)
+      sculpt(0, 47 + lift, lean + 1, 20, 18, 17, skin)
+      sculpt(0, 54 + lift, lean - 1, 21, 8, 18, hair)
+      sculpt(0, 48 + lift, lean - 6, 20, 13, 7, hair)
+      for (const side of [-1, 1]) {
+        sculpt(side * 10, 46 + lift, lean + 1, 4, 6, 5, skin)
+        // Small inset eyes stay legible without a large protruding face.
+        box(side * 4, 47 + lift, lean + 9.4, 2.2, 3, 1, colors.ink)
       }
-      if (appearance === 5) box(0, 54 + lift, lean - 8, 10, 10, 9, hair)
-      if (appearance === 4) box(0, 54 + lift, lean + 2, 11, 4, 10, skin)
-      box(0, 45 + lift, lean + 8, 4, 4, 3, skin)
-      if (older) {
-        for (const side of [-1, 1]) {
-          box(side * 4, 48 + lift, lean + 8, 6, 5, 2, colors.ink)
-          box(side * 4, 48 + lift, lean + 9, 3, 2, 1, colors.glass)
-        }
-        box(0, 48 + lift, lean + 8, 3, 2, 2, colors.ink)
-      }
+      sculpt(0, 44 + lift, lean + 10, 3, 3, 3, skin)
+
       if (appearance === 0) {
-        box(0, 56 + lift, lean, 17, 4, 15, shirt)
-        box(0, 54 + lift, lean + 8, 17, 3, 8, shirt)
+        sculpt(0, 56 + lift, lean - 1, 22, 7, 19, hat)
+        sculpt(0, 54 + lift, lean + 10, 23, 3, 12, hat)
+        box(0, 57 + lift, lean + 8.6, 5, 3, 1, accent)
+        for (const y of [27, 33]) box(0, y + lift, lean + 6.1, 16, 3, 1, accent)
+        // A little canvas backpack also makes the child recognisable from behind.
+        sculpt(0, 31 + lift, lean - 8, 12, 13, 6, bag)
+      } else if (appearance === 1 || appearance === 3) {
+        for (const side of [-1, 1]) {
+          sculpt(side * 8, 46 + lift, lean - 1, 6, child ? 14 : 17, 13, hair)
+        }
+        sculpt(-4, 52 + lift, lean + 7, 12, 6, 5, hair)
+        sculpt(6, 52 + lift, lean + 7, 5, 5, 4, hair)
+        sculpt(10, 51 + lift, lean + 1, 3, 4, 7, hat)
+        box(0, 36 + lift, lean + 6, 7, 4, 1, accent)
+        if (child) {
+          for (const side of [-1, 1]) box(side * 5, 31 + lift, lean + 6.3, 3, 12, 1, bottom)
+          box(0, 27 + lift, lean + 6.5, 11, 6, 1, bottom)
+        }
+      } else if (appearance === 2) {
+        sculpt(-4, 55 + lift, lean + 3, 13, 7, 13, hair)
+        box(0, 32 + lift, lean + 6.1, 7, 12, 1, accent)
+        for (const side of [-1, 1]) box(side * 5, 35 + lift, lean + 6.5, 3, 6, 1, bottom)
+        box(5, 29 + lift, lean + 6.5, 4, 1.5, 1, accent)
+      } else if (appearance === 4) {
+        // A swept crop and a hoodie with contrasting drawstrings.
+        sculpt(-5, 56 + lift, lean + 3, 12, 7, 12, hair)
+        sculpt(3, 54 + lift, lean + 7, 10, 6, 6, hair)
+        sculpt(0, 37 + lift, lean - 6, 15, 7, 8, shirt)
+        for (const side of [-1, 1]) box(side * 3, 34 + lift, lean + 6.2, 1, 7, 1, accent)
+        box(0, 27 + lift, lean + 6.2, 10, 4, 1, accent)
+      } else if (appearance === 5) {
+        // A high ponytail, side fringe and a light cardigan.
+        sculpt(0, 53 + lift, lean - 10, 9, 8, 9, hair)
+        sculpt(0, 45 + lift, lean - 12, 8, 14, 8, hair)
+        sculpt(0, 53 + lift, lean - 8, 10, 3, 4, hat)
+        sculpt(-5, 52 + lift, lean + 7, 11, 6, 5, hair)
+        sculpt(-9, 48 + lift, lean + 2, 4, 9, 8, hair)
+        box(0, 31 + lift, lean + 6.2, 7, 13, 1, accent)
+        for (const y of [27, 32]) box(5, y + lift, lean + 6.5, 1.5, 1.5, 1, accent)
       }
-      if (!riding && (appearance === 3 || appearance === 5)) {
-        box(0, 21, 0, 19, 12, 13, shirt)
-        box(0, 16, 0, 23, 5, 15, shirt)
+      if (skirt) {
+        sculpt(0, 22, 0, 19, 10, 13, bottom)
+        sculpt(0, 18, 0, 22, 6, 15, bottom)
       }
       for (const side of [-1, 1]) {
         if (riding) {
-          box(side * 6, 27, 4, 6, 6, 17, colors.window).motion = 'pedal'
-          box(side * 6, 20, 11, 5, 12, 5, colors.window).motion = 'pedal'
-          box(side * 7, 14, 13, 7, 4, 9, colors.ink).motion = 'pedal'
-          box(side * 10, 37, 11, 5, 5, 18, shirt)
-          box(side * 10, 35, 21, 5, 5, 6, skin)
+          sculpt(side * 6, 27, 4, 7, 7, 18, bottom).motion = 'pedal'
+          sculpt(side * 6, 20, 11, 6, 12, 6, child ? skin : bottom).motion = 'pedal'
+          sculpt(side * 7, 14, 13, 8, 5, 11, shoe).motion = 'pedal'
+          box(side * 7, 12.5, 13, 8, 2, 10, sole).motion = 'pedal'
+          sculpt(side * 11, 38, 10, 7, 7, 14, sleeve)
+          sculpt(side * 10, 36, 19, 5, 5, 9, skin)
         } else {
-          box(side * 4, 15, 0, 6, 14, 6, colors.window).motion = 'leg'
-          box(side * 4, 7, 0, 5, 8, 5, child ? skin : colors.window).motion = 'leg'
-          box(side * 4, 3, 2, 7, 4, 10, colors.ink).motion = 'leg'
-          box(side * 10, 30, 0, 5, 11, 6, shirt).motion = 'arm'
-          box(side * 10, 23, 0, 5, 6, 5, skin).motion = 'arm'
+          sculpt(side * 4.5, 16, 0, 7, 13, 8, skirt ? skin : bottom).motion = 'leg'
+          sculpt(side * 4.5, 8, 0, 6, 8, 6, child || skirt ? skin : bottom).motion = 'leg'
+          if (child) box(side * 4.5, 5, 0, 6, 4, 6, sock).motion = 'leg'
+          sculpt(side * 4.5, 3, 2, 8, 5, 12, shoe).motion = 'leg'
+          box(side * 4.5, 1.5, 2, 8, 2, 11, sole).motion = 'leg'
+          sculpt(side * 11, 33, 0, 7, 10, 9, sleeve).motion = 'arm'
+          sculpt(side * 11, 26, 0.5, 5, 8, 6, skin).motion = 'arm'
+          sculpt(side * 11, 22, 1, 6, 5, 6, skin).motion = 'arm'
         }
       }
-      if (!riding && variant % 3 === 1) {
-        box(-12, 17, 2, 9, 12, 10, colors.sand).motion = 'arm'
-        box(-12, 24, 2, 7, 3, 3, colors.wood).motion = 'arm'
+      if (!riding && appearance === 2) {
+        // The satchel is worn at the hip, so it moves with the torso, not the hand.
+        box(-8, 31, 6.6, 2, 17, 1.5, bag)
+        sculpt(-11, 22, 1, 7, 11, 11, bag)
+        sculpt(-11, 25, 2, 8, 4, 11, accent)
       }
     }
 
@@ -568,7 +674,7 @@ export function createTownScene(articles?: TownArticle[]) {
     }
 
     function cyclist(variant: number) {
-      const frame = shirts[(variant + 2) % shirts.length]
+      const frame = [0xfa0a5c, 0x527afc, 0xfafa74, 0x8a72fc, 0xeff0d3][(variant + 2) % 5]
       // Slim frame tubes keep daylight visible through both wheels and triangles.
       function tube(y1: number, z1: number, y2: number, z2: number, tint = frame) {
         box(
@@ -1926,7 +2032,7 @@ export function createTownScene(articles?: TownArticle[]) {
         scene.add(mesh)
       }
     }
-    for (const shape of ['box', 'disc', 'wheel'] as const) {
+    for (const shape of ['box', 'person', 'disc', 'wheel'] as const) {
       const items = movingParts[shape] ?? []
       if (!items.length) continue
       const mesh = new InstancedMesh(geometries[shape], material, items.length)
@@ -1957,9 +2063,12 @@ export function createTownScene(articles?: TownArticle[]) {
         let pitch = part.pitch
         if (part.motion === 'leg' || part.motion === 'arm') {
           const direction = part.motion === 'leg' ? 1 : -1
-          localZ += swing * 5 * direction
-          pitch += swing * 0.3 * direction
-          if (part.motion === 'leg') y += Math.max(0, swing) * 2
+          const rotation = swing * 0.32 * direction
+          const pivotY = (part.motion === 'leg' ? 22 : 36) * resident.scale
+          const offsetY = part.y - pivotY
+          y = pivotY + offsetY * Math.cos(rotation) - part.z * Math.sin(rotation)
+          localZ = offsetY * Math.sin(rotation) + part.z * Math.cos(rotation)
+          pitch += rotation
         } else if (part.motion === 'pedal') {
           y += swing * 3
           localZ += Math.cos(cycle) * Math.sign(part.x) * 3
@@ -2081,12 +2190,8 @@ export function createTownScene(articles?: TownArticle[]) {
         rebuild(detailed)
         blockKey = nextBlockKey
       }
-      // Pixelate only the town, independently of device DPI; article lettering stays sharp.
-      const pixelSize = 2
-      target.setSize(
-        Math.max(1, Math.ceil(size.width / pixelSize)),
-        Math.max(1, Math.ceil(size.height / pixelSize))
-      )
+      // Use CSS-pixel resolution with MSAA to smooth edges while bounding GPU cost.
+      target.setSize(Math.max(1, Math.ceil(size.width)), Math.max(1, Math.ceil(size.height)))
       trafficTarget.setSize(target.width, target.height)
       backdropMaterial.uniforms.texelSize.value.set(1 / target.width, 1 / target.height)
       // Ignore the ordinary depth slope of flat ground at every zoom level.
