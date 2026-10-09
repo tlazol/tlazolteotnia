@@ -572,7 +572,8 @@ export function createTownScene(articles?: TownArticle[]) {
       sculpt(0, 23 + lift, lean, 14, 7, 11, bottom)
       sculpt(0, 40 + lift, lean, 6, 6, 7, skin)
       sculpt(0, 47 + lift, lean + 1, 20, 18, 17, skin)
-      sculpt(0, 54 + lift, lean - 1, 21, 8, 18, hair)
+      // Center the crown over the head and cover its front and corner bevels.
+      sculpt(0, 54 + lift, lean + 1, 21, 8, 20, hair)
       // Hair must extend past the head's side/front planes, not share their depth.
       sculpt(0, 48 + lift, lean - 6, 21, 13, 7, hair)
       for (const side of [-1, 1]) {

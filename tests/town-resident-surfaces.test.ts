@@ -61,6 +61,9 @@ describe('resident head surfaces', () => {
               mesh.updateMatrixWorld()
               batch.getColorAt(index, color)
               mesh.userData.tint = color.getHex()
+              mesh.userData.scalp =
+                Math.abs(position.x - pose.x) < 0.001 &&
+                Math.abs(position.y - (47 + lift) * scale) < 0.001
               heads[variant].push(mesh)
             })
           }
@@ -77,6 +80,21 @@ describe('resident head surfaces', () => {
         const lean = kind === 'bicycle' ? 5 : 0
         expect(heads[variant].length).toBeGreaterThan(0)
         const ray = new Raycaster()
+        // Look down across the crown, including its bevels: skin must not poke through hair.
+        for (let x = -9.75; x < 10; x += 0.5) {
+          for (let z = -7.25; z < 9.5; z += 0.5) {
+            const origin = new Vector3(x, 70 + lift, lean + z)
+              .multiplyScalar(scale)
+              .add(new Vector3(pose.x, 0, pose.z))
+            ray.set(origin, new Vector3(0, -1, 0))
+            const hits = ray.intersectObjects(heads[variant], false)
+            if (!hits.some((hit) => hit.object.userData.scalp)) continue
+            expect(
+              hits[0].object.userData.scalp,
+              `exposed scalp on hairstyle ${variant}, ray ${origin.toArray()}`
+            ).toBe(false)
+          }
+        }
         for (const direction of [
           new Vector3(0, 0, -1),
           new Vector3(-1, 0, 0),
