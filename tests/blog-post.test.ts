@@ -43,16 +43,13 @@ describe('blog post parser', () => {
     expectValidationError('---\ntitle: [\n---\nBody', 'YAML:')
   })
 
-  it.each([
-    'title',
-    'date',
-    'description',
-    'tags',
-    'draft'
-  ])('reports a missing %s field with the path and field name', (field) => {
-    const source = validFrontmatter.replace(new RegExp(`^${field}:.*\\n`, 'm'), '')
-    expectValidationError(source, `content/blog/example.md: ${field}:`)
-  })
+  it.each(['title', 'date', 'description', 'tags', 'draft'])(
+    'reports a missing %s field with the path and field name',
+    (field) => {
+      const source = validFrontmatter.replace(new RegExp(`^${field}:.*\\n`, 'm'), '')
+      expectValidationError(source, `content/blog/example.md: ${field}:`)
+    }
+  )
 
   it('rejects invalid dates and impossible calendar dates', () => {
     expectValidationError(validFrontmatter.replace('2026-05-15', '15/05/2026'), 'YYYY-MM-DD')

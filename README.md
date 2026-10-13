@@ -2,6 +2,8 @@
 
 Personal site built with TanStack Start and deployed to Cloudflare Workers.
 
+Use Node.js 22.22+, 24.x, or 26+ as specified in `package.json`.
+
 ## Local development
 
 ```bash
@@ -22,6 +24,8 @@ npm run deploy:dry-run
 ```
 
 `check` runs formatting, linting, type checking, content validation, the Vitest suite, and the OG image consistency check.
+
+After upgrading Biome, run `npx biome migrate --write`. After upgrading Wrangler or changing Worker bindings, run `npm run cf-typegen`. Run `npm run format` after these commands, then repeat the verification commands above.
 
 ## Production
 

@@ -119,93 +119,93 @@ describe('article residents', () => {
     }
   })
 
-  it.each([
-    'walker',
-    'bicycle'
-  ] as const)('returns a %s dropped by any building to an existing road and keeps its full circuit there', (kind) => {
-    const article = layoutTownArticles(posts).find((person) => person.kind === kind)
-    if (!article) throw new Error('Resident missing')
-    const original = structuredClone(article.route)
-    for (const point of [...onettBuildings, { x: -10000, z: 10000 }]) {
-      const route = nearestResidentRoute(point, article.route)
-      expect(route.speed).toBe(article.route.speed)
-      expect(Math.abs(route.lane)).toBeLessThanOrEqual(Math.abs(article.route.lane))
-      expect(nearestTownRoad(route.start, onettRoads).distance).toBeLessThanOrEqual(0)
-      expect(nearestTownRoad(route.end, onettRoads).distance).toBeLessThanOrEqual(0)
-      for (let time = 0; time <= 1000; time += 20) {
-        expect(nearestTownRoad(trafficPose(route, time), onettRoads).distance).toBeLessThanOrEqual(
-          0
-        )
-      }
-    }
-    expect(article.route).toEqual(original)
-  })
-
-  it.each([
-    'walker',
-    'bicycle'
-  ] as const)('leaves a dropped %s on the grass, walks back without jumps, and then follows the road', (kind) => {
-    for (const zoom of [1, 0.3, 2.5]) {
-      const article = structuredClone(streetResident)
-      article.kind = kind
-      article.route.lane = kind === 'bicycle' ? 29 : 48
-      // The lawn beside the northern footpath stays clear of the new streetfront lots.
-      article.route.progress =
-        (onettRoads[4].points[0].x - article.route.start.x - 80) /
-        (article.route.end.x - article.route.start.x - 160)
-      const town = createTownScene([article])
-      try {
-        town.update({ ...view, zoom }, size)
-        town.render(renderer, 0, false)
-        const before = town.projectResidents(0)[0]
-        town.beginResidentDrag(article.slug)
-        town.moveResidentDrag(140 * zoom, -70 * zoom)
-        town.render(renderer, 100, false)
-        const lifted = town.projectResidents(100)[0]
-        expect(lifted.dropAllowed).toBe(true)
-        expect(lifted.x - before.x).toBeCloseTo(140 * zoom)
-        expect(lifted.y - before.y).toBeCloseTo((-70 - 28 / Math.SQRT2) * zoom)
-        const held = town.residentPosition(article.slug)
-        town.endResidentDrag()
-        town.render(renderer, 200, false)
-        expect(town.residentPosition(article.slug)).toEqual(held)
-        if (!held) throw new Error('Resident missing')
-        expect(nearestTownRoad(held, onettRoads).distance).toBeGreaterThan(0)
-        town.render(renderer, 300, true)
-        town.render(renderer, 400, true)
-        const walkingBack = town.residentPosition(article.slug)
-        expect(walkingBack).not.toEqual(held)
-        town.update({ ...view, zoom: zoom === 0.3 ? 1 : 0.3 }, size)
-        town.render(renderer, 500, false)
-        expect(town.residentPosition(article.slug)).toEqual(walkingBack)
-        town.beginResidentDrag(article.slug)
-        town.moveResidentDrag(-100, 80)
-        town.render(renderer, 600, true)
-        const carried = town.residentPosition(article.slug)
-        town.render(renderer, 700, true)
-        expect(town.residentPosition(article.slug)).toEqual(carried)
-        town.endResidentDrag(true)
-        town.render(renderer, 800, false)
-        expect(town.residentPosition(article.slug)).toEqual(walkingBack)
-        town.render(renderer, 900, true)
-        let previous = town.residentPosition(article.slug)
-        for (let now = 1000; now <= 60900; now += 100) {
-          town.render(renderer, now, true)
-          const next = town.residentPosition(article.slug)
-          if (!previous || !next) throw new Error('Resident missing')
-          expect(Math.hypot(next.x - previous.x, next.z - previous.z)).toBeLessThanOrEqual(
-            article.route.speed * 0.1 + 0.001
-          )
-          if (now >= 40000)
-            expect(nearestTownRoad(next, onettRoads).distance).toBeLessThanOrEqual(0)
-          previous = next
+  it.each(['walker', 'bicycle'] as const)(
+    'returns a %s dropped by any building to an existing road and keeps its full circuit there',
+    (kind) => {
+      const article = layoutTownArticles(posts).find((person) => person.kind === kind)
+      if (!article) throw new Error('Resident missing')
+      const original = structuredClone(article.route)
+      for (const point of [...onettBuildings, { x: -10000, z: 10000 }]) {
+        const route = nearestResidentRoute(point, article.route)
+        expect(route.speed).toBe(article.route.speed)
+        expect(Math.abs(route.lane)).toBeLessThanOrEqual(Math.abs(article.route.lane))
+        expect(nearestTownRoad(route.start, onettRoads).distance).toBeLessThanOrEqual(0)
+        expect(nearestTownRoad(route.end, onettRoads).distance).toBeLessThanOrEqual(0)
+        for (let time = 0; time <= 1000; time += 20) {
+          expect(
+            nearestTownRoad(trafficPose(route, time), onettRoads).distance
+          ).toBeLessThanOrEqual(0)
         }
-        expect(previous).not.toEqual(walkingBack)
-      } finally {
-        town.dispose()
+      }
+      expect(article.route).toEqual(original)
+    }
+  )
+
+  it.each(['walker', 'bicycle'] as const)(
+    'leaves a dropped %s on the grass, walks back without jumps, and then follows the road',
+    (kind) => {
+      for (const zoom of [1, 0.3, 2.5]) {
+        const article = structuredClone(streetResident)
+        article.kind = kind
+        article.route.lane = kind === 'bicycle' ? 29 : 48
+        // The lawn beside the northern footpath stays clear of the new streetfront lots.
+        article.route.progress =
+          (onettRoads[4].points[0].x - article.route.start.x - 80) /
+          (article.route.end.x - article.route.start.x - 160)
+        const town = createTownScene([article])
+        try {
+          town.update({ ...view, zoom }, size)
+          town.render(renderer, 0, false)
+          const before = town.projectResidents(0)[0]
+          town.beginResidentDrag(article.slug)
+          town.moveResidentDrag(140 * zoom, -70 * zoom)
+          town.render(renderer, 100, false)
+          const lifted = town.projectResidents(100)[0]
+          expect(lifted.dropAllowed).toBe(true)
+          expect(lifted.x - before.x).toBeCloseTo(140 * zoom)
+          expect(lifted.y - before.y).toBeCloseTo((-70 - 28 / Math.SQRT2) * zoom)
+          const held = town.residentPosition(article.slug)
+          town.endResidentDrag()
+          town.render(renderer, 200, false)
+          expect(town.residentPosition(article.slug)).toEqual(held)
+          if (!held) throw new Error('Resident missing')
+          expect(nearestTownRoad(held, onettRoads).distance).toBeGreaterThan(0)
+          town.render(renderer, 300, true)
+          town.render(renderer, 400, true)
+          const walkingBack = town.residentPosition(article.slug)
+          expect(walkingBack).not.toEqual(held)
+          town.update({ ...view, zoom: zoom === 0.3 ? 1 : 0.3 }, size)
+          town.render(renderer, 500, false)
+          expect(town.residentPosition(article.slug)).toEqual(walkingBack)
+          town.beginResidentDrag(article.slug)
+          town.moveResidentDrag(-100, 80)
+          town.render(renderer, 600, true)
+          const carried = town.residentPosition(article.slug)
+          town.render(renderer, 700, true)
+          expect(town.residentPosition(article.slug)).toEqual(carried)
+          town.endResidentDrag(true)
+          town.render(renderer, 800, false)
+          expect(town.residentPosition(article.slug)).toEqual(walkingBack)
+          town.render(renderer, 900, true)
+          let previous = town.residentPosition(article.slug)
+          for (let now = 1000; now <= 60900; now += 100) {
+            town.render(renderer, now, true)
+            const next = town.residentPosition(article.slug)
+            if (!previous || !next) throw new Error('Resident missing')
+            expect(Math.hypot(next.x - previous.x, next.z - previous.z)).toBeLessThanOrEqual(
+              article.route.speed * 0.1 + 0.001
+            )
+            if (now >= 40000)
+              expect(nearestTownRoad(next, onettRoads).distance).toBeLessThanOrEqual(0)
+            previous = next
+          }
+          expect(previous).not.toEqual(walkingBack)
+        } finally {
+          town.dispose()
+        }
       }
     }
-  })
+  )
 
   it('rejects drops on buildings and water and restores the previous walk', () => {
     const article = layoutTownArticles(posts)[0]
@@ -282,83 +282,84 @@ describe('article residents', () => {
     }
   })
 
-  it.each([
-    0, 0.25, 0.5, 0.999
-  ])('spreads residents across town and keeps circuits outside hills (%s)', (value) => {
-    const articles = randomTownArticles(posts, () => value)
-    const positions = articles.map((article) => trafficPose(article.route, 0))
-    expect(Math.min(...positions.map((point) => point.z))).toBeLessThan(-1600)
-    expect(Math.max(...positions.map((point) => point.z))).toBeGreaterThan(1500)
-    expect(Math.min(...positions.map((point) => point.x))).toBeLessThan(650)
-    expect(Math.max(...positions.map((point) => point.x))).toBeGreaterThan(3100)
-    const counts = new Map<string, number>()
-    for (const article of articles) {
-      const key = JSON.stringify([article.route.start, article.route.end])
-      counts.set(key, (counts.get(key) ?? 0) + 1)
-      for (let time = 0; time <= 1000; time += 5) {
-        const point = trafficPose(article.route, time)
-        expect(nearestTownRoad(point, onettRoads).distance).toBeLessThanOrEqual(0.001)
-        for (const hill of onettHills) {
-          const center = onettToTown(hill.x, hill.y)
-          expect(
-            Math.abs(point.x - center.x) < hill.width / 2 + 12 &&
-              Math.abs(point.z - center.z) < hill.depth / 2 + 12
-          ).toBe(false)
+  it.each([0, 0.25, 0.5, 0.999])(
+    'spreads residents across town and keeps circuits outside hills (%s)',
+    (value) => {
+      const articles = randomTownArticles(posts, () => value)
+      const positions = articles.map((article) => trafficPose(article.route, 0))
+      expect(Math.min(...positions.map((point) => point.z))).toBeLessThan(-1600)
+      expect(Math.max(...positions.map((point) => point.z))).toBeGreaterThan(1500)
+      expect(Math.min(...positions.map((point) => point.x))).toBeLessThan(650)
+      expect(Math.max(...positions.map((point) => point.x))).toBeGreaterThan(3100)
+      const counts = new Map<string, number>()
+      for (const article of articles) {
+        const key = JSON.stringify([article.route.start, article.route.end])
+        counts.set(key, (counts.get(key) ?? 0) + 1)
+        for (let time = 0; time <= 1000; time += 5) {
+          const point = trafficPose(article.route, time)
+          expect(nearestTownRoad(point, onettRoads).distance).toBeLessThanOrEqual(0.001)
+          for (const hill of onettHills) {
+            const center = onettToTown(hill.x, hill.y)
+            expect(
+              Math.abs(point.x - center.x) < hill.width / 2 + 12 &&
+                Math.abs(point.z - center.z) < hill.depth / 2 + 12
+            ).toBe(false)
+          }
         }
       }
+      expect(counts.size).toBeGreaterThan(20)
+      expect(Math.max(...counts.values()) - Math.min(...counts.values())).toBeLessThanOrEqual(1)
     }
-    expect(counts.size).toBeGreaterThan(20)
-    expect(Math.max(...counts.values()) - Math.min(...counts.values())).toBeLessThanOrEqual(1)
-  })
+  )
 
-  it.each([
-    'walker',
-    'bicycle'
-  ] as const)('keeps a selected %s moving across focus and detail rebuilds without teleporting', (kind) => {
-    const articles = layoutTownArticles(posts)
-    const selected = articles.find((article) => article.kind === kind)
-    if (!selected) throw new Error('Article resident missing')
-    const otherSlug = articles.find((article) => article.slug !== selected.slug)?.slug
-    if (!otherSlug) throw new Error('Other resident missing')
-    const town = createTownScene(articles)
-    try {
-      town.update(view, size)
-      town.render(renderer, 0, true)
-      town.render(renderer, 100, true)
-      town.select(selected.slug)
-      town.focus(selected.slug)
-      const before = town.residentPosition(selected.slug)
-      const other = town.residentPosition(otherSlug)
-      town.render(renderer, 200, true)
-      expect(town.residentPosition(selected.slug)).not.toEqual(before)
-      expect(town.residentPosition(otherSlug)).not.toEqual(other)
-      town.update({ ...view, zoom: 0.3 }, size)
-      town.render(renderer, 300, true)
-      const stopped = town.residentPosition(selected.slug)
-      expect(stopped).not.toEqual(before)
-      town.select(null)
-      town.focus(null)
-      town.render(renderer, 400, true)
-      const resumed = town.residentPosition(selected.slug)
-      if (!resumed || !stopped) throw new Error('Article resident missing')
-      expect(Math.hypot(resumed.x - stopped.x, resumed.z - stopped.z)).toBeLessThanOrEqual(
-        selected.route.speed * 0.1 + 0.001
-      )
-      expect(resumed).not.toEqual(stopped)
-      town.filter([selected.slug])
-      const hidden = town.residentPosition(otherSlug)
-      town.render(renderer, 500, true)
-      expect(town.residentPosition(otherSlug)).toEqual(hidden)
-      expect(
-        town
-          .projectResidents(500)
-          .filter((person) => person.visible)
-          .every((person) => person.slug === selected.slug)
-      ).toBe(true)
-    } finally {
-      town.dispose()
+  it.each(['walker', 'bicycle'] as const)(
+    'keeps a selected %s moving across focus and detail rebuilds without teleporting',
+    (kind) => {
+      const articles = layoutTownArticles(posts)
+      const selected = articles.find((article) => article.kind === kind)
+      if (!selected) throw new Error('Article resident missing')
+      const otherSlug = articles.find((article) => article.slug !== selected.slug)?.slug
+      if (!otherSlug) throw new Error('Other resident missing')
+      const town = createTownScene(articles)
+      try {
+        town.update(view, size)
+        town.render(renderer, 0, true)
+        town.render(renderer, 100, true)
+        town.select(selected.slug)
+        town.focus(selected.slug)
+        const before = town.residentPosition(selected.slug)
+        const other = town.residentPosition(otherSlug)
+        town.render(renderer, 200, true)
+        expect(town.residentPosition(selected.slug)).not.toEqual(before)
+        expect(town.residentPosition(otherSlug)).not.toEqual(other)
+        town.update({ ...view, zoom: 0.3 }, size)
+        town.render(renderer, 300, true)
+        const stopped = town.residentPosition(selected.slug)
+        expect(stopped).not.toEqual(before)
+        town.select(null)
+        town.focus(null)
+        town.render(renderer, 400, true)
+        const resumed = town.residentPosition(selected.slug)
+        if (!resumed || !stopped) throw new Error('Article resident missing')
+        expect(Math.hypot(resumed.x - stopped.x, resumed.z - stopped.z)).toBeLessThanOrEqual(
+          selected.route.speed * 0.1 + 0.001
+        )
+        expect(resumed).not.toEqual(stopped)
+        town.filter([selected.slug])
+        const hidden = town.residentPosition(otherSlug)
+        town.render(renderer, 500, true)
+        expect(town.residentPosition(otherSlug)).toEqual(hidden)
+        expect(
+          town
+            .projectResidents(500)
+            .filter((person) => person.visible)
+            .every((person) => person.slug === selected.slug)
+        ).toBe(true)
+      } finally {
+        town.dispose()
+      }
     }
-  })
+  )
 
   it('disables a building-occluded resident while keeping a visible street resident selectable', () => {
     const building = onettBuildings[0]
