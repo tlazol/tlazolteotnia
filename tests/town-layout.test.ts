@@ -8,6 +8,8 @@ import {
   townBuildingAccess,
   townBuildingBounds
 } from '../src/lib/town-layout'
+import { townToBoard } from '../src/lib/town-posts'
+import { townLakeStrips } from '../src/lib/town-terrain'
 import { createTownScene } from '../src/lib/town-three.client'
 
 type Bounds = { left: number; right: number; back: number; front: number }
@@ -64,6 +66,53 @@ const streets = onettRoads.flatMap((road) =>
 )
 
 describe('Onett map', () => {
+  it('keeps lake shores clear of streets and building lots', () => {
+    for (const strip of townLakeStrips) {
+      const shore = {
+        left: strip.x - 48,
+        right: strip.x + 48,
+        back: strip.north - 32,
+        front: strip.south + 32
+      }
+      expect(streets.some((street) => polygonsOverlap(corners(shore), street))).toBe(false)
+      expect(onettBuildings.some((lot) => overlaps(shore, townBuildingBounds(lot)))).toBe(false)
+    }
+  })
+
+  it('rejects dropping a resident on either lake and restores their position', () => {
+    const town = createTownScene([
+      {
+        slug: 'lake-drop',
+        variant: 0,
+        kind: 'walker',
+        route: {
+          start: onettRoads[0].points[0],
+          end: onettRoads[0].points[1],
+          lane: 0,
+          progress: 0.5,
+          speed: 10
+        }
+      }
+    ])
+    try {
+      town.update({ x: 0, y: 0, zoom: 1 }, { width: 1280, height: 720 })
+      const position = town.residentPosition('lake-drop')
+      if (!position) throw new Error('Missing resident')
+      const original = { ...position }
+      for (const strip of townLakeStrips) {
+        const destination = { x: strip.x, z: (strip.north + strip.south) / 2 }
+        const delta = townToBoard(destination.x - original.x, destination.z - original.z)
+        town.beginResidentDrag('lake-drop')
+        town.moveResidentDrag(delta.x, delta.y)
+        expect(town.projectResidents(0)[0].dropAllowed).toBe(false)
+        town.endResidentDrag()
+        expect(town.residentPosition('lake-drop')).toEqual(original)
+      }
+    } finally {
+      town.dispose()
+    }
+  })
+
   it('keeps whole lots clear of streets, sidewalks and neighboring lots', () => {
     onettBuildings.forEach((lot, index) => {
       const bounds = townBuildingBounds(lot)
