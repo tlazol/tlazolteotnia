@@ -32,6 +32,7 @@ import {
   WebGLRenderTarget
 } from 'three'
 import { type BoardSize, type BoardView, hashSlug } from './sticker-board'
+import { townArchitecture } from './town-architecture'
 import {
   nearestTownRoad,
   onettBuildings,
@@ -80,7 +81,7 @@ function personScale(variant: number) {
 
 // Sampled from the daytime Onett map; keep these hues independent of scene lighting.
 // https://cdn.wikimg.net/strategywiki/images/1/1e/EarthBound_Onett.png
-const colors = {
+const townColors = {
   hedge: 0x2aba64,
   treeOutline: 0x527264,
   trunk: 0x9a5a6c,
@@ -105,8 +106,8 @@ const colors = {
   asphalt: 0x82928c,
   glass: 0x8acacc
 }
-const roofs = [0x8a72fc, 0x8a72fc, 0xd25afc, 0xfa0a5c]
-const walls = [0xf2f2bd, 0xeff0d3, 0xf2f2bd, 0xfafa74]
+const townRoofs = [0x8a72fc, 0x8a72fc, 0xd25afc, 0xfa0a5c]
+const townWalls = [0xf2f2bd, 0xeff0d3, 0xf2f2bd, 0xfafa74]
 
 function shadeFaces(geometry: BufferGeometry) {
   const normals = geometry.getAttribute('normal')
@@ -277,7 +278,7 @@ function landGeometry() {
 
 export function createTownScene(articles?: TownArticle[]) {
   const scene = new Scene()
-  scene.background = new Color(colors.ocean)
+  scene.background = new Color(townColors.ocean)
   const camera = createTownCamera()
   const geometries = {
     box: new BoxGeometry(1, 1, 1),
@@ -420,6 +421,10 @@ export function createTownScene(articles?: TownArticle[]) {
   backdrop.add(new Mesh(backdropGeometry, backdropMaterial))
 
   function rebuild(detailed: boolean) {
+    let colors = townColors
+    let roofs = townRoofs
+    let walls = townWalls
+    let architecture: ReturnType<typeof townTerrain>['architecture'] | undefined
     for (const mesh of meshes) {
       scene.remove(mesh)
       mesh.dispose()
@@ -1285,6 +1290,7 @@ export function createTownScene(articles?: TownArticle[]) {
     }
 
     function house(x: number, z: number, variant: number) {
+      const flatRoof = architecture === 'desert' || architecture === 'mesa' || variant % 3 === 2
       const width = 180 + (variant % 3) * 18
       const depth = variant % 3 === 2 ? 126 : 152
       const height = 88 + (variant % 2) * 24
@@ -1292,13 +1298,13 @@ export function createTownScene(articles?: TownArticle[]) {
       box(x, 6, z, width + 12, 12, depth + 12, colors.curb)
       box(x, height / 2 + 12, z, width, height, depth, walls[variant % walls.length])
       box(x, height + 14, z, width + 28, 8, depth + 28, colors.ink)
-      if (variant % 3 === 2) {
+      if (flatRoof) {
         box(x, height + 23, z, width + 30, 16, depth + 30, roofs[variant % roofs.length])
         box(x - 40, height + 39, z, 60, 16, 58, colors.cream)
       } else {
         part('roof', x, height + 18, z, width + 30, 62, depth + 30, roofs[variant % roofs.length])
       }
-      const chimneyY = height + (variant % 3 === 2 ? 53 : 63)
+      const chimneyY = height + (flatRoof ? 53 : 63)
       box(x + width / 4, chimneyY, z - 35, 23, 47, 25, colors.brick)
       box(x + width / 4, chimneyY + 26, z - 35, 28, 7, 30, colors.cream)
       const front = facade(x, z + depth / 2)
@@ -1338,7 +1344,7 @@ export function createTownScene(articles?: TownArticle[]) {
           box(x + width / 4 + 12, y, z - 35, 1, 2, 25, colors.sand)
         }
         box(x + width / 4, chimneyY + 30, z - 35, 17, 2, 19, colors.ink)
-        if (variant % 3 === 2) {
+        if (flatRoof) {
           parapet(x, height + 34, z, width + 24, depth + 24)
           roofEquipment(x + 30, height + 32, z + 12)
         } else {
@@ -1347,7 +1353,7 @@ export function createTownScene(articles?: TownArticle[]) {
             box(x, height + 77, z + dz, 12, 7, 5, colors.cream)
           }
         }
-        if (variant % 3 !== 2) {
+        if (!flatRoof) {
           const roofWidth = width + 30
           const slope = Math.atan2(62, roofWidth / 2)
           const slopeLength = Math.hypot(roofWidth / 2, 62)
@@ -1886,6 +1892,7 @@ export function createTownScene(articles?: TownArticle[]) {
     }
 
     function townhouse(variant: number) {
+      const flatRoof = architecture === 'desert' || architecture === 'mesa'
       // Narrow adjoining homes have separate doors, stepped cornices and twin gables.
       for (const side of [-1, 1]) {
         const x = side * 57
@@ -1895,9 +1902,14 @@ export function createTownScene(articles?: TownArticle[]) {
         box(x, 6, 0, 114, 12, 162, colors.curb)
         box(x, height / 2 + 12, 0, 110, height, 150, tint)
         box(x, height + 15, 0, 116, 6, 160, colors.cream)
-        part('roof', x, height + 18, 0, 116, 48, 164, roof)
-        part('gable', x, height + 18, 83, 106, 43, 3, tint)
-        box(x, height + 33, 86, 18, 16, 3, colors.window)
+        if (flatRoof) {
+          box(x, height + 20, 0, 116, 12, 164, roof)
+          parapet(x, height + 28, 0, 110, 156)
+        } else {
+          part('roof', x, height + 18, 0, 116, 48, 164, roof)
+          part('gable', x, height + 18, 83, 106, 43, 3, tint)
+          box(x, height + 33, 86, 18, 16, 3, colors.window)
+        }
         for (const dx of [-49, 49]) box(x + dx, height / 2 + 12, 77, 6, height, 4, colors.cream)
         windowDetail(x, 109, 76, false, true, variant)
         windowDetail(x - 23, 49, 76, false, false, variant + 1)
@@ -2051,13 +2063,19 @@ export function createTownScene(articles?: TownArticle[]) {
 
     function cottage(variant: number) {
       const accent = roofs[variant % roofs.length]
+      const flatRoof = architecture === 'desert' || architecture === 'mesa'
       // A low, broad porch and a steep roof give the cottages a distinct silhouette.
       box(12, 1, 15, 218, 1, 194, colors.shadow)
       box(0, 6, 0, 176, 12, 146, colors.curb)
       box(0, 48, 0, 164, 78, 134, variant % 2 ? colors.sand : colors.brick)
-      part('roof', 0, 89, 0, 192, 92, 160, accent)
-      part('gable', 0, 90, 81, 178, 83, 3, colors.cream)
-      windowDetail(0, 124, 84, false, false, variant)
+      if (flatRoof) {
+        box(0, 93, 0, 184, 12, 152, accent)
+        parapet(0, 101, 0, 178, 146)
+      } else {
+        part('roof', 0, 89, 0, 192, 92, 160, accent)
+        part('gable', 0, 90, 81, 178, 83, 3, colors.cream)
+        windowDetail(0, 124, 84, false, false, variant)
+      }
       for (const x of [-52, 52]) windowDetail(x, 49, 68, false, true, variant)
       windowDetail(83, 48, 0, true)
       box(0, 34, 71, 27, 51, 6, colors.door)
@@ -2071,8 +2089,9 @@ export function createTownScene(articles?: TownArticle[]) {
         box(x, 30, 107, 5, 5, 55, colors.cream)
         for (const z of [87, 105, 123]) box(x, 21, z, 4, 22, 4, colors.cream)
       }
-      box(-47, 143, -34, 22, 66, 24, colors.brick)
-      box(-47, 178, -34, 29, 6, 31, colors.cream)
+      const chimneyTop = flatRoof ? 128 : 178
+      box(-47, chimneyTop - 35, -34, 22, 66, 24, colors.brick)
+      box(-47, chimneyTop, -34, 29, 6, 31, colors.cream)
       if (detailed) {
         for (let x = -84; x <= 84; x += 14) box(x, 15, 108, 1, 1, 66, colors.sand)
         planter(-55, 137, colors.flower)
@@ -2495,6 +2514,119 @@ export function createTownScene(articles?: TownArticle[]) {
       offsetX = offsetZ = yaw = 0
     }
 
+    function regionalBuildingDetails(firstBox: number, firstRoof: number, firstGable: number) {
+      if (!architecture) return
+      const palette = townArchitecture[architecture]
+      const buildingBoxes = parts.box.slice(firstBox)
+      const buildingRoofs = [...parts.roof.slice(firstRoof), ...parts.gable.slice(firstGable)]
+      if (architecture === 'winter') {
+        // Lift a solid snow layer above each roof, including rotated school roofs.
+        for (const roof of buildingRoofs) {
+          if (roof.depth / scale < 30) continue
+          parts.gable.push({ ...roof, y: roof.y + 4 * scale, color: palette.trim })
+        }
+        for (const roof of buildingBoxes) {
+          if (
+            roof.y / scale < 70 ||
+            roof.height / scale > 18 ||
+            roof.width / scale < 70 ||
+            roof.depth / scale < 40 ||
+            roof.angle ||
+            roof.pitch
+          )
+            continue
+          parts.box.push({
+            ...roof,
+            y: roof.y + roof.height / 2 + 2 * scale,
+            height: 4 * scale,
+            color: palette.trim
+          })
+        }
+        return
+      }
+
+      // Use the main ground-floor wall, keeping additions within the existing lot.
+      const wall = buildingBoxes
+        .filter(
+          (item) =>
+            item.width / scale >= 100 &&
+            item.depth / scale >= 100 &&
+            item.height / scale >= 60 &&
+            (item.y - item.height / 2) / scale < 30
+        )
+        .sort((a, b) => b.width * b.height * b.depth - a.width * a.height * a.depth)[0]
+      if (!wall) return
+      const x = (wall.x - offsetX) / scale
+      const z = (wall.z - offsetZ) / scale + wall.depth / scale / 2
+      const width = wall.width / scale
+      const top = (wall.y + wall.height / 2) / scale
+      const bottom = (wall.y - wall.height / 2) / scale
+
+      if (architecture === 'autumn' || architecture === 'mesa') {
+        // Exposed timber in autumn; horizontal sandstone courses in the mesa.
+        const band = architecture === 'autumn' ? palette.timber : palette.trim
+        for (const y of [bottom + 7, top - 7]) box(x, y, z + 2, width, 8, 4, band)
+        if (architecture === 'autumn') {
+          for (const side of [-1, 1])
+            box(x + side * (width / 2 - 5), (top + bottom) / 2, z + 3, 10, top - bottom, 6, band)
+        } else {
+          for (let y = bottom + 30; y < top - 20; y += 30)
+            box(x, y, z + 2, width, 5, 4, palette.accent)
+        }
+      } else if (architecture === 'spring') {
+        // Blossom boxes below the front windows, visible even at the town overview.
+        for (const side of [-1, 1]) {
+          const px = x + side * width * 0.32
+          box(px, bottom + 21, z + 8, 42, 10, 16, palette.timber)
+          for (const dx of [-14, 0, 14]) {
+            box(px + dx, bottom + 29, z + 8, 12, 9, 12, palette.accent)
+            box(px + dx, bottom + 35, z + 9, 10, 7, 10, dx ? colors.flower : palette.trim)
+          }
+        }
+      } else if (architecture === 'summer' || architecture === 'tropical') {
+        const canopyWidth = Math.min(width - 20, 152)
+        if (architecture === 'tropical') {
+          part('roof', x, 84, z + 18, canopyWidth, 30, 48, palette.roof)
+          for (const side of [-1, 1])
+            box(x + side * (canopyWidth / 2 - 8), 44, z + 34, 6, 80, 6, palette.timber)
+        } else {
+          box(x, 84, z + 19, canopyWidth, 5, 42, palette.trim)
+          for (let dx = -canopyWidth / 2 + 6; dx < canopyWidth / 2; dx += 18)
+            box(x + dx, 88, z + 19, 8, 4, 42, palette.roof)
+          box(x, 78, z + 40, canopyWidth, 10, 4, palette.roof)
+        }
+      } else if (architecture === 'desert') {
+        // Adobe parapets and exposed vigas make a dry-climate roofline.
+        for (let dx = -width / 2 + 18; dx < width / 2; dx += 28)
+          box(x + dx, top - 12, z + 9, 9, 9, 18, palette.timber)
+        box(x, top + 15, z - 2, width + 8, 24, 12, palette.trim)
+        box(x, 77, z + 17, 74, 7, 36, palette.accent)
+      } else if (architecture === 'crystal') {
+        // A cluster of faceted roof spires echoes the surrounding crystal outcrops.
+        const roofTop = Math.max(
+          top,
+          ...buildingRoofs.map((roof) => (roof.y + roof.height) / scale)
+        )
+        for (const [dx, height] of [
+          [-28, 30],
+          [0, 48],
+          [28, 24]
+        ]) {
+          box(x + dx, roofTop + height / 2, 0, 15, height, 15, palette.accent)
+          part('gable', x + dx, roofTop + height, 0, 15, 16, 15, palette.glass)
+        }
+      } else if (architecture === 'mushroom') {
+        // A small, tiered mushroom hood over the entrance, with pale cap spots.
+        for (const [y, w, d] of [
+          [79, 94, 48],
+          [90, 78, 40],
+          [101, 52, 30]
+        ])
+          part('disc', x, y, z + 16, w, 12, d, palette.roof)
+        for (const dx of [-16, 14]) part('disc', x + dx, 108, z + 16, 10, 2, 9, palette.trim)
+      }
+    }
+
     for (const lot of onettBuildings) {
       // The entrance paths meet the sidewalk without paving over the carriageway.
       for (const access of townBuildingAccess(lot)) {
@@ -2511,6 +2643,28 @@ export function createTownScene(articles?: TownArticle[]) {
       offsetX = lot.x
       offsetZ = lot.z
       scale = lot.scale
+      const terrain = townTerrain(lot.x, lot.z)
+      architecture = terrain.architecture
+      const palette = townArchitecture[architecture]
+      colors = {
+        ...townColors,
+        cream: palette.trim,
+        brick: palette.wall,
+        sand: palette.wall,
+        wood: palette.timber,
+        door: palette.timber,
+        curb: palette.timber,
+        window: palette.roof,
+        glass: palette.glass,
+        asphalt: palette.roof,
+        flower: terrain.flower,
+        hedge: terrain.leaf
+      }
+      roofs = [palette.roof, palette.roof, palette.accent, palette.roof]
+      walls = [palette.wall, palette.trim, palette.wall, palette.wall]
+      const firstBox = parts.box.length
+      const firstRoof = parts.roof.length
+      const firstGable = parts.gable.length
       const kind = lot.kind
       if (kind === 'house') {
         house(0, 0, lot.variant)
@@ -2567,6 +2721,11 @@ export function createTownScene(articles?: TownArticle[]) {
       } else {
         building(0, 0, kind, lot.variant)
       }
+      regionalBuildingDetails(firstBox, firstRoof, firstGable)
+      colors = townColors
+      roofs = townRoofs
+      walls = townWalls
+      architecture = undefined
       offsetX = offsetZ = 0
       scale = 1
     }

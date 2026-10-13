@@ -1,4 +1,16 @@
+export type TownArchitecture =
+  | 'spring'
+  | 'summer'
+  | 'autumn'
+  | 'winter'
+  | 'tropical'
+  | 'desert'
+  | 'crystal'
+  | 'mesa'
+  | 'mushroom'
+
 type TownTerrain = {
+  architecture: TownArchitecture
   ground: number
   shadow: number
   outline: number
@@ -12,6 +24,7 @@ type TownTerrain = {
 // The scenery and ground share a palette so each landscape reads at every zoom.
 const seasons = {
   spring: {
+    architecture: 'spring',
     scenery: 'tree',
     density: 100,
     ground: 0xeda4c8,
@@ -22,6 +35,7 @@ const seasons = {
     flower: 0xffe9b5
   },
   summer: {
+    architecture: 'summer',
     scenery: 'tree',
     density: 100,
     ground: 0x89d8a0,
@@ -32,6 +46,7 @@ const seasons = {
     flower: 0xfff19b
   },
   autumn: {
+    architecture: 'autumn',
     scenery: 'tree',
     density: 100,
     ground: 0xeab96a,
@@ -42,6 +57,7 @@ const seasons = {
     flower: 0xffe1aa
   },
   winter: {
+    architecture: 'winter',
     scenery: 'tree',
     density: 100,
     ground: 0xd9eaf5,
@@ -60,6 +76,7 @@ const landscapes: { x: number; z: number; rx: number; rz: number; terrain: TownT
     rx: 1650,
     rz: 820,
     terrain: {
+      architecture: 'desert',
       scenery: 'cactus',
       density: 19,
       ground: 0xf5d781,
@@ -76,6 +93,7 @@ const landscapes: { x: number; z: number; rx: number; rz: number; terrain: TownT
     rx: 1300,
     rz: 700,
     terrain: {
+      architecture: 'tropical',
       scenery: 'palm',
       density: 33,
       ground: 0xbbe3ab,
@@ -92,6 +110,7 @@ const landscapes: { x: number; z: number; rx: number; rz: number; terrain: TownT
     rx: 1900,
     rz: 1250,
     terrain: {
+      architecture: 'crystal',
       scenery: 'crystal',
       density: 29,
       ground: 0xa9a0d9,
@@ -108,6 +127,7 @@ const landscapes: { x: number; z: number; rx: number; rz: number; terrain: TownT
     rx: 1720,
     rz: 1050,
     terrain: {
+      architecture: 'mesa',
       scenery: 'mesa',
       density: 23,
       ground: 0xd78b77,
@@ -124,6 +144,7 @@ const landscapes: { x: number; z: number; rx: number; rz: number; terrain: TownT
     rx: 830,
     rz: 1330,
     terrain: {
+      architecture: 'mushroom',
       scenery: 'mushroom',
       density: 42,
       ground: 0x77b6b8,
