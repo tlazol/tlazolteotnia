@@ -53,12 +53,16 @@ function AppNotFound() {
   return <ErrorPage message="404" details="The requested page could not be found." />
 }
 
-function AppError({ error }: { error: Error }) {
+function AppError({ error }: { error: unknown }) {
   const router = useRouter()
   return (
     <ErrorPage
       message="Oops!"
-      details={import.meta.env.DEV ? error.message : 'An unexpected error occurred.'}
+      details={
+        import.meta.env.DEV && error instanceof Error
+          ? error.message
+          : 'An unexpected error occurred.'
+      }
       retry={() => router.invalidate()}
     />
   )
