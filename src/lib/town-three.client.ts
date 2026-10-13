@@ -32,6 +32,7 @@ import {
   WebGLRenderTarget
 } from 'three'
 import { type BoardSize, type BoardView, hashSlug } from './sticker-board'
+import { type ActiveResident, updateTownActivities } from './town-activity'
 import { townArchitecture } from './town-architecture'
 import {
   nearestTownRoad,
@@ -48,7 +49,7 @@ import { createTownNavigation, type TownObstacle, type TownPoint } from './town-
 import { townPersonStyle } from './town-person'
 import { clampTownView, nearestResidentRoute, type TownArticle, townToBoard } from './town-posts'
 import { inTownLake, townLakeStrips, townTerrain } from './town-terrain'
-import { avoidTraffic, type TrafficBody, type TrafficRoute, trafficPose } from './town-traffic'
+import { avoidTraffic, type TrafficRoute, trafficPose } from './town-traffic'
 import { boardToTown, createTownCamera, updateTownCamera } from './town-view'
 
 type Part = {
@@ -65,7 +66,7 @@ type Part = {
   motion?: 'leg' | 'arm' | 'pedal' | 'wheel'
 }
 type TownShape = 'box' | 'person' | 'ground' | 'land' | 'roof' | 'gable' | 'tree' | 'disc' | 'wheel'
-type Resident = TrafficBody & {
+type Resident = ActiveResident & {
   slug?: string
   time?: number
   returning?: { path: TownPoint[]; route: TrafficRoute }
@@ -2924,6 +2925,7 @@ export function createTownScene(articles?: TownArticle[]) {
             kind: placement.kind,
             scale: placement.kind === 'car' ? 1 : personScale(variant),
             phase: variant * 1.7,
+            time: placement.kind === 'walker' ? elapsed : undefined,
             pose: trafficPose(route, elapsed)
           }
           ambientResidents.set(key, resident)
@@ -3015,12 +3017,23 @@ export function createTownScene(articles?: TownArticle[]) {
       (resident) =>
         resident !== dragged?.resident && (!resident.slug || visibleSlugs?.has(resident.slug))
     )
+    const available = active.filter(
+      (resident) =>
+        !resident.returning &&
+        (!resident.slug || resident.slug === selectedSlug || resident.slug !== focusedSlug)
+    )
+    for (const resident of residents) {
+      if (!available.includes(resident)) resident.activity = undefined
+    }
+    // End activities before deciding which route clocks and poses can move.
+    if (delta > 0) updateTownActivities(available, elapsed)
     const moving = new Set(
       active.filter(
         (resident) =>
-          !resident.placed ||
-          (delta > 0 &&
-            (!resident.slug || resident.slug === selectedSlug || resident.slug !== focusedSlug))
+          !resident.activity &&
+          (!resident.placed ||
+            (delta > 0 &&
+              (!resident.slug || resident.slug === selectedSlug || resident.slug !== focusedSlug)))
       )
     )
     for (const resident of moving) {
@@ -3035,7 +3048,15 @@ export function createTownScene(articles?: TownArticle[]) {
     for (const resident of active) resident.placed = true
     for (const { mesh, items } of trafficMeshes) {
       items.forEach(({ part, resident }, index) => {
-        const { x, z, yaw } = resident.pose
+        const { x, z } = resident.pose
+        const activity = resident.activity
+        const age = activity ? elapsed - activity.start : 0
+        // Ease gestures in and out, with different rhythms for each participant.
+        const envelope = activity ? Math.min(1, age * 3, (activity.end - elapsed) * 3) : 0
+        const beat = Math.sin(age * 5 + resident.phase)
+        const yaw =
+          resident.pose.yaw +
+          (activity?.kind === 'look' ? Math.sin(age * 1.5) * 0.65 * envelope : 0)
         const cycle =
           (resident.time ?? elapsed) * (resident.kind === 'walker' ? 5 : 7) + resident.phase
         const swing = Math.sin(cycle) * Math.sign(part.x)
@@ -3044,7 +3065,17 @@ export function createTownScene(articles?: TownArticle[]) {
         let pitch = part.pitch
         if (part.motion === 'leg' || part.motion === 'arm') {
           const direction = part.motion === 'leg' ? 1 : -1
-          const rotation = swing * 0.32 * direction
+          let rotation = activity ? 0 : swing * 0.32 * direction
+          if (activity && part.motion === 'arm') {
+            if (activity.kind === 'talk') {
+              rotation = (part.x > 0 ? -0.65 + beat * 0.3 : -0.15) * envelope
+            } else if (activity.kind === 'play') {
+              // A shared rock-paper-scissors rhythm, followed by a little celebratory hop.
+              rotation = (-0.9 + Math.sin(age * 5) * 0.55) * envelope
+            } else if (activity.kind === 'stretch') {
+              rotation = -2.6 * envelope
+            }
+          }
           const pivotY = (part.motion === 'leg' ? 22 : 36) * resident.scale
           const offsetY = part.y - pivotY
           y = pivotY + offsetY * Math.cos(rotation) - part.z * Math.sin(rotation)
@@ -3058,7 +3089,11 @@ export function createTownScene(articles?: TownArticle[]) {
         }
         transform.position.set(
           x + part.x * Math.cos(yaw) + localZ * Math.sin(yaw),
-          y + (resident === dragged?.resident ? liftHeight : 0),
+          y +
+            (resident === dragged?.resident ? liftHeight : 0) +
+            (activity?.kind === 'play' && age % 3 > 2
+              ? Math.max(0, Math.sin((age % 3) * Math.PI * 2)) * 9 * resident.scale * envelope
+              : 0),
           z - part.x * Math.sin(yaw) + localZ * Math.cos(yaw)
         )
         transform.rotation.set(pitch, yaw, part.angle, 'YXZ')
@@ -3079,6 +3114,7 @@ export function createTownScene(articles?: TownArticle[]) {
     beginResidentDrag(slug: string) {
       const resident = articleResidents.get(slug)
       if (!resident) return
+      resident.activity = undefined
       followedSlug = null
       dragged = { resident, pose: { ...resident.pose } }
       trafficDirty = true
@@ -3200,13 +3236,17 @@ export function createTownScene(articles?: TownArticle[]) {
         elapsed += Math.max(0, Math.min((now - lastTime) / 1000, 0.1))
       }
       const delta = elapsed - previousElapsed
+      for (const resident of residents) {
+        if (!resident.slug && resident.time !== undefined && !resident.activity)
+          resident.time += delta
+      }
       for (const [slug, resident] of articleResidents) {
         if (
           resident !== dragged?.resident &&
           (resident.slug === selectedSlug || resident.slug !== focusedSlug) &&
           visibleSlugs?.has(slug)
         ) {
-          resident.time = (resident.time ?? 0) + delta
+          if (!resident.activity) resident.time = (resident.time ?? 0) + delta
           if (resident.returning) {
             if (delta <= 0) continue
             resident.pose = {
