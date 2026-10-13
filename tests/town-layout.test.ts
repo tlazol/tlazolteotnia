@@ -266,7 +266,6 @@ describe('Onett map', () => {
     expect(hospital.x).toBeLessThan(hall.x)
     expect(library.z).toBeLessThan(hall.z)
     expect(arcade.z).toBeGreaterThan(hall.z)
-    expect(onettBuildings.some((building) => building.label === "NESS'S HOUSE")).toBe(true)
     for (const building of onettBuildings) {
       expect(
         nearestTownRoad(

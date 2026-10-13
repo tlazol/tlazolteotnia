@@ -256,7 +256,7 @@ export const onettBuildings: TownBuilding[] = [
   building('house', westLane, 655, 3, undefined, 0.6),
   building('library', libraryLane, 430, 1),
   building('library', libraryLane, 1010, 2),
-  building('house', hillLane, 1940, 0, "NESS'S HOUSE", 1.15),
+  building('house', hillLane, 1940, 0, undefined, 1.15),
   building('house', hillLane, 2590, 2, undefined, 1.15),
   building('house', hillLane, 1140, 3, undefined, 0.6),
   building('house', hillLane, 690, 3, undefined, 0.65),
