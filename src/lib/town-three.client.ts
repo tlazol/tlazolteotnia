@@ -1331,19 +1331,12 @@ export function createTownScene(articles?: TownArticle[]) {
       }
     }
 
-    function building(
-      x: number,
-      z: number,
-      kind: 'office' | 'apartment' | 'shop' | 'clinic',
-      variant: number
-    ) {
-      const floors =
-        kind === 'office' ? 4 + (variant % 2) : kind === 'apartment' ? 3 + (variant % 2) : 1
-      const width = kind === 'shop' ? 252 : 230
+    function building(x: number, z: number, kind: 'office' | 'apartment', variant: number) {
+      const floors = kind === 'office' ? 4 + (variant % 2) : 3 + (variant % 2)
+      const width = 230
       const depth = 164
       const height = floors * 48 + 20
-      const tint =
-        kind === 'office' ? colors.glass : kind === 'apartment' ? colors.brick : colors.cream
+      const tint = kind === 'office' ? colors.glass : colors.brick
       box(x + 20, 1, z + 20, width + 40, 1, depth + 40, colors.shadow)
       box(x, 5, z, width + 18, 10, depth + 18, colors.curb)
       box(x, height / 2 + 10, z, width, height, depth, tint)
@@ -1443,99 +1436,335 @@ export function createTownScene(articles?: TownArticle[]) {
         front(-4, 34, 12, 5, 16, 1, colors.glass)
         front(6, 26, 13, 2, 9, 2, colors.cream)
         front(0, 7, 16, 40, 5, 25, colors.cream)
-        if (kind === 'shop' || kind === 'clinic') {
-          for (const sign of [-1, 1]) {
-            front(sign * 69, 33, 3, 76, 43, 6, colors.wood)
-            front(sign * 69, 34, 7, 68, 34, 3, colors.window)
-            front(sign * 69 - 21, 39, 9, 5, 20, 1, colors.glass)
-            front(sign * 69, 22, 10, 68, 3, 5, colors.cream)
-            for (let i = 0; i < 3; i++) {
-              front(
-                sign * 69 - 23 + i * 22,
-                29,
-                11,
-                11,
-                10 + i * 3,
-                3,
-                kind === 'shop' ? roofs[(variant + i) % roofs.length] : colors.pavement
-              )
-            }
-            front(sign * 69, 34, 13, 3, 34, 3, colors.cream)
-          }
+        front(0, 56, 18, 58, 5, 34, colors.window)
+        for (const dx of [-22, 22]) front(dx, 33, 27, 4, 43, 4, colors.cream)
+      }
+      if (kind === 'office') {
+        if (variant % 2 === 0) {
+          // The low office has a recessed rooftop studio and a broad entrance brise-soleil.
+          box(-26, height + 55, -13, 133, 64, 112, colors.glass)
+          box(-26, height + 90, -13, 145, 7, 124, colors.cream)
+          for (const dx of [-78, -52, -26, 0, 26]) box(dx, height + 55, 45, 4, 64, 4, colors.window)
+          for (const dx of [-51, -34, -17, 0, 17, 34, 51]) box(dx, 72, 112, 5, 8, 56, colors.cream)
         } else {
-          front(0, 56, 18, 58, 5, 34, colors.window)
-          for (const dx of [-22, 22]) front(dx, 33, 27, 4, 43, 4, colors.cream)
+          // The taller office has a solid service spine and deep vertical sun fins.
+          box(-78, height / 2 + 30, 77, 49, height + 40, 23, colors.window)
+          for (const dx of [-39, 1, 41, 81])
+            box(dx, height / 2 + 40, 94, 8, height - 36, 25, colors.pavement)
+          box(0, height + 31, 0, 246, 9, 178, colors.window)
         }
       }
-      if (kind === 'shop') {
-        for (let i = 0; i < 8; i++) {
-          box(
-            x - 112 + i * 32,
-            62,
-            z + 95,
-            32,
-            7,
-            32,
-            i % 2 ? colors.cream : roofs[variant % roofs.length]
-          )
-        }
+    }
+
+    function glazedEntrance(x: number, z: number, width = 38) {
+      box(x, 37, z + 2, width + 8, 62, 6, colors.cream)
+      box(x, 37, z + 6, width, 54, 3, colors.window)
+      for (const side of [-1, 1]) {
+        box(x + (side * width) / 4, 43, z + 8, width / 2 - 5, 34, 2, colors.glass)
+        box(x + side * 4, 31, z + 10, 2, 10, 2, colors.cream)
+      }
+      box(x, 37, z + 9, 3, 54, 2, colors.cream)
+      box(x, 4, z + 24, width + 16, 8, 40, colors.pavement)
+    }
+
+    function pharmacy() {
+      // A tall stepped dispensary front and a green cross, with a lower stockroom behind.
+      box(0, 5, 0, 260, 10, 176, colors.curb)
+      box(0, 52, -12, 244, 94, 140, colors.cream)
+      box(0, 101, -12, 252, 8, 150, colors.hedge)
+      box(0, 69, 59, 244, 128, 34, colors.pavement)
+      box(0, 140, 59, 136, 22, 38, colors.hedge)
+      box(0, 158, 59, 72, 16, 38, colors.hedge)
+      box(0, 141, 81, 30, 9, 4, colors.cream)
+      box(0, 141, 81, 9, 30, 4, colors.cream)
+      for (const x of [-78, 78]) {
+        box(x, 48, 79, 69, 59, 6, colors.hedge)
+        box(x, 48, 83, 59, 49, 3, colors.window)
+        box(x, 52, 85, 51, 34, 2, colors.glass)
         if (detailed) {
-          for (let i = 0; i < 8; i++) {
-            box(
-              x - 112 + i * 32,
-              57,
-              z + 110,
-              32,
-              9,
-              3,
-              i % 2 ? colors.cream : roofs[variant % roofs.length]
-            )
-          }
-          shopGoods(x + 53, z + 113, variant)
-          for (const dx of [-113, 113]) {
-            box(x + dx, 53, z + 97, 3, 14, 3, colors.window)
-            box(x + dx, 47, z + 90, 3, 3, 17, colors.window)
-          }
-          // A side vending machine: display, selection buttons, coin slot, collection tray.
-          const machine = facade(x + width / 2 + 4, z + 54, true)
-          machine(0, 29, 13, 32, 56, 24, roofs[variant % roofs.length])
-          machine(0, 59, 13, 34, 4, 26, colors.cream)
-          machine(-3, 39, 26, 21, 29, 2, colors.window)
-          for (const y of [31, 43]) {
-            for (const u of [-10, -3, 4]) {
-              machine(u, y, 28, 4, 8, 2, u === -3 ? colors.sand : colors.glass)
-              machine(u, y - 6, 28, 4, 2, 2, colors.cream)
+          for (const y of [32, 46]) {
+            box(x, y, 88, 54, 3, 4, colors.cream)
+            for (const dx of [-18, -6, 6, 18]) {
+              box(x + dx, y + 7, 88, 7, 11, 3, dx > 0 ? colors.sand : colors.pavement)
             }
           }
-          machine(11, 31, 27, 3, 9, 2, colors.ink)
-          machine(0, 12, 26, 21, 8, 2, colors.ink)
-          machine(0, 8, 29, 23, 2, 5, colors.curb)
-          for (const dx of [-54, 54]) box(x + dx, height + 30, z, 5, 25, 5, colors.window)
-          box(x - 81, 18, z + 151, 28, 34, 6, colors.wood)
-          box(x - 81, 20, z + 155, 22, 24, 2, colors.window)
-          for (const dy of [14, 21, 28]) box(x - 81, dy, z + 157, 14, 2, 1, colors.cream)
         }
-        box(x, height + 43, z, 150, 38, 12, roofs[variant % roofs.length])
-        for (const dx of [-42, 0, 42]) box(x + dx, height + 43, z + 7, 22, 8, 2, colors.cream)
-        flowerbed(x + 78, z + 148)
-      } else if (kind === 'clinic') {
-        box(x, height + 46, z, 66, 50, 12, colors.cream)
-        box(x, height + 46, z + 7, 34, 10, 3, colors.flower)
-        box(x, height + 46, z + 7, 10, 34, 3, colors.flower)
-        box(x, 60, z + 101, 94, 7, 36, colors.water)
-        if (detailed) {
-          const front = facade(x, z + 82)
-          front(-113, 52, 17, 5, 4, 32, colors.window)
-          front(-113, 35, 32, 24, 34, 5, colors.pavement)
-          front(-113, 35, 36, 15, 5, 2, colors.flower)
-          front(-113, 35, 36, 5, 15, 2, colors.flower)
-          front(24, 42, 4, 13, 18, 3, colors.window)
-          for (const y of [37, 42, 47]) front(24, y, 6, 8, 2, 1, colors.cream)
-          for (const dx of [-37, 37]) planter(x + dx, z + 133, colors.cream)
-          for (const dx of [-29, 29]) {
-            box(x + dx, 19, z + 146, 3, 32, 3, colors.window)
-            box(x + dx, 35, z + 141, 3, 3, 38, colors.cream)
+      }
+      glazedEntrance(0, 79)
+      box(0, 84, 95, 66, 6, 32, colors.hedge)
+      sign('DRUGS', 111, 81, colors.hedge, 2)
+      box(0, 2, 149, 48, 4, 86, colors.pavement)
+      for (const z of [-42, 14]) windowDetail(123, 49, z, true)
+      roofEquipment(-64, 105, -30)
+    }
+
+    function burgerDiner() {
+      // Rounded chrome end bays and an oversailing red roof make a low roadside diner.
+      box(0, 5, 0, 256, 10, 172, colors.curb)
+      box(0, 41, 0, 174, 72, 148, colors.pavement)
+      for (const x of [-86, 86]) {
+        part('disc', x, 41, 0, 76, 72, 148, colors.pavement)
+        part('disc', x, 58, 0, 78, 31, 150, colors.glass)
+        part('disc', x, 82, 0, 88, 10, 170, colors.flower)
+      }
+      box(0, 58, 76, 174, 32, 4, colors.glass)
+      for (const x of [-72, -43, 43, 72]) box(x, 58, 79, 4, 34, 4, colors.cream)
+      box(0, 31, 77, 174, 7, 5, colors.flower)
+      box(0, 82, 0, 174, 10, 170, colors.flower)
+      box(0, 90, 0, 186, 6, 152, colors.cream)
+      glazedEntrance(0, 78, 30)
+      box(0, 77, 111, 80, 7, 62, colors.flower)
+      sign('BURGER', 102, 88, colors.flower, 2)
+      box(0, 2, 150, 44, 4, 84, colors.pavement)
+      box(70, 129, 0, 7, 76, 7, colors.cream)
+      part('disc', 70, 177, 0, 74, 20, 62, colors.sand)
+      part('disc', 70, 164, 0, 78, 6, 64, colors.hedge)
+      part('disc', 70, 157, 0, 74, 8, 62, colors.brick)
+      part('disc', 70, 148, 0, 74, 10, 62, colors.sand)
+      for (const x of [-83, 83]) {
+        box(x, 28, 127, 43, 5, 28, colors.cream)
+        box(x, 14, 127, 6, 28, 6, colors.window)
+        for (const z of [106, 148]) box(x, 15, z, 46, 7, 13, colors.flower)
+      }
+      if (detailed) {
+        for (const x of [51, 67, 83]) box(x, 188, -4, 6, 2, 3, colors.cream)
+        for (const y of [17, 23]) box(0, y, 79, 169, 2, 2, colors.curb)
+        roofEquipment(-48, 94, -25)
+      }
+    }
+
+    function bakery(variant: number) {
+      const twin = variant % 2 === 1
+      box(0, 5, 0, 250, 10, 170, colors.curb)
+      box(0, 53, 0, 232, 96, 150, colors.sand)
+      // The coastal bakery has twin narrow gables; the town bakery has one deep roof and oven.
+      for (const x of twin ? [-59, 59] : [0]) {
+        const width = twin ? 124 : 248
+        part('roof', x, 104, 0, width, twin ? 65 : 91, 174, colors.wood)
+        part('gable', x, 105, 88, width - 12, twin ? 59 : 85, 3, colors.cream)
+        windowDetail(x, twin ? 129 : 141, 91)
+      }
+      for (const x of [-74, 74]) {
+        box(x, 44, 79, 65, 55, 6, colors.wood)
+        box(x, 44, 83, 55, 45, 3, colors.window)
+        box(x, 31, 88, 60, 6, 13, colors.wood)
+        for (const dx of [-17, 0, 17]) {
+          part('disc', x + dx, 39, 89, 13, 9, 8, colors.sand)
+        }
+      }
+      glazedEntrance(0, 77, 30)
+      box(0, 80, 103, 219, 7, 48, colors.wood)
+      sign('BAKERY', 97, 91, colors.door, 2)
+      const chimneyX = twin ? -92 : 86
+      box(chimneyX, 147, -35, 28, 130, 30, colors.brick)
+      box(chimneyX, 215, -35, 37, 8, 39, colors.cream)
+      box(chimneyX, 220, -35, 23, 3, 25, colors.ink)
+      box(0, 2, 149, 44, 4, 88, colors.pavement)
+      if (!twin) {
+        box(108, 35, 21, 42, 64, 65, colors.brick)
+        part('roof', 108, 68, 21, 48, 22, 69, colors.brick)
+        box(131, 29, 21, 3, 32, 33, colors.ink)
+      }
+      if (detailed) {
+        brickwork(0, 75, 232, 91)
+        planter(-85, 144, colors.sand)
+        box(77, 24, 141, 43, 44, 7, colors.wood)
+        box(77, 26, 146, 34, 33, 2, colors.window)
+        for (const y of [18, 27, 36]) box(77, y, 148, 23, 2, 2, colors.cream)
+      }
+    }
+
+    function arcade() {
+      // A dark, windowless game hall with a pixel crown and neon portal.
+      box(0, 5, -13, 254, 10, 194, colors.curb)
+      box(0, 60, -13, 238, 110, 178, colors.window)
+      box(0, 120, -13, 254, 10, 194, roofs[2])
+      for (const [x, height] of [
+        [-96, 32],
+        [-48, 55],
+        [0, 78],
+        [48, 55],
+        [96, 32]
+      ]) {
+        box(x, 125 + height / 2, 54, 42, height, 42, roofs[0])
+        box(x, 129 + height, 54, 46, 7, 46, colors.flower)
+      }
+      box(0, 57, 83, 110, 100, 15, colors.flower)
+      box(0, 53, 92, 86, 89, 6, colors.ink)
+      glazedEntrance(0, 88, 56)
+      for (const x of [-87, 87]) {
+        box(x, 52, 81, 34, 66, 9, roofs[2])
+        box(x, 59, 87, 24, 27, 3, colors.ink)
+        box(x, 61, 90, 14, 14, 2, colors.water)
+        box(x, 38, 92, 28, 6, 14, colors.flower)
+      }
+      sign('GAME', 151, 84, roofs[0], 3)
+      box(0, 2, 153, 76, 4, 76, roofs[0])
+      for (const z of [-62, -18, 26]) {
+        box(121, 65, z, 5, 87, 7, roofs[2])
+        box(125, 83, z, 3, 18, 18, colors.water)
+      }
+    }
+
+    function policeStation() {
+      // An L-shaped station: a blue command tower and a low motor-pool wing.
+      box(0, 5, -5, 406, 10, 188, colors.curb)
+      box(-68, 79, -12, 238, 148, 158, colors.pavement)
+      box(-68, 158, -12, 250, 10, 170, colors.window)
+      box(137, 44, 11, 140, 78, 204, colors.cream)
+      box(137, 88, 11, 151, 10, 216, colors.window)
+      for (const y of [45, 106]) {
+        for (const x of [-151, -96, -41]) windowDetail(x, y, 68)
+      }
+      box(8, 111, 72, 48, 210, 30, colors.window)
+      box(8, 221, 72, 58, 10, 40, colors.cream)
+      part('disc', 8, 178, 91, 31, 5, 35, colors.sand, 0, Math.PI / 2)
+      box(8, 183, 95, 7, 22, 3, colors.cream)
+      box(8, 233, 72, 15, 14, 17, colors.flower)
+      for (const x of [104, 167]) {
+        box(x, 40, 115, 53, 65, 6, colors.curb)
+        for (const y of [16, 27, 38, 49, 60]) box(x, y, 119, 49, 2, 2, colors.window)
+        box(x, 2, 150, 54, 4, 68, colors.pavement)
+      }
+      glazedEntrance(0, 90, 32)
+      box(0, 73, 115, 89, 7, 60, colors.window)
+      sign('POLICE', 133, 92, colors.window, 2)
+      box(0, 2, 153, 55, 4, 76, colors.pavement)
+      box(-129, 195, -27, 5, 66, 5, colors.window)
+      for (const y of [197, 216]) box(-129, y, -27, 49, 3, 3, colors.cream)
+      roofEquipment(-64, 165, -32)
+      if (detailed) {
+        wallUtilities(208, 7)
+        bench(-122, 125)
+        box(-166, 34, 160, 33, 58, 8, colors.window)
+        box(-166, 39, 166, 24, 40, 3, colors.cream)
+      }
+    }
+
+    function library(variant: number) {
+      if (variant === 1) {
+        school(0, 0)
+        fence(480, 370)
+        return
+      }
+      if (variant === 2) {
+        // Keep the roof a single solid prism: no overlaid gables, ridge or eave strips.
+        // Walls meet its underside; the shallow windows sit directly on the wall faces.
+        box(0, 6, 0, 412, 12, 154, colors.curb)
+        box(0, 78, 0, 400, 132, 144, colors.cream)
+        const previousYaw = yaw
+        yaw += Math.PI / 2
+        part('gable', 0, 144, 0, 156, 52, 412, colors.window)
+        yaw = previousYaw
+        for (const y of [48, 111]) {
+          for (const x of [-164, -110, -56, 56, 110, 164]) {
+            box(x, y, 73, 34, 32, 2, colors.window)
+            box(x, y, 75, 3, 32, 2, colors.cream)
           }
+          for (const z of [-37, 37]) {
+            box(201, y, z, 2, 32, 34, colors.window)
+            box(203, y, z, 2, 32, 3, colors.cream)
+          }
+        }
+        // The clock and paired classroom windows carry the school's identity.
+        box(0, 113, 73, 30, 30, 2, colors.window)
+        box(0, 117, 75, 3, 11, 2, colors.cream)
+        box(6, 113, 75, 9, 3, 2, colors.cream)
+        box(0, 41, 73, 44, 58, 2, colors.window)
+        box(0, 41, 75, 3, 58, 2, colors.cream)
+        for (const x of [-6, 6]) box(x, 34, 75, 2, 9, 2, colors.cream)
+        box(0, 79, 94, 80, 6, 44, colors.window)
+        for (const x of [-34, 34]) box(x, 38, 110, 6, 76, 6, colors.cream)
+        box(0, 2, 135, 60, 4, 114, colors.pavement)
+        for (const x of [-119, 119]) {
+          bench(x, 110)
+          flowerbed(x, 151)
+        }
+        box(188, 77, 134, 4, 150, 4, colors.curb)
+        box(204, 137, 134, 30, 22, 3, colors.pavement)
+        box(204, 137, 137, 8, 8, 2, colors.flower)
+        return
+      }
+      // The library is a brick reading hall with a monumental gable and glazed roof lantern.
+      box(0, 6, 0, 432, 12, 198, colors.curb)
+      box(0, 66, 0, 412, 120, 180, colors.brick)
+      part('roof', 0, 132, 0, 436, 103, 194, colors.window)
+      part('gable', 0, 133, 99, 414, 94, 4, colors.cream)
+      box(0, 237, -4, 112, 30, 110, colors.glass)
+      box(0, 255, -4, 126, 8, 122, colors.window)
+      for (const x of [-47, -23, 0, 23, 47]) box(x, 238, 53, 4, 30, 4, colors.cream)
+      for (const x of [-156, -96, 96, 156]) {
+        box(x, 70, 93, 42, 79, 6, colors.cream)
+        box(x, 70, 98, 32, 67, 3, colors.window)
+        box(x, 76, 100, 23, 48, 2, colors.glass)
+        box(x, 70, 102, 3, 66, 3, colors.cream)
+      }
+      glazedEntrance(0, 92, 52)
+      box(0, 86, 113, 106, 9, 45, colors.window)
+      sign('LIBRARY', 156, 105, colors.window, 2)
+      box(0, 2, 157, 72, 4, 66, colors.pavement)
+      for (const x of [-127, 127]) bench(x, 137)
+      if (detailed) {
+        brickwork(0, 90, 412, 120)
+        brickwork(207, 0, 180, 120, true)
+        for (const z of [-54, 8, 64]) windowDetail(207, 70, z, true)
+      }
+    }
+
+    function hotel() {
+      // A narrow vertical hotel above a broad lobby, with a mansard-like pavilion roof.
+      box(0, 5, 0, 246, 10, 176, colors.curb)
+      box(0, 38, 0, 230, 66, 160, colors.sand)
+      box(0, 77, 0, 246, 12, 176, colors.cream)
+      box(-20, 175, -10, 170, 184, 138, colors.brick)
+      for (const y of [112, 166, 220]) {
+        for (const x of [-71, -20, 31]) windowDetail(x, y, 60)
+        for (const z of [-49, 7]) windowDetail(66, y, z, true)
+      }
+      box(-20, 272, -10, 190, 12, 154, colors.cream)
+      part('roof', -20, 280, -10, 194, 75, 158, roofs[2])
+      part('gable', -20, 281, 70, 180, 67, 3, colors.sand)
+      windowDetail(-20, 309, 74)
+      glazedEntrance(0, 81, 46)
+      for (const x of [-78, 78]) windowDetail(x, 40, 81)
+      box(0, 73, 123, 116, 9, 88, roofs[2])
+      for (const x of [-51, 51]) box(x, 36, 157, 6, 72, 6, colors.cream)
+      sign('HOTEL', 255, 72, colors.flower, 2)
+      box(0, 2, 159, 52, 4, 66, colors.pavement)
+      for (const x of [-83, 83]) planter(x, 139, colors.flower)
+    }
+
+    function hospital() {
+      // A white stepped ward block and a blue emergency canopy, without apartment balconies.
+      box(0, 5, 0, 256, 10, 178, colors.curb)
+      box(0, 54, 0, 242, 98, 164, colors.pavement)
+      box(-27, 157, -16, 176, 108, 132, colors.cream)
+      box(-48, 236, -26, 132, 50, 112, colors.pavement)
+      for (const [x, y, z, width, depth] of [
+        [0, 106, 0, 252, 174],
+        [-27, 214, -16, 186, 142],
+        [-48, 264, -26, 142, 122]
+      ])
+        box(x, y, z, width, 6, depth, colors.water)
+      for (const y of [134, 182]) {
+        box(-27, y, 52, 156, 29, 5, colors.window)
+        for (const x of [-89, -58, -27, 4, 35]) box(x, y, 56, 23, 23, 3, colors.glass)
+        box(63, y, -17, 5, 29, 111, colors.glass)
+      }
+      box(-48, 242, 33, 34, 10, 4, colors.flower)
+      box(-48, 242, 33, 10, 34, 4, colors.flower)
+      for (const x of [-83, 83]) windowDetail(x, 49, 83)
+      glazedEntrance(0, 84, 52)
+      box(0, 82, 125, 124, 9, 82, colors.water)
+      for (const x of [-55, 55]) box(x, 40, 160, 6, 80, 6, colors.cream)
+      sign('HOSPITAL', 101, 88, colors.window, 2)
+      box(0, 2, 161, 59, 4, 60, colors.pavement)
+      roofEquipment(88, 110, -37)
+      if (detailed) {
+        for (const x of [-79, 79]) {
+          box(x, 32, 130, 23, 54, 9, colors.cream)
+          box(x, 34, 136, 15, 5, 3, colors.flower)
+          box(x, 34, 136, 5, 15, 3, colors.flower)
         }
       }
     }
@@ -1573,7 +1802,7 @@ export function createTownScene(articles?: TownArticle[]) {
       box(85, 232, -38, 26, 6, 29, colors.cream)
     }
 
-    function specialtyShop(kind: 'cafe' | 'florist' | 'workshop', label: string) {
+    function specialtyShop(kind: 'cafe' | 'florist' | 'workshop', label: string, variant: number) {
       const cafe = kind === 'cafe'
       const florist = kind === 'florist'
       const width = 224
@@ -1584,11 +1813,35 @@ export function createTownScene(articles?: TownArticle[]) {
       box(0, 6, 0, width + 12, 12, 162, colors.curb)
       box(0, height / 2 + 12, 0, width, height, 150, tint)
       box(0, height + 16, 0, width + 20, 8, 168, colors.cream)
-      if (cafe) {
+      if (cafe && variant === 0) {
+        // The corner cafe is a flat-roofed espresso bar with a shaded roof terrace.
+        box(0, height + 23, 0, 248, 8, 174, colors.window)
+        for (const x of [-102, 102]) {
+          box(x, height + 44, 0, 4, 36, 146, colors.cream)
+          for (const z of [-69, 69]) box(x, height + 63, z, 6, 76, 6, colors.wood)
+        }
+        for (const x of [-105, -70, -35, 0, 35, 70, 105])
+          box(x, height + 103, 0, 8, 6, 163, colors.wood)
+        box(0, height + 100, -70, 218, 6, 8, colors.wood)
+        box(0, height + 100, 70, 218, 6, 8, colors.wood)
+        for (const x of [-56, 56]) {
+          part('disc', x, height + 49, -3, 35, 5, 35, colors.cream)
+          box(x, height + 37, -3, 5, 24, 5, colors.window)
+        }
+      } else if (cafe) {
         part('roof', 0, height + 20, 0, width + 24, 64, 174, roofs[3])
         part('gable', 0, height + 20, 88, width + 12, 58, 3, colors.cream)
         box(-72, height + 66, -30, 24, 58, 26, colors.brick)
         box(-72, height + 97, -30, 30, 6, 32, colors.cream)
+      } else if (florist && variant === 0) {
+        // The nursery branch has an asymmetric glass lean-to beside a tall potting shed.
+        box(-71, height + 32, -2, 73, 48, 146, colors.wood)
+        box(-71, height + 60, -2, 84, 8, 159, colors.hedge)
+        box(42, height + 25, -2, 141, 5, 155, colors.glass, -0.27)
+        for (const z of [-76, -38, 0, 38, 76])
+          box(42, height + 28, z, 144, 4, 4, colors.cream, -0.27)
+        for (const x of [-23, 41, 106])
+          box(x, height + 28 - (x - 42) * Math.tan(0.27), -2, 4, 4, 158, colors.cream)
       } else if (florist) {
         // The raised glasshouse roof reads clearly even when fine detail is hidden.
         box(0, height + 23, 0, width + 10, 6, 158, accent)
@@ -1600,6 +1853,15 @@ export function createTownScene(articles?: TownArticle[]) {
             box(side * 38.5, height + 47, z, Math.hypot(77, 40), 4, 4, colors.cream, -side * slope)
           }
         }
+      } else if (variant === 0) {
+        // The coastal workshop has three sawtooth roof bays and high glazed north lights.
+        for (const x of [-78, 0, 78]) {
+          part('roof', x, height + 20, 0, 78, 48, 172, colors.window)
+          part('gable', x, height + 21, 88, 68, 41, 3, colors.glass)
+          box(x, height + 69, 0, 7, 5, 176, colors.cream)
+        }
+        box(-92, height + 59, -54, 16, 80, 16, colors.brick)
+        box(-92, height + 102, -54, 24, 6, 24, colors.ink)
       } else {
         box(0, height + 24, 0, width + 24, 10, 174, colors.window)
         parapet(0, height + 33, 0, width + 20, 170)
@@ -1642,7 +1904,13 @@ export function createTownScene(articles?: TownArticle[]) {
         for (const dx of [0, 19, 38]) box(dx, 37, 117, 14, 8, 19, colors.sand)
         if (detailed) wallUtilities(112, 0)
       }
-      sign(label, cafe ? 143 : florist ? 111 : 154, cafe ? 92 : 84, accent, 2)
+      sign(
+        label,
+        cafe ? (variant === 0 ? 110 : 143) : florist ? 99 : 110,
+        cafe ? 92 : 84,
+        accent,
+        2
+      )
       if (florist) {
         for (const x of [-83, -42, -1, 100]) {
           planter(x, 121, x === -42 ? colors.sand : colors.flower)
@@ -1712,10 +1980,20 @@ export function createTownScene(articles?: TownArticle[]) {
       box(0, height + 17, 0, 252, 10, 170, accent)
       const front = facade(0, 78)
       if (market) {
+        if (variant === 1) {
+          // A single broad market hall with a raised ventilation lantern.
+          part('roof', 0, height + 22, 0, 254, 79, 178, colors.hedge)
+          part('gable', 0, height + 23, 90, 242, 72, 3, colors.wood)
+          box(0, height + 111, -2, 64, 24, 144, colors.window)
+          part('roof', 0, height + 126, -2, 82, 25, 158, colors.hedge)
+          for (const z of [-52, -24, 4, 32, 60]) box(34, height + 111, z, 3, 17, 17, colors.cream)
+        }
         // Three individual pitched bays and open produce stalls under a striped canopy.
         for (const x of [-78, 0, 78]) {
-          part('roof', x, height + 22, 0, 80, 44, 176, roofs[(variant + 1) % roofs.length])
-          part('gable', x, height + 22, 89, 74, 38, 3, colors.sand)
+          if (variant === 0) {
+            part('roof', x, height + 22, 0, 80, 44, 176, roofs[1])
+            part('gable', x, height + 22, 89, 74, 38, 3, colors.sand)
+          }
           front(x, 46, 3, 64, 57, 5, colors.window)
           box(x, 27, 115, 65, 12, 32, colors.wood)
           shopGoods(x - 16, 113, variant + (x === 0 ? 1 : 0))
@@ -1726,7 +2004,7 @@ export function createTownScene(articles?: TownArticle[]) {
           front(-108 + i * 24, 70, 60, 24, 13, 4, tint)
         }
         for (const x of [-115, 115]) box(x, 39, 135, 5, 78, 5, colors.wood)
-        sign('MARKET', 142, 88, accent, 2)
+        sign('MARKET', variant === 0 ? 142 : 117, 93, accent, 2)
       } else if (fireStation) {
         // Twin engine bays and a square hose tower distinguish the fire station.
         for (const x of [-66, 27]) {
@@ -1744,8 +2022,19 @@ export function createTownScene(articles?: TownArticle[]) {
         front(92, 39, 4, 24, 56, 6, colors.door)
         sign('FIRE', 115, 86, accent, 2)
       } else if (cinema) {
-        box(0, height + 30, 0, 152, 20, 165, accent)
-        box(0, height + 47, 0, 76, 14, 159, colors.cream)
+        if (variant === 0) {
+          box(0, height + 30, 0, 152, 20, 165, accent)
+          box(0, height + 47, 0, 76, 14, 159, colors.cream)
+        } else {
+          // The second cinema has a tall corner blade sign instead of a stepped crown.
+          box(-88, 164, 56, 42, 174, 42, colors.window)
+          box(-88, 256, 56, 52, 10, 52, colors.flower)
+          for (const y of [128, 158, 188, 218]) {
+            box(-88, y, 80, 25, 19, 4, colors.sand)
+            box(-88, y, 84, 13, 7, 3, colors.flower)
+          }
+          box(39, height + 30, -12, 141, 22, 137, colors.flower)
+        }
         for (const x of [-96, 96]) {
           front(x, 92, 3, 13, 160, 8, accent)
           front(x / 1.6, 48, 6, 44, 59, 4, colors.window)
@@ -1761,7 +2050,15 @@ export function createTownScene(articles?: TownArticle[]) {
         for (let x = -100; x <= 100; x += 20) box(x, 80, 142, 5, 5, 4, colors.sand)
         box(0, 3, 122, 98, 6, 80, colors.brick)
       } else {
-        part('roof', 0, height + 22, 0, 256, 48, 174, roofs[3])
+        if (variant === 0) {
+          part('roof', 0, height + 22, 0, 256, 48, 174, roofs[3])
+        } else {
+          // The coastal post office pairs a low sorting wing with a tall entrance pavilion.
+          box(0, height + 24, 0, 254, 8, 172, colors.flower)
+          box(0, height + 50, 38, 83, 58, 78, colors.brick)
+          part('roof', 0, height + 82, 38, 97, 48, 94, colors.window)
+          for (const x of [-80, 80]) box(x, height + 32, -8, 43, 10, 96, colors.glass)
+        }
         for (const x of [-75, 75]) windowDetail(x, 58, 78, false, false, variant)
         front(0, 39, 4, 40, 58, 6, colors.window)
         front(0, 42, 8, 30, 43, 3, colors.glass)
@@ -1772,8 +2069,18 @@ export function createTownScene(articles?: TownArticle[]) {
         box(90, 26, 125, 27, 52, 25, accent)
         box(90, 54, 125, 33, 7, 29, colors.cream)
         box(90, 42, 139, 18, 4, 2, colors.ink)
-        box(0, 174, 0, 65, 39, 8, colors.cream)
-        for (const side of [-1, 1]) box(side * 14, 174, 6, 35, 4, 3, accent, side * 0.5)
+        box(0, variant === 0 ? 174 : 158, variant === 0 ? 0 : 81, 65, 39, 8, colors.cream)
+        for (const side of [-1, 1])
+          box(
+            side * 14,
+            variant === 0 ? 174 : 158,
+            variant === 0 ? 6 : 87,
+            35,
+            4,
+            3,
+            accent,
+            side * 0.5
+          )
         sign('POST', 101, 87, accent, 2)
       }
       windowDetail(119, 55, -35, true)
@@ -2051,7 +2358,7 @@ export function createTownScene(articles?: TownArticle[]) {
       ) {
         civicShop(kind, lot.variant)
       } else if (kind === 'cafe' || kind === 'florist' || kind === 'workshop') {
-        specialtyShop(kind, lot.label ?? kind.toUpperCase())
+        specialtyShop(kind, lot.label ?? kind.toUpperCase(), lot.variant)
       } else if (kind === 'city-hall') {
         box(0, 81, 0, 360, 162, 174, colors.cream)
         box(0, 169, 0, 380, 14, 190, colors.curb)
@@ -2072,36 +2379,24 @@ export function createTownScene(articles?: TownArticle[]) {
         sign('TOWN HALL', 184, 144, colors.flower, 2)
         flowerbed(-115, 140)
         flowerbed(115, 140)
-      } else if (kind === 'library' || kind === 'police') {
-        school(0, 0)
-        if (lot.label) sign(lot.label, 146, 126, colors.window, 2)
-        fence(480, 370)
+      } else if (kind === 'library') {
+        library(lot.variant)
+      } else if (kind === 'police') {
+        policeStation()
+      } else if (kind === 'shop') {
+        pharmacy()
+      } else if (kind === 'burger') {
+        burgerDiner()
+      } else if (kind === 'bakery') {
+        bakery(lot.variant)
+      } else if (kind === 'arcade') {
+        arcade()
+      } else if (kind === 'hotel') {
+        hotel()
+      } else if (kind === 'hospital') {
+        hospital()
       } else {
-        building(
-          0,
-          0,
-          kind === 'hotel' || kind === 'apartment'
-            ? 'apartment'
-            : kind === 'hospital' || kind === 'office'
-              ? 'office'
-              : 'shop',
-          lot.variant
-        )
-        if (lot.label) {
-          const height = kind === 'hotel' ? 244 : kind === 'hospital' ? 265 : 117
-          sign(lot.label, height, 20, kind === 'arcade' ? roofs[0] : colors.flower)
-        }
-        if (kind === 'burger') {
-          box(72, 121, 0, 5, 92, 5, colors.cream)
-          part('disc', 72, 166, 0, 74, 12, 62, colors.sand)
-          part('disc', 72, 158, 0, 78, 6, 64, colors.hedge)
-          part('disc', 72, 152, 0, 74, 7, 62, colors.brick)
-          part('disc', 72, 146, 0, 74, 8, 62, colors.sand)
-        }
-        if (kind === 'arcade') {
-          box(0, 28, -140, 265, 56, 6, colors.flower)
-          for (let x = -130; x <= 130; x += 16) box(x, 30, -140, 4, 66, 8, roofs[0])
-        }
+        building(0, 0, kind, lot.variant)
       }
       offsetX = offsetZ = 0
       scale = 1
