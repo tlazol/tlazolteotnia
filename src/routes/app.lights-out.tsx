@@ -7,7 +7,6 @@ import {
   createSolvableBoard,
   findShortestSolution,
   isBoardCleared,
-  type LightsOutBoard,
   pressCell
 } from '#/lib/lights-out'
 import { siteName } from '#/lib/site'
@@ -27,7 +26,7 @@ export const Route = createFileRoute('/app/lights-out')({
 })
 
 function LightsOutPage() {
-  const { initialBoard }: { initialBoard: LightsOutBoard } = Route.useLoaderData()
+  const { initialBoard } = Route.useLoaderData()
   const [board, setBoard] = useState(initialBoard)
   const [moves, setMoves] = useState(0)
   const [hintsRemaining, setHintsRemaining] = useState(3)
