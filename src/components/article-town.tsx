@@ -162,6 +162,9 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
         renderer.current.filter(latest.current.visiblePosts.map((post) => post.slug))
         renderer.current.update(currentView.current, latest.current.size)
         setReady(true)
+        setActiveSlug(
+          latest.current.visiblePosts.find((post) => post.slug === articles[0]?.slug)?.slug ?? null
+        )
       })
       .catch((error) => {
         if (!cancelled) {
