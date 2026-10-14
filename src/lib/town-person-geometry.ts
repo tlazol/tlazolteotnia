@@ -231,6 +231,7 @@ export function createPersonFaceTexture() {
     { width: 0.073, upper: 0.078, lower: 0.065, tilt: 0.005, irisX: 0.065, irisY: 0.079 },
     { width: 0.084, upper: 0.018, lower: 0.044, tilt: 0, irisX: 0.07, irisY: 0.062 }
   ]
+  const ink = [34, 23, 38, 255]
   for (let slot = 0; slot < 6; slot++) {
     const eye = eyes[slot]
     const bead = slot === 3
@@ -249,6 +250,13 @@ export function createPersonFaceTexture() {
           const corner = 0.45 + outer * eye.tilt
           const upper = corner + (eye.upper * (1 - closed) - closed * 0.018) * arch
           const lower = corner - (eye.lower * (1 - closed) + closed * 0.018) * arch
+          // An opaque rim surrounds the entire opening, including the outer corners.
+          const rimDx = (u - ex) / (eye.width + 0.006)
+          const rimArch = Math.sqrt(Math.max(0, 1 - rimDx * rimDx))
+          const rimCorner = 0.45 + side * rimDx * eye.tilt
+          const rimUpper = rimCorner + (eye.upper * (1 - closed) - closed * 0.018 + 0.01) * rimArch
+          const rimLower = rimCorner - (eye.lower * (1 - closed) + closed * 0.018 + 0.007) * rimArch
+          if (Math.abs(rimDx) < 1 && v > rimLower && v < rimUpper) rgba = ink
           // Irises nearly fill each opening; the upper lid covers them during a blink.
           if (Math.abs(dx) < 1 && v > lower && v < upper) {
             rgba = [255, 246, 237, 255]
@@ -275,24 +283,22 @@ export function createPersonFaceTexture() {
                 rgba = [255, 255, 253, 255]
             }
           }
-          // Bead eyes have a fine rim; the other shapes carry a soft upper lash.
+          // Keep the upper lash heavier than the lower contour at town-camera scale.
           if (
             Math.abs(dx) < 1 &&
-            Math.abs(v - upper) < (bead ? 0.003 : 0.005 + Math.max(0, outer) * 0.002)
+            Math.abs(v - upper) < (bead ? 0.005 : 0.007 + Math.max(0, outer) * 0.003)
           )
-            rgba = [53, 35, 55, 255]
+            rgba = ink
           if (
             !bead &&
             closed < 1 &&
             outer > 0.94 &&
             outer < 1.17 &&
-            Math.abs(v - (0.45 + eye.tilt + (outer - 1) * 0.08 * (1 - closed))) < 0.005
+            Math.abs(v - (0.45 + eye.tilt + (outer - 1) * 0.08 * (1 - closed))) < 0.007
           )
-            rgba = [53, 35, 55, 255]
-          if (!bead && closed < 1 && Math.abs(dx) < 0.9 && Math.abs(v - lower) < 0.002)
-            rgba = [133, 84, 87, 190]
-          if (Math.abs(dx) < 0.7 && Math.abs(v - (0.58 + outer * eye.tilt * 0.4)) < 0.004)
-            rgba = [101, 65, 83, 190]
+            rgba = ink
+          const browY = 0.57 + outer * eye.tilt * 0.4 + 0.008 * (1 - (dx / 0.85) ** 2)
+          if (Math.abs(dx) < 0.85 && Math.abs(v - browY) < 0.01) rgba = [48, 30, 46, 255]
           const blush = ((u - (0.5 + side * 0.255)) / 0.066) ** 2 + ((v - 0.3) / 0.028) ** 2
           if (blush < 1) rgba = [239, 123, 146, (1 - blush) * 95]
         }
