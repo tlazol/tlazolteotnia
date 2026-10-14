@@ -207,7 +207,7 @@ export type PersonShape = keyof ReturnType<typeof createPersonGeometries>
 
 export const personBlinkFrames = 5
 
-// Six expressions across, with progressively closed eyelids in each atlas row.
+// Six eye shapes across, with progressively closed eyelids in each atlas row.
 // Pure pixel generation also works in geometry tests
 // without a DOM; the transparent face patch follows the cheeks instead of floating.
 export function createPersonFaceTexture() {
@@ -222,7 +222,19 @@ export function createPersonFaceTexture() {
     [205, 97, 141],
     [115, 117, 204]
   ]
+  // Round, droopy, bright, bead, sparkling and sleepy eyes share the same atlas.
+  const eyes = [
+    { width: 0.076, upper: 0.063, lower: 0.061, tilt: 0, irisX: 0.068, irisY: 0.066 },
+    { width: 0.085, upper: 0.055, lower: 0.06, tilt: -0.022, irisX: 0.071, irisY: 0.065 },
+    { width: 0.087, upper: 0.068, lower: 0.056, tilt: 0.012, irisX: 0.076, irisY: 0.069 },
+    { width: 0.047, upper: 0.041, lower: 0.041, tilt: 0, irisX: 0.047, irisY: 0.043 },
+    { width: 0.073, upper: 0.078, lower: 0.065, tilt: 0.005, irisX: 0.065, irisY: 0.079 },
+    { width: 0.084, upper: 0.018, lower: 0.044, tilt: 0, irisX: 0.07, irisY: 0.062 }
+  ]
   for (let slot = 0; slot < 6; slot++) {
+    const eye = eyes[slot]
+    const bead = slot === 3
+    const sparkling = slot === 4
     for (let py = 0; py < height; py++) {
       const closed = Math.floor(py / size) / (personBlinkFrames - 1)
       for (let px = 0; px < size; px++) {
@@ -231,38 +243,55 @@ export function createPersonFaceTexture() {
         let rgba = [0, 0, 0, 0]
         for (const side of [-1, 1]) {
           const ex = 0.5 + side * 0.17
-          const dx = (u - ex) / 0.09
+          const dx = (u - ex) / eye.width
           const outer = side * dx
           const arch = Math.sqrt(Math.max(0, 1 - dx * dx))
-          const corner = 0.46 + outer * 0.018
-          const upper =
-            corner +
-            (slot === 3 ? 0.038 : 0.048) * (1 - dx * dx) * (1 - closed) -
-            closed * 0.025 * arch
-          const lower = corner - (0.072 - closed * 0.047) * arch
-          // Smaller eyes leave room for the cheeks; the upper lid covers the iris as it closes.
+          const corner = 0.45 + outer * eye.tilt
+          const upper = corner + (eye.upper * (1 - closed) - closed * 0.018) * arch
+          const lower = corner - (eye.lower * (1 - closed) + closed * 0.018) * arch
+          // Irises nearly fill each opening; the upper lid covers them during a blink.
           if (Math.abs(dx) < 1 && v > lower && v < upper) {
             rgba = [255, 246, 237, 255]
-            const iris = ((u - ex) / 0.066) ** 2 + ((v - 0.451) / 0.077) ** 2
+            const iris = ((u - ex) / eye.irisX) ** 2 + ((v - 0.45) / eye.irisY) ** 2
             if (iris < 1) {
               const shade = Math.max(0.4, Math.min(1.25, 1.2 - (v - 0.39) * 6))
-              rgba = [...irises[slot].map((channel) => Math.min(255, channel * shade)), 255]
-              if (((u - ex) / 0.024) ** 2 + ((v - 0.46) / 0.049) ** 2 < 1) rgba = [38, 31, 59, 255]
+              rgba = [48, 35, 55, 255]
+              if (!bead && iris < 0.8)
+                rgba = [...irises[slot].map((channel) => Math.min(255, channel * shade)), 255]
               if (
-                ((u - ex + 0.019) / 0.021) ** 2 + ((v - 0.477) / 0.022) ** 2 < 1 ||
-                ((u - ex - 0.022) / 0.01) ** 2 + ((v - 0.409) / 0.012) ** 2 < 1
+                ((u - ex) / (eye.irisX * 0.53)) ** 2 + ((v - 0.457) / (eye.irisY * 0.64)) ** 2 <
+                1
+              )
+                rgba = [38, 31, 51, 255]
+              const glint = bead ? 0.009 : sparkling ? 0.023 : 0.017
+              const glintY = 0.45 + eye.irisY * 0.35
+              if (
+                ((u - ex + eye.irisX * 0.26) / glint) ** 2 + ((v - glintY) / glint) ** 2 < 1 ||
+                (!bead &&
+                  ((u - ex - eye.irisX * 0.3) / 0.009) ** 2 +
+                    ((v - (0.45 - eye.irisY * 0.5)) / (sparkling ? 0.017 : 0.01)) ** 2 <
+                    1)
               )
                 rgba = [255, 255, 253, 255]
             }
           }
-          // Swept upper lash and a small outer flick; lower lid stays light.
-          if (Math.abs(dx) < 1 && Math.abs(v - upper) < 0.007 + Math.max(0, outer) * 0.003)
+          // Bead eyes have a fine rim; the other shapes carry a soft upper lash.
+          if (
+            Math.abs(dx) < 1 &&
+            Math.abs(v - upper) < (bead ? 0.003 : 0.005 + Math.max(0, outer) * 0.002)
+          )
             rgba = [53, 35, 55, 255]
-          if (outer > 0.9 && outer < 1.22 && Math.abs(v - (0.478 + (outer - 1) * 0.065)) < 0.007)
+          if (
+            !bead &&
+            closed < 1 &&
+            outer > 0.94 &&
+            outer < 1.17 &&
+            Math.abs(v - (0.45 + eye.tilt + (outer - 1) * 0.08 * (1 - closed))) < 0.005
+          )
             rgba = [53, 35, 55, 255]
-          if (closed < 1 && Math.abs(dx) < 0.9 && Math.abs(v - lower) < 0.002)
+          if (!bead && closed < 1 && Math.abs(dx) < 0.9 && Math.abs(v - lower) < 0.002)
             rgba = [133, 84, 87, 190]
-          if (Math.abs(dx) < 0.7 && Math.abs(v - (0.59 + outer * 0.008)) < 0.005)
+          if (Math.abs(dx) < 0.7 && Math.abs(v - (0.58 + outer * eye.tilt * 0.4)) < 0.004)
             rgba = [101, 65, 83, 190]
           const blush = ((u - (0.5 + side * 0.255)) / 0.066) ** 2 + ((v - 0.3) / 0.028) ** 2
           if (blush < 1) rgba = [239, 123, 146, (1 - blush) * 95]
