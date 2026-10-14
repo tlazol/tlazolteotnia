@@ -3,6 +3,7 @@ import {
   InstancedMesh,
   Matrix4,
   Mesh,
+  MeshBasicMaterial,
   Raycaster,
   type Scene,
   Vector3,
@@ -65,9 +66,12 @@ describe('resident head surfaces', () => {
                 mesh.updateMatrixWorld()
                 batch.getColorAt(index, color)
                 mesh.userData.tint = color.getHex()
+                mesh.userData.face =
+                  batch.material instanceof MeshBasicMaterial && !!batch.material.map
                 mesh.userData.scalp =
+                  !mesh.userData.face &&
                   Math.abs(position.x - pose.x) < 0.001 &&
-                  Math.abs(position.y - (47 + lift) * scale) < 0.001 &&
+                  Math.abs(position.y - (50 + lift) * scale) < 0.001 &&
                   Math.abs(position.z - pose.z - (lean + 1) * scale) < 0.001
                 heads[variant].push(mesh)
               })
@@ -84,11 +88,21 @@ describe('resident head surfaces', () => {
           const lift = kind === 'bicycle' ? 10 : 0
           const lean = kind === 'bicycle' ? -7 : 0
           expect(heads[variant].length).toBeGreaterThan(0)
+          expect(heads[variant].filter((mesh) => mesh.userData.scalp)).toHaveLength(1)
           const ray = new Raycaster()
+          // Every costume keeps both eyes exposed, including helmets and headbands.
+          for (const side of [-1, 1]) {
+            const origin = new Vector3(side * 6.56, 48.18 + lift, lean + 60)
+              .multiplyScalar(scale)
+              .add(new Vector3(pose.x, 0, pose.z))
+            ray.set(origin, new Vector3(0, 0, -1))
+            const first = ray.intersectObjects(heads[variant], false)[0]
+            expect(first?.object.userData.face, `hidden eye on costume ${variant}`).toBe(true)
+          }
           // Look down across the crown, including its bevels: skin must not poke through hair.
-          for (let x = -9.75; x < 10; x += 0.5) {
-            for (let z = -7.25; z < 9.5; z += 0.5) {
-              const origin = new Vector3(x, 70 + lift, lean + z)
+          for (let x = -13.75; x < 14; x += 1) {
+            for (let z = -10.75; z < 12; z += 1) {
+              const origin = new Vector3(x, 100 + lift, lean + z)
                 .multiplyScalar(scale)
                 .add(new Vector3(pose.x, 0, pose.z))
               ray.set(origin, new Vector3(0, -1, 0))
@@ -96,7 +110,7 @@ describe('resident head surfaces', () => {
               if (!hits.some((hit) => hit.object.userData.scalp)) continue
               expect(
                 hits[0].object.userData.scalp,
-                `exposed scalp on hairstyle ${variant}, ray ${origin.toArray()}`
+                `exposed scalp on hairstyle ${variant}, ray ${origin.toArray()}, hit ${hits[0].point.toArray()}`
               ).toBe(false)
             }
           }
@@ -105,8 +119,8 @@ describe('resident head surfaces', () => {
             new Vector3(-1, 0, 0),
             new Vector3(1, 0, 0)
           ]) {
-            for (let y = 44.25; y < 56; y += 0.5) {
-              for (let u = -10.25; u < 10; u += 0.5) {
+            for (let y = 44.25; y < 56; y += 1) {
+              for (let u = -10.25; u < 10; u += 1) {
                 const origin = direction.z
                   ? new Vector3(u, y + lift, lean + 30)
                   : new Vector3(-direction.x * 30, y + lift, lean + u)
@@ -139,4 +153,47 @@ describe('resident head surfaces', () => {
       }
     }
   )
+})
+
+it('batches repeated costumes without adding draw calls per resident', () => {
+  const batchCounts = [30, 60].map((count) => {
+    const articles: TownArticle[] = Array.from({ length: count }, (_, i) => ({
+      slug: `batch-${i}`,
+      variant: i % townPersonStyles.length,
+      kind: i % 2 ? 'walker' : 'bicycle',
+      route: {
+        start: { x: -2000 - i * 100, z: -1100 },
+        end: { x: -2000 - i * 100, z: -900 },
+        lane: -19,
+        progress: 0.5,
+        speed: 10
+      }
+    }))
+    const town = createTownScene(articles)
+    let batches = 0
+    let faces = 0
+    const renderer = {
+      getRenderTarget: () => null,
+      setRenderTarget: () => {},
+      clear: () => {},
+      render: (scene: Scene) => {
+        if (scene.background) return
+        for (const mesh of scene.children) {
+          if (!(mesh instanceof InstancedMesh)) continue
+          batches++
+          if (mesh.material instanceof MeshBasicMaterial && mesh.material.map) faces += mesh.count
+        }
+      }
+    } as unknown as WebGLRenderer
+    try {
+      town.update({ x: 0, y: 0, zoom: 1 }, { width: 1280, height: 720 })
+      town.render(renderer, 0, false)
+      expect(faces).toBe(count)
+      return batches
+    } finally {
+      town.dispose()
+    }
+  })
+  expect(batchCounts[0]).toBeGreaterThan(0)
+  expect(batchCounts[1]).toBe(batchCounts[0])
 })

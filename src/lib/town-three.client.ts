@@ -1,4 +1,5 @@
 import {
+  Box3,
   BoxGeometry,
   BufferGeometry,
   Color,
@@ -47,6 +48,12 @@ import {
 } from './town-layout'
 import { createTownNavigation, type TownObstacle, type TownPoint } from './town-navigation'
 import { townPersonStyle } from './town-person'
+import {
+  createPersonFaceTexture,
+  createPersonGeometries,
+  type PersonShape
+} from './town-person-geometry'
+import { createPersonParts } from './town-person-model'
 import { clampTownView, nearestResidentRoute, type TownArticle, townToBoard } from './town-posts'
 import { inTownLake, townLakeStrips, townTerrain } from './town-terrain'
 import { avoidTraffic, type TrafficRoute, trafficPose } from './town-traffic'
@@ -65,8 +72,18 @@ type Part = {
   color: number
   motion?: 'leg' | 'arm' | 'pedal' | 'wheel'
 }
-type TownShape = 'box' | 'person' | 'ground' | 'land' | 'roof' | 'gable' | 'tree' | 'disc' | 'wheel'
+type TownShape =
+  | 'box'
+  | 'ground'
+  | 'land'
+  | 'roof'
+  | 'gable'
+  | 'tree'
+  | 'disc'
+  | 'wheel'
+  | PersonShape
 type Resident = ActiveResident & {
+  bounds?: Box3
   slug?: string
   time?: number
   returning?: { path: TownPoint[]; route: TrafficRoute }
@@ -187,26 +204,6 @@ function treeGeometry() {
   return geometry
 }
 
-function personGeometry() {
-  // One bevel per edge: carved toy-like facets, shared by every resident.
-  const shape = new Shape()
-  shape.moveTo(-0.36, -0.36)
-  shape.lineTo(0.36, -0.36)
-  shape.lineTo(0.36, 0.36)
-  shape.lineTo(-0.36, 0.36)
-  shape.closePath()
-  const geometry = new ExtrudeGeometry(shape, {
-    depth: 0.72,
-    bevelEnabled: true,
-    bevelThickness: 0.14,
-    bevelSize: 0.14,
-    bevelSegments: 1,
-    steps: 1
-  })
-  geometry.translate(0, 0, -0.36)
-  return geometry
-}
-
 function roofGeometry() {
   const geometry = new BufferGeometry()
   geometry.setAttribute(
@@ -283,7 +280,7 @@ export function createTownScene(articles?: TownArticle[]) {
   const camera = createTownCamera()
   const geometries = {
     box: new BoxGeometry(1, 1, 1),
-    person: personGeometry(),
+    ...createPersonGeometries(),
     disc: new CylinderGeometry(0.5, 0.5, 1, 20),
     wheel: new TorusGeometry(0.5, 0.09, 4, 12).rotateY(Math.PI / 2),
     ground: new BoxGeometry(1, 1, 1),
@@ -293,9 +290,16 @@ export function createTownScene(articles?: TownArticle[]) {
     tree: treeGeometry()
   }
   for (const [shape, geometry] of Object.entries(geometries)) {
-    if (shape !== 'land') shadeFaces(geometry)
+    if (shape !== 'land' && !shape.startsWith('girl')) shadeFaces(geometry)
+    geometry.computeBoundingBox()
   }
   const material = new MeshBasicMaterial({ vertexColors: true })
+  const faceTexture = createPersonFaceTexture()
+  const faceMaterial = new MeshBasicMaterial({
+    map: faceTexture,
+    transparent: true,
+    alphaTest: 0.02
+  })
   const grassTexture = tileTexture('grass')
   const roofTexture = tileTexture('roof')
   const grassMaterial = new MeshBasicMaterial({ map: grassTexture, vertexColors: true })
@@ -470,9 +474,9 @@ export function createTownScene(articles?: TownArticle[]) {
     const forestParts: Partial<Record<TownShape, Part[]>> = {}
     let distantForest = false
     let resident: Resident | undefined
-    const parts: Record<TownShape, Part[]> = {
+    const parts: Partial<Record<TownShape, Part[]>> &
+      Record<Exclude<TownShape, PersonShape>, Part[]> = {
       box: [],
-      person: [],
       ground: [],
       land: [],
       roof: [],
@@ -538,10 +542,19 @@ export function createTownScene(articles?: TownArticle[]) {
       if (resident) {
         movingParts[shape] ??= []
         movingParts[shape].push({ part: item, resident })
+        transform.position.set(item.x, item.y, item.z)
+        transform.rotation.set(item.pitch, item.yaw, item.angle, 'YXZ')
+        transform.scale.set(item.width, item.height, item.depth)
+        transform.updateMatrix()
+        const bounds = geometries[shape].boundingBox
+        if (bounds) resident.bounds?.union(bounds.clone().applyMatrix4(transform.matrix))
       } else if (distantForest) {
         forestParts[shape] ??= []
         forestParts[shape].push(item)
-      } else parts[shape].push(item)
+      } else {
+        parts[shape] ??= []
+        parts[shape].push(item)
+      }
       return item
     }
     const box = (
@@ -556,426 +569,10 @@ export function createTownScene(articles?: TownArticle[]) {
       pitch = 0
     ) => part('box', x, y, z, w, h, d, c, angle, pitch)
 
-    // Small-town silhouettes: caps, striped tees, denim, cardigans and satchels.
-    // Local +z is the face / direction of travel.
-    const clothingColors = [
-      0x343449, 0xeff0d3, 0x687286, 0xa87b61, 0xfa0a5c, 0xff729f, 0xffb3d4, 0xc44b91, 0xf56c52,
-      0xf99b50, 0xfacb58, 0xfafa74, 0x527afc, 0x3556a4, 0x52bafc, 0xa2eafa, 0x8a72fc, 0xb8a0f2,
-      0xd25afc, 0x713f94, 0x28a68a, 0x68d6ac, 0xb0edca, 0x387961, 0x93ca54, 0xd5ed87, 0x658b44,
-      0xe3b987, 0x9d4563, 0xe6a0a4, 0x437c99, 0xb2ced7
-    ]
-    const shoeColors = [
-      0x393846, 0xf4efd9, 0x655b70, 0x975e43, 0xf34f71, 0xfa91c3, 0xc84992, 0xff8854, 0xf9ce58,
-      0xe9ee91, 0x4569d5, 0x70c9ef, 0xb4eafa, 0x53449b, 0x9d79e4, 0xd7b2ef, 0x36ad96, 0x8dddb6,
-      0xb8df74, 0x487c62, 0xba5871, 0xdc9670, 0x738aab, 0xc1c6d5
-    ]
-    const skinTones = [
-      0xffe1c4, 0xf5cfb0, 0xefbe98, 0xe8b48a, 0xdca078, 0xd39470, 0xc18762, 0xb57753, 0xa66b4b,
-      0x905a42, 0x774a38, 0x603c30,
-      // Pastel aliens share the town's aqua, green and violet accents.
-      0x91d8f0, 0x60bcd4, 0x9aebcc, 0x69c39b, 0xb5d98a, 0xc3aff0, 0xe7b1e0, 0x79a7df
-    ]
-    const hairColors = [
-      0x302b3b, 0x51382f, 0x765044, 0x9a603e, 0xbe783f, 0xd7a85a, 0xf0cc78, 0xa44346, 0xfa5cab,
-      0xff9ed2, 0x52d5f3, 0xa2eafa, 0x28cbb8, 0x8a72fc, 0xc6a0ff, 0x9cea74, 0x527afc, 0xd25afc,
-      0xfa786f, 0x58d692
-    ]
     function person(variant: number, riding = false) {
-      const style = townPersonStyle(variant)
-      const { role } = style
-      const appearance = style.hair
-      const child = style.scale <= 0.72
-      const skirt = !riding && style.skirt
-      const helmet = role === 'astronaut' || role === 'knight' || role === 'robot'
-      const bareHead = role === 'alien'
-      // Independent, stable seeds let every silhouette use every palette colour.
-      const identity = resident?.slug ?? String(variant)
-      const skin =
-        role === 'robot'
-          ? 0xb2ced7
-          : skinTones[(hashSlug(`skin:${identity}`) >>> 8) % skinTones.length]
-      const outfitColor = (palette: readonly number[], slot: string) =>
-        palette[(hashSlug(`${slot}:${identity}`) >>> 8) % palette.length]
-      const shirt = outfitColor(clothingColors, 'top')
-      const bottom = outfitColor(clothingColors, 'bottom')
-      const shoe = outfitColor(shoeColors, 'shoe')
-      const sock = outfitColor(clothingColors, 'sock')
-      const hat = outfitColor(clothingColors, 'hat')
-      const bag = outfitColor(clothingColors, 'bag')
-      // Keep tiny stripes, collars and laces legible against both pastel and dark tops.
-      const shirtLuma =
-        (((shirt >> 16) & 255) * 299 + ((shirt >> 8) & 255) * 587 + (shirt & 255) * 114) / 1000
-      const accent = outfitColor(
-        shirtLuma > 155
-          ? [0x343449, 0x3556a4, 0x713f94, 0x387961, 0x9d4563, 0x437c99]
-          : [0xeff0d3, 0xffb3d4, 0xfafa74, 0xa2eafa, 0xb0edca, 0xd5ed87],
-        'trim'
-      )
-      const sole = outfitColor([0xeff0d3, 0x393846, 0xf9ce58, 0xfa91c3, 0x8dddb6, 0xb4eafa], 'sole')
-      const sleeve = hashSlug(`sleeve:${identity}`) % 3 === 0 ? accent : shirt
-      const hair = helmet
-        ? 0xb2ced7
-        : bareHead
-          ? skin
-          : hairColors[(hashSlug(`hair:${identity}`) >>> 16) % hairColors.length]
-      const lift = riding ? 10 : 0
-      const lean = riding ? -7 : 0
-      const sculpt = (
-        x: number,
-        y: number,
-        z: number,
-        w: number,
-        h: number,
-        d: number,
-        c: number
-      ) => part('person', x, y, z, w, h, d, c)
-
-      // Broad shoulders, a tucked waist and a short neck separate the main volumes.
-      sculpt(0, 30 + lift, lean, 18, 18, 12, shirt)
-      // The seated hips rest on the saddle's top (y=33), centered at z=-7.
-      sculpt(0, riding ? 36.5 : 23, lean, 14, 7, 11, bottom)
-      sculpt(0, 40 + lift, lean, 6, 6, 7, skin)
-      sculpt(0, 47 + lift, lean + 1, 20, 18, 17, skin)
-      // Center the crown over the head and cover its front and corner bevels.
-      sculpt(0, 54 + lift, lean + 1, 21, 8, 20, hair)
-      // Hair must extend past the head's side/front planes, not share their depth.
-      sculpt(0, 48 + lift, lean - 6, 21, 13, 7, hair)
-      for (const side of [-1, 1]) {
-        sculpt(side * 10, 46 + lift, lean + 1, 4, 6, 5, skin)
-        // Small inset eyes stay legible without a large protruding face.
-        box(side * 4, 47 + lift, lean + 9.4, 2.2, 3, 1, colors.ink)
-      }
-      sculpt(0, 44 + lift, lean + 10, 3, 3, 3, skin)
-
-      if (role === 'cap-child') {
-        sculpt(0, 56 + lift, lean - 1, 22, 7, 19, hat)
-        sculpt(0, 54 + lift, lean + 10, 23, 3, 12, hat)
-        box(0, 57 + lift, lean + 8.6, 5, 3, 1, accent)
-        for (const y of [27, 33]) box(0, y + lift, lean + 6.1, 16, 3, 1, accent)
-        // A little canvas backpack also makes the child recognisable from behind.
-        sculpt(0, 31 + lift, lean - 8, 12, 13, 6, bag)
-      } else if (!helmet && !bareHead && (appearance === 1 || appearance === 3)) {
-        for (const side of [-1, 1]) {
-          sculpt(side * 8, 46 + lift, lean - 1, 6, child ? 14 : 17, 13, hair)
-        }
-        sculpt(-4, 52 + lift, lean + 7.5, 13, 6, 5, hair)
-        sculpt(6, 52 + lift, lean + 7, 5, 5, 4, hair)
-        sculpt(10, 51 + lift, lean + 1, 3, 4, 7, hat)
-        box(0, 36 + lift, lean + 6, 7, 4, 1, accent)
-        if (child) {
-          for (const side of [-1, 1]) box(side * 5, 31 + lift, lean + 6.3, 3, 12, 1, bottom)
-          box(0, 27 + lift, lean + 6.5, 11, 6, 1, bottom)
-        }
-      } else if (!helmet && !bareHead && appearance === 2) {
-        sculpt(-4, 55 + lift, lean + 3.5, 13, 7, 13, hair)
-        box(0, 32 + lift, lean + 6.1, 7, 12, 1, accent)
-        for (const side of [-1, 1]) box(side * 5, 35 + lift, lean + 6.5, 3, 6, 1, bottom)
-        box(5, 29 + lift, lean + 6.5, 4, 1.5, 1, accent)
-      } else if (!helmet && !bareHead && appearance === 4) {
-        // A swept crop and a hoodie with contrasting drawstrings.
-        sculpt(-5, 56 + lift, lean + 3, 12, 7, 12, hair)
-        sculpt(3, 54 + lift, lean + 7, 10, 6, 6, hair)
-        sculpt(0, 37 + lift, lean - 6, 15, 7, 8, shirt)
-        for (const side of [-1, 1]) box(side * 3, 34 + lift, lean + 6.2, 1, 7, 1, accent)
-        box(0, 27 + lift, lean + 6.2, 10, 4, 1, accent)
-      } else if (!helmet && !bareHead && appearance === 5) {
-        // A high ponytail, side fringe and a light cardigan.
-        sculpt(0, 53 + lift, lean - 10, 9, 8, 9, hair)
-        sculpt(0, 45 + lift, lean - 12, 8, 14, 8, hair)
-        sculpt(0, 53 + lift, lean - 8, 10, 3, 4, hat)
-        sculpt(-5, 52 + lift, lean + 7.5, 11, 6, 5, hair)
-        sculpt(-9, 48 + lift, lean + 2, 4, 9, 8, hair)
-        box(0, 31 + lift, lean + 6.2, 7, 13, 1, accent)
-        for (const y of [27, 32]) box(5, y + lift, lean + 6.5, 1.5, 1.5, 1, accent)
-      }
-      if (skirt) {
-        sculpt(0, 22, 0, 19, 10, 13, bottom)
-        sculpt(0, 18, 0, 22, 6, 15, bottom)
-      }
-      for (const side of [-1, 1]) {
-        if (riding) {
-          // Keep the thighs attached to the seated hips while the lower legs pedal.
-          sculpt(side * 6, 33.5, 1, 7, 7, 22, bottom)
-          sculpt(side * 6, 23, 11, 6, 20, 6, child ? skin : bottom).motion = 'pedal'
-          sculpt(side * 7, 14, 13, 8, 5, 11, shoe).motion = 'pedal'
-          box(side * 7, 12.5, 13, 8, 2, 10, sole).motion = 'pedal'
-          sculpt(side * 11, 38, 4, 7, 7, 24, sleeve)
-          sculpt(side * 10, 36, 19, 5, 5, 9, skin)
-        } else {
-          sculpt(side * 4.5, 16, 0, 7, 13, 8, skirt ? skin : bottom).motion = 'leg'
-          sculpt(side * 4.5, 8, 0, 6, 8, 6, child || skirt ? skin : bottom).motion = 'leg'
-          if (child) box(side * 4.5, 5, 0, 6, 4, 6, sock).motion = 'leg'
-          sculpt(side * 4.5, 3, 2, 8, 5, 12, shoe).motion = 'leg'
-          box(side * 4.5, 1.5, 2, 8, 2, 11, sole).motion = 'leg'
-          sculpt(side * 11, 33, 0, 7, 10, 9, sleeve).motion = 'arm'
-          sculpt(side * 11, 26, 0.5, 5, 8, 6, skin).motion = 'arm'
-          sculpt(side * 11, 22, 1, 6, 5, 6, skin).motion = 'arm'
-        }
-      }
-      if (!riding && role === 'casual') {
-        // The satchel is worn at the hip, so it moves with the torso, not the hand.
-        box(-8, 31, 6.6, 2, 17, 1.5, bag)
-        sculpt(-11, 22, 1, 7, 11, 11, bag)
-        sculpt(-11, 25, 2, 8, 4, 11, accent)
-      }
-
-      // Costume coordinates follow the seated torso as well as the walking body.
-      const costume = (
-        x: number,
-        y: number,
-        z: number,
-        w: number,
-        h: number,
-        d: number,
-        c: number
-      ) => sculpt(x, y + lift, z + lean, w, h, d, c)
-      const trim = (x: number, y: number, z: number, w: number, h: number, d: number, c: number) =>
-        box(x, y + lift, z + lean, w, h, d, c)
-      const ivory = 0xf4efd9
-      const metal = 0xb2ced7
-      const gold = 0xfacb58
-      function brimmedHat(tint: number, width = 28) {
-        costume(0, 57, 1, 23, 9, 21, tint)
-        costume(0, 54, 3, width, 3, 26, tint)
-        trim(0, 57, 11.7, 21, 2, 1, accent)
-      }
-      function backpack(tint: number, width = 16) {
-        costume(0, 31, -10, width, 18, 9, tint)
-        costume(0, 36, -14, width + 1, 5, 3, accent)
-        for (const side of [-1, 1]) trim(side * 6, 32, 6.8, 2, 14, 2, tint)
-      }
-      function bow(y: number, z: number, tint: number) {
-        for (const side of [-1, 1]) costume(side * 4, y, z, 7, 6, 3, tint)
-        costume(0, y, z + 1, 3, 4, 3, gold)
-      }
-      function cape(tint: number) {
-        costume(0, 32, -10, 22, 16, 4, tint)
-        costume(0, riding ? 24 : 19, riding ? -13 : -11, 26, riding ? 7 : 12, 4, tint)
-        costume(0, 38, -5, 23, 4, 14, tint)
-      }
-      function pointedHat(tint: number) {
-        brimmedHat(tint, 31)
-        costume(0, 64, 0, 18, 10, 17, tint)
-        costume(-2, 71, 0, 11, 8, 11, tint)
-        costume(-4, 77, 0, 5, 6, 6, tint)
-        trim(0, 63, 8.7, 4, 4, 1, gold)
-      }
-      // Walking props share the hand's pivot. Riders strap them to their backs.
-      function staff(tint: number, magical = true) {
-        const x = 14
-        const z = riding ? -13 : 2
-        const shaft = costume(x, 29, z, 3, 42, 3, tint)
-        const tip = costume(x, 52, z, 8, 9, 8, magical ? accent : metal)
-        if (!riding) shaft.motion = tip.motion = 'arm'
-        if (magical) {
-          const cross = costume(x, 52, z, 12, 3, 4, gold)
-          if (!riding) cross.motion = 'arm'
-        }
-      }
-      switch (role) {
-        case 'kindergartner':
-          brimmedHat(gold)
-          costume(0, 30, 0, 20, 19, 14, shirt)
-          trim(0, 36, 7.4, 13, 4, 2, ivory)
-          trim(5, 32, 8.6, 4, 4, 1, gold)
-          costume(-12, 23, 1, 7, 10, 11, bag)
-          trim(-7, 31, 8, 2, 16, 2, bag)
-          break
-        case 'schoolchild':
-          brimmedHat(hat, 25)
-          backpack(bag, 18)
-          trim(0, 32, 7.6, 5, 7, 1, ivory)
-          break
-        case 'student':
-          // A sailor collar, neckerchief and a square school bag.
-          for (const side of [-1, 1]) trim(side * 5, 36, 7.6, 6, 5, 2, ivory)
-          bow(33, 8.8, hat)
-          costume(0, 37, -8, 19, 4, 5, ivory)
-          backpack(bag, 13)
-          break
-        case 'salaryman':
-        case 'office-lady':
-          costume(0, 30, 0, 20, 19, 14, shirt)
-          trim(0, 32, 7.4, 7, 14, 1, ivory)
-          for (const side of [-1, 1]) trim(side * 5, 35, 8, 4, 7, 2, bottom)
-          if (role === 'salaryman') trim(0, 32, 8.5, 3, 11, 2, hat)
-          else bow(36, 8.5, hat)
-          if (riding) backpack(bag, 13)
-          else {
-            costume(-14, 19, 2, 8, 11, 14, bag).motion = 'arm'
-            costume(-14, 25, 2, 3, 5, 7, gold).motion = 'arm'
-          }
-          break
-        case 'doctor':
-        case 'nurse':
-          costume(0, 28, 0, 21, 23, 14, ivory)
-          trim(0, 32, 7.5, 6, 14, 1, shirt)
-          for (const side of [-1, 1]) trim(side * 5, 33, 8, 2, 9, 2, colors.ink)
-          costume(5, 28, 9, 4, 4, 2, metal)
-          trim(-6, 26, 7.5, 5, 4, 1, bag)
-          if (role === 'nurse') {
-            costume(0, 58, 1, 23, 8, 22, ivory)
-            trim(0, 59, 12.4, 7, 2, 1, hat)
-            trim(0, 59, 12.5, 2, 6, 1, hat)
-          }
-          break
-        case 'chef':
-          costume(0, 60, 1, 24, 10, 22, ivory)
-          for (const x of [-7, 0, 7]) costume(x, 68, 1, 11, 12, 21, ivory)
-          costume(0, 29, 0, 20, 21, 14, ivory)
-          trim(0, 38, 8, 12, 3, 2, hat)
-          for (const x of [-4, 4]) {
-            for (const y of [27, 32]) trim(x, y, 7.5, 2, 2, 1, colors.ink)
-          }
-          trim(0, 21, 8, 16, 3, 2, bag)
-          break
-        case 'firefighter':
-        case 'builder':
-          brimmedHat(hat)
-          costume(0, 62, 1, 4, 6, 20, accent)
-          costume(0, 29, 0, 21, 22, 14, shirt)
-          for (const side of [-1, 1]) trim(side * 6, 30, 7.6, 3, 17, 2, gold)
-          trim(0, 24, 8, 20, 3, 2, ivory)
-          if (role === 'firefighter') {
-            for (const side of [-1, 1]) costume(side * 5, 30, -11, 8, 22, 9, metal)
-            trim(0, 57, 12.5, 7, 6, 2, gold)
-          } else {
-            costume(0, 21, 0, 21, 4, 16, bag)
-            costume(-10, 21, 3, 6, 8, 9, bag)
-          }
-          break
-        case 'police':
-          brimmedHat(shirt, 25)
-          trim(0, 57, 12.4, 6, 5, 2, gold)
-          trim(-5, 34, 7.4, 4, 5, 2, gold)
-          costume(0, 22, 0, 20, 3, 14, colors.ink)
-          costume(11, 24, 1, 6, 9, 6, colors.ink)
-          trim(11, 31, 1, 2, 6, 2, colors.ink)
-          break
-        case 'farmer':
-          brimmedHat(gold, 32)
-          trim(0, 28, 7.6, 14, 13, 2, bottom)
-          for (const side of [-1, 1]) trim(side * 6, 35, 7.6, 3, 9, 2, bottom)
-          backpack(bag, 18)
-          for (const x of [-5, 3, 7]) costume(x, 43, -11, 4, 12, 4, 0x387961)
-          break
-        case 'astronaut':
-          costume(0, 30, 0, 24, 22, 17, ivory)
-          costume(0, 48, 1, 27, 25, 24, ivory)
-          costume(0, 48, 13, 21, 15, 4, 0x3556a4)
-          trim(-5, 52, 15.2, 8, 3, 1, 0xa2eafa)
-          costume(0, 32, -12, 21, 22, 10, ivory)
-          trim(0, 31, 9, 12, 10, 2, shirt)
-          for (const x of [-3, 3]) trim(x, 32, 10.4, 2, 3, 1, gold)
-          break
-        case 'alien':
-          costume(0, 51, 1, 25, 21, 21, skin)
-          for (const side of [-1, 1]) {
-            costume(side * 6, 50, 11, 7, 8, 3, colors.ink)
-            costume(side * 8, 64, 1, 2, 11, 2, skin)
-            costume(side * 8, 70, 1, 5, 5, 5, hat)
-          }
-          costume(0, 37, 0, 24, 4, 16, metal)
-          trim(0, 30, 7.2, 7, 5, 2, accent)
-          break
-        case 'magical-girl':
-          for (const side of [-1, 1]) {
-            costume(side * 12, 46, -2, 8, 23, 10, hair)
-            costume(side * 12, 55, -1, 10, 5, 6, hat)
-          }
-          bow(36, 9, hat)
-          costume(0, 56, 9, 17, 3, 3, gold)
-          costume(0, 59, 9, 4, 5, 4, accent)
-          if (!riding) costume(0, 18, 0, 24, 4, 16, ivory)
-          staff(hat)
-          break
-        case 'hero':
-        case 'knight':
-          cape(hat)
-          costume(0, 30, 0, 21, 18, 15, role === 'knight' ? metal : shirt)
-          costume(0, 22, 0, 21, 4, 15, bag)
-          trim(0, 22, 8.2, 5, 4, 2, gold)
-          costume(-14, 30, 1, 5, 19, 17, metal)
-          costume(-17, 30, 1, 2, 12, 10, hat)
-          // A sheathed sword stays on the back, clear of moving hands and handlebars.
-          costume(10, 34, -12, 4, 32, 4, metal)
-          costume(10, 49, -12, 12, 3, 5, gold)
-          costume(10, 54, -12, 3, 8, 3, bag)
-          if (role === 'knight') {
-            costume(0, 47, 10, 22, 17, 4, metal)
-            trim(0, 49, 12.4, 16, 3, 1, colors.ink)
-            costume(0, 63, 0, 5, 13, 18, hat)
-          } else costume(0, 54, 10, 21, 4, 3, gold)
-          break
-        case 'wizard':
-        case 'witch':
-          pointedHat(hat)
-          cape(shirt)
-          if (!riding) {
-            costume(0, 20, 0, 21, 13, 14, shirt)
-            costume(0, 12, 0, 24, 7, 16, shirt)
-          }
-          if (role === 'wizard') {
-            costume(0, 41, 10, 13, 9, 5, ivory)
-            costume(0, 35, 10, 7, 9, 5, ivory)
-            staff(bag)
-          } else {
-            staff(bag, false)
-            const broom = costume(14, 10, riding ? -13 : 2, 9, 13, 7, gold)
-            if (!riding) broom.motion = 'arm'
-          }
-          break
-        case 'ninja':
-          costume(0, 48, 1, 26, 23, 22, shirt)
-          trim(0, 49, 12.3, 17, 6, 1, skin)
-          for (const side of [-1, 1]) trim(side * 4, 49, 13, 2, 3, 1, colors.ink)
-          costume(0, 54, 1, 27, 4, 23, hat)
-          costume(8, 49, -13, 5, 14, 4, hat)
-          costume(0, 24, 0, 20, 4, 14, hat)
-          costume(9, 34, -11, 4, 30, 4, bag)
-          costume(9, 51, -11, 4, 7, 4, metal)
-          break
-        case 'pirate':
-          brimmedHat(hat, 32)
-          costume(0, 63, 2, 22, 9, 10, hat)
-          trim(0, 63, 7.4, 5, 5, 1, ivory)
-          trim(-4, 47, 10.8, 6, 6, 2, colors.ink)
-          trim(0, 50, 10.9, 20, 1.5, 1, colors.ink)
-          costume(0, 24, 0, 21, 5, 14, hat)
-          trim(0, 24, 7.6, 5, 4, 2, gold)
-          // A small parrot perched on the shoulder.
-          costume(-13, 43, -1, 6, 10, 7, accent)
-          costume(-13, 49, 1, 7, 6, 8, hat)
-          costume(-13, 48, 5, 3, 3, 4, gold)
-          break
-        case 'fairy':
-          for (const side of [-1, 1]) {
-            costume(side * 12, 39, -10, 15, 20, 4, 0xa2eafa)
-            costume(side * 10, 25, -10, 12, 12, 4, 0xe7b1e0)
-            costume(side * 8, 57, 3, 7, 5, 7, hat)
-          }
-          bow(35, 8, hat)
-          staff(gold)
-          break
-        case 'vampire':
-          cape(hat)
-          for (const side of [-1, 1]) costume(side * 10, 41, -4, 5, 13, 9, hat)
-          trim(0, 32, 7.8, 7, 13, 2, ivory)
-          bow(37, 9, bottom)
-          for (const side of [-1, 1]) trim(side * 3, 42, 10.8, 2, 3, 1, ivory)
-          break
-        case 'robot':
-          costume(0, 30, 0, 23, 22, 16, metal)
-          costume(0, 48, 1, 25, 23, 22, metal)
-          trim(0, 49, 12.4, 20, 8, 2, colors.ink)
-          for (const side of [-1, 1]) trim(side * 5, 49, 13.6, 4, 4, 1, hat)
-          trim(0, 42, 12.4, 9, 2, 1, colors.ink)
-          costume(0, 64, 0, 3, 10, 3, metal)
-          costume(0, 70, 0, 6, 6, 6, hat)
-          trim(0, 31, 8.5, 14, 10, 2, shirt)
-          trim(0, 32, 9.8, 8, 3, 1, accent)
-          for (const side of [-1, 1]) costume(side * 14, 48, 0, 5, 9, 9, hat)
-          break
+      for (const item of createPersonParts(variant, resident?.slug ?? String(variant), riding)) {
+        const { shape, x, y, z, width, height, depth, color, angle, pitch } = item
+        part(shape, x, y, z, width, height, depth, color, angle, pitch).motion = item.motion
       }
     }
 
@@ -2956,6 +2553,7 @@ export function createTownScene(articles?: TownArticle[]) {
             pose: trafficPose(route, elapsed)
           }
           ambientResidents.set(key, resident)
+          resident.bounds = new Box3()
           residents.push(resident)
           scale = resident.scale
           if (resident.kind === 'car') car(variant)
@@ -2978,6 +2576,7 @@ export function createTownScene(articles?: TownArticle[]) {
         }
         articleResidents.set(article.slug, resident)
       }
+      resident.bounds = new Box3()
       residents.push(resident)
       scale = resident.scale
       if (resident.kind === 'bicycle') cyclist(article.variant)
@@ -3023,10 +2622,11 @@ export function createTownScene(articles?: TownArticle[]) {
         scene.add(mesh)
       }
     }
-    for (const shape of ['box', 'person', 'disc', 'wheel'] as const) {
+    for (const shape of Object.keys(movingParts) as TownShape[]) {
       const items = movingParts[shape] ?? []
       if (!items.length) continue
-      const mesh = new InstancedMesh(geometries[shape], material, items.length)
+      const partMaterial = shape.startsWith('girlFace') ? faceMaterial : material
+      const mesh = new InstancedMesh(geometries[shape], partMaterial, items.length)
       mesh.instanceMatrix.setUsage(DynamicDrawUsage)
       // Residents travel outside their initial bounds; let the GPU clip these batches.
       mesh.frustumCulled = false
@@ -3039,7 +2639,7 @@ export function createTownScene(articles?: TownArticle[]) {
       }
       const selectionMesh = new InstancedMesh(
         geometries[shape],
-        material,
+        partMaterial,
         Math.max(1, ...partCounts.values())
       )
       selectionMesh.instanceMatrix.setUsage(DynamicDrawUsage)
@@ -3223,7 +2823,15 @@ export function createTownScene(articles?: TownArticle[]) {
       return [...articleResidents.entries()].map(([slug, resident]) => {
         const { x, z } = resident.pose
         const riding = resident.kind === 'bicycle'
-        const headHeight = (riding ? 56 : 46) * resident.scale
+        const headHeight = (resident.bounds?.max.y ?? 66 * resident.scale) - 8 * resident.scale
+        const bounds = resident.bounds
+        const width = bounds
+          ? 2 *
+            Math.hypot(
+              Math.max(Math.abs(bounds.min.x), bounds.max.x),
+              Math.max(Math.abs(bounds.min.z), bounds.max.z)
+            )
+          : 44 * resident.scale
         const lifted = resident === dragged?.resident
         world.set(x, headHeight + (lifted ? liftHeight : 0), z)
         projected.copy(world).project(camera)
@@ -3231,7 +2839,11 @@ export function createTownScene(articles?: TownArticle[]) {
         const py = ((1 - projected.y) * viewport.height) / 2
         const inView = px >= 0 && px <= viewport.width && py >= 70 && py < viewport.height - 70
         if ((checkVisibility || !visibility.has(slug)) && inView && visibleSlugs?.has(slug)) {
-          screen.set(projected.x, projected.y)
+          // Visibility is sampled at the face, independently of tall hats and props.
+          world.set(x, (riding ? 60 : 50) * resident.scale + (lifted ? liftHeight : 0), z)
+          world.project(camera)
+          screen.set(world.x, world.y)
+          world.set(x, (riding ? 60 : 50) * resident.scale + (lifted ? liftHeight : 0), z)
           raycaster.setFromCamera(screen, camera)
           raycaster.far = raycaster.ray.origin.distanceTo(world) - 8
           visibility.set(slug, raycaster.intersectObjects(occluders, false).length === 0)
@@ -3240,7 +2852,7 @@ export function createTownScene(articles?: TownArticle[]) {
           slug,
           x: px,
           y: py,
-          width: (riding ? 64 : 28) * resident.scale,
+          width,
           bodyHeight: (headHeight + (riding ? 20 * resident.scale : 0)) / Math.SQRT2,
           footY: (headHeight + (lifted ? liftHeight : 0)) / Math.SQRT2,
           dropAllowed: !lifted || navigation.canStand(resident.pose),
@@ -3384,6 +2996,8 @@ export function createTownScene(articles?: TownArticle[]) {
       }
       for (const geometry of Object.values(geometries)) geometry.dispose()
       material.dispose()
+      faceMaterial.dispose()
+      faceTexture.dispose()
       grassMaterial.dispose()
       roofMaterial.dispose()
       grassTexture.dispose()

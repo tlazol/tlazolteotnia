@@ -1,0 +1,382 @@
+import { hashSlug } from './sticker-board'
+import { townPersonStyle } from './town-person'
+import type { PersonShape } from './town-person-geometry'
+
+export type PersonPart = {
+  shape: PersonShape | 'box'
+  x: number
+  y: number
+  z: number
+  width: number
+  height: number
+  depth: number
+  color: number
+  angle: number
+  pitch: number
+  motion?: 'leg' | 'arm' | 'pedal'
+}
+
+// Coordinated cloth, dark trim, ribbon and hair palettes, selected by article identity.
+const palettes = [
+  [0x739bc3, 0x303d61, 0xf0c978, 0xd9a96c],
+  [0xd99ab3, 0x6d405d, 0xffd7e1, 0x705065],
+  [0x89bcb0, 0x355c65, 0xf7d59a, 0xe3dbc4],
+  [0xb39ccb, 0x51476e, 0xedbdcf, 0xc6b9e3],
+  [0xc98479, 0x583e4c, 0xf3cdaa, 0x65464b],
+  [0xe8c484, 0x556083, 0xa3d9db, 0x959ac7],
+  [0x819db5, 0x303d55, 0xf0a4b6, 0xdce4ee],
+  [0xa7b980, 0x43564e, 0xf6d7aa, 0x8b674d]
+] as const
+const skinTones = [0xffe2d3, 0xf7d3c0, 0xe8b49b, 0xcc9279, 0xa86f5d]
+const ivory = 0xfff4e6
+const metal = 0xc9d9e5
+const gold = 0xecc780
+
+export function createPersonParts(variant: number, identity: string, riding = false) {
+  const style = townPersonStyle(variant)
+  const { role, hair: hairstyle } = style
+  const [cloth, dark, ribbon, hair] =
+    palettes[(hashSlug(`top:${identity}`) >>> 8) % palettes.length]
+  const skin = skinTones[(hashSlug(`skin:${identity}`) >>> 8) % skinTones.length]
+  const parts: PersonPart[] = []
+  const add = (
+    shape: PersonPart['shape'],
+    x: number,
+    y: number,
+    z: number,
+    width: number,
+    height: number,
+    depth: number,
+    color: number,
+    angle = 0,
+    pitch = 0
+  ) => {
+    const part: PersonPart = { shape, x, y, z, width, height, depth, color, angle, pitch }
+    parts.push(part)
+    return part
+  }
+  const lift = riding ? 10 : 0
+  const lean = riding ? -7 : 0
+  const piece = (
+    shape: PersonPart['shape'],
+    x: number,
+    y: number,
+    z: number,
+    w: number,
+    h: number,
+    d: number,
+    color: number,
+    angle = 0,
+    pitch = 0
+  ) => add(shape, x, y + lift, z + lean, w, h, d, color, angle, pitch)
+  const round = (x: number, y: number, z: number, w: number, h: number, d: number, c: number) =>
+    piece('girlRound', x, y, z, w, h, d, c)
+  const trim = (
+    x: number,
+    y: number,
+    z: number,
+    w: number,
+    h: number,
+    d: number,
+    c: number,
+    angle = 0
+  ) => piece('box', x, y, z, w, h, d, c, angle)
+  const lock = (
+    x: number,
+    y: number,
+    z: number,
+    w: number,
+    h: number,
+    d: number,
+    angle = 0,
+    c: number = hair
+  ) => piece('girlLock', x, y, z, w, h, d, c, angle)
+  const bow = (x: number, y: number, z: number, c: number = ribbon, size = 1) => {
+    for (const side of [-1, 1])
+      piece('girlLock', x + side * 3 * size, y, z, 6 * size, 6 * size, 3 * size, c, side * 1.2)
+    round(x, y, z + 0.8, 3 * size, 3 * size, 3 * size, gold)
+  }
+  const skirt = (c: number = dark, length = 10) => {
+    if (riding) return
+    piece('girlSkirt', 0, 22 - (length - 10) / 2, 0, 23, length, 17, c)
+    piece('girlSkirt', 0, 17.4 - (length - 10), 0, 24, 2, 18, ivory)
+  }
+  const coat = (c: number) => piece('girlBody', 0, 29, 0, 18, 21, 13, c)
+  const brimHat = (c: number = dark, width = 40) => {
+    piece('girlBrim', 0, 61.5, 1, width, 2.5, 31, c)
+    piece('girlCap', 0, 65, 1, 36, 12, 34, c)
+    trim(0, 62.5, 12, 18, 2.5, 1, ribbon)
+  }
+  const backpack = (c: number = dark) => {
+    round(0, 30, -10, 14, 16, 8, c)
+    trim(0, 32, -14, 10, 2, 1, gold)
+    for (const side of [-1, 1]) trim(side * 5, 31, 5.7, 1.5, 13, 1, c)
+  }
+  const cape = (c: number = cloth) => {
+    piece('girlSkirt', 0, riding ? 31 : 27, -8, 25, riding ? 17 : 25, 7, c)
+    bow(0, 36, 6.5)
+  }
+  const staff = (broom = false) => {
+    const z = riding ? -15 : 3
+    const shaft = piece('girlLimb', 15, 29, z, 2.6, 39, 2.6, dark)
+    const tip = piece(
+      broom ? 'girlLock' : 'girlRound',
+      15,
+      broom ? 13 : 50,
+      z,
+      broom ? 10 : 8,
+      broom ? 17 : 9,
+      7,
+      broom ? gold : ribbon
+    )
+    if (!riding) shaft.motion = tip.motion = 'arm'
+  }
+
+  // About 2.4 heads tall, with a shaped chin, soft cheeks, and a short neck.
+  piece('girlBody', 0, 30, 0, 16, 17, 11, cloth)
+  round(0, riding ? 26.5 : 24, 0, 13, 8, 10, dark)
+  piece('girlLimb', 0, 38, 0, 5, 7, 5, skin)
+  piece('girlHead', 0, 50, 1, 32, 28, 26, skin)
+  piece(`girlFace${style.face}`, 0, 50, 1, 32, 28, 26, 0xffffff)
+  piece('girlCrown', 0, 50.3, 1, 34, 30, 28, hair)
+  for (const side of [-1, 1]) round(side * 15, 47, 1, 4, 6, 5, skin)
+
+  // Back/side masses and pointed strands, rather than a cap of cuboids.
+  const long = hairstyle === 'long' || hairstyle === 'waves'
+  if (role !== 'astronaut' && (long || hairstyle === 'bob' || hairstyle === 'short')) {
+    const length = long ? 31 : hairstyle === 'bob' ? 18 : 12
+    for (const x of [-10, -5, 0, 5, 10]) lock(x, 48 - length * 0.2, -10, 10, length, 9, -x * 0.012)
+  }
+  for (const side of [-1, 1]) {
+    if (role !== 'astronaut') lock(side * 14, long ? 44 : 48, 3, 6, long ? 25 : 17, 9, side * -0.08)
+    if (hairstyle === 'twintails') {
+      lock(side * 19, 41, -4, 12, 33, 12, side * 0.15)
+      bow(side * 17, 56, -1, ribbon, 0.75)
+    } else if (hairstyle === 'braids') {
+      for (let i = 0; i < 4; i++)
+        round(side * (15 + i * 0.7), 47 - i * 5, -4, 7 - i * 0.6, 7, 7, hair)
+      bow(side * 17, 30, -2, ribbon, 0.65)
+    } else if (hairstyle === 'bun') {
+      round(side * 13, 62, -6, 12, 12, 12, hair)
+      bow(side * 14, 62, 0, ribbon, 0.65)
+    } else if (hairstyle === 'waves') {
+      lock(side * 17, 35, -4, 9, 17, 10, side * 0.3)
+    }
+  }
+  if (hairstyle === 'ponytail') {
+    round(0, 60, -13, 12, 10, 10, hair)
+    lock(2, 43, -16, 15, 33, 13, -0.14)
+    bow(0, 59, -17)
+  }
+  for (const [i, x] of (role === 'astronaut' ? [] : [-10, -4, 3, 9]).entries()) {
+    lock(x, 58 + (i === 1 ? 0 : 1), 11.5, i === 1 ? 10 : 8, i === 1 ? 15 : 13, 6, -0.2 + i * 0.1)
+  }
+  // A side clip gives even simple hairstyles a readable accent.
+  trim(12, 55, 11.5, 4, 1.5, 1.5, gold, -0.35)
+
+  if (style.skirt) skirt()
+  else if (!riding) piece('girlBody', 0, 22, 0, 15, 8, 11, dark)
+  for (const side of [-1, 1]) {
+    if (riding) {
+      add('girlLimb', side * 5, 34, 1, 6, 7, 22, dark)
+      add('girlLimb', side * 6, 23, 11, 5.5, 20, 6, skin).motion = 'pedal'
+      add('girlRound', side * 7, 14, 13, 7, 6, 11, dark).motion = 'pedal'
+      add('girlLimb', side * 10, 38, 4, 6, 7, 24, cloth)
+      add('girlRound', side * 10, 36, 19, 4.5, 4.5, 7, skin)
+    } else {
+      add('girlLimb', side * 4.6, 15, 0, 6, 15, 6, skin).motion = 'leg'
+      add('girlLimb', side * 4.6, 7.5, 0, 5.6, 9, 5.6, ivory).motion = 'leg'
+      add('girlRound', side * 4.6, 3, 2, 7.5, 6, 11, dark).motion = 'leg'
+      add('girlRound', side * 4.6, 1, 2, 7.5, 2, 10.5, ivory).motion = 'leg'
+      add('girlLimb', side * 9, 33, 0, 7, 10, 8, cloth, side * 0.12).motion = 'arm'
+      add('girlLimb', side * 10, 26, 0.5, 4.5, 9, 5, skin).motion = 'arm'
+      add('girlRound', side * 10, 22, 1, 5, 5, 5, skin).motion = 'arm'
+    }
+  }
+
+  switch (role) {
+    case 'cap-child':
+      piece('girlCap', 0, 64, 1, 36, 13, 34, cloth)
+      piece('girlBrim', 0, 60, 13, 27, 2, 16, cloth)
+      for (const y of [28, 33]) trim(0, y, 5.8, 13, 2, 1, ivory)
+      backpack()
+      break
+    case 'dress-child':
+      bow(0, 35, 6)
+      trim(0, 28, 6, 10, 10, 1, ivory)
+      break
+    case 'casual':
+      trim(-6, 31, 6, 2, 17, 1, dark, -0.25)
+      round(-11, 23, 2, 7, 10, 9, ribbon)
+      break
+    case 'dress':
+      bow(0, 28, 7)
+      bow(-12, 61, 5, ribbon, 1.1)
+      break
+    case 'hoodie':
+      round(0, 36, -5, 20, 8, 12, cloth)
+      for (const side of [-1, 1]) trim(side * 3, 33, 6, 1, 7, 1, ivory)
+      trim(0, 27, 6, 10, 4, 1, ribbon)
+      break
+    case 'cardigan':
+      for (const side of [-1, 1]) trim(side * 5, 31, 5.7, 4, 14, 1, ivory)
+      bow(0, 36, 6.5)
+      break
+    case 'kindergartner':
+      brimHat(gold)
+      coat(cloth)
+      bow(0, 36, 7, ivory)
+      round(-11, 24, 1, 8, 11, 8, gold)
+      break
+    case 'schoolchild':
+      brimHat()
+      backpack(ribbon)
+      bow(0, 35, 7, ivory)
+      break
+    case 'student':
+      for (const side of [-1, 1]) trim(side * 4, 36, 6, 6, 4, 1, ivory, side * -0.35)
+      bow(0, 33, 7)
+      backpack()
+      break
+    case 'salaryman':
+    case 'office-lady':
+      coat(dark)
+      trim(0, 32, 6.5, 6, 12, 1, ivory)
+      if (role === 'salaryman') lock(0, 32, 7.5, 3, 10, 2, 0, ribbon)
+      else bow(0, 36, 7)
+      if (riding) backpack()
+      else round(-12, 20, 2, 7, 11, 12, dark).motion = 'arm'
+      break
+    case 'doctor':
+    case 'nurse':
+      coat(ivory)
+      trim(0, 31, 6.5, 5, 13, 1, cloth)
+      if (role === 'doctor') {
+        for (const side of [-1, 1]) trim(side * 5, 33, 6.8, 1, 8, 1, dark)
+        round(5, 28, 7.5, 3, 3, 2, metal)
+      } else {
+        round(0, 63, 0, 26, 9, 21, ivory)
+        trim(0, 64, 10, 7, 2, 1, ribbon)
+        trim(0, 64, 10.1, 2, 6, 1, ribbon)
+      }
+      break
+    case 'chef':
+      piece('girlBrim', 0, 62, 0, 29, 5, 26, ivory)
+      for (const x of [-8, 0, 8]) round(x, 69, 0, 15, 15, 23, ivory)
+      coat(ivory)
+      bow(0, 37, 6.5)
+      trim(0, 26, 7, 11, 11, 1, ivory)
+      for (const x of [-4, 4]) for (const y of [29, 33]) round(x, y, 7, 1.5, 1.5, 1, dark)
+      break
+    case 'firefighter':
+    case 'builder':
+      brimHat(gold)
+      coat(role === 'firefighter' ? cloth : ribbon)
+      for (const side of [-1, 1]) trim(side * 5, 30, 6.5, 2, 16, 1, gold)
+      trim(0, 24, 7, 16, 2, 1, ivory)
+      if (role === 'firefighter')
+        for (const side of [-1, 1]) piece('girlLimb', side * 5, 30, -11, 7, 21, 8, metal)
+      else round(-10, 22, 1, 6, 9, 8, dark)
+      break
+    case 'police':
+      brimHat(dark, 33)
+      trim(0, 63, 12.5, 5, 5, 1, gold)
+      trim(-4, 34, 6, 3, 4, 1, gold)
+      trim(0, 24, 6, 15, 2, 1, dark)
+      break
+    case 'farmer':
+      brimHat(gold, 42)
+      trim(0, 28, 6, 12, 12, 1, dark)
+      for (const side of [-1, 1]) trim(side * 5, 35, 6, 2, 8, 1, dark)
+      backpack()
+      break
+    case 'astronaut':
+      coat(ivory)
+      // Open helmet: the face and fringe remain visible between the ear modules.
+      piece('girlBrim', 0, 38, 0, 31, 4, 25, ivory)
+      for (const side of [-1, 1]) {
+        round(side * 17, 49, 0, 7, 16, 18, ivory)
+        round(side * 20, 49, 2, 2, 8, 8, cloth)
+      }
+      piece('girlCrown', 0, 50.8, 0.2, 36, 32, 30, ivory)
+      backpack(ivory)
+      trim(0, 31, 7, 10, 8, 1, cloth)
+      break
+    case 'alien':
+      for (const side of [-1, 1]) {
+        piece('girlLimb', side * 10, 69, 0, 2, 11, 2, metal)
+        round(side * 10, 75, 0, 5, 5, 5, ribbon)
+      }
+      piece('girlBrim', 0, 37, 0, 22, 3, 16, metal)
+      bow(0, 29, 7)
+      break
+    case 'magical-girl':
+      bow(0, 36, 7, ribbon, 1.1)
+      trim(0, 62, 12, 18, 2, 2, gold)
+      round(0, 64, 12, 4, 5, 3, ribbon)
+      staff()
+      break
+    case 'hero':
+    case 'knight':
+      cape(dark)
+      coat(role === 'knight' ? metal : cloth)
+      bow(0, 36, 7)
+      trim(0, 24, 7, 15, 2, 1, gold)
+      round(-13, 29, 1, 5, 17, 14, metal)
+      piece('girlLimb', 10, 35, -13, 3, 30, 3, metal)
+      trim(10, 49, -13, 10, 2, 4, gold)
+      if (role === 'knight') {
+        trim(0, 62, 12, 23, 3, 2, metal)
+        lock(0, 68, -4, 8, 17, 7, -0.3, ribbon)
+      }
+      break
+    case 'wizard':
+    case 'witch':
+      cape()
+      piece('girlBrim', 0, 61.5, 0, 42, 3, 35, dark)
+      piece('girlHat', 0, 74, 1, 36, 25, 34, dark)
+      bow(8, 66, 9, ribbon, 0.85)
+      staff(role === 'witch')
+      break
+    case 'ninja':
+      trim(0, 62, 12, 26, 3, 2, dark)
+      trim(0, 62, 13.2, 5, 3, 1, metal)
+      lock(13, 44, -9, 5, 22, 3, -0.4, ribbon)
+      bow(0, 36, 7)
+      piece('girlLimb', 9, 34, -12, 3, 29, 3, dark)
+      break
+    case 'pirate':
+      brimHat(dark, 41)
+      piece('girlHat', 0, 67, 2, 27, 10, 15, dark)
+      trim(0, 66, 10, 5, 5, 1, ivory)
+      bow(0, 35, 7)
+      round(-13, 41, 0, 6, 9, 7, cloth)
+      round(-13, 46, 2, 6, 6, 7, ribbon)
+      break
+    case 'fairy':
+      for (const side of [-1, 1]) {
+        piece('girlLock', side * 15, 38, -9, 17, 24, 3, 0xb6e4e6, side * -0.5)
+        piece('girlLock', side * 12, 26, -9, 13, 15, 3, 0xe8c1dc, side * 0.7)
+      }
+      bow(0, 34, 7)
+      staff()
+      break
+    case 'vampire':
+      cape(dark)
+      trim(0, 31, 6.5, 6, 12, 1, ivory)
+      bow(0, 36, 7, ribbon)
+      bow(-12, 61, 4, dark)
+      break
+    case 'robot':
+      coat(metal)
+      trim(0, 30, 7, 9, 8, 1, dark)
+      round(0, 31, 8, 4, 4, 1, ribbon)
+      for (const side of [-1, 1]) {
+        round(side * 17, 50, 0, 6, 11, 12, metal)
+        trim(side * 19, 51, 4, 2, 6, 2, ribbon)
+        piece('girlHat', side * 12, 64, 0, 8, 12, 8, metal)
+      }
+      break
+  }
+  return parts
+}
