@@ -80,6 +80,7 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
     lastPositions.current = positions
     const state = latest.current
     for (const position of positions) {
+      const visible = position.visible || (position.slug === state.activeSlug && position.inView)
       const button = buttons.current.get(position.slug)
       if (button) {
         const zoom = currentView.current.zoom
@@ -91,9 +92,9 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
         button.style.height = `${height}px`
         button.style.setProperty('--foot-y', `${position.y + position.footY * zoom - top}px`)
         button.style.transform = `translate(${position.x - width / 2}px, ${top}px)`
-        button.style.visibility = position.visible ? 'visible' : 'hidden'
+        button.style.visibility = visible ? 'visible' : 'hidden'
         button.dataset.dropAllowed = String(position.dropAllowed)
-        button.tabIndex = position.visible ? 0 : -1
+        button.tabIndex = visible ? 0 : -1
       }
       if (position.slug === state.activeSlug && bubble.current) {
         const element = bubble.current
@@ -106,8 +107,8 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
         element.style.top = `${placement.top}px`
         element.style.setProperty('--tail-x', `${placement.tail}px`)
         element.dataset.side = placement.above ? 'above' : 'below'
-        element.style.visibility = position.visible ? 'visible' : 'hidden'
-        if (position.visible && pendingBubbleFocus.current === position.slug) {
+        element.style.visibility = visible ? 'visible' : 'hidden'
+        if (visible && pendingBubbleFocus.current === position.slug) {
           const link = element.querySelector('a')
           link?.focus({ preventScroll: true })
           if (document.activeElement === link) pendingBubbleFocus.current = null

@@ -1,4 +1,13 @@
-import { InstancedMesh, Matrix4, Raycaster, Vector3, type WebGLRenderer } from 'three'
+import {
+  InstancedMesh,
+  Matrix4,
+  Mesh,
+  Raycaster,
+  type Scene,
+  ShaderMaterial,
+  Vector3,
+  type WebGLRenderer
+} from 'three'
 import { describe, expect, it, vi } from 'vitest'
 import type { BlogPostSummary } from '../src/lib/blog-post'
 import {
@@ -385,8 +394,86 @@ describe('article residents', () => {
       town.render(renderer, 0, false)
       const positions = town.projectResidents(0)
       expect(positions.find((person) => person.slug === 'behind-building')?.visible).toBe(false)
+      expect(positions.find((person) => person.slug === 'behind-building')?.inView).toBe(true)
       expect(positions.find((person) => person.slug === 'retired-programmer')?.visible).toBe(true)
     } finally {
+      town.dispose()
+    }
+  })
+
+  it('updates the selected silhouette when switching, filtering and rebuilding without motion', () => {
+    const other: TownArticle = {
+      ...structuredClone(streetResident),
+      slug: 'other',
+      variant: 0,
+      kind: 'bicycle'
+    }
+    other.route.start.x += 400
+    other.route.end.x += 400
+    const town = createTownScene([streetResident, other])
+    type RenderTarget = Parameters<WebGLRenderer['setRenderTarget']>[0]
+    let target: RenderTarget = null
+    const passes: { scene: Scene; target: RenderTarget }[] = []
+    const targetSpy = vi.spyOn(renderer, 'setRenderTarget').mockImplementation((next) => {
+      target = next
+    })
+    const renderSpy = vi.spyOn(renderer, 'render').mockImplementation((scene) => {
+      passes.push({ scene: scene as Scene, target })
+    })
+    function render(now: number) {
+      passes.length = 0
+      town.render(renderer, now, false)
+      const backdrop = passes.at(-1)?.scene.children[0]
+      if (!(backdrop instanceof Mesh) || !(backdrop.material instanceof ShaderMaterial))
+        throw new Error('Town backdrop missing')
+      const uniforms = backdrop.material.uniforms
+      return {
+        enabled: uniforms.selectionEnabled.value,
+        selection: passes.find(
+          (pass) => pass.target?.depthTexture === uniforms.selectionDepth.value
+        )?.scene
+      }
+    }
+    function expectSelected(scene: Scene | undefined, slug: string) {
+      if (!scene) throw new Error('Selected resident missing')
+      const pose = town.residentPosition(slug)
+      if (!pose) throw new Error('Resident missing')
+      const matrix = new Matrix4()
+      const point = new Vector3()
+      let count = 0
+      for (const mesh of scene.children) {
+        if (!(mesh instanceof InstancedMesh)) continue
+        for (let index = 0; index < mesh.count; index++) {
+          mesh.getMatrixAt(index, matrix)
+          point.setFromMatrixPosition(matrix)
+          expect(Math.hypot(point.x - pose.x, point.z - pose.z)).toBeLessThan(70)
+          count++
+        }
+      }
+      expect(count).toBeGreaterThan(10)
+    }
+    try {
+      town.update(view, size)
+      expect(render(0)).toEqual({ enabled: false, selection: undefined })
+      town.select(streetResident.slug)
+      const first = render(100)
+      expect(first.enabled).toBe(true)
+      expectSelected(first.selection, streetResident.slug)
+      town.select(other.slug)
+      expectSelected(render(200).selection, other.slug)
+      town.update({ ...view, zoom: 0.3 }, size)
+      expectSelected(render(300).selection, other.slug)
+      town.select(null)
+      expect(render(400)).toEqual({ enabled: false, selection: undefined })
+      town.select(other.slug)
+      expectSelected(render(500).selection, other.slug)
+      town.filter([streetResident.slug])
+      expect(render(600)).toEqual({ enabled: false, selection: undefined })
+      town.filter([streetResident.slug, other.slug])
+      expectSelected(render(700).selection, other.slug)
+    } finally {
+      renderSpy.mockRestore()
+      targetSpy.mockRestore()
       town.dispose()
     }
   })

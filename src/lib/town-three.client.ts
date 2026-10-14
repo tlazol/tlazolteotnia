@@ -303,9 +303,14 @@ export function createTownScene(articles?: TownArticle[]) {
   const meshes: InstancedMesh[] = []
   const occluders: InstancedMesh[] = []
   const traffic = new Scene()
+  const selection = new Scene()
   const residents: Resident[] = []
   const ambientResidents = new Map<string, Resident>()
-  const trafficMeshes: { mesh: InstancedMesh; items: MovingPart[] }[] = []
+  const trafficMeshes: {
+    mesh: InstancedMesh
+    selectionMesh: InstancedMesh
+    items: MovingPart[]
+  }[] = []
   const obstacles: TownObstacle[] = []
   function containsGround(point: TownPoint) {
     const coast = coastColumns[Math.round((point.x - coastColumns[0].x) / coastStep)]
@@ -361,6 +366,13 @@ export function createTownScene(articles?: TownArticle[]) {
   })
   trafficTarget.texture.colorSpace = SRGBColorSpace
   trafficTarget.depthTexture = new DepthTexture(1, 1, FloatType)
+  const selectionTarget = new WebGLRenderTarget(1, 1, {
+    minFilter: NearestFilter,
+    magFilter: NearestFilter,
+    samples: 4,
+    generateMipmaps: false
+  })
+  selectionTarget.depthTexture = new DepthTexture(1, 1, FloatType)
   const backdrop = new Scene()
   const backdropCamera = new OrthographicCamera(-1, 1, 1, -1, 0, 1)
   const backdropGeometry = new PlaneGeometry(2, 2)
@@ -374,6 +386,9 @@ export function createTownScene(articles?: TownArticle[]) {
       townDepth: { value: target.depthTexture },
       trafficMap: { value: trafficTarget.texture },
       trafficDepth: { value: trafficTarget.depthTexture },
+      selectionDepth: { value: selectionTarget.depthTexture },
+      selectionEnabled: { value: false },
+      selectionColor: { value: new Color(0x96e5ef) },
       texelSize: { value: new Vector2(1, 1) },
       outlineDepth: { value: 0 }
     },
@@ -389,6 +404,9 @@ export function createTownScene(articles?: TownArticle[]) {
       uniform sampler2D townDepth;
       uniform sampler2D trafficMap;
       uniform sampler2D trafficDepth;
+      uniform sampler2D selectionDepth;
+      uniform bool selectionEnabled;
+      uniform vec3 selectionColor;
       uniform vec2 texelSize;
       uniform float outlineDepth;
       varying vec2 vUv;
@@ -415,6 +433,13 @@ export function createTownScene(articles?: TownArticle[]) {
         float outline = step(outlineDepth, neighborDepth - depth);
         // Darken the surface color so each contour keeps its material's hue.
         gl_FragColor.rgb *= mix(1.0, 0.45, outline);
+        // Reveal only selected parts behind the town; nearer residents stay intact.
+        if (selectionEnabled) {
+          float selectedZ = texture2D(selectionDepth, uv).r;
+          if (selectedZ < 1.0 && townZ < selectedZ && townZ <= trafficZ) {
+            gl_FragColor.rgb = mix(gl_FragColor.rgb, selectionColor, 0.35);
+          }
+        }
         #include <colorspace_fragment>
       }
     `
@@ -432,9 +457,11 @@ export function createTownScene(articles?: TownArticle[]) {
     }
     meshes.length = 0
     occluders.length = 0
-    for (const { mesh } of trafficMeshes) {
+    for (const { mesh, selectionMesh } of trafficMeshes) {
       traffic.remove(mesh)
       mesh.dispose()
+      selection.remove(selectionMesh)
+      selectionMesh.dispose()
     }
     trafficMeshes.length = 0
     residents.length = 0
@@ -3006,8 +3033,21 @@ export function createTownScene(articles?: TownArticle[]) {
       items.forEach(({ part }, index) => {
         mesh.setColorAt(index, color.setHex(part.color))
       })
-      trafficMeshes.push({ mesh, items })
+      const partCounts = new Map<string, number>()
+      for (const { resident } of items) {
+        if (resident.slug) partCounts.set(resident.slug, (partCounts.get(resident.slug) ?? 0) + 1)
+      }
+      const selectionMesh = new InstancedMesh(
+        geometries[shape],
+        material,
+        Math.max(1, ...partCounts.values())
+      )
+      selectionMesh.instanceMatrix.setUsage(DynamicDrawUsage)
+      selectionMesh.frustumCulled = false
+      selectionMesh.count = 0
+      trafficMeshes.push({ mesh, selectionMesh, items })
       traffic.add(mesh)
+      selection.add(selectionMesh)
     }
     navigation = createTownNavigation(obstacles, containsGround)
   }
@@ -3046,7 +3086,8 @@ export function createTownScene(articles?: TownArticle[]) {
       (point) => navigation.canStand(point)
     )
     for (const resident of active) resident.placed = true
-    for (const { mesh, items } of trafficMeshes) {
+    for (const { mesh, selectionMesh, items } of trafficMeshes) {
+      selectionMesh.count = 0
       items.forEach(({ part, resident }, index) => {
         const { x, z } = resident.pose
         const activity = resident.activity
@@ -3105,8 +3146,12 @@ export function createTownScene(articles?: TownArticle[]) {
         )
         transform.updateMatrix()
         mesh.setMatrixAt(index, transform.matrix)
+        if (visible && resident.slug === selectedSlug) {
+          selectionMesh.setMatrixAt(selectionMesh.count++, transform.matrix)
+        }
       })
       mesh.instanceMatrix.needsUpdate = true
+      selectionMesh.instanceMatrix.needsUpdate = true
     }
   }
 
@@ -3150,6 +3195,7 @@ export function createTownScene(articles?: TownArticle[]) {
     },
     select(slug: string | null) {
       selectedSlug = slug
+      trafficDirty = true
     },
     follow(slug: string | null) {
       followedSlug = slug && visibleSlugs?.has(slug) ? slug : null
@@ -3198,6 +3244,7 @@ export function createTownScene(articles?: TownArticle[]) {
           bodyHeight: (headHeight + (riding ? 20 * resident.scale : 0)) / Math.SQRT2,
           footY: (headHeight + (lifted ? liftHeight : 0)) / Math.SQRT2,
           dropAllowed: !lifted || navigation.canStand(resident.pose),
+          inView,
           visible: inView && !!visibleSlugs?.has(slug) && (lifted || visibility.get(slug) === true)
         }
       })
@@ -3221,6 +3268,7 @@ export function createTownScene(articles?: TownArticle[]) {
       // Use CSS-pixel resolution with MSAA to smooth edges while bounding GPU cost.
       target.setSize(Math.max(1, Math.ceil(size.width)), Math.max(1, Math.ceil(size.height)))
       trafficTarget.setSize(target.width, target.height)
+      selectionTarget.setSize(target.width, target.height)
       backdropMaterial.uniforms.texelSize.value.set(1 / target.width, 1 / target.height)
       // Ignore the ordinary depth slope of flat ground at every zoom level.
       const worldPixelSize = size.height / target.height / view.zoom
@@ -3316,14 +3364,24 @@ export function createTownScene(articles?: TownArticle[]) {
         renderer.setRenderTarget(trafficTarget)
         renderer.clear()
         renderer.render(traffic, camera)
+        if (selectedSlug && visibleSlugs?.has(selectedSlug)) {
+          renderer.setRenderTarget(selectionTarget)
+          renderer.clear()
+          renderer.render(selection, camera)
+        }
       }
+      backdropMaterial.uniforms.selectionEnabled.value =
+        !!selectedSlug && !!visibleSlugs?.has(selectedSlug)
       renderer.setRenderTarget(previousTarget)
       renderer.render(backdrop, backdropCamera)
       return currentView
     },
     dispose() {
       for (const mesh of meshes) mesh.dispose()
-      for (const { mesh } of trafficMeshes) mesh.dispose()
+      for (const { mesh, selectionMesh } of trafficMeshes) {
+        mesh.dispose()
+        selectionMesh.dispose()
+      }
       for (const geometry of Object.values(geometries)) geometry.dispose()
       material.dispose()
       grassMaterial.dispose()
@@ -3332,6 +3390,7 @@ export function createTownScene(articles?: TownArticle[]) {
       roofTexture.dispose()
       target.dispose()
       trafficTarget.dispose()
+      selectionTarget.dispose()
       backdropGeometry.dispose()
       backdropMaterial.dispose()
     }
