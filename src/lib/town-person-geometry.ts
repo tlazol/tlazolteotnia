@@ -205,11 +205,15 @@ export function createPersonGeometries() {
 }
 export type PersonShape = keyof ReturnType<typeof createPersonGeometries>
 
-// Six eyes/expressions in one atlas. Pure pixel generation also works in geometry tests
+export const personBlinkFrames = 5
+
+// Six expressions across, with progressively closed eyelids in each atlas row.
+// Pure pixel generation also works in geometry tests
 // without a DOM; the transparent face patch follows the cheeks instead of floating.
 export function createPersonFaceTexture() {
   const size = 256
-  const pixels = new Uint8Array(size * 6 * size * 4)
+  const height = size * personBlinkFrames
+  const pixels = new Uint8Array(size * 6 * height * 4)
   const irises = [
     [91, 139, 211],
     [173, 104, 184],
@@ -219,40 +223,45 @@ export function createPersonFaceTexture() {
     [115, 117, 204]
   ]
   for (let slot = 0; slot < 6; slot++) {
-    for (let py = 0; py < size; py++) {
+    for (let py = 0; py < height; py++) {
+      const closed = Math.floor(py / size) / (personBlinkFrames - 1)
       for (let px = 0; px < size; px++) {
         const u = (px + 0.5) / size
-        const v = (py + 0.5) / size
+        const v = ((py % size) + 0.5) / size
         let rgba = [0, 0, 0, 0]
         for (const side of [-1, 1]) {
-          const ex = 0.5 + side * 0.19
-          const dx = (u - ex) / 0.112
+          const ex = 0.5 + side * 0.17
+          const dx = (u - ex) / 0.09
           const outer = side * dx
           const arch = Math.sqrt(Math.max(0, 1 - dx * dx))
           const corner = 0.46 + outer * 0.018
-          const upper = corner + (slot === 3 ? 0.05 : 0.065) * (1 - dx * dx)
-          const lower = corner - 0.095 * arch
-          // Broad irises tuck under a flatter upper lid, with only narrow white corners.
+          const upper =
+            corner +
+            (slot === 3 ? 0.038 : 0.048) * (1 - dx * dx) * (1 - closed) -
+            closed * 0.025 * arch
+          const lower = corner - (0.072 - closed * 0.047) * arch
+          // Smaller eyes leave room for the cheeks; the upper lid covers the iris as it closes.
           if (Math.abs(dx) < 1 && v > lower && v < upper) {
             rgba = [255, 246, 237, 255]
-            const iris = ((u - ex) / 0.086) ** 2 + ((v - 0.449) / 0.108) ** 2
+            const iris = ((u - ex) / 0.066) ** 2 + ((v - 0.451) / 0.077) ** 2
             if (iris < 1) {
-              const shade = Math.max(0.35, Math.min(1.2, 1.15 - (v - 0.37) * 5))
+              const shade = Math.max(0.4, Math.min(1.25, 1.2 - (v - 0.39) * 6))
               rgba = [...irises[slot].map((channel) => Math.min(255, channel * shade)), 255]
-              if (((u - ex) / 0.032) ** 2 + ((v - 0.464) / 0.069) ** 2 < 1) rgba = [38, 31, 59, 255]
+              if (((u - ex) / 0.024) ** 2 + ((v - 0.46) / 0.049) ** 2 < 1) rgba = [38, 31, 59, 255]
               if (
-                ((u - ex + 0.026) / 0.017) ** 2 + ((v - 0.485) / 0.02) ** 2 < 1 ||
-                ((u - ex - 0.033) / 0.008) ** 2 + ((v - 0.397) / 0.009) ** 2 < 1
+                ((u - ex + 0.019) / 0.021) ** 2 + ((v - 0.477) / 0.022) ** 2 < 1 ||
+                ((u - ex - 0.022) / 0.01) ** 2 + ((v - 0.409) / 0.012) ** 2 < 1
               )
                 rgba = [255, 255, 253, 255]
             }
           }
           // Swept upper lash and a small outer flick; lower lid stays light.
-          if (Math.abs(dx) < 1 && Math.abs(v - upper) < 0.009 + Math.max(0, outer) * 0.004)
+          if (Math.abs(dx) < 1 && Math.abs(v - upper) < 0.007 + Math.max(0, outer) * 0.003)
             rgba = [53, 35, 55, 255]
-          if (outer > 0.85 && outer < 1.25 && Math.abs(v - (0.48 + (outer - 1) * 0.085)) < 0.009)
+          if (outer > 0.9 && outer < 1.22 && Math.abs(v - (0.478 + (outer - 1) * 0.065)) < 0.007)
             rgba = [53, 35, 55, 255]
-          if (Math.abs(dx) < 0.9 && Math.abs(v - lower) < 0.003) rgba = [133, 84, 87, 190]
+          if (closed < 1 && Math.abs(dx) < 0.9 && Math.abs(v - lower) < 0.002)
+            rgba = [133, 84, 87, 190]
           if (Math.abs(dx) < 0.7 && Math.abs(v - (0.59 + outer * 0.008)) < 0.005)
             rgba = [101, 65, 83, 190]
           const blush = ((u - (0.5 + side * 0.255)) / 0.066) ** 2 + ((v - 0.3) / 0.028) ** 2
@@ -267,7 +276,7 @@ export function createPersonFaceTexture() {
       }
     }
   }
-  const texture = new DataTexture(pixels, size * 6, size, RGBAFormat)
+  const texture = new DataTexture(pixels, size * 6, height, RGBAFormat)
   texture.colorSpace = SRGBColorSpace
   texture.magFilter = LinearFilter
   texture.minFilter = LinearMipmapLinearFilter

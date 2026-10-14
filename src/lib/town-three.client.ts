@@ -10,6 +10,7 @@ import {
   ExtrudeGeometry,
   Float32BufferAttribute,
   FloatType,
+  InstancedBufferAttribute,
   InstancedMesh,
   LinearFilter,
   LinearMipmapLinearFilter,
@@ -51,7 +52,8 @@ import { townPersonStyle } from './town-person'
 import {
   createPersonFaceTexture,
   createPersonGeometries,
-  type PersonShape
+  type PersonShape,
+  personBlinkFrames
 } from './town-person-geometry'
 import { createPersonParts } from './town-person-model'
 import { clampTownView, nearestResidentRoute, type TownArticle, townToBoard } from './town-posts'
@@ -89,6 +91,7 @@ type Resident = ActiveResident & {
   returning?: { path: TownPoint[]; route: TrafficRoute }
   route: TrafficRoute
   phase: number
+  blinkPhase: number
   placed?: boolean
 }
 type MovingPart = { part: Part; resident: Resident }
@@ -300,6 +303,13 @@ export function createTownScene(articles?: TownArticle[]) {
     transparent: true,
     alphaTest: 0.02
   })
+  // Each face selects its own eyelid row while sharing the same texture and draw call.
+  faceMaterial.onBeforeCompile = (shader) => {
+    shader.vertexShader = `attribute float blinkFrame;\n${shader.vertexShader}`.replace(
+      '#include <uv_vertex>',
+      `#include <uv_vertex>\nvMapUv.y = (vMapUv.y + blinkFrame) / ${personBlinkFrames.toFixed(1)};`
+    )
+  }
   const grassTexture = tileTexture('grass')
   const roofTexture = tileTexture('roof')
   const grassMaterial = new MeshBasicMaterial({ map: grassTexture, vertexColors: true })
@@ -314,6 +324,8 @@ export function createTownScene(articles?: TownArticle[]) {
     mesh: InstancedMesh
     selectionMesh: InstancedMesh
     items: MovingPart[]
+    blink?: InstancedBufferAttribute
+    selectionBlink?: InstancedBufferAttribute
   }[] = []
   const obstacles: TownObstacle[] = []
   function containsGround(point: TownPoint) {
@@ -461,11 +473,15 @@ export function createTownScene(articles?: TownArticle[]) {
     }
     meshes.length = 0
     occluders.length = 0
-    for (const { mesh, selectionMesh } of trafficMeshes) {
+    for (const { mesh, selectionMesh, blink } of trafficMeshes) {
       traffic.remove(mesh)
       mesh.dispose()
       selection.remove(selectionMesh)
       selectionMesh.dispose()
+      if (blink) {
+        mesh.geometry.dispose()
+        selectionMesh.geometry.dispose()
+      }
     }
     trafficMeshes.length = 0
     residents.length = 0
@@ -2549,6 +2565,7 @@ export function createTownScene(articles?: TownArticle[]) {
             kind: placement.kind,
             scale: placement.kind === 'car' ? 1 : personScale(variant),
             phase: variant * 1.7,
+            blinkPhase: (hashSlug(key) / 0xffffffff) * 10,
             time: placement.kind === 'walker' ? elapsed : undefined,
             pose: trafficPose(route, elapsed)
           }
@@ -2572,6 +2589,7 @@ export function createTownScene(articles?: TownArticle[]) {
           kind: article.kind,
           scale: personScale(article.variant),
           phase: article.variant * 1.7,
+          blinkPhase: (hashSlug(article.slug) / 0xffffffff) * 10,
           pose: trafficPose(article.route, 0)
         }
         articleResidents.set(article.slug, resident)
@@ -2625,8 +2643,14 @@ export function createTownScene(articles?: TownArticle[]) {
     for (const shape of Object.keys(movingParts) as TownShape[]) {
       const items = movingParts[shape] ?? []
       if (!items.length) continue
-      const partMaterial = shape.startsWith('girlFace') ? faceMaterial : material
-      const mesh = new InstancedMesh(geometries[shape], partMaterial, items.length)
+      const isFace = shape.startsWith('girlFace')
+      const partMaterial = isFace ? faceMaterial : material
+      const geometry = isFace ? geometries[shape].clone() : geometries[shape]
+      const blink = isFace
+        ? new InstancedBufferAttribute(new Float32Array(items.length), 1).setUsage(DynamicDrawUsage)
+        : undefined
+      if (blink) geometry.setAttribute('blinkFrame', blink)
+      const mesh = new InstancedMesh(geometry, partMaterial, items.length)
       mesh.instanceMatrix.setUsage(DynamicDrawUsage)
       // Residents travel outside their initial bounds; let the GPU clip these batches.
       mesh.frustumCulled = false
@@ -2637,22 +2661,26 @@ export function createTownScene(articles?: TownArticle[]) {
       for (const { resident } of items) {
         if (resident.slug) partCounts.set(resident.slug, (partCounts.get(resident.slug) ?? 0) + 1)
       }
-      const selectionMesh = new InstancedMesh(
-        geometries[shape],
-        partMaterial,
-        Math.max(1, ...partCounts.values())
-      )
+      const selectionCount = Math.max(1, ...partCounts.values())
+      const selectionGeometry = isFace ? geometries[shape].clone() : geometries[shape]
+      const selectionBlink = isFace
+        ? new InstancedBufferAttribute(new Float32Array(selectionCount), 1).setUsage(
+            DynamicDrawUsage
+          )
+        : undefined
+      if (selectionBlink) selectionGeometry.setAttribute('blinkFrame', selectionBlink)
+      const selectionMesh = new InstancedMesh(selectionGeometry, partMaterial, selectionCount)
       selectionMesh.instanceMatrix.setUsage(DynamicDrawUsage)
       selectionMesh.frustumCulled = false
       selectionMesh.count = 0
-      trafficMeshes.push({ mesh, selectionMesh, items })
+      trafficMeshes.push({ mesh, selectionMesh, items, blink, selectionBlink })
       traffic.add(mesh)
       selection.add(selectionMesh)
     }
     navigation = createTownNavigation(obstacles, containsGround)
   }
 
-  function animateTraffic(delta: number) {
+  function animateTraffic(delta: number, motion: boolean) {
     const active = residents.filter(
       (resident) =>
         resident !== dragged?.resident && (!resident.slug || visibleSlugs?.has(resident.slug))
@@ -2686,7 +2714,7 @@ export function createTownScene(articles?: TownArticle[]) {
       (point) => navigation.canStand(point)
     )
     for (const resident of active) resident.placed = true
-    for (const { mesh, selectionMesh, items } of trafficMeshes) {
+    for (const { mesh, selectionMesh, items, blink, selectionBlink } of trafficMeshes) {
       selectionMesh.count = 0
       items.forEach(({ part, resident }, index) => {
         const { x, z } = resident.pose
@@ -2746,12 +2774,24 @@ export function createTownScene(articles?: TownArticle[]) {
         )
         transform.updateMatrix()
         mesh.setMatrixAt(index, transform.matrix)
+        let blinkFrame = 0
+        if (blink) {
+          // A quick close, a short hold, and a gentler reopen every 3–5 seconds.
+          const interval = 3.1 + (Math.sin(resident.blinkPhase * 1.13) + 1) * 1.05
+          const age = ((elapsed + resident.blinkPhase * 0.83) % interval) - (interval - 0.24)
+          const closed = motion ? Math.max(0, Math.min(age / 0.08, 1, (0.24 - age) / 0.12)) : 0
+          blinkFrame = Math.round(closed * (personBlinkFrames - 1))
+          blink.setX(index, blinkFrame)
+        }
         if (visible && resident.slug === selectedSlug) {
+          selectionBlink?.setX(selectionMesh.count, blinkFrame)
           selectionMesh.setMatrixAt(selectionMesh.count++, transform.matrix)
         }
       })
       mesh.instanceMatrix.needsUpdate = true
       selectionMesh.instanceMatrix.needsUpdate = true
+      if (blink) blink.needsUpdate = true
+      if (selectionBlink) selectionBlink.needsUpdate = true
     }
   }
 
@@ -2892,6 +2932,7 @@ export function createTownScene(articles?: TownArticle[]) {
     },
     render(renderer: WebGLRenderer, now: number, motion: boolean) {
       const previousElapsed = elapsed
+      const motionChanged = motion !== lastMotion
       if (motion && lastMotion && lastTime !== undefined) {
         elapsed += Math.max(0, Math.min((now - lastTime) / 1000, 0.1))
       }
@@ -2944,8 +2985,8 @@ export function createTownScene(articles?: TownArticle[]) {
       lastTime = now
       lastMotion = motion
       const previousTarget = renderer.getRenderTarget()
-      let updateTraffic = dirty || trafficDirty || elapsed !== previousElapsed
-      if (updateTraffic) animateTraffic(delta)
+      let updateTraffic = dirty || trafficDirty || motionChanged || elapsed !== previousElapsed
+      if (updateTraffic) animateTraffic(delta, motion)
       const followed = followedSlug ? articleResidents.get(followedSlug) : undefined
       if (followed) {
         const point = townToBoard(followed.pose.x, followed.pose.z, 28)
@@ -2990,9 +3031,13 @@ export function createTownScene(articles?: TownArticle[]) {
     },
     dispose() {
       for (const mesh of meshes) mesh.dispose()
-      for (const { mesh, selectionMesh } of trafficMeshes) {
+      for (const { mesh, selectionMesh, blink } of trafficMeshes) {
         mesh.dispose()
         selectionMesh.dispose()
+        if (blink) {
+          mesh.geometry.dispose()
+          selectionMesh.geometry.dispose()
+        }
       }
       for (const geometry of Object.values(geometries)) geometry.dispose()
       material.dispose()
