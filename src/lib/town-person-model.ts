@@ -103,9 +103,9 @@ export function createPersonParts(variant: number, identity: string, riding = fa
   }
   const coat = (c: number) => piece('girlBody', 0, 29, 0, 18, 21, 13, c)
   const brimHat = (c: number = dark, width = 40) => {
-    piece('girlBrim', 0, 61.5, 1, width, 2.5, 31, c)
-    piece('girlCap', 0, 65, 1, 36, 12, 34, c)
-    trim(0, 62.5, 12, 18, 2.5, 1, ribbon)
+    piece('girlBrim', 0, 67.5, 1, width, 2.5, 37, c)
+    piece('girlCap', 0, 71, 1, 36, 12, 40, c)
+    trim(0, 68.5, 12, 18, 2.5, 1, ribbon)
   }
   const backpack = (c: number = dark) => {
     round(0, 30, -10, 14, 16, 8, c)
@@ -132,47 +132,48 @@ export function createPersonParts(variant: number, identity: string, riding = fa
     if (!riding) shaft.motion = tip.motion = 'arm'
   }
 
-  // About 2.4 heads tall, with a shaped chin, soft cheeks, and a short neck.
+  // A taller cranium and tapered jaw keep the face readable from the town camera.
   piece('girlBody', 0, 30, 0, 16, 17, 11, cloth)
   round(0, riding ? 26.5 : 24, 0, 13, 8, 10, dark)
   piece('girlLimb', 0, 38, 0, 5, 7, 5, skin)
-  piece('girlHead', 0, 50, 1, 32, 28, 26, skin)
-  piece(`girlFace${style.face}`, 0, 50, 1, 32, 28, 26, 0xffffff)
-  piece('girlCrown', 0, 50.3, 1, 34, 30, 28, hair)
-  for (const side of [-1, 1]) round(side * 15, 47, 1, 4, 6, 5, skin)
+  piece('girlHead', 0, 54, 1, 30, 36, 30, skin)
+  piece(`girlFace${style.face}`, 0, 54, 1, 30, 36, 30, 0xffffff)
+  piece('girlCrown', 0, 54.3, 1, 32, 38, 32, hair)
+  for (const side of [-1, 1]) round(side * 14, 51, 1, 4, 6, 5, skin)
 
   // Back/side masses and pointed strands, rather than a cap of cuboids.
   const long = hairstyle === 'long' || hairstyle === 'waves'
   if (role !== 'astronaut' && (long || hairstyle === 'bob' || hairstyle === 'short')) {
     const length = long ? 31 : hairstyle === 'bob' ? 18 : 12
-    for (const x of [-10, -5, 0, 5, 10]) lock(x, 48 - length * 0.2, -10, 10, length, 9, -x * 0.012)
+    for (const x of [-10, -5, 0, 5, 10])
+      lock(x, 52 - length * 0.2, -13, 10, length + 6, 9, -x * 0.012)
   }
   for (const side of [-1, 1]) {
-    if (role !== 'astronaut') lock(side * 14, long ? 44 : 48, 3, 6, long ? 25 : 17, 9, side * -0.08)
+    if (role !== 'astronaut') lock(side * 14, long ? 47 : 51, 3, 6, long ? 31 : 23, 9, side * -0.08)
     if (hairstyle === 'twintails') {
-      lock(side * 19, 41, -4, 12, 33, 12, side * 0.15)
-      bow(side * 17, 56, -1, ribbon, 0.75)
+      lock(side * 19, 44, -4, 12, 39, 12, side * 0.15)
+      bow(side * 17, 61, -1, ribbon, 0.75)
     } else if (hairstyle === 'braids') {
       for (let i = 0; i < 4; i++)
-        round(side * (15 + i * 0.7), 47 - i * 5, -4, 7 - i * 0.6, 7, 7, hair)
-      bow(side * 17, 30, -2, ribbon, 0.65)
+        round(side * (15 + i * 0.7), 50 - i * 5, -4, 7 - i * 0.6, 7, 7, hair)
+      bow(side * 17, 33, -2, ribbon, 0.65)
     } else if (hairstyle === 'bun') {
-      round(side * 13, 62, -6, 12, 12, 12, hair)
-      bow(side * 14, 62, 0, ribbon, 0.65)
+      round(side * 13, 68, -6, 12, 12, 12, hair)
+      bow(side * 14, 68, 0, ribbon, 0.65)
     } else if (hairstyle === 'waves') {
       lock(side * 17, 35, -4, 9, 17, 10, side * 0.3)
     }
   }
   if (hairstyle === 'ponytail') {
-    round(0, 60, -13, 12, 10, 10, hair)
-    lock(2, 43, -16, 15, 33, 13, -0.14)
-    bow(0, 59, -17)
+    round(0, 66, -16, 12, 10, 10, hair)
+    lock(2, 46, -19, 15, 39, 13, -0.14)
+    bow(0, 65, -20)
   }
   for (const [i, x] of (role === 'astronaut' ? [] : [-10, -4, 3, 9]).entries()) {
-    lock(x, 58 + (i === 1 ? 0 : 1), 11.5, i === 1 ? 10 : 8, i === 1 ? 15 : 13, 6, -0.2 + i * 0.1)
+    lock(x, 63 + (i === 1 ? 0 : 1), 14.5, i === 1 ? 10 : 8, i === 1 ? 15 : 13, 6, -0.2 + i * 0.1)
   }
   // A side clip gives even simple hairstyles a readable accent.
-  trim(12, 55, 11.5, 4, 1.5, 1.5, gold, -0.35)
+  trim(12, 59, 14.5, 4, 1.5, 1.5, gold, -0.35)
 
   if (style.skirt) skirt()
   else if (!riding) piece('girlBody', 0, 22, 0, 15, 8, 11, dark)
@@ -196,8 +197,8 @@ export function createPersonParts(variant: number, identity: string, riding = fa
 
   switch (role) {
     case 'cap-child':
-      piece('girlCap', 0, 64, 1, 36, 13, 34, cloth)
-      piece('girlBrim', 0, 60, 13, 27, 2, 16, cloth)
+      piece('girlCap', 0, 70, 1, 36, 13, 40, cloth)
+      piece('girlBrim', 0, 66, 16, 27, 2, 16, cloth)
       for (const y of [28, 33]) trim(0, y, 5.8, 13, 2, 1, ivory)
       backpack()
       break
@@ -211,7 +212,7 @@ export function createPersonParts(variant: number, identity: string, riding = fa
       break
     case 'dress':
       bow(0, 28, 7)
-      bow(-12, 61, 5, ribbon, 1.1)
+      bow(-12, 67, 5, ribbon, 1.1)
       break
     case 'hoodie':
       round(0, 36, -5, 20, 8, 12, cloth)
@@ -255,14 +256,14 @@ export function createPersonParts(variant: number, identity: string, riding = fa
         for (const side of [-1, 1]) trim(side * 5, 33, 6.8, 1, 8, 1, dark)
         round(5, 28, 7.5, 3, 3, 2, metal)
       } else {
-        round(0, 63, 0, 26, 9, 21, ivory)
-        trim(0, 64, 10, 7, 2, 1, ribbon)
-        trim(0, 64, 10.1, 2, 6, 1, ribbon)
+        round(0, 69, 0, 26, 9, 21, ivory)
+        trim(0, 70, 10, 7, 2, 1, ribbon)
+        trim(0, 70, 10.1, 2, 6, 1, ribbon)
       }
       break
     case 'chef':
-      piece('girlBrim', 0, 62, 0, 29, 5, 26, ivory)
-      for (const x of [-8, 0, 8]) round(x, 69, 0, 15, 15, 23, ivory)
+      piece('girlBrim', 0, 68, 0, 29, 5, 26, ivory)
+      for (const x of [-8, 0, 8]) round(x, 75, 0, 15, 15, 23, ivory)
       coat(ivory)
       bow(0, 37, 6.5)
       trim(0, 26, 7, 11, 11, 1, ivory)
@@ -280,7 +281,7 @@ export function createPersonParts(variant: number, identity: string, riding = fa
       break
     case 'police':
       brimHat(dark, 33)
-      trim(0, 63, 12.5, 5, 5, 1, gold)
+      trim(0, 69, 12.5, 5, 5, 1, gold)
       trim(-4, 34, 6, 3, 4, 1, gold)
       trim(0, 24, 6, 15, 2, 1, dark)
       break
@@ -295,25 +296,25 @@ export function createPersonParts(variant: number, identity: string, riding = fa
       // Open helmet: the face and fringe remain visible between the ear modules.
       piece('girlBrim', 0, 38, 0, 31, 4, 25, ivory)
       for (const side of [-1, 1]) {
-        round(side * 17, 49, 0, 7, 16, 18, ivory)
-        round(side * 20, 49, 2, 2, 8, 8, cloth)
+        round(side * 17, 52, 0, 7, 16, 18, ivory)
+        round(side * 20, 52, 2, 2, 8, 8, cloth)
       }
-      piece('girlCrown', 0, 50.8, 0.2, 36, 32, 30, ivory)
+      piece('girlCrown', 0, 54.8, 0.2, 34, 40, 34, ivory)
       backpack(ivory)
       trim(0, 31, 7, 10, 8, 1, cloth)
       break
     case 'alien':
       for (const side of [-1, 1]) {
-        piece('girlLimb', side * 10, 69, 0, 2, 11, 2, metal)
-        round(side * 10, 75, 0, 5, 5, 5, ribbon)
+        piece('girlLimb', side * 10, 75, 0, 2, 11, 2, metal)
+        round(side * 10, 81, 0, 5, 5, 5, ribbon)
       }
       piece('girlBrim', 0, 37, 0, 22, 3, 16, metal)
       bow(0, 29, 7)
       break
     case 'magical-girl':
       bow(0, 36, 7, ribbon, 1.1)
-      trim(0, 62, 12, 18, 2, 2, gold)
-      round(0, 64, 12, 4, 5, 3, ribbon)
+      trim(0, 68, 12, 18, 2, 2, gold)
+      round(0, 70, 12, 4, 5, 3, ribbon)
       staff()
       break
     case 'hero':
@@ -326,29 +327,29 @@ export function createPersonParts(variant: number, identity: string, riding = fa
       piece('girlLimb', 10, 35, -13, 3, 30, 3, metal)
       trim(10, 49, -13, 10, 2, 4, gold)
       if (role === 'knight') {
-        trim(0, 62, 12, 23, 3, 2, metal)
-        lock(0, 68, -4, 8, 17, 7, -0.3, ribbon)
+        trim(0, 68, 12, 23, 3, 2, metal)
+        lock(0, 74, -4, 8, 17, 7, -0.3, ribbon)
       }
       break
     case 'wizard':
     case 'witch':
       cape()
-      piece('girlBrim', 0, 61.5, 0, 42, 3, 35, dark)
-      piece('girlHat', 0, 74, 1, 36, 25, 34, dark)
-      bow(8, 66, 9, ribbon, 0.85)
+      piece('girlBrim', 0, 67.5, 0, 42, 3, 41, dark)
+      piece('girlHat', 0, 80, 1, 36, 25, 40, dark)
+      bow(8, 72, 9, ribbon, 0.85)
       staff(role === 'witch')
       break
     case 'ninja':
-      trim(0, 62, 12, 26, 3, 2, dark)
-      trim(0, 62, 13.2, 5, 3, 1, metal)
+      trim(0, 68, 12, 26, 3, 2, dark)
+      trim(0, 68, 13.2, 5, 3, 1, metal)
       lock(13, 44, -9, 5, 22, 3, -0.4, ribbon)
       bow(0, 36, 7)
       piece('girlLimb', 9, 34, -12, 3, 29, 3, dark)
       break
     case 'pirate':
       brimHat(dark, 41)
-      piece('girlHat', 0, 67, 2, 27, 10, 15, dark)
-      trim(0, 66, 10, 5, 5, 1, ivory)
+      piece('girlHat', 0, 73, 2, 27, 10, 15, dark)
+      trim(0, 72, 10, 5, 5, 1, ivory)
       bow(0, 35, 7)
       round(-13, 41, 0, 6, 9, 7, cloth)
       round(-13, 46, 2, 6, 6, 7, ribbon)
@@ -365,16 +366,16 @@ export function createPersonParts(variant: number, identity: string, riding = fa
       cape(dark)
       trim(0, 31, 6.5, 6, 12, 1, ivory)
       bow(0, 36, 7, ribbon)
-      bow(-12, 61, 4, dark)
+      bow(-12, 67, 4, dark)
       break
     case 'robot':
       coat(metal)
       trim(0, 30, 7, 9, 8, 1, dark)
       round(0, 31, 8, 4, 4, 1, ribbon)
       for (const side of [-1, 1]) {
-        round(side * 17, 50, 0, 6, 11, 12, metal)
-        trim(side * 19, 51, 4, 2, 6, 2, ribbon)
-        piece('girlHat', side * 12, 64, 0, 8, 12, 8, metal)
+        round(side * 17, 53, 0, 6, 11, 12, metal)
+        trim(side * 19, 54, 4, 2, 6, 2, ribbon)
+        piece('girlHat', side * 12, 70, 0, 8, 12, 8, metal)
       }
       break
   }

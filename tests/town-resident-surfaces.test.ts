@@ -71,7 +71,7 @@ describe('resident head surfaces', () => {
                 mesh.userData.scalp =
                   !mesh.userData.face &&
                   Math.abs(position.x - pose.x) < 0.001 &&
-                  Math.abs(position.y - (50 + lift) * scale) < 0.001 &&
+                  Math.abs(position.y - (54 + lift) * scale) < 0.001 &&
                   Math.abs(position.z - pose.z - (lean + 1) * scale) < 0.001
                 heads[variant].push(mesh)
               })
@@ -92,7 +92,7 @@ describe('resident head surfaces', () => {
           const ray = new Raycaster()
           // Every costume keeps both eyes exposed, including helmets and headbands.
           for (const side of [-1, 1]) {
-            const origin = new Vector3(side * 6.56, 48.18 + lift, lean + 60)
+            const origin = new Vector3(side * 5.7, 52.164 + lift, lean + 60)
               .multiplyScalar(scale)
               .add(new Vector3(pose.x, 0, pose.z))
             ray.set(origin, new Vector3(0, 0, -1))
@@ -101,7 +101,7 @@ describe('resident head surfaces', () => {
           }
           // Look down across the crown, including its bevels: skin must not poke through hair.
           for (let x = -13.75; x < 14; x += 1) {
-            for (let z = -10.75; z < 12; z += 1) {
+            for (let z = -14.75; z < 16; z += 1) {
               const origin = new Vector3(x, 100 + lift, lean + z)
                 .multiplyScalar(scale)
                 .add(new Vector3(pose.x, 0, pose.z))
@@ -119,7 +119,7 @@ describe('resident head surfaces', () => {
             new Vector3(-1, 0, 0),
             new Vector3(1, 0, 0)
           ]) {
-            for (let y = 44.25; y < 56; y += 1) {
+            for (let y = 44.25; y < 62; y += 1) {
               for (let u = -10.25; u < 10; u += 1) {
                 const origin = direction.z
                   ? new Vector3(u, y + lift, lean + 30)
@@ -151,7 +151,9 @@ describe('resident head surfaces', () => {
       } finally {
         town.dispose()
       }
-    }
+    },
+    // Curved head meshes have more triangles, and the crown scan covers their full depth.
+    20000
   )
 })
 

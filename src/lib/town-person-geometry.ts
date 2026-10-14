@@ -9,15 +9,16 @@ import {
 } from 'three'
 
 type Ring = readonly [y: number, radiusX: number, radiusZ: number, x?: number, z?: number]
-const headProfile: Ring[] = [
-  [-0.5, 0.08, 0.12],
-  [-0.43, 0.29, 0.29],
-  [-0.28, 0.45, 0.43],
-  [-0.05, 0.5, 0.5],
-  [0.2, 0.49, 0.48],
-  [0.38, 0.39, 0.38],
-  [0.5, 0, 0]
-]
+const headSegments = 32
+// Ellipsoidal latitude rings give the forehead and rear skull continuous curvature.
+// Only the lower cheeks taper; the depth stays round through the jaw.
+const headProfile: Ring[] = Array.from({ length: 17 }, (_, row) => {
+  const latitude = -Math.PI / 2 + (row / 16) * Math.PI
+  const y = Math.sin(latitude) * 0.5
+  const radius = row === 0 || row === 16 ? 0 : Math.cos(latitude) * 0.5
+  const jaw = y < -0.05 ? 1 - 0.22 * ((-0.05 - y) / 0.45) ** 1.5 : 1
+  return [y, radius * jaw, radius]
+})
 
 function headRadius(y: number) {
   y = Math.max(-0.5, Math.min(0.5, y))
@@ -72,7 +73,7 @@ function rings(profile: Ring[], segments = 12, soft = false, flattenFace = false
 function crownGeometry() {
   const positions: number[] = []
   const indices: number[] = []
-  const segments = 24
+  const segments = headSegments
   const rows = headProfile.length - 1
   for (let row = 0; row <= rows; row++) {
     for (let col = 0; col <= segments; col++) {
@@ -81,12 +82,11 @@ function crownGeometry() {
       const bottom = -0.36 + Math.max(0, Math.cos(a)) * 0.55
       const y = Math.max(bottom, headProfile[row][0])
       const [rx, rz] = headRadius(y)
-      const cos = Math.cos(a)
-      positions.push(Math.sin(a) * rx, y, (cos > 0 ? cos ** 0.45 : cos) * rz)
+      positions.push(Math.sin(a) * rx, y, Math.cos(a) * rz)
       if (row < rows && col < segments) connect(indices, row, col, segments)
     }
   }
-  return finish(positions, indices)
+  return finish(positions, indices, undefined, true)
 }
 
 function faceGeometry(slot: number) {
@@ -94,15 +94,16 @@ function faceGeometry(slot: number) {
   const indices: number[] = []
   const uvs: number[] = []
   // Match the head's actual polygon grid, displaced outward to avoid z-fighting.
-  const ys = [-0.43, -0.28, -0.05, 0.2]
+  const ys = headProfile.filter(([y]) => y >= -0.45 && y <= 0.2).map(([y]) => y)
+  const columns = 12
   for (const [row, y] of ys.entries()) {
     const [rx, rz] = headRadius(y)
-    for (let col = 0; col <= 8; col++) {
-      const a = ((col - 4) / 24) * Math.PI * 2
+    for (let col = 0; col <= columns; col++) {
+      const a = ((col - columns / 2) / headSegments) * Math.PI * 2
       const x = Math.sin(a) * rx
-      positions.push(x * 1.006, y, Math.cos(a) ** 0.45 * rz + 0.006)
+      positions.push(x * 1.006, y, Math.cos(a) * rz + 0.006)
       uvs.push((slot + x + 0.5) / 6, y + 0.5)
-      if (row < ys.length - 1 && col < 8) connect(indices, row, col, 8)
+      if (row < ys.length - 1 && col < columns) connect(indices, row, col, columns)
     }
   }
   return finish(positions, indices, uvs, true)
@@ -110,7 +111,7 @@ function faceGeometry(slot: number) {
 
 export function createPersonGeometries() {
   return {
-    girlHead: rings(headProfile, 24, true, true),
+    girlHead: rings(headProfile, headSegments, true),
     girlCrown: crownGeometry(),
     girlLock: rings(
       [
@@ -224,34 +225,38 @@ export function createPersonFaceTexture() {
         const v = (py + 0.5) / size
         let rgba = [0, 0, 0, 0]
         for (const side of [-1, 1]) {
-          const ex = 0.5 + side * 0.205
-          const dx = (u - ex) / 0.114
-          const dy = (v - 0.435) / (slot === 3 ? 0.115 : 0.14)
-          const eye = dx * dx + dy * dy
-          if (eye < 1) {
-            rgba = [255, 248, 242, 255]
-            const iris = ((u - ex) / 0.071) ** 2 + ((v - 0.428) / 0.128) ** 2
+          const ex = 0.5 + side * 0.19
+          const dx = (u - ex) / 0.112
+          const outer = side * dx
+          const arch = Math.sqrt(Math.max(0, 1 - dx * dx))
+          const corner = 0.46 + outer * 0.018
+          const upper = corner + (slot === 3 ? 0.05 : 0.065) * (1 - dx * dx)
+          const lower = corner - 0.095 * arch
+          // Broad irises tuck under a flatter upper lid, with only narrow white corners.
+          if (Math.abs(dx) < 1 && v > lower && v < upper) {
+            rgba = [255, 246, 237, 255]
+            const iris = ((u - ex) / 0.086) ** 2 + ((v - 0.449) / 0.108) ** 2
             if (iris < 1) {
-              const shade = Math.max(0.32, Math.min(1.25, 1.2 - (v - 0.31) * 3.4))
+              const shade = Math.max(0.35, Math.min(1.2, 1.15 - (v - 0.37) * 5))
               rgba = [...irises[slot].map((channel) => Math.min(255, channel * shade)), 255]
-              if (((u - ex) / 0.028) ** 2 + ((v - 0.45) / 0.071) ** 2 < 1) rgba = [38, 31, 59, 255]
+              if (((u - ex) / 0.032) ** 2 + ((v - 0.464) / 0.069) ** 2 < 1) rgba = [38, 31, 59, 255]
               if (
-                ((u - ex + 0.024) / 0.025) ** 2 + ((v - 0.488) / 0.033) ** 2 < 1 ||
-                ((u - ex - 0.029) / 0.013) ** 2 + ((v - 0.378) / 0.016) ** 2 < 1
+                ((u - ex + 0.026) / 0.017) ** 2 + ((v - 0.485) / 0.02) ** 2 < 1 ||
+                ((u - ex - 0.033) / 0.008) ** 2 + ((v - 0.397) / 0.009) ** 2 < 1
               )
                 rgba = [255, 255, 253, 255]
             }
           }
           // Swept upper lash and a small outer flick; lower lid stays light.
-          const lid = 0.435 + (slot === 3 ? 0.115 : 0.14) * Math.sqrt(Math.max(0, 1 - dx * dx))
-          if (Math.abs(dx) < 1.05 && Math.abs(v - lid) < 0.012) rgba = [53, 35, 55, 255]
-          const outer = side * (u - ex)
-          if (outer > 0.095 && outer < 0.14 && Math.abs(v - (0.49 + (outer - 0.095) * 0.6)) < 0.013)
+          if (Math.abs(dx) < 1 && Math.abs(v - upper) < 0.009 + Math.max(0, outer) * 0.004)
             rgba = [53, 35, 55, 255]
-          if (Math.abs(dx) < 0.65 && Math.abs(v - (0.615 - side * dx * 0.016)) < 0.007)
-            rgba = [101, 65, 83, 220]
-          const blush = ((u - (0.5 + side * 0.29)) / 0.07) ** 2 + ((v - 0.28) / 0.036) ** 2
-          if (blush < 1) rgba = [239, 123, 146, (1 - blush) * 130]
+          if (outer > 0.85 && outer < 1.25 && Math.abs(v - (0.48 + (outer - 1) * 0.085)) < 0.009)
+            rgba = [53, 35, 55, 255]
+          if (Math.abs(dx) < 0.9 && Math.abs(v - lower) < 0.003) rgba = [133, 84, 87, 190]
+          if (Math.abs(dx) < 0.7 && Math.abs(v - (0.59 + outer * 0.008)) < 0.005)
+            rgba = [101, 65, 83, 190]
+          const blush = ((u - (0.5 + side * 0.255)) / 0.066) ** 2 + ((v - 0.3) / 0.028) ** 2
+          if (blush < 1) rgba = [239, 123, 146, (1 - blush) * 95]
         }
         if (((u - 0.5) / 0.015) ** 2 + ((v - 0.285) / 0.011) ** 2 < 1) rgba = [201, 135, 128, 170]
         const mouthX = (u - 0.5) / 0.044
