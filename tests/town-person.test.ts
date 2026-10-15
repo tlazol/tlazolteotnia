@@ -49,7 +49,7 @@ it('keeps each appearance stable, with hair colors independent of clothes', () =
   )
   expect(new Set(appearances.map(({ hairColor }) => hairColor)).size).toBe(12)
   expect(new Set(appearances.map(({ hair }) => hair)).size).toBe(12)
-  expect(new Set(appearances.map(({ fringe }) => fringe)).size).toBe(4)
+  expect(new Set(appearances.map(({ fringe }) => fringe)).size).toBe(6)
   expect(new Set(appearances.map(({ headwear }) => headwear)).size).toBe(10)
   const colorsByCloth = new Map<number, Set<number>>()
   for (const { variant, identity } of examples) {

@@ -107,7 +107,14 @@ export function townPersonAppearance(variant: number, identity: string) {
     hair,
     hairColor: choose('hair-color', hairColors),
     headwear,
-    fringe: choose('fringe', ['straight', 'swept', 'round', 'locks'] as const),
+    fringe: choose('fringe', [
+      'straight',
+      'swept',
+      'round',
+      'locks',
+      'pointed',
+      'curtain'
+    ] as const),
     shortFringe: ['goggles', 'mirror', 'visor', 'knight'].includes(headwear)
   }
 }

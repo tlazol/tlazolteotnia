@@ -151,7 +151,9 @@ export function createPersonParts(variant: number, identity: string, riding = fa
           straight: 'girlCrownStraight',
           swept: 'girlCrownSwept',
           round: 'girlCrownRound',
-          locks: 'girlCrown'
+          locks: 'girlCrown',
+          pointed: 'girlCrownPointed',
+          curtain: 'girlCrownCurtain'
         } as const
       )[fringe]
   piece(crown, 0, 54.3, 1, 32, 38, 32, hair)
@@ -204,15 +206,28 @@ export function createPersonParts(variant: number, identity: string, riding = fa
   if (shortFringe) {
     if (role !== 'astronaut') for (const x of [-9, 0, 9]) lock(x, 63, 12, 10, 10, 6, -0.15)
   } else if (fringe === 'swept') {
-    for (const [i, x] of [-9, -2, 5, 10].entries()) lock(x, 57 - i, 14, 12, 20, 7, -0.45)
+    // Broad overlapping sections sweep from one temple toward the opposite cheek.
+    lock(-7, 58, 14, 15, 25, 8, -0.65)
+    lock(1, 56, 15, 14, 24, 8, -0.65)
+    lock(9, 54, 13, 10, 21, 7, -0.5)
   } else if (fringe === 'locks') {
-    for (const [i, x] of [-10, -4, 3, 9].entries())
-      lock(x, 56 + (i % 2), 14.5, i === 1 ? 11 : 9, i === 1 ? 20 : 18, 6, -0.2 + i * 0.1)
+    // Narrow, uneven tips make a tousled zigzag instead of a uniform comb.
+    for (const [i, x] of [-11, -6, -1, 4, 10].entries())
+      lock(x, 56 + (i % 2) * 2, 15, 7, i % 2 ? 19 : 24, 6, i % 2 ? -0.2 : 0.18)
   } else if (fringe === 'round') {
-    for (const x of [-9, 0, 9]) round(x, 55, 12, 13, 16, 11, hair)
+    // Three soft lobes have rounded ends, with the middle one hanging lower.
+    for (const x of [-9, 0, 9]) round(x, x === 0 ? 55 : 57, 14, 12, 21, 9, hair)
+  } else if (fringe === 'pointed') {
+    lock(-9, 58, 13, 11, 20, 7, -0.25)
+    lock(9, 58, 13, 11, 20, 7, 0.25)
+    lock(-1.5, 57, 15, 19, 25, 9, 0.05)
+  } else if (fringe === 'curtain') {
+    // The part stays above the eyes; the two fans overlap across the eye line.
+    lock(-7, 56, 14, 18, 25, 8, -0.3)
+    lock(7, 56, 14, 18, 25, 8, 0.5)
   } else {
-    // A continuous curved edge gives a blunt cut without a row of square blocks.
-    for (const x of [-8, 0, 8]) lock(x, 60, 12, 10, 12, 6)
+    // Shallow strands end above the continuous, level blunt hem.
+    for (const x of [-9, -3, 3, 9]) lock(x, 58, 13, 6, 17, 4)
   }
   // A side clip gives even simple hairstyles a readable accent.
   if (!shortFringe) trim(12, 59, 14.5, 4, 1.5, 1.5, gold, -0.35)

@@ -7,6 +7,7 @@ import {
   RGBAFormat,
   SRGBColorSpace
 } from 'three'
+import type { townPersonAppearance } from './town-person'
 
 type Ring = readonly [y: number, radiusX: number, radiusZ: number, x?: number, z?: number]
 const headSegments = 32
@@ -70,7 +71,9 @@ function rings(profile: Ring[], segments = 12, soft = false, flattenFace = false
   return finish(positions, indices, undefined, soft)
 }
 
-function crownGeometry(fringe: 'locks' | 'straight' | 'swept' | 'round' | 'short' = 'locks') {
+function crownGeometry(
+  fringe: ReturnType<typeof townPersonAppearance>['fringe'] | 'short' = 'locks'
+) {
   const positions: number[] = []
   const indices: number[] = []
   const segments = headSegments
@@ -81,9 +84,18 @@ function crownGeometry(fringe: 'locks' | 'straight' | 'swept' | 'round' | 'short
       // The fringe covers the eyes continuously, including between the pointed locks.
       // Leave the lower cheeks and mouth visible beneath it.
       const front = Math.max(0, Math.cos(a))
-      const edge =
-        fringe === 'short' ? 0.55 : fringe === 'straight' ? 0.18 : fringe === 'round' ? 0.24 : 0.2
-      const bottom = -0.36 + front * edge + (fringe === 'swept' ? Math.sin(a) * front * 0.1 : 0)
+      const edges = {
+        straight: -0.17,
+        swept: -0.2 + Math.sin(a) * 0.09,
+        round: -0.15 - 0.09 * (0.5 + 0.5 * Math.cos(a * 8)),
+        locks: -0.14 - 0.11 * (0.5 + 0.5 * Math.cos(a * 13 + 0.7)),
+        pointed: -0.14 - 0.1 * (1 - Math.abs(Math.sin(a))),
+        curtain: -0.15 - 0.1 * Math.sin(Math.abs(Math.atan2(Math.sin(a), Math.cos(a))) * 2),
+        short: 0.19
+      }
+      // Flatten the blunt hem across the face; other cuts have their own silhouette.
+      const blend = fringe === 'short' ? front : Math.min(1, front * 2)
+      const bottom = -0.36 + blend * (edges[fringe] + 0.36)
       const y = Math.max(bottom, headProfile[row][0])
       const [rx, rz] = headRadius(y)
       positions.push(Math.sin(a) * rx, y, Math.cos(a) * rz)
@@ -120,6 +132,8 @@ export function createPersonGeometries() {
     girlCrownStraight: crownGeometry('straight'),
     girlCrownSwept: crownGeometry('swept'),
     girlCrownRound: crownGeometry('round'),
+    girlCrownPointed: crownGeometry('pointed'),
+    girlCrownCurtain: crownGeometry('curtain'),
     girlCrownShort: crownGeometry('short'),
     girlBucketBrim: rings(
       [
