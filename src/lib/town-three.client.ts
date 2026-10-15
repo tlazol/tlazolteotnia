@@ -35,6 +35,7 @@ import {
 import { type BoardSize, hashSlug } from './sticker-board'
 import { type ActiveResident, updateTownActivities } from './town-activity'
 import { townArchitecture } from './town-architecture'
+import { bicycleCrank, bicycleGrip, bicyclePose } from './town-bicycle-pose'
 import { createTownCamera, updateTownCamera } from './town-camera'
 import {
   nearestTownRoad,
@@ -56,7 +57,7 @@ import {
   type PersonShape,
   personBlinkFrames
 } from './town-person-geometry'
-import { createPersonParts } from './town-person-model'
+import { createPersonParts, type PersonPart } from './town-person-model'
 import { clampTownView, nearestResidentRoute, type TownArticle, townToBoard } from './town-posts'
 import { inTownLake, townLakeStrips, townTerrain } from './town-terrain'
 import { avoidTraffic, type TrafficRoute, trafficPose } from './town-traffic'
@@ -73,7 +74,7 @@ type Part = {
   pitch: number
   yaw: number
   color: number
-  motion?: 'leg' | 'arm' | 'pedal' | 'wheel'
+  motion?: PersonPart['motion'] | 'wheel'
 }
 type TownShape =
   | 'box'
@@ -641,8 +642,25 @@ export function createTownScene(articles?: TownArticle[]) {
       tube(13, 0, 29, 14)
       tube(12, 20, 34, 13, colors.pavement)
       box(0, 31, -7, 11, 4, 10, colors.ink)
-      box(0, 35, 18, 23, 3, 3, colors.ink)
-      box(0, 13, 0, 20, 3, 3, colors.window)
+      tube(34, 13, bicycleGrip.y, bicycleGrip.z, colors.pavement)
+      box(0, bicycleGrip.y, bicycleGrip.z, 23, 3, 3, colors.ink)
+      box(0, bicycleCrank.y, bicycleCrank.z, 12, 3, 3, colors.window)
+      for (const side of [-1, 1]) {
+        for (const motion of ['crank', 'pedal'] as const) {
+          const pose = bicyclePose(motion, side, 0)
+          box(
+            side * (motion === 'crank' ? 5 : 7),
+            pose.y,
+            pose.z,
+            motion === 'crank' ? 2 : 7,
+            pose.height,
+            motion === 'crank' ? 2 : 5,
+            motion === 'crank' ? colors.pavement : colors.ink,
+            0,
+            pose.pitch
+          ).motion = motion
+        }
+      }
       person(variant, true)
     }
 
@@ -2716,6 +2734,7 @@ export function createTownScene(articles?: TownArticle[]) {
         let y = part.y
         let localZ = part.z
         let pitch = part.pitch
+        let height = part.height
         if (part.motion === 'leg' || part.motion === 'arm') {
           const direction = part.motion === 'leg' ? 1 : -1
           let rotation = activity ? 0 : swing * 0.32 * direction
@@ -2734,11 +2753,14 @@ export function createTownScene(articles?: TownArticle[]) {
           y = pivotY + offsetY * Math.cos(rotation) - part.z * Math.sin(rotation)
           localZ = offsetY * Math.sin(rotation) + part.z * Math.cos(rotation)
           pitch += rotation
-        } else if (part.motion === 'pedal') {
-          y += swing * 3 * resident.scale
-          localZ += Math.cos(cycle) * Math.sign(part.x) * 3 * resident.scale
         } else if (part.motion === 'wheel') {
           pitch += ((resident.time ?? elapsed) * resident.route.speed) / 9
+        } else if (part.motion) {
+          const pose = bicyclePose(part.motion, Math.sign(part.x), cycle)
+          y = pose.y * resident.scale
+          localZ = pose.z * resident.scale
+          height = pose.height * resident.scale
+          pitch = pose.pitch
         }
         transform.position.set(
           x + part.x * Math.cos(yaw) + localZ * Math.sin(yaw),
@@ -2753,7 +2775,7 @@ export function createTownScene(articles?: TownArticle[]) {
         const visible = !resident.slug || visibleSlugs?.has(resident.slug)
         transform.scale.set(
           visible ? part.width : 0,
-          visible ? part.height : 0,
+          visible ? height : 0,
           visible ? part.depth : 0
         )
         transform.updateMatrix()

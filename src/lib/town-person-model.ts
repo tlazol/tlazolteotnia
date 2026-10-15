@@ -1,4 +1,5 @@
 import { hashSlug } from './sticker-board'
+import { bicycleGrip, bicyclePose, bicycleSegment, type CyclingMotion } from './town-bicycle-pose'
 import { townPersonAppearance, townPersonStyle } from './town-person'
 import type { PersonShape } from './town-person-geometry'
 
@@ -13,7 +14,7 @@ export type PersonPart = {
   color: number
   angle: number
   pitch: number
-  motion?: 'leg' | 'arm' | 'pedal'
+  motion?: 'leg' | 'arm' | CyclingMotion
 }
 
 // Coordinated cloth, dark trim and ribbon palettes, selected by article identity.
@@ -244,11 +245,32 @@ export function createPersonParts(variant: number, identity: string, riding = fa
   else if (!riding) piece('girlBody', 0, 22, 0, 15, 8, 11, dark)
   for (const side of [-1, 1]) {
     if (riding) {
-      add('girlLimb', side * 5, 34, 1, 6, 7, 22, dark)
-      add('girlLimb', side * 6, 23, 11, 5.5, 20, 6, skin).motion = 'pedal'
-      add('girlRound', side * 7, 14, 13, 7, 6, 11, dark).motion = 'pedal'
-      add('girlLimb', side * 10, 38, 4, 6, 7, 24, cloth)
-      add('girlRound', side * 10, 36, 19, 4.5, 4.5, 7, skin)
+      for (const motion of ['thigh', 'shin', 'shoe'] as const) {
+        const pose = bicyclePose(motion, side, 0)
+        add(
+          motion === 'shoe' ? 'girlRound' : 'girlLimb',
+          side * 7,
+          pose.y,
+          pose.z,
+          motion === 'shoe' ? 7 : 6,
+          pose.height,
+          motion === 'shoe' ? 11 : 6,
+          motion === 'shin' ? skin : dark,
+          0,
+          pose.pitch
+        ).motion = motion
+      }
+      const shoulder = { y: 44, z: -7 }
+      const elbow = { y: 37, z: 5 }
+      for (const [from, to, width, color] of [
+        [elbow, shoulder, 7, cloth],
+        [bicycleGrip, elbow, 4.5, skin]
+      ] as const) {
+        const pose = bicycleSegment(from, to)
+        add('girlLimb', side * 10, pose.y, pose.z, width, pose.height, width, color, 0, pose.pitch)
+      }
+      add('girlRound', side * 10, elbow.y, elbow.z, 5, 5, 5, skin)
+      add('girlRound', side * 10, bicycleGrip.y + 1, bicycleGrip.z, 5, 5, 7, skin)
     } else {
       add('girlLimb', side * 4.6, 15, 0, 6, 15, 6, skin).motion = 'leg'
       add('girlLimb', side * 4.6, 7.5, 0, 5.6, 9, 5.6, ivory).motion = 'leg'
