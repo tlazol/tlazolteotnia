@@ -160,7 +160,8 @@ describe('resident head surfaces', () => {
 })
 
 it('batches repeated costumes without adding draw calls per resident', () => {
-  const batchCounts = [30, 60].map((count) => {
+  // Include several identities per costume so optional hats and fringes occur in both sets.
+  const batchCounts = [120, 240].map((count) => {
     const articles: TownArticle[] = Array.from({ length: count }, (_, i) => ({
       slug: `batch-${i}`,
       variant: i % townPersonStyles.length,

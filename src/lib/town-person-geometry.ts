@@ -70,7 +70,7 @@ function rings(profile: Ring[], segments = 12, soft = false, flattenFace = false
   return finish(positions, indices, undefined, soft)
 }
 
-function crownGeometry() {
+function crownGeometry(fringe: 'locks' | 'straight' | 'swept' | 'round' | 'short' = 'locks') {
   const positions: number[] = []
   const indices: number[] = []
   const segments = headSegments
@@ -80,7 +80,10 @@ function crownGeometry() {
       const a = (col / segments) * Math.PI * 2
       // The fringe covers the eyes continuously, including between the pointed locks.
       // Leave the lower cheeks and mouth visible beneath it.
-      const bottom = -0.36 + Math.max(0, Math.cos(a)) * 0.2
+      const front = Math.max(0, Math.cos(a))
+      const edge =
+        fringe === 'short' ? 0.55 : fringe === 'straight' ? 0.18 : fringe === 'round' ? 0.24 : 0.2
+      const bottom = -0.36 + front * edge + (fringe === 'swept' ? Math.sin(a) * front * 0.1 : 0)
       const y = Math.max(bottom, headProfile[row][0])
       const [rx, rz] = headRadius(y)
       positions.push(Math.sin(a) * rx, y, Math.cos(a) * rz)
@@ -114,6 +117,44 @@ export function createPersonGeometries() {
   return {
     girlHead: rings(headProfile, headSegments, true),
     girlCrown: crownGeometry(),
+    girlCrownStraight: crownGeometry('straight'),
+    girlCrownSwept: crownGeometry('swept'),
+    girlCrownRound: crownGeometry('round'),
+    girlCrownShort: crownGeometry('short'),
+    girlBucketBrim: rings(
+      [
+        [-0.5, 0, 0],
+        [-0.5, 0.5, 0.5],
+        [-0.3, 0.49, 0.49],
+        [0.5, 0.39, 0.39],
+        [0.5, 0, 0]
+      ],
+      16
+    ),
+    girlVisor: rings(
+      [
+        [-0.5, 0, 0],
+        [-0.5, 0.44, 0.42],
+        [-0.3, 0.5, 0.5],
+        [0.3, 0.5, 0.5],
+        [0.5, 0.44, 0.42],
+        [0.5, 0, 0]
+      ],
+      32,
+      true,
+      true
+    ),
+    girlBentHat: rings(
+      [
+        [-0.5, 0, 0],
+        [-0.5, 0.5, 0.5],
+        [-0.05, 0.3, 0.32, -0.06],
+        [0.3, 0.14, 0.16, -0.16],
+        [0.48, 0.075, 0.08, -0.32],
+        [0.32, 0, 0, -0.55]
+      ],
+      12
+    ),
     girlLock: rings(
       [
         [-0.5, 0.015, 0.015, 0.18, 0.12],

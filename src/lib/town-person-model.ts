@@ -1,5 +1,5 @@
 import { hashSlug } from './sticker-board'
-import { townPersonStyle } from './town-person'
+import { townPersonAppearance, townPersonStyle } from './town-person'
 import type { PersonShape } from './town-person-geometry'
 
 export type PersonPart = {
@@ -16,16 +16,16 @@ export type PersonPart = {
   motion?: 'leg' | 'arm' | 'pedal'
 }
 
-// Coordinated cloth, dark trim, ribbon and hair palettes, selected by article identity.
+// Coordinated cloth, dark trim and ribbon palettes, selected by article identity.
 const palettes = [
-  [0x739bc3, 0x303d61, 0xf0c978, 0xd9a96c],
-  [0xd99ab3, 0x6d405d, 0xffd7e1, 0x705065],
-  [0x89bcb0, 0x355c65, 0xf7d59a, 0xe3dbc4],
-  [0xb39ccb, 0x51476e, 0xedbdcf, 0xc6b9e3],
-  [0xc98479, 0x583e4c, 0xf3cdaa, 0x65464b],
-  [0xe8c484, 0x556083, 0xa3d9db, 0x959ac7],
-  [0x819db5, 0x303d55, 0xf0a4b6, 0xdce4ee],
-  [0xa7b980, 0x43564e, 0xf6d7aa, 0x8b674d]
+  [0x739bc3, 0x303d61, 0xf0c978],
+  [0xd99ab3, 0x6d405d, 0xffd7e1],
+  [0x89bcb0, 0x355c65, 0xf7d59a],
+  [0xb39ccb, 0x51476e, 0xedbdcf],
+  [0xc98479, 0x583e4c, 0xf3cdaa],
+  [0xe8c484, 0x556083, 0xa3d9db],
+  [0x819db5, 0x303d55, 0xf0a4b6],
+  [0xa7b980, 0x43564e, 0xf6d7aa]
 ] as const
 const skinTones = [0xffe2d3, 0xf7d3c0, 0xe8b49b, 0xcc9279, 0xa86f5d]
 const ivory = 0xfff4e6
@@ -34,9 +34,15 @@ const gold = 0xecc780
 
 export function createPersonParts(variant: number, identity: string, riding = false) {
   const style = townPersonStyle(variant)
-  const { role, hair: hairstyle } = style
-  const [cloth, dark, ribbon, hair] =
-    palettes[(hashSlug(`top:${identity}`) >>> 8) % palettes.length]
+  const { role } = style
+  const {
+    hair: hairstyle,
+    hairColor: hair,
+    headwear,
+    fringe,
+    shortFringe
+  } = townPersonAppearance(variant, identity)
+  const [cloth, dark, ribbon] = palettes[(hashSlug(`top:${identity}`) >>> 8) % palettes.length]
   const skin = skinTones[(hashSlug(`skin:${identity}`) >>> 8) % skinTones.length]
   const parts: PersonPart[] = []
   const add = (
@@ -138,19 +144,40 @@ export function createPersonParts(variant: number, identity: string, riding = fa
   piece('girlLimb', 0, 38, 0, 5, 7, 5, skin)
   piece('girlHead', 0, 54, 1, 30, 36, 30, skin)
   piece(`girlFace${style.face}`, 0, 54, 1, 30, 36, 30, 0xffffff)
-  piece('girlCrown', 0, 54.3, 1, 32, 38, 32, hair)
+  const crown = shortFringe
+    ? 'girlCrownShort'
+    : (
+        {
+          straight: 'girlCrownStraight',
+          swept: 'girlCrownSwept',
+          round: 'girlCrownRound',
+          locks: 'girlCrown'
+        } as const
+      )[fringe]
+  piece(crown, 0, 54.3, 1, 32, 38, 32, hair)
   for (const side of [-1, 1]) round(side * 14, 51, 1, 4, 6, 5, skin)
 
   // Back/side masses and pointed strands, rather than a cap of cuboids.
-  const long = hairstyle === 'long' || hairstyle === 'waves'
-  if (role !== 'astronaut' && (long || hairstyle === 'bob' || hairstyle === 'short')) {
-    const length = long ? 31 : hairstyle === 'bob' ? 18 : 12
+  const long = hairstyle === 'long' || hairstyle === 'waves' || hairstyle === 'wolf'
+  if (
+    role !== 'astronaut' &&
+    (long || hairstyle === 'bob' || hairstyle === 'short' || hairstyle === 'flipped-bob')
+  ) {
+    const length = hairstyle === 'wolf' ? 23 : long ? 31 : hairstyle === 'short' ? 12 : 18
     for (const x of [-10, -5, 0, 5, 10])
       lock(x, 52 - length * 0.2, -13, 10, length + 6, 9, -x * 0.012)
   }
   for (const side of [-1, 1]) {
     if (role !== 'astronaut') lock(side * 14, long ? 47 : 51, 3, 6, long ? 31 : 23, 9, side * -0.08)
-    if (hairstyle === 'twintails') {
+    if (hairstyle === 'flipped-bob' || hairstyle === 'wolf') {
+      lock(side * 17, hairstyle === 'wolf' ? 36 : 42, -2, 9, 14, 9, side * -0.75)
+    }
+    if (hairstyle === 'curly-twintails') {
+      for (let i = 0; i < 4; i++) {
+        round(side * (20 + (i % 2) * 2), 56 - i * 7, -5, 14 - i, 12, 13 - i, hair)
+      }
+      bow(side * 18, 63, -1, ribbon, 0.8)
+    } else if (hairstyle === 'twintails') {
       lock(side * 19, 44, -4, 12, 39, 12, side * 0.15)
       bow(side * 17, 61, -1, ribbon, 0.75)
     } else if (hairstyle === 'braids') {
@@ -169,11 +196,26 @@ export function createPersonParts(variant: number, identity: string, riding = fa
     lock(2, 46, -19, 15, 39, 13, -0.14)
     bow(0, 65, -20)
   }
-  for (const [i, x] of [-10, -4, 3, 9].entries()) {
-    lock(x, 59 + (i === 1 ? 0 : 1), 14.5, i === 1 ? 11 : 9, i === 1 ? 26 : 24, 6, -0.2 + i * 0.1)
+  if (hairstyle === 'sidetail') {
+    round(17, 49, -8, 10, 10, 10, hair)
+    lock(20, 36, -9, 13, 31, 12, -0.2)
+    bow(19, 50, -3, ribbon, 0.85)
+  }
+  if (shortFringe) {
+    if (role !== 'astronaut') for (const x of [-9, 0, 9]) lock(x, 63, 12, 10, 10, 6, -0.15)
+  } else if (fringe === 'swept') {
+    for (const [i, x] of [-9, -2, 5, 10].entries()) lock(x, 57 - i, 14, 12, 20, 7, -0.45)
+  } else if (fringe === 'locks') {
+    for (const [i, x] of [-10, -4, 3, 9].entries())
+      lock(x, 56 + (i % 2), 14.5, i === 1 ? 11 : 9, i === 1 ? 20 : 18, 6, -0.2 + i * 0.1)
+  } else if (fringe === 'round') {
+    for (const x of [-9, 0, 9]) round(x, 55, 12, 13, 16, 11, hair)
+  } else {
+    // A continuous curved edge gives a blunt cut without a row of square blocks.
+    for (const x of [-8, 0, 8]) lock(x, 60, 12, 10, 12, 6)
   }
   // A side clip gives even simple hairstyles a readable accent.
-  trim(12, 59, 14.5, 4, 1.5, 1.5, gold, -0.35)
+  if (!shortFringe) trim(12, 59, 14.5, 4, 1.5, 1.5, gold, -0.35)
 
   if (style.skirt) skirt()
   else if (!riding) piece('girlBody', 0, 22, 0, 15, 8, 11, dark)
@@ -212,7 +254,7 @@ export function createPersonParts(variant: number, identity: string, riding = fa
       break
     case 'dress':
       bow(0, 28, 7)
-      bow(-12, 67, 5, ribbon, 1.1)
+      if (headwear === 'none') bow(-12, 67, 5, ribbon, 1.1)
       break
     case 'hoodie':
       round(0, 36, -5, 20, 8, 12, cloth)
@@ -293,13 +335,13 @@ export function createPersonParts(variant: number, identity: string, riding = fa
       break
     case 'astronaut':
       coat(ivory)
-      // A low helmet rim and fringe cover the eyes between the ear modules.
+      // The visor covers the eyes between the ear modules.
       piece('girlBrim', 0, 38, 0, 31, 4, 25, ivory)
       for (const side of [-1, 1]) {
         round(side * 17, 52, 0, 7, 16, 18, ivory)
         round(side * 20, 52, 2, 2, 8, 8, cloth)
       }
-      piece('girlCrown', 0, 54.8, 0.2, 34, 40, 34, ivory)
+      piece('girlCrownShort', 0, 54.8, 0.2, 34, 40, 34, ivory)
       backpack(ivory)
       trim(0, 31, 7, 10, 8, 1, cloth)
       break
@@ -335,7 +377,7 @@ export function createPersonParts(variant: number, identity: string, riding = fa
     case 'witch':
       cape()
       piece('girlBrim', 0, 67.5, 0, 42, 3, 41, dark)
-      piece('girlHat', 0, 80, 1, 36, 25, 40, dark)
+      piece('girlBentHat', 0, 80, 1, 36, 25, 40, dark)
       bow(8, 72, 9, ribbon, 0.85)
       staff(role === 'witch')
       break
@@ -377,6 +419,57 @@ export function createPersonParts(variant: number, identity: string, riding = fa
         trim(side * 19, 54, 4, 2, 6, 2, ribbon)
         piece('girlHat', side * 12, 70, 0, 8, 12, 8, metal)
       }
+      break
+  }
+
+  switch (headwear) {
+    case 'casquette':
+      piece('girlCap', 0, 70, -1, 41, 16, 38, dark, -0.1)
+      piece('girlBrim', 0, 63, 14, 34, 3, 22, dark, 0, 0.12)
+      trim(0, 66, 17, 23, 3, 2, ribbon)
+      round(9, 68, 17, 3, 3, 2, gold)
+      break
+    case 'knit':
+      piece('girlCap', 0, 70, 0, 35, 23, 35, cloth)
+      piece('girlVisor', 0, 57, 1, 35, 12, 35, cloth)
+      round(0, 83, 0, 11, 10, 11, ivory)
+      for (const side of [-1, 1]) {
+        round(side * 17, 50, 1, 8, 16, 13, cloth)
+        lock(side * 18, 37, 1, 3, 15, 3, 0, ivory)
+      }
+      break
+    case 'bucket':
+      piece('girlCap', 0, 69, 0, 40, 17, 41, cloth)
+      piece('girlBucketBrim', 0, 61, 1, 45, 9, 43, cloth)
+      trim(0, 68, 20, 7, 4, 2, ivory)
+      break
+    case 'beret':
+      piece('girlCap', -3, 72, 0, 41, 13, 38, dark, -0.15)
+      piece('girlBrim', 0, 67, 0, 32, 3, 31, dark)
+      lock(-6, 80, -1, 3, 6, 3, -0.35, dark)
+      round(-14, 72, 12, 4, 4, 3, gold)
+      break
+    case 'goggles':
+      // Opaque lenses sit on the eyes, with a bridge and side straps.
+      for (const side of [-1, 1]) {
+        trim(side * 16, 53, 0, 2, 5, 27, dark)
+        round(side * 7.4, 53, 14, 16, 17, 9, gold)
+        round(side * 7.4, 53, 17.5, 12.5, 13.5, 5, 0x355768)
+        round(side * 7.4 - 2, 56, 19.7, 3, 4, 1, 0xb9dfdf)
+      }
+      trim(0, 54, 18, 4, 3, 2, gold)
+      break
+    case 'mirror':
+    case 'visor':
+      piece('girlVisor', 0, 53, 1, 37, 16, 37, headwear === 'mirror' ? ivory : metal)
+      piece('girlVisor', 0, 53, 2, 35, 12, 37, headwear === 'mirror' ? 0x796793 : 0x344c67)
+      trim(-6, 56, 20.6, 8, 1.5, 1, 0xb6e4e6, 0.12)
+      trim(7, 50, 20.6, 4, 1, 1, ribbon)
+      break
+    case 'knight':
+      piece('girlVisor', 0, 53, 1, 36, 15, 36, metal)
+      for (const x of [-9, -4.5, 0, 4.5, 9]) trim(x, 53, 19, 1.5, 5, 1, dark)
+      for (const side of [-1, 1]) round(side * 17, 54, 3, 4, 4, 4, gold)
       break
   }
   return parts
