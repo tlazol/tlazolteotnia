@@ -167,7 +167,15 @@ export function createPersonParts(variant: number, identity: string, riding = fa
   ) {
     const length = hairstyle === 'wolf' ? 23 : long ? 31 : hairstyle === 'short' ? 12 : 18
     for (const x of [-10, -5, 0, 5, 10])
-      lock(x, 52 - length * 0.2, -13, 10, length + 6, 9, -x * 0.012)
+      lock(
+        x,
+        52 - length * 0.2,
+        headwear === 'knit' ? -10 : -13,
+        headwear === 'knit' ? 8 : 10,
+        length + 6,
+        headwear === 'knit' ? 7 : 9,
+        -x * 0.012
+      )
   }
   for (const side of [-1, 1]) {
     if (role !== 'astronaut') lock(side * 14, long ? 47 : 51, 3, 6, long ? 31 : 23, 9, side * -0.08)
@@ -445,8 +453,9 @@ export function createPersonParts(variant: number, identity: string, riding = fa
       round(9, 68, 17, 3, 3, 2, gold)
       break
     case 'knit':
-      piece('girlCap', 0, 70, 0, 35, 23, 35, cloth)
-      piece('girlVisor', 0, 57, 1, 35, 12, 35, cloth)
+      // Enclose the fringe and side locks, including their upper, wider sections.
+      piece('girlCap', 0, 70, 1, 40, 23, 43, cloth)
+      piece('girlVisor', 0, 57, 1, 40, 12, 43, cloth)
       round(0, 83, 0, 11, 10, 11, ivory)
       for (const side of [-1, 1]) {
         round(side * 17, 50, 1, 8, 16, 13, cloth)
