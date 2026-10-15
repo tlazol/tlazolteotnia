@@ -3,13 +3,7 @@ import { createClientOnlyFn } from '@tanstack/react-start'
 import { type MouseEvent, type PointerEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { type BlogPostSummary, sortBlogPostsNewestFirst } from '#/lib/blog-post'
 import { shouldOpenPostModal } from '#/lib/post-modal'
-import {
-  type BoardSize,
-  type BoardView,
-  boardSession,
-  filterStickerPosts,
-  zoomBoardAt
-} from '#/lib/sticker-board'
+import { type BoardSize, boardSession, filterStickerPosts } from '#/lib/sticker-board'
 import type { createArticleTown, ResidentScreenPosition } from '#/lib/town-articles.client'
 import {
   clampTownView,
@@ -18,6 +12,13 @@ import {
   layoutTownArticles,
   placeTownBubble
 } from '#/lib/town-posts'
+import {
+  gestureTownView,
+  rotateTownAt,
+  type TownView,
+  townSession,
+  zoomTownAt
+} from '#/lib/town-view'
 import { PostModal } from './post-modal'
 import { SiteHeader } from './site-header'
 
@@ -35,6 +36,8 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
   const [ready, setReady] = useState(false)
   const [failed, setFailed] = useState(false)
   const [dragging, setDragging] = useState(false)
+  const [rotateMode, setRotateMode] = useState(false)
+  const rotateDrag = useRef(false)
   const [draggedSlug, setDraggedSlug] = useState<string | null>(null)
   const [activeSlug, setActiveSlug] = useState<string | null>(null)
   const [selectedPost, setSelectedPost] = useState<BlogPostSummary | null>(null)
@@ -51,9 +54,10 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
   const listHeading = useRef<HTMLHeadingElement>(null)
   const buttons = useRef(new Map<string, HTMLButtonElement>())
   const renderer = useRef<ReturnType<typeof createArticleTown> | null>(null)
-  const currentView = useRef<BoardView>({ x: 0, y: 0, zoom: 1 })
+  const currentView = useRef<TownView>({ x: 0, y: 0, zoom: 1 })
   const previousSize = useRef<BoardSize | null>(null)
-  const pointers = useRef(new Map<number, Point>())
+  const restoredView = useRef(townSession.view)
+  const pointers = useRef(new Map<number, Point & { pointerType: string }>())
   const origin = useRef<Point | null>(null)
   const didDrag = useRef(false)
   const residentDrag = useRef<{ slug: string; pointerId: number; started: boolean } | null>(null)
@@ -62,19 +66,19 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
   const latest = useRef({ size, activeSlug, topic, q, visiblePosts })
   latest.current = { size, activeSlug, topic, q, visiblePosts }
 
-  function updateView(next: BoardView) {
+  function updateView(next: TownView) {
     const clamped = clampTownView(next, latest.current.size)
     currentView.current = clamped
     renderer.current?.update(clamped, latest.current.size)
     setZoom(clamped.zoom)
-    boardSession.view = clamped
+    townSession.view = clamped
     boardSession.key = 'town'
   }
 
-  function positionOverlay(positions: ResidentScreenPosition[], nextView?: BoardView) {
+  function positionOverlay(positions: ResidentScreenPosition[], nextView?: TownView) {
     if (nextView) {
       currentView.current = nextView
-      boardSession.view = nextView
+      townSession.view = nextView
       boardSession.key = 'town'
     }
     lastPositions.current = positions
@@ -136,8 +140,8 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
           x: currentView.current.x + (size.width - previous.width) / 2,
           y: currentView.current.y + (size.height - previous.height) / 2
         }
-      : boardSession.key === 'town' && boardSession.view
-        ? boardSession.view
+      : restoredView.current
+        ? restoredView.current
         : initialTownView(size, articles[0])
     previousSize.current = size
     updateView(next)
@@ -159,6 +163,7 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
             setReady(false)
           }
         )
+        if (restoredView.current) renderer.current.follow(null)
         renderer.current.filter(latest.current.visiblePosts.map((post) => post.slug))
         renderer.current.update(currentView.current, latest.current.size)
         setReady(true)
@@ -226,8 +231,9 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
       const delta =
         event.deltaY *
         (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? latest.current.size.height : 1)
+      renderer.current?.follow(null)
       updateView(
-        zoomBoardAt(currentView.current, Math.exp(-Math.max(-300, Math.min(300, delta)) * 0.002), {
+        zoomTownAt(currentView.current, Math.exp(-Math.max(-300, Math.min(300, delta)) * 0.002), {
           x: event.clientX - rect.left,
           y: event.clientY - rect.top
         })
@@ -237,36 +243,56 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
     return () => element.removeEventListener('wheel', wheel)
   }, [ready])
 
-  function point(event: PointerEvent): Point {
+  function point(event: PointerEvent) {
     const rect = surface.current?.getBoundingClientRect()
-    return { x: event.clientX - (rect?.left ?? 0), y: event.clientY - (rect?.top ?? 0) }
+    return {
+      x: event.clientX - (rect?.left ?? 0),
+      y: event.clientY - (rect?.top ?? 0),
+      pointerType: event.pointerType
+    }
   }
   function selectResident(slug: string) {
     renderer.current?.follow(slug)
     setActiveSlug(activeSlug === slug ? null : slug)
   }
   function pointerDown(event: PointerEvent<HTMLDivElement>) {
-    if (!ready || event.button !== 0) return
-    if (event.target instanceof Element && event.target.closest('.town-bubble')) {
+    if (!ready || event.button !== 0 || pointers.current.size >= 2) return
+    if (
+      !pointers.current.size &&
+      event.target instanceof Element &&
+      event.target.closest('.town-bubble')
+    ) {
       didDrag.current = false
       return
     }
     if (!pointers.current.size) {
       didDrag.current = false
       origin.current = point(event)
+      rotateDrag.current = event.pointerType !== 'touch' && rotateMode
       const person = event.target instanceof Element ? event.target.closest('.town-person') : null
-      const slug = person?.getAttribute('data-slug')
+      const slug = rotateDrag.current ? null : person?.getAttribute('data-slug')
       if (slug) {
         residentDrag.current = { slug, pointerId: event.pointerId, started: false }
         renderer.current?.focus(slug)
         event.currentTarget.setPointerCapture(event.pointerId)
       } else {
         renderer.current?.follow(null)
+        if (!person) event.currentTarget.setPointerCapture(event.pointerId)
       }
     }
-    if (residentDrag.current && residentDrag.current.pointerId !== event.pointerId) return
+    if (
+      pointers.current.size &&
+      (event.pointerType !== 'touch' || [...pointers.current.values()][0].pointerType !== 'touch')
+    )
+      return
     pointers.current.set(event.pointerId, point(event))
     if (pointers.current.size > 1) {
+      renderer.current?.endResidentDrag(true)
+      residentDrag.current = null
+      setDraggedSlug(null)
+      renderer.current?.follow(null)
+      renderer.current?.focus(null)
+      for (const id of pointers.current.keys()) event.currentTarget.setPointerCapture(id)
       didDrag.current = true
       setDragging(true)
     }
@@ -298,20 +324,20 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
     renderer.current?.focus(null)
     if (pointers.current.size === 2) {
       const after = [...pointers.current.values()]
-      const oldCenter = midpoint(previous[0], previous[1])
-      const newCenter = midpoint(after[0], after[1])
-      const oldDistance = Math.hypot(previous[0].x - previous[1].x, previous[0].y - previous[1].y)
-      const newDistance = Math.hypot(after[0].x - after[1].x, after[0].y - after[1].y)
-      const zoomed = zoomBoardAt(
-        currentView.current,
-        newDistance / Math.max(1, oldDistance),
-        oldCenter
+      updateView(
+        gestureTownView(currentView.current, [previous[0], previous[1]], [after[0], after[1]])
       )
-      updateView({
-        ...zoomed,
-        x: zoomed.x + newCenter.x - oldCenter.x,
-        y: zoomed.y + newCenter.y - oldCenter.y
-      })
+    } else if (rotateDrag.current) {
+      updateView(
+        rotateTownAt(
+          currentView.current,
+          ((next.x - before.x) / latest.current.size.width) * Math.PI * 2,
+          {
+            x: latest.current.size.width / 2,
+            y: latest.current.size.height / 2
+          }
+        )
+      )
     } else
       updateView({
         ...currentView.current,
@@ -321,6 +347,10 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
   }
   function pointerUp(event: PointerEvent<HTMLDivElement>) {
     if (!pointers.current.has(event.pointerId)) return
+    if (event.type !== 'pointerup') {
+      cancelGesture()
+      return
+    }
     const resident = residentDrag.current
     if (resident?.pointerId === event.pointerId) {
       if (resident.started) releasedResident.current = resident.slug
@@ -336,6 +366,8 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
     }
     if (!didDrag.current && !resident) setActiveSlug(null)
     pointers.current.delete(event.pointerId)
+    origin.current = [...pointers.current.values()][0] ?? null
+    if (pointers.current.size) rotateDrag.current = false
     if (event.currentTarget.hasPointerCapture(event.pointerId))
       event.currentTarget.releasePointerCapture(event.pointerId)
     if (!pointers.current.size) {
@@ -343,6 +375,26 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
       origin.current = null
     }
   }
+  function cancelGesture() {
+    renderer.current?.endResidentDrag(true)
+    renderer.current?.focus(null)
+    residentDrag.current = null
+    setDraggedSlug(null)
+    const ids = [...pointers.current.keys()]
+    pointers.current.clear()
+    for (const id of ids) {
+      if (surface.current?.hasPointerCapture(id)) surface.current.releasePointerCapture(id)
+    }
+    origin.current = null
+    rotateDrag.current = false
+    didDrag.current = true
+    setDragging(false)
+  }
+  useEffect(() => {
+    window.addEventListener('blur', cancelGesture)
+    return () => window.removeEventListener('blur', cancelGesture)
+  }, [])
+
   function openPost(event: MouseEvent<HTMLAnchorElement>, post: BlogPostSummary) {
     if (!shouldOpenPostModal(event)) return
     event.preventDefault()
@@ -356,6 +408,7 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
       <SiteHeader />
       <div
         ref={surface}
+        data-camera-mode={rotateMode ? 'rotate' : 'pan'}
         className={`sticker-surface${ready ? ' is-ready' : ''}${dragging ? ' is-dragging' : ''}`}
         onPointerDown={pointerDown}
         onPointerMove={pointerMove}
@@ -549,7 +602,12 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
         <div className="board-caption">
           <span className="board-caption__dot" />
           <span>{String(visiblePosts.length).padStart(2, '0')} 記事</span>
-          <span className="town-instruction">人をクリックで記事・ドラッグで移動</span>
+          <span className="town-instruction town-instruction--mouse">
+            {rotateMode ? '横ドラッグで回転' : '人をクリックで記事・ドラッグで移動'}
+          </span>
+          <span className="town-instruction town-instruction--touch">
+            1本指で移動・2本指で回転／ズーム
+          </span>
           {(topic || q) && (
             <Link to="/" search={{}} replace aria-label="絞り込みを解除">
               解除 ×
@@ -559,16 +617,27 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
         {ready && (
           <fieldset className="board-controls" aria-label="街の表示操作">
             <button
+              className="town-camera-mode"
+              type="button"
+              aria-label="回転モード"
+              aria-pressed={rotateMode}
+              title="移動／回転を切り替え（タッチでは常に2本指で回転）"
+              onClick={() => setRotateMode(!rotateMode)}
+            >
+              {rotateMode ? '回転' : '移動'}
+            </button>
+            <button
               type="button"
               aria-label="縮小"
-              onClick={() =>
+              onClick={() => {
+                renderer.current?.follow(null)
                 updateView(
-                  zoomBoardAt(currentView.current, 1 / 1.25, {
+                  zoomTownAt(currentView.current, 1 / 1.25, {
                     x: size.width / 2,
                     y: size.height / 2
                   })
                 )
-              }
+              }}
             >
               −
             </button>
@@ -576,11 +645,12 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
             <button
               type="button"
               aria-label="拡大"
-              onClick={() =>
+              onClick={() => {
+                renderer.current?.follow(null)
                 updateView(
-                  zoomBoardAt(currentView.current, 1.25, { x: size.width / 2, y: size.height / 2 })
+                  zoomTownAt(currentView.current, 1.25, { x: size.width / 2, y: size.height / 2 })
                 )
-              }
+              }}
             >
               +
             </button>
@@ -589,7 +659,7 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
               aria-label="全体表示"
               onClick={() => {
                 renderer.current?.follow(null)
-                updateView(fitTown(size))
+                updateView(fitTown(size, currentView.current.rotation))
               }}
             >
               ⛶
@@ -616,7 +686,4 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
       )}
     </main>
   )
-}
-function midpoint(a: Point, b: Point): Point {
-  return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }
 }

@@ -33,9 +33,10 @@ import {
   type WebGLRenderer,
   WebGLRenderTarget
 } from 'three'
-import { type BoardSize, type BoardView, hashSlug } from './sticker-board'
+import { type BoardSize, hashSlug } from './sticker-board'
 import { type ActiveResident, updateTownActivities } from './town-activity'
 import { townArchitecture } from './town-architecture'
+import { createTownCamera, updateTownCamera } from './town-camera'
 import {
   nearestTownRoad,
   onettBuildings,
@@ -60,7 +61,7 @@ import { createPersonParts } from './town-person-model'
 import { clampTownView, nearestResidentRoute, type TownArticle, townToBoard } from './town-posts'
 import { inTownLake, townLakeStrips, townTerrain } from './town-terrain'
 import { avoidTraffic, type TrafficRoute, trafficPose } from './town-traffic'
-import { boardToTown, createTownCamera, updateTownCamera } from './town-view'
+import { boardToTown, type TownView } from './town-view'
 
 type Part = {
   x: number
@@ -350,7 +351,7 @@ export function createTownScene(articles?: TownArticle[]) {
   let lastMotion = false
   let selectedSlug: string | null = null
   let followedSlug: string | null = articles?.[0]?.slug ?? null
-  let currentView: BoardView = { x: 0, y: 0, zoom: 1 }
+  let currentView: TownView = { x: 0, y: 0, zoom: 1 }
   let focusedSlug: string | null = null
   let dragged: { resident: Resident; pose: Resident['pose'] } | null = null
   let zoom = 1
@@ -2807,7 +2808,7 @@ export function createTownScene(articles?: TownArticle[]) {
     },
     moveResidentDrag(dx: number, dy: number) {
       if (!dragged) return
-      const delta = boardToTown(dx / zoom, dy / zoom)
+      const delta = boardToTown(dx / zoom, dy / zoom, currentView.rotation)
       dragged.resident.pose = {
         ...dragged.resident.pose,
         x: dragged.resident.pose.x + delta.x,
@@ -2902,11 +2903,14 @@ export function createTownScene(articles?: TownArticle[]) {
         }
       })
     },
-    update(view: BoardView, size: BoardSize) {
+    update(view: TownView, size: BoardSize) {
+      if ((view.rotation ?? 0) !== (currentView.rotation ?? 0)) visibilityTime = -Infinity
       currentView = view
       viewport = size
       zoom = view.zoom
-      const nextKey = [view.x, view.y, view.zoom, size.width, size.height].join(':')
+      const nextKey = [view.x, view.y, view.zoom, view.rotation ?? 0, size.width, size.height].join(
+        ':'
+      )
       if (nextKey === viewKey) return
       viewKey = nextKey
       dirty = true
@@ -2990,9 +2994,10 @@ export function createTownScene(articles?: TownArticle[]) {
       if (updateTraffic) animateTraffic(delta, motion)
       const followed = followedSlug ? articleResidents.get(followedSlug) : undefined
       if (followed) {
-        const point = townToBoard(followed.pose.x, followed.pose.z, 28)
+        const point = townToBoard(followed.pose.x, followed.pose.z, 28, currentView.rotation)
         const next = clampTownView(
           {
+            ...currentView,
             x: viewport.width / 2 - point.x * zoom,
             y: viewport.height * 0.56 - point.y * zoom,
             zoom

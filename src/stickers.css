@@ -932,6 +932,26 @@ body::after {
   margin-left: 10px;
   font: 11px "Noto Sans JP", sans-serif;
 }
+.board-controls .town-camera-mode {
+  width: auto;
+  padding: 0 10px;
+  font-size: 12px;
+}
+.board-controls .town-camera-mode[aria-pressed="true"] {
+  background: #e8c8ff;
+  color: #17181d;
+}
+.town-instruction--touch {
+  display: none;
+}
+@media (pointer: coarse) {
+  .town-camera-mode, .town-instruction--mouse {
+    display: none;
+  }
+  .town-instruction--touch {
+    display: inline;
+  }
+}
 @media (max-width: 600px) {
   .town-list-toggle {
     top: 16px;

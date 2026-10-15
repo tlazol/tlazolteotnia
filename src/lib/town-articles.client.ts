@@ -1,7 +1,8 @@
 import { WebGLRenderer } from 'three'
-import type { BoardSize, BoardView } from './sticker-board'
+import type { BoardSize } from './sticker-board'
 import type { TownArticle } from './town-posts'
 import { createTownScene } from './town-three.client'
+import type { TownView } from './town-view'
 
 export type ResidentScreenPosition = ReturnType<
   ReturnType<typeof createTownScene>['projectResidents']
@@ -10,7 +11,7 @@ export type ResidentScreenPosition = ReturnType<
 export function createArticleTown(
   canvas: HTMLCanvasElement,
   articles: TownArticle[],
-  onPositions: (positions: ResidentScreenPosition[], view: BoardView) => void,
+  onPositions: (positions: ResidentScreenPosition[], view: TownView) => void,
   onFailure: () => void
 ) {
   const renderer = new WebGLRenderer({ canvas, antialias: false, alpha: false })
@@ -76,7 +77,7 @@ export function createArticleTown(
       town.endResidentDrag(cancel)
       wake()
     },
-    update(view: BoardView, size: BoardSize) {
+    update(view: TownView, size: BoardSize) {
       if (!size.width || !size.height) return
       hasSize = true
       if (

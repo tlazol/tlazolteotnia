@@ -10,6 +10,7 @@ import {
 } from 'three'
 import { describe, expect, it, vi } from 'vitest'
 import type { BlogPostSummary } from '../src/lib/blog-post'
+import { createTownCamera, updateTownCamera } from '../src/lib/town-camera'
 import {
   nearestTownRoad,
   onettBuildings,
@@ -30,7 +31,6 @@ import {
 } from '../src/lib/town-posts'
 import { createTownScene } from '../src/lib/town-three.client'
 import { trafficPose } from '../src/lib/town-traffic'
-import { createTownCamera, updateTownCamera } from '../src/lib/town-view'
 
 const posts: BlogPostSummary[] = Array.from({ length: 46 }, (_, i) => ({
   slug: `post-${i}`,
@@ -65,6 +65,41 @@ const streetResident: TownArticle = {
 }
 
 describe('article residents', () => {
+  it('refreshes occlusion, follows and drags residents with a rotated camera', () => {
+    const town = createTownScene([streetResident])
+    const raycast = vi.spyOn(Raycaster.prototype, 'intersectObjects').mockReturnValue([])
+    try {
+      town.update(view, size)
+      town.render(renderer, 0, false)
+      for (const [step, rotation] of [0, Math.PI / 2, Math.PI, Math.PI * 1.5].entries()) {
+        const before = town.residentPosition(streetResident.slug)
+        if (!before) throw new Error('Resident missing')
+        const point = townToBoard(before.x, before.z, 28, rotation)
+        town.update({ x: 640 - point.x, y: 400 - point.y, zoom: 1, rotation }, size)
+        town.follow(streetResident.slug)
+        const followed = town.render(renderer, step * 16, false)
+        expect(followed.rotation ?? 0).toBe(rotation)
+        const positions = town.projectResidents(step * 16)
+        expect(positions[0].x).toBeCloseTo(size.width / 2)
+        expect(positions[0].visible).toBe(true)
+        expect(raycast).toHaveBeenCalledTimes(step + 1)
+
+        town.beginResidentDrag(streetResident.slug)
+        town.moveResidentDrag(80, -40)
+        const after = town.residentPosition(streetResident.slug)
+        if (!after) throw new Error('Resident missing')
+        const delta = townToBoard(after.x - before.x, after.z - before.z, 0, rotation)
+        expect(delta.x).toBeCloseTo(80)
+        expect(delta.y).toBeCloseTo(-40)
+        town.endResidentDrag(true)
+        expect(town.residentPosition(streetResident.slug)).toEqual(before)
+      }
+    } finally {
+      raycast.mockRestore()
+      town.dispose()
+    }
+  })
+
   it('reuses occlusion checks during camera movement but refreshes moving residents', () => {
     const town = createTownScene([streetResident])
     const raycast = vi.spyOn(Raycaster.prototype, 'intersectObjects').mockReturnValue([])

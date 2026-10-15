@@ -1,8 +1,11 @@
 import type { BlogPostSummary } from './blog-post'
-import { type BoardSize, type BoardView, hashSlug } from './sticker-board'
+import { type BoardSize, hashSlug } from './sticker-board'
 import { onettBuildings, onettHills, onettRoads, onettToTown, townLayoutScale } from './town-layout'
 import { townPersonStyles } from './town-person'
 import { type TrafficRoute, trafficPose } from './town-traffic'
+import { type TownView, townToBoard } from './town-view'
+
+export { townToBoard } from './town-view'
 
 export type TownArticle = {
   slug: string
@@ -117,21 +120,20 @@ export function nearestResidentRoute(
   return nearest
 }
 
-export function townToBoard(x: number, z: number, height = 0) {
-  return { x: (x - z) / Math.SQRT2, y: (x + z) / 2 - height / Math.SQRT2 }
+const landmarks = [...onettRoads.flatMap((road) => road.points), ...onettBuildings]
+export function getTownBounds(rotation = 0) {
+  const projected = landmarks.map((p) => townToBoard(p.x, p.z, 0, rotation))
+  return {
+    left: Math.min(...projected.map((p) => p.x)) - 220,
+    right: Math.max(...projected.map((p) => p.x)) + 220,
+    top: Math.min(...projected.map((p) => p.y)) - 300,
+    bottom: Math.max(...projected.map((p) => p.y)) + 220
+  }
 }
+export const townBounds = getTownBounds()
 
-const landmarks = [...onettRoads.flatMap((road) => road.points), ...onettBuildings].map((p) =>
-  townToBoard(p.x, p.z)
-)
-export const townBounds = {
-  left: Math.min(...landmarks.map((p) => p.x)) - 220,
-  right: Math.max(...landmarks.map((p) => p.x)) + 220,
-  top: Math.min(...landmarks.map((p) => p.y)) - 300,
-  bottom: Math.max(...landmarks.map((p) => p.y)) + 220
-}
-
-export function fitTown(size: BoardSize): BoardView {
+export function fitTown(size: BoardSize, rotation = 0): TownView {
+  const townBounds = getTownBounds(rotation)
   const zoom = Math.max(
     0.03,
     Math.min(
@@ -141,31 +143,39 @@ export function fitTown(size: BoardSize): BoardView {
     )
   )
   return {
+    rotation,
     zoom,
     x: size.width / 2 - ((townBounds.left + townBounds.right) / 2) * zoom,
     y: (size.height + 30) / 2 - ((townBounds.top + townBounds.bottom) / 2) * zoom
   }
 }
 
-export function clampTownView(view: BoardView, size: BoardSize): BoardView {
-  const zoom = Math.max(Math.min(0.15, fitTown(size).zoom), Math.min(2.5, view.zoom))
+export function clampTownView(view: TownView, size: BoardSize): TownView {
+  const townBounds = getTownBounds(view.rotation)
+  const zoom = Math.max(Math.min(0.15, fitTown(size, view.rotation).zoom), Math.min(2.5, view.zoom))
   const clamp = (value: number, min: number, max: number) =>
     min > max ? (min + max) / 2 : Math.max(min, Math.min(max, value))
   return {
+    ...view,
     zoom,
     x: clamp(view.x, size.width - 40 - townBounds.right * zoom, 40 - townBounds.left * zoom),
     y: clamp(view.y, size.height - 80 - townBounds.bottom * zoom, 90 - townBounds.top * zoom)
   }
 }
 
-export function initialTownView(size: BoardSize, article?: TownArticle): BoardView {
+export function initialTownView(size: BoardSize, article?: TownArticle): TownView {
   const pose = article
     ? trafficPose(article.route, 0)
     : { x: 2000 * townLayoutScale, z: 600 * townLayoutScale }
   const point = townToBoard(pose.x, pose.z, 28)
   const zoom = 1
   return clampTownView(
-    { x: size.width / 2 - point.x * zoom, y: size.height * 0.56 - point.y * zoom, zoom },
+    {
+      x: size.width / 2 - point.x * zoom,
+      y: size.height * 0.56 - point.y * zoom,
+      zoom,
+      rotation: 0
+    },
     size
   )
 }
