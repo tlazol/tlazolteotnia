@@ -7,11 +7,11 @@ import {
   DataTexture,
   DepthTexture,
   DynamicDrawUsage,
-  ExtrudeGeometry,
   Float32BufferAttribute,
   FloatType,
   InstancedBufferAttribute,
   InstancedMesh,
+  LatheGeometry,
   LinearFilter,
   LinearMipmapLinearFilter,
   Mesh,
@@ -25,7 +25,6 @@ import {
   RGBAFormat,
   Scene,
   ShaderMaterial,
-  Shape,
   SRGBColorSpace,
   TorusGeometry,
   Vector2,
@@ -176,10 +175,9 @@ function tileTexture(kind: 'grass' | 'roof') {
 }
 
 function treeGeometry() {
-  // A stepped leaf silhouette with depth, facing the fixed diagonal camera.
-  const shape = new Shape()
-  const outline = [
-    [-0.5, -0.8],
+  // Revolve the stepped crown so the foliage has volume from every camera angle.
+  const profile = [
+    [0, -0.8],
     [0.5, -0.8],
     [0.5, -0.6],
     [0.8, -0.6],
@@ -190,22 +188,15 @@ function treeGeometry() {
     [0.8, 0.7],
     [0.5, 0.7],
     [0.5, 0.9],
-    [-0.5, 0.9],
-    [-0.5, 0.7],
-    [-0.8, 0.7],
-    [-0.8, 0.4],
-    [-1, 0.4],
-    [-1, -0.3],
-    [-0.8, -0.3],
-    [-0.8, -0.6],
-    [-0.5, -0.6]
+    [0, 0.9]
   ]
-  shape.moveTo(outline[0][0], outline[0][1])
-  for (const [x, y] of outline.slice(1)) shape.lineTo(x, y)
-  shape.closePath()
-  const geometry = new ExtrudeGeometry(shape, { depth: 0.5, bevelEnabled: false, steps: 1 })
-  geometry.translate(0, 0, -0.25)
-  geometry.rotateY(Math.PI / 4)
+  const geometry = new LatheGeometry(
+    profile.map(([radius, y]) => new Vector2(radius, y)),
+    8
+  )
+    .rotateY(Math.PI / 8)
+    .toNonIndexed()
+  geometry.computeVertexNormals()
   return geometry
 }
 
@@ -528,7 +519,7 @@ export function createTownScene(articles?: TownArticle[]) {
         depth: depth * scale,
         angle,
         pitch,
-        yaw: shape === 'tree' ? 0 : yaw,
+        yaw,
         color: tint
       }
       if (!resident && tint === colors.shadow) {
@@ -540,8 +531,8 @@ export function createTownScene(articles?: TownArticle[]) {
         item.y + item.height / 2 > 5 &&
         item.y - item.height * (shape === 'tree' ? 0.8 : 0.5) < 60
       ) {
-        // Tree geometry spans +/-1 in x and +/-0.25 in z before its 45-degree turn.
-        const extent = shape === 'tree' ? 1.25 / Math.SQRT2 : 0.5
+        // The rounded tree crown spans a unit radius in both horizontal axes.
+        const extent = shape === 'tree' ? 1 : 0.5
         const radiusX =
           (Math.abs(Math.cos(item.yaw)) * item.width + Math.abs(Math.sin(item.yaw)) * item.depth) *
             extent +
@@ -909,25 +900,16 @@ export function createTownScene(articles?: TownArticle[]) {
         return
       }
       box(x, elevation + 24 * size, z, 13 * size, 48 * size, 13 * size, colors.trunk)
-      part('tree', x, elevation + 86 * size, z, 57 * size, 64 * size, 48 * size, terrain.outline)
+      part('tree', x, elevation + 61 * size, z, 43 * size, 30 * size, 40 * size, terrain.outline)
+      part('tree', x, elevation + 90 * size, z, 52 * size, 60 * size, 48 * size, terrain.leaf)
       part(
         'tree',
-        x + 10 * size,
-        elevation + 90 * size,
-        z + 10 * size,
-        49 * size,
-        55 * size,
-        32 * size,
-        terrain.leaf
-      )
-      part(
-        'tree',
-        x + 5 * size,
-        elevation + 106 * size,
-        z + 22 * size,
-        31 * size,
-        30 * size,
-        16 * size,
+        x - 10 * size,
+        elevation + 122 * size,
+        z - 8 * size,
+        38 * size,
+        33 * size,
+        36 * size,
         terrain.highlight
       )
     }
