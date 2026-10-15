@@ -90,14 +90,16 @@ describe('resident head surfaces', () => {
           expect(heads[variant].length).toBeGreaterThan(0)
           expect(heads[variant].filter((mesh) => mesh.userData.scalp)).toHaveLength(1)
           const ray = new Raycaster()
-          // Every costume keeps both eyes exposed, including helmets and headbands.
+          // Hair or headwear hides both eyes, including on helmets and riding poses.
           for (const side of [-1, 1]) {
             const origin = new Vector3(side * 5.7, 52.164 + lift, lean + 60)
               .multiplyScalar(scale)
               .add(new Vector3(pose.x, 0, pose.z))
             ray.set(origin, new Vector3(0, 0, -1))
             const first = ray.intersectObjects(heads[variant], false)[0]
-            expect(first?.object.userData.face, `hidden eye on costume ${variant}`).toBe(true)
+            expect(first, `missing eye cover on costume ${variant}`).toBeDefined()
+            expect(first?.object.userData.face, `exposed eye on costume ${variant}`).toBe(false)
+            expect(first?.object.userData.scalp, `bare eye area on costume ${variant}`).toBe(false)
           }
           // Look down across the crown, including its bevels: skin must not poke through hair.
           for (let x = -13.75; x < 14; x += 1) {

@@ -78,8 +78,9 @@ function crownGeometry() {
   for (let row = 0; row <= rows; row++) {
     for (let col = 0; col <= segments; col++) {
       const a = (col / segments) * Math.PI * 2
-      // An open face, temples at the sides, and a nape that covers the rear skull.
-      const bottom = -0.36 + Math.max(0, Math.cos(a)) * 0.55
+      // The fringe covers the eyes continuously, including between the pointed locks.
+      // Leave the lower cheeks and mouth visible beneath it.
+      const bottom = -0.36 + Math.max(0, Math.cos(a)) * 0.2
       const y = Math.max(bottom, headProfile[row][0])
       const [rx, rz] = headRadius(y)
       positions.push(Math.sin(a) * rx, y, Math.cos(a) * rz)

@@ -169,8 +169,8 @@ export function createPersonParts(variant: number, identity: string, riding = fa
     lock(2, 46, -19, 15, 39, 13, -0.14)
     bow(0, 65, -20)
   }
-  for (const [i, x] of (role === 'astronaut' ? [] : [-10, -4, 3, 9]).entries()) {
-    lock(x, 63 + (i === 1 ? 0 : 1), 14.5, i === 1 ? 10 : 8, i === 1 ? 15 : 13, 6, -0.2 + i * 0.1)
+  for (const [i, x] of [-10, -4, 3, 9].entries()) {
+    lock(x, 59 + (i === 1 ? 0 : 1), 14.5, i === 1 ? 11 : 9, i === 1 ? 26 : 24, 6, -0.2 + i * 0.1)
   }
   // A side clip gives even simple hairstyles a readable accent.
   trim(12, 59, 14.5, 4, 1.5, 1.5, gold, -0.35)
@@ -293,7 +293,7 @@ export function createPersonParts(variant: number, identity: string, riding = fa
       break
     case 'astronaut':
       coat(ivory)
-      // Open helmet: the face and fringe remain visible between the ear modules.
+      // A low helmet rim and fringe cover the eyes between the ear modules.
       piece('girlBrim', 0, 38, 0, 31, 4, 25, ivory)
       for (const side of [-1, 1]) {
         round(side * 17, 52, 0, 7, 16, 18, ivory)
