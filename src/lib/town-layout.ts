@@ -1,4 +1,6 @@
 type Point = { x: number; z: number }
+// Make room for resident-sized entrances without widening the traffic lanes.
+export const townLayoutScale = 2.2
 export type TownRoad = { points: Point[]; width: number; trail?: boolean }
 export type TownBuildingKind =
   | 'house'
@@ -33,7 +35,7 @@ export type TownBuilding = Point & {
 // Undo the reference map's oblique drawing before placing it in the 3D world.
 // Both street axes have equal scale; the camera supplies all perspective.
 export function onettToTown(x: number, y: number): Point {
-  return { x: x + y - 445, z: y * Math.SQRT2 - 1595 }
+  return { x: (x + y - 445) * townLayoutScale, z: (y * Math.SQRT2 - 1595) * townLayoutScale }
 }
 
 // Streets use board coordinates from the daytime Onett map.
@@ -210,6 +212,18 @@ function building(
   label?: string,
   scale = 1
 ): TownBuilding {
+  // Doors are 40–58 units tall in the source models; residents are about 75.
+  // Small-lot variants must still have an entrance wide enough for an SD head.
+  const minimumScale =
+    kind === 'office' || kind === 'apartment'
+      ? 2.1
+      : kind === 'townhouse'
+        ? 2
+        : kind === 'house'
+          ? 1.85
+          : 1.65
+  scale = Math.max(scale * 1.6, minimumScale)
+  x *= townLayoutScale
   const frontage = {
     x,
     z: street.points[0].z - street.width / 2 - (street.trail ? 0 : 18)
@@ -233,7 +247,7 @@ export const onettBuildings: TownBuilding[] = [
   building('apartment', civicStreet, 2990, 1),
   building('apartment', eastLane, 2580, 0),
   building('townhouse', eastLane, 2940, 2),
-  building('townhouse', westLane, 870, 1),
+  building('townhouse', westLane, 920, 1),
   building('apartment', northStreet, 470, 0),
   building('police', northStreet, 960, 0, 'POLICE'),
   building('shop', northEastStreet, 1530, 0, 'DRUGS'),
@@ -251,9 +265,9 @@ export const onettBuildings: TownBuilding[] = [
   building('house', southEastLane, 3700, 0),
   building('house', northEastStreet, 2970, 3, undefined, 0.7),
   building('house', northEastStreet, 2690, 0, undefined, 0.7),
-  building('house', coastLane, 1540, 0, undefined, 0.7),
-  building('house', coastLane, 1770, 3, undefined, 0.7),
-  building('house', westLane, 655, 3, undefined, 0.6),
+  building('house', coastLane, 1530, 0, undefined, 0.7),
+  building('house', coastLane, 1780, 3, undefined, 0.7),
+  building('house', westLane, 675, 3, undefined, 0.6),
   building('library', libraryLane, 430, 1),
   building('library', libraryLane, 1010, 2),
   building('house', hillLane, 1940, 0, undefined, 1.15),
@@ -275,7 +289,7 @@ export const onettBuildings: TownBuilding[] = [
   building('townhouse', southEastLane, 3940, 1, undefined, 0.65),
   building('florist', southEastLane, 4190, 0, 'FLOWERS', 0.65),
   building('cottage', coastLane, 2010, 0, undefined, 0.65),
-  building('house', coastLane, 2420, 1, undefined, 0.65),
+  building('house', coastLane, 2400, 1, undefined, 0.65),
   building('bakery', coastLane, 2640, 3, 'BAKERY', 0.65),
   building('cottage', coastLane, 2870, 2, undefined, 0.65),
   building('post-office', coastLane, 3100, 1, 'POST', 0.65),
@@ -283,7 +297,7 @@ export const onettBuildings: TownBuilding[] = [
   building('house', coastLane, 3660, 1, undefined, 0.65),
   building('workshop', coastLane, 3900, 0, 'WORKSHOP', 0.65),
   building('cottage', coastLane, 4150, 3, undefined, 0.65),
-  building('office', northEastStreet, 2080, 1, undefined, 0.65),
+  building('office', northEastStreet, 2090, 1, undefined, 0.65),
   building('cinema', northEastStreet, 2420, 1, 'CINEMA', 0.65),
   building('cottage', libraryLane, 2690, 0, undefined, 0.65),
   building('house', libraryLane, 2930, 1, undefined, 0.65)
@@ -335,9 +349,21 @@ export function townBuildingAccess(lot: TownBuilding) {
 
 // Gardens occupy spare parcels and open onto the adjoining lane.
 export const onettParks = [
-  { x: 1480, z: libraryLane.points[0].z - 124, frontage: libraryLane.points[0].z - 14 },
-  { x: 850, z: marketLane.points[0].z - 177, frontage: marketLane.points[0].z - 47 },
-  { x: 3060, z: marketEastLane.points[0].z - 177, frontage: marketEastLane.points[0].z - 47 }
+  {
+    x: 1480 * townLayoutScale,
+    z: libraryLane.points[0].z - 124,
+    frontage: libraryLane.points[0].z - 14
+  },
+  {
+    x: 850 * townLayoutScale,
+    z: marketLane.points[0].z - 177,
+    frontage: marketLane.points[0].z - 47
+  },
+  {
+    x: 3060 * townLayoutScale,
+    z: marketEastLane.points[0].z - 177,
+    frontage: marketEastLane.points[0].z - 47
+  }
 ]
 
 // Tree belts enclose the town and separate the northern trails from the civic blocks.
@@ -357,7 +383,11 @@ export const onettHills = [
   { x: 600, y: -620, width: 1250, depth: 670, height: 105 },
   { x: 1710, y: -1050, width: 1090, depth: 850, height: 165 },
   { x: 2680, y: -950, width: 1390, depth: 540, height: 115 }
-]
+].map((hill) => ({
+  ...hill,
+  width: hill.width * townLayoutScale,
+  depth: hill.depth * townLayoutScale
+}))
 
 export function nearestTownRoad(point: Point, roads: TownRoad[]) {
   let distance = Number.POSITIVE_INFINITY

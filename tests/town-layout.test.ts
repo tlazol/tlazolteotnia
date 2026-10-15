@@ -6,7 +6,8 @@ import {
   onettRoads,
   onettToTown,
   townBuildingAccess,
-  townBuildingBounds
+  townBuildingBounds,
+  townLayoutScale
 } from '../src/lib/town-layout'
 import { townToBoard } from '../src/lib/town-posts'
 import { townLakeStrips } from '../src/lib/town-terrain'
@@ -178,12 +179,15 @@ describe('Onett map', () => {
     const town = createTownScene([])
     const collisions: { road: number; bounds: Bounds }[] = []
     const blockedEntrances: number[] = []
-    const entrances = onettBuildings.flatMap(townBuildingAccess).map((access) => ({
-      left: access.x - access.width / 2,
-      right: access.x + access.width / 2,
-      back: access.start,
-      front: access.end
-    }))
+    const entrances = onettBuildings.flatMap((lot) =>
+      townBuildingAccess(lot).map((access) => ({
+        left: access.x - access.width / 2,
+        right: access.x + access.width / 2,
+        back: access.start,
+        front: access.end,
+        stepHeight: 15 * lot.scale
+      }))
+    )
     let captured = false
     const matrix = new Matrix4()
     const box = new Box3()
@@ -206,11 +210,15 @@ describe('Onett map', () => {
             streets.forEach((street, road) => {
               if (polygonsOverlap(corners(bounds), street)) collisions.push({ road, bounds })
             })
-            // Check ground-level obstructions; awnings above the paving are intentional.
-            if (box.max.y > 15 && box.min.y < 15)
-              entrances.forEach((entrance, index) => {
-                if (overlaps(bounds, entrance)) blockedEntrances.push(index)
-              })
+            // Steps grow with the building; check above them and below the awnings.
+            entrances.forEach((entrance, index) => {
+              if (
+                box.max.y > entrance.stepHeight &&
+                box.min.y < entrance.stepHeight &&
+                overlaps(bounds, entrance)
+              )
+                blockedEntrances.push(index)
+            })
           }
         }
       }
@@ -241,10 +249,10 @@ describe('Onett map', () => {
         ? []
         : [road.points[0], road.points[road.points.length - 1]].filter(
             (point) =>
-              point.x > 1000 &&
-              point.x < 3500 &&
-              point.z > -500 &&
-              point.z < 1500 &&
+              point.x > 1000 * townLayoutScale &&
+              point.x < 3500 * townLayoutScale &&
+              point.z > -500 * townLayoutScale &&
+              point.z < 1500 * townLayoutScale &&
               nearestTownRoad(
                 point,
                 onettRoads.filter((other) => other !== road)

@@ -45,7 +45,8 @@ import {
   onettRoads,
   onettToTown,
   townBuildingAccess,
-  townBuildingBounds
+  townBuildingBounds,
+  townLayoutScale
 } from './town-layout'
 import { createTownNavigation, type TownObstacle, type TownPoint } from './town-navigation'
 import { townPersonStyle } from './town-person'
@@ -229,16 +230,16 @@ function roofGeometry() {
 
 // A headland with stepped coves. Share its outline between the ground,
 // cliff terraces and planting so no trees or grass extend over the water.
-const coastStep = 96
+const coastStep = 96 * townLayoutScale
 const coastColumns = Array.from({ length: 100 }, (_, index) => {
-  const x = -2352 + index * coastStep
+  const x = -2352 + index * 96
   const reach = Math.sqrt(Math.max(0, 1 - ((x - 2400) / 4850) ** 2))
   const inlet = Math.sin(x / 490) * 160 + Math.sin(x / 173) * 65
   const bay = Math.exp(-(((x - 4400) / 1150) ** 2)) * 380
   return {
-    x,
-    north: Math.round((-1000 - reach * 4200 + inlet) / 32) * 32,
-    south: Math.round((-1000 + reach * 3400 + inlet - bay) / 32) * 32,
+    x: x * townLayoutScale,
+    north: Math.round((-1000 - reach * 4200 + inlet) / 32) * 32 * townLayoutScale,
+    south: Math.round((-1000 + reach * 3400 + inlet - bay) / 32) * 32 * townLayoutScale,
     beach: 100 + Math.round(Math.exp(-(((x - 3500) / 1700) ** 2)) * 320)
   }
 })
@@ -2440,13 +2441,13 @@ export function createTownScene(articles?: TownArticle[]) {
     // These details are outside the streets; keep them out of resident raycasts.
     distantForest = true
     for (const [column, { x, north, south }] of coastColumns.entries()) {
-      for (let z = north + 85, row = 0; z < south - 85; z += 88, row++) {
+      for (let z = north + 85, row = 0; z < south - 85; z += 88 * townLayoutScale, row++) {
         const seed = hashSlug(`forest:${column}:${row}`)
         const px = x + (seed % 35) - 17
         const pz = z + ((seed >>> 8) % 29) - 14
         if (inTownLake(px, pz, 80)) continue
-        const by = (pz + 1595) / Math.SQRT2
-        const bx = px - by + 445
+        const by = (pz / townLayoutScale + 1595) / Math.SQRT2
+        const bx = px / townLayoutScale - by + 445
         const fringe = Math.sin(by / 210) * 80 + Math.sin(bx / 290) * 65
         if (bx > -400 + fringe && bx < 3390 + fringe && by > -380 + fringe && by < 2570 + fringe)
           continue

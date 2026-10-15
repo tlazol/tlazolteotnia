@@ -1,3 +1,5 @@
+import { townLayoutScale } from './town-layout'
+
 export type TownArchitecture =
   | 'spring'
   | 'summer'
@@ -158,6 +160,8 @@ const landscapes: { x: number; z: number; rx: number; rz: number; terrain: TownT
 ]
 
 export function townTerrain(x: number, z: number): TownTerrain {
+  x /= townLayoutScale
+  z /= townLayoutScale
   for (const region of landscapes) {
     const dx = (x - region.x) / region.rx
     const dz = (z - region.z) / region.rz
@@ -179,14 +183,14 @@ export const townLakeStrips = [
   { x: -850, z: -700, rx: 560, rz: 720 },
   { x: 4940, z: -1640, rx: 600, rz: 810 }
 ].flatMap((lake) =>
-  Array.from({ length: Math.floor((lake.rx * 2) / 64) }, (_, index) => {
-    const x = lake.x - lake.rx + index * 64 + 32
+  Array.from({ length: Math.floor((lake.rx * townLayoutScale * 2) / 64) }, (_, index) => {
+    const x = lake.x - lake.rx + (index * 64 + 32) / townLayoutScale
     const reach = Math.sqrt(Math.max(0, 1 - ((x - lake.x) / lake.rx) ** 2))
     const bend = Math.sin((x - lake.x) / 170) * 100
     return {
-      x,
-      north: Math.round((lake.z - reach * lake.rz + bend) / 32) * 32,
-      south: Math.round((lake.z + reach * lake.rz + bend) / 32) * 32
+      x: x * townLayoutScale,
+      north: Math.round(((lake.z - reach * lake.rz + bend) * townLayoutScale) / 32) * 32,
+      south: Math.round(((lake.z + reach * lake.rz + bend) * townLayoutScale) / 32) * 32
     }
   })
 )

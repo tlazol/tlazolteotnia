@@ -1,6 +1,6 @@
 import type { BlogPostSummary } from './blog-post'
 import { type BoardSize, type BoardView, hashSlug } from './sticker-board'
-import { onettBuildings, onettHills, onettRoads, onettToTown } from './town-layout'
+import { onettBuildings, onettHills, onettRoads, onettToTown, townLayoutScale } from './town-layout'
 import { townPersonStyles } from './town-person'
 import { type TrafficRoute, trafficPose } from './town-traffic'
 
@@ -159,7 +159,9 @@ export function clampTownView(view: BoardView, size: BoardSize): BoardView {
 }
 
 export function initialTownView(size: BoardSize, article?: TownArticle): BoardView {
-  const pose = article ? trafficPose(article.route, 0) : { x: 2000, z: 600 }
+  const pose = article
+    ? trafficPose(article.route, 0)
+    : { x: 2000 * townLayoutScale, z: 600 * townLayoutScale }
   const point = townToBoard(pose.x, pose.z, 28)
   const zoom = 1
   return clampTownView(

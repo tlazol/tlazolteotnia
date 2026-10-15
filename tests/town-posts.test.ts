@@ -15,7 +15,8 @@ import {
   onettBuildings,
   onettHills,
   onettRoads,
-  onettToTown
+  onettToTown,
+  townLayoutScale
 } from '../src/lib/town-layout'
 import {
   clampTownView,
@@ -296,10 +297,10 @@ describe('article residents', () => {
     (value) => {
       const articles = randomTownArticles(posts, () => value)
       const positions = articles.map((article) => trafficPose(article.route, 0))
-      expect(Math.min(...positions.map((point) => point.z))).toBeLessThan(-1600)
-      expect(Math.max(...positions.map((point) => point.z))).toBeGreaterThan(1500)
-      expect(Math.min(...positions.map((point) => point.x))).toBeLessThan(650)
-      expect(Math.max(...positions.map((point) => point.x))).toBeGreaterThan(3100)
+      expect(Math.min(...positions.map((point) => point.z))).toBeLessThan(-1600 * townLayoutScale)
+      expect(Math.max(...positions.map((point) => point.z))).toBeGreaterThan(1500 * townLayoutScale)
+      expect(Math.min(...positions.map((point) => point.x))).toBeLessThan(650 * townLayoutScale)
+      expect(Math.max(...positions.map((point) => point.x))).toBeGreaterThan(3100 * townLayoutScale)
       const counts = new Map<string, number>()
       for (const article of articles) {
         const key = JSON.stringify([article.route.start, article.route.end])
@@ -327,6 +328,8 @@ describe('article residents', () => {
       const articles = layoutTownArticles(posts)
       const selected = articles.find((article) => article.kind === kind)
       if (!selected) throw new Error('Article resident missing')
+      // Keep the speed assertion away from ambient traffic's avoidance sidesteps.
+      selected.route = { ...selected.route, progress: 0.37 }
       const otherSlug = articles.find((article) => article.slug !== selected.slug)?.slug
       if (!otherSlug) throw new Error('Other resident missing')
       const town = createTownScene(articles)
