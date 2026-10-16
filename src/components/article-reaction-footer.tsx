@@ -2,11 +2,9 @@ import { ReactionBar } from '#/components/reaction-bar'
 import type { ReactionCount } from '#/lib/reactions'
 
 export function ArticleReactionFooter({
-  onReaction,
   reactions,
   slug
 }: {
-  onReaction: (reaction: ReactionCount) => void
   reactions: ReactionCount[]
   slug: string
 }) {
@@ -29,7 +27,7 @@ export function ArticleReactionFooter({
       <p className="mt-2 mb-0 text-[0.82rem] leading-[1.7] text-[var(--muted)]">
         好きな絵文字をいくつでもどうぞ。
       </p>
-      <ReactionBar onReaction={onReaction} reactions={reactions} slug={slug} />
+      <ReactionBar reactions={reactions} slug={slug} />
     </section>
   )
 }

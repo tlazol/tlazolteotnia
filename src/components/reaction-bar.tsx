@@ -1,13 +1,9 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { MdAddReaction } from 'react-icons/md'
 import { getPostAccent } from '#/lib/post-accent'
-import { mergeReaction, REACTION_EMOJIS, type ReactionCount } from '#/lib/reactions'
+import { REACTION_EMOJIS, type ReactionCount } from '#/lib/reactions'
 
-type ReactionResponse = {
-  reaction?: ReactionCount
-  created?: boolean
-  error?: string
-}
+import { useReactions } from './use-reactions'
 
 const reactionRainbowPatterns = {
   green: {
@@ -49,65 +45,25 @@ const reactionRainbowPatterns = {
 
 const PICKER_VIEWPORT_GUTTER = 16
 
-export function ReactionBar({
-  reactions,
-  slug,
-  onReaction
-}: {
-  reactions: ReactionCount[]
-  slug: string
-  onReaction?: (reaction: ReactionCount) => void
-}) {
-  const [current, setCurrent] = useState(reactions)
+export function ReactionBar({ reactions, slug }: { reactions: ReactionCount[]; slug: string }) {
+  const {
+    reactions: current,
+    pendingEmoji,
+    errorMessage,
+    react: sendReaction
+  } = useReactions(slug, reactions)
   const [pickerOpen, setPickerOpen] = useState(false)
-  const [pendingEmoji, setPendingEmoji] = useState<string | null>(null)
   const [celebratingEmoji, setCelebratingEmoji] = useState<string | null>(null)
-  const [errorMessage, setErrorMessage] = useState<string | null>(null)
-  const previousRef = useRef<ReactionCount[]>(reactions)
-
-  useEffect(() => setCurrent(reactions), [reactions])
-
   useEffect(() => {
     if (!celebratingEmoji) return
     const timeout = window.setTimeout(() => setCelebratingEmoji(null), 900)
     return () => window.clearTimeout(timeout)
   }, [celebratingEmoji])
 
-  async function react(emoji: string) {
-    const existing = current.find((reaction) => reaction.emoji === emoji)
-    if (pendingEmoji || existing?.reacted) return
-    previousRef.current = current
-    setCurrent((value) =>
-      mergeReaction(value, {
-        emoji: emoji as ReactionCount['emoji'],
-        count: (existing?.count ?? 0) + 1,
-        reacted: true
-      })
-    )
-    setPendingEmoji(emoji)
-    setErrorMessage(null)
+  function react(emoji: ReactionCount['emoji']) {
+    if (!sendReaction(emoji)) return
     setCelebratingEmoji(emoji)
     setPickerOpen(false)
-    const formData = new FormData()
-    formData.set('emoji', emoji)
-    try {
-      const response = await fetch(`/api/reactions/${encodeURIComponent(slug)}`, {
-        method: 'POST',
-        body: formData
-      })
-      const result = (await response.json()) as ReactionResponse
-      if (!response.ok || !result.reaction)
-        throw new Error(result.error ?? 'リアクションを送信できませんでした。')
-      setCurrent((value) => mergeReaction(value, result.reaction as ReactionCount))
-      onReaction?.(result.reaction)
-    } catch (error) {
-      setCurrent(previousRef.current)
-      setErrorMessage(
-        error instanceof Error ? error.message : 'リアクションを送信できませんでした。'
-      )
-    } finally {
-      setPendingEmoji(null)
-    }
   }
 
   return (
@@ -203,7 +159,7 @@ function ReactionPicker({
   current: ReactionCount[]
   onClose: () => void
   onOpen: () => void
-  onReact: (emoji: string) => void
+  onReact: (emoji: ReactionCount['emoji']) => void
   open: boolean
   pendingEmoji: string | null
   slug: string

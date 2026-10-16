@@ -1,8 +1,7 @@
 import { Link } from '@tanstack/react-router'
-import { useCallback, useState } from 'react'
 import type { BlogPost } from '#/lib/blog-post'
 import { shouldOpenPostModal } from '#/lib/post-modal'
-import { mergeReaction, type ReactionCount } from '#/lib/reactions'
+import type { ReactionCount } from '#/lib/reactions'
 import { authorName } from '#/lib/site'
 import { ArticleReactionFooter } from './article-reaction-footer'
 import { ArticleSticker } from './article-sticker'
@@ -17,11 +16,6 @@ export function ArticleContent({
   reactions: ReactionCount[]
   onTagNavigate?: () => void
 }) {
-  const [currentReactions, setCurrentReactions] = useState(reactions)
-  const updateReaction = useCallback((reaction: ReactionCount) => {
-    setCurrentReactions((current) => mergeReaction(current, reaction))
-  }, [])
-
   return (
     <article>
       <header className="article-heading">
@@ -48,11 +42,7 @@ export function ArticleContent({
         </ul>
       </header>
       <MarkdownBody body={post.body} />
-      <ArticleReactionFooter
-        onReaction={updateReaction}
-        reactions={currentReactions}
-        slug={post.slug}
-      />
+      <ArticleReactionFooter reactions={reactions} slug={post.slug} />
     </article>
   )
 }

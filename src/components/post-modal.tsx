@@ -3,12 +3,15 @@ import { useEffect, useRef, useState } from 'react'
 import { getPostData } from '#/lib/blog.functions'
 import type { BlogPostSummary } from '#/lib/blog-post'
 import { getPostAccent } from '#/lib/post-accent'
-import { ArticleContent } from './article-content'
+import type { ArticleContent } from './article-content'
 
 export function PostModal({ post, onClose }: { post: BlogPostSummary; onClose: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null)
   const closeButton = useRef<HTMLButtonElement>(null)
-  const [data, setData] = useState<Awaited<ReturnType<typeof getPostData>>>(null)
+  const [loaded, setLoaded] = useState<{
+    data: NonNullable<Awaited<ReturnType<typeof getPostData>>>
+    Content: typeof ArticleContent
+  } | null>(null)
   const [failed, setFailed] = useState(false)
 
   useEffect(() => {
@@ -27,10 +30,12 @@ export function PostModal({ post, onClose }: { post: BlogPostSummary; onClose: (
 
   useEffect(() => {
     let cancelled = false
-    getPostData({ data: { slug: post.slug } })
-      .then((result) => {
+    setLoaded(null)
+    setFailed(false)
+    Promise.all([getPostData({ data: { slug: post.slug } }), import('./article-content')])
+      .then(([result, { ArticleContent }]) => {
         if (cancelled) return
-        setData(result)
+        if (result) setLoaded({ data: result, Content: ArticleContent })
         setFailed(!result)
       })
       .catch(() => {
@@ -71,8 +76,13 @@ export function PostModal({ post, onClose }: { post: BlogPostSummary; onClose: (
           />
         </div>
         <div className="article-page post-modal__article">
-          {data ? (
-            <ArticleContent post={data.post} reactions={data.reactions} onTagNavigate={onClose} />
+          {loaded ? (
+            <loaded.Content
+              key={loaded.data.post.slug}
+              post={loaded.data.post}
+              reactions={loaded.data.reactions}
+              onTagNavigate={onClose}
+            />
           ) : failed ? (
             <p className="post-modal__status" role="alert">
               記事を読み込めませんでした。上のリンクから記事ページを開いてください。
