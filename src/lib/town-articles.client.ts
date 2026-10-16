@@ -30,19 +30,23 @@ export function createArticleTown(
     frame = 0
     town.pause()
   }
+  function fail(error?: unknown) {
+    if (disposed || unavailable) return
+    if (error !== undefined) console.error('Town renderer unavailable', error)
+    unavailable = true
+    stop()
+    onFailure()
+  }
   function render(now: number) {
     frame = 0
-    if (disposed || document.hidden || !hasSize) return
+    if (disposed || unavailable || document.hidden || !hasSize) return
     try {
       renderer.clear()
       const view = town.render(renderer, now, !reducedMotion.matches)
       onPositions(town.projectResidents(now), view)
-      if (!reducedMotion.matches) timer = setTimeout(wake, 1000 / 30)
+      if (!disposed && !unavailable && !reducedMotion.matches) timer = setTimeout(wake, 1000 / 30)
     } catch (error) {
-      console.error('Town renderer unavailable', error)
-      unavailable = true
-      stop()
-      onFailure()
+      fail(error)
     }
   }
   function wake() {
@@ -56,9 +60,7 @@ export function createArticleTown(
   }
   function contextLost(event: Event) {
     event.preventDefault()
-    unavailable = true
-    stop()
-    onFailure()
+    fail()
   }
   document.addEventListener('visibilitychange', visibilityChanged)
   reducedMotion.addEventListener('change', wake)
@@ -78,16 +80,20 @@ export function createArticleTown(
       wake()
     },
     update(view: TownView, size: SceneSize) {
-      if (!size.width || !size.height) return
-      hasSize = true
-      if (
-        canvas.clientWidth !== size.width ||
-        canvas.width !== Math.floor(size.width * renderer.getPixelRatio()) ||
-        canvas.height !== Math.floor(size.height * renderer.getPixelRatio())
-      )
-        renderer.setSize(size.width, size.height, false)
-      town.update(view, size)
-      wake()
+      if (disposed || unavailable || !size.width || !size.height) return
+      try {
+        hasSize = true
+        if (
+          canvas.clientWidth !== size.width ||
+          canvas.width !== Math.floor(size.width * renderer.getPixelRatio()) ||
+          canvas.height !== Math.floor(size.height * renderer.getPixelRatio())
+        )
+          renderer.setSize(size.width, size.height, false)
+        town.update(view, size)
+        wake()
+      } catch (error) {
+        fail(error)
+      }
     },
     select(slug: string | null) {
       town.select(slug)
@@ -107,6 +113,7 @@ export function createArticleTown(
     },
     residentPosition: town.residentPosition,
     dispose() {
+      if (disposed) return
       disposed = true
       stop()
       document.removeEventListener('visibilitychange', visibilityChanged)

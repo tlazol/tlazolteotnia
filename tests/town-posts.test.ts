@@ -467,9 +467,10 @@ describe('article residents', () => {
       const uniforms = backdrop.material.uniforms
       return {
         enabled: uniforms.selectionEnabled.value,
-        selection: passes.find(
-          (pass) => pass.target?.depthTexture === uniforms.selectionDepth.value
-        )?.scene
+        selection: uniforms.selectionEnabled.value
+          ? passes.find((pass) => pass.target?.depthTexture === uniforms.selectionDepth.value)
+              ?.scene
+          : undefined
       }
     }
     function expectSelected(scene: Scene | undefined, slug: string) {

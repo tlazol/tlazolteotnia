@@ -1,30 +1,17 @@
 import { Link, useNavigate, useSearch } from '@tanstack/react-router'
-import { createClientOnlyFn } from '@tanstack/react-start'
-import { type MouseEvent, type PointerEvent, useEffect, useMemo, useRef, useState } from 'react'
+import { type MouseEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { type BlogPostSummary, sortBlogPostsNewestFirst } from '#/lib/blog-post'
 import { filterBlogPosts } from '#/lib/blog-tags'
 import { shouldOpenPostModal } from '#/lib/post-modal'
-import type { SceneSize } from '#/lib/scene-math'
-import type { createArticleTown, ResidentScreenPosition } from '#/lib/town-articles.client'
-import {
-  clampTownView,
-  fitTown,
-  initialTownView,
-  layoutTownArticles,
-  placeTownBubble
-} from '#/lib/town-posts'
-import {
-  gestureTownView,
-  rotateTownAt,
-  type TownView,
-  townSession,
-  zoomTownAt
-} from '#/lib/town-view'
+import { fitTown, initialTownView, layoutTownArticles } from '#/lib/town-posts'
+import { townSession, zoomTownAt } from '#/lib/town-view'
 import { PostModal } from './post-modal'
 import { SiteHeader } from './site-header'
-
-const loadRenderer = createClientOnlyFn(() => import('#/lib/town-articles.client'))
-type Point = { x: number; y: number }
+import { TownArticleList } from './town-article-list'
+import { TownBubble } from './town-bubble'
+import { TownCameraControls } from './town-camera-controls'
+import { useTownInput } from './use-town-input'
+import { useTownRenderer } from './use-town-renderer'
 
 export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
   const { topic = '', q = '' } = useSearch({ from: '/' })
@@ -32,178 +19,58 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
   const sorted = useMemo(() => sortBlogPostsNewestFirst(posts), [posts])
   const articles = useMemo(() => layoutTownArticles(sorted), [sorted])
   const visiblePosts = useMemo(() => filterBlogPosts(sorted, topic, q), [sorted, topic, q])
-  const [size, setSize] = useState<SceneSize>({ width: 0, height: 0 })
-  const [zoom, setZoom] = useState(1)
-  const [ready, setReady] = useState(false)
-  const [failed, setFailed] = useState(false)
-  const [dragging, setDragging] = useState(false)
+
   const [rotateMode, setRotateMode] = useState(false)
-  const rotateDrag = useRef(false)
-  const [draggedSlug, setDraggedSlug] = useState<string | null>(null)
   const [activeSlug, setActiveSlug] = useState<string | null>(null)
   const [selectedPost, setSelectedPost] = useState<BlogPostSummary | null>(null)
   const [listOpen, setListOpen] = useState(false)
-  const loading = !ready && !failed
-  const listVisible = failed || (ready && listOpen)
-  const [query, setQuery] = useState(q)
-  const activePost = visiblePosts.find((post) => post.slug === activeSlug)
-  const surface = useRef<HTMLDivElement>(null)
-  const canvas = useRef<HTMLCanvasElement>(null)
-  const bubble = useRef<HTMLDivElement>(null)
-  const pendingBubbleFocus = useRef<string | null>(null)
   const listToggle = useRef<HTMLButtonElement>(null)
   const listHeading = useRef<HTMLHeadingElement>(null)
-  const buttons = useRef(new Map<string, HTMLButtonElement>())
-  const renderer = useRef<ReturnType<typeof createArticleTown> | null>(null)
-  const currentView = useRef<TownView>({ x: 0, y: 0, zoom: 1 })
-  const previousSize = useRef<SceneSize | null>(null)
-  const restoredView = useRef(townSession.view)
-  const pointers = useRef(new Map<number, Point & { pointerType: string }>())
-  const origin = useRef<Point | null>(null)
-  const didDrag = useRef(false)
-  const residentDrag = useRef<{ slug: string; pointerId: number; started: boolean } | null>(null)
-  const releasedResident = useRef<string | null>(null)
-  const lastPositions = useRef<ResidentScreenPosition[]>([])
-  const latest = useRef({ size, activeSlug, topic, q, visiblePosts })
-  latest.current = { size, activeSlug, topic, q, visiblePosts }
-
-  function updateView(next: TownView) {
-    const clamped = clampTownView(next, latest.current.size)
-    currentView.current = clamped
-    renderer.current?.update(clamped, latest.current.size)
-    setZoom(clamped.zoom)
-    townSession.view = clamped
+  const scene = useTownRenderer(articles, visiblePosts, activeSlug, setActiveSlug)
+  const {
+    status,
+    surface,
+    canvas,
+    bubble,
+    buttons,
+    renderer,
+    size,
+    zoom,
+    currentView,
+    updateView
+  } = scene
+  const ready = status === 'ready'
+  const failed = status === 'failed'
+  const loading = status === 'loading'
+  const listVisible = failed || (ready && listOpen)
+  const activePost = visiblePosts.find((post) => post.slug === activeSlug)
+  function selectResident(slug: string) {
+    renderer.current?.follow(slug)
+    setActiveSlug((active) => (active === slug ? null : slug))
   }
-
-  function positionOverlay(positions: ResidentScreenPosition[], nextView?: TownView) {
-    if (nextView) {
-      currentView.current = nextView
-      townSession.view = nextView
-    }
-    lastPositions.current = positions
-    const state = latest.current
-    for (const position of positions) {
-      const visible = position.visible || (position.slug === state.activeSlug && position.inView)
-      const button = buttons.current.get(position.slug)
-      if (button) {
-        const zoom = currentView.current.zoom
-        const width = Math.max(44, position.width * zoom)
-        const bodyHeight = position.bodyHeight * zoom
-        const height = Math.max(44, bodyHeight + 20 * zoom)
-        const top = position.y - 10 * zoom - (height - bodyHeight - 20 * zoom) / 2
-        button.style.width = `${width}px`
-        button.style.height = `${height}px`
-        button.style.setProperty('--foot-y', `${position.y + position.footY * zoom - top}px`)
-        button.style.transform = `translate(${position.x - width / 2}px, ${top}px)`
-        button.style.visibility = visible ? 'visible' : 'hidden'
-        button.dataset.dropAllowed = String(position.dropAllowed)
-        button.tabIndex = visible ? 0 : -1
-      }
-      if (position.slug === state.activeSlug && bubble.current) {
-        const element = bubble.current
-        const placement = placeTownBubble(
-          position,
-          { width: element.offsetWidth, height: element.offsetHeight },
-          state.size
-        )
-        element.style.left = `${placement.left}px`
-        element.style.top = `${placement.top}px`
-        element.style.setProperty('--tail-x', `${placement.tail}px`)
-        element.dataset.side = placement.above ? 'above' : 'below'
-        element.style.visibility = visible ? 'visible' : 'hidden'
-        if (visible && pendingBubbleFocus.current === position.slug) {
-          const link = element.querySelector('a')
-          link?.focus({ preventScroll: true })
-          if (document.activeElement === link) pendingBubbleFocus.current = null
-        }
-      }
-    }
+  const { input, dragging, draggedSlug } = useTownInput(
+    scene,
+    rotateMode,
+    setActiveSlug,
+    selectResident
+  )
+  function closeBubble() {
+    setActiveSlug(null)
+    if (activeSlug) buttons.current.get(activeSlug)?.focus({ preventScroll: true })
   }
-
-  useEffect(() => {
-    const element = surface.current
-    if (!element) return
-    const observer = new ResizeObserver(([entry]) =>
-      setSize({ width: entry.contentRect.width, height: entry.contentRect.height })
-    )
-    observer.observe(element)
-    return () => observer.disconnect()
-  }, [])
-
-  useEffect(() => {
-    if (!size.width) return
-    const previous = previousSize.current
-    const next = previous
-      ? {
-          ...currentView.current,
-          x: currentView.current.x + (size.width - previous.width) / 2,
-          y: currentView.current.y + (size.height - previous.height) / 2
-        }
-      : restoredView.current
-        ? restoredView.current
-        : initialTownView(size, articles[0])
-    previousSize.current = size
-    updateView(next)
-  }, [size, articles])
-
-  useEffect(() => {
-    let cancelled = false
-    setReady(false)
-    setFailed(false)
-    void loadRenderer()
-      .then((module) => {
-        if (cancelled || !canvas.current) return
-        renderer.current = module.createArticleTown(
-          canvas.current,
-          articles,
-          positionOverlay,
-          () => {
-            setFailed(true)
-            setReady(false)
-          }
-        )
-        if (restoredView.current) renderer.current.follow(null)
-        renderer.current.filter(latest.current.visiblePosts.map((post) => post.slug))
-        renderer.current.update(currentView.current, latest.current.size)
-        setReady(true)
-        setActiveSlug(
-          latest.current.visiblePosts.find((post) => post.slug === articles[0]?.slug)?.slug ?? null
-        )
-      })
-      .catch((error) => {
-        if (!cancelled) {
-          console.error('Town renderer unavailable', error)
-          setFailed(true)
-        }
-      })
-    return () => {
-      cancelled = true
-      renderer.current?.dispose()
-      renderer.current = null
-    }
-  }, [articles])
-
+  function closeList() {
+    setListOpen(false)
+    listToggle.current?.focus()
+  }
   useEffect(() => {
     renderer.current?.filter(visiblePosts.map((post) => post.slug))
     setActiveSlug(null)
     renderer.current?.focus(null)
     townSession.search = { topic: topic || undefined, q: q || undefined }
-    setQuery(q)
-  }, [visiblePosts, topic, q])
-  useEffect(() => {
-    pendingBubbleFocus.current = activeSlug
-    renderer.current?.select(activeSlug)
-    positionOverlay(lastPositions.current)
-  }, [activeSlug])
+  }, [visiblePosts, topic, q, renderer])
   useEffect(() => {
     if (listOpen) listHeading.current?.focus()
   }, [listOpen])
-  useEffect(() => {
-    if (!bubble.current) return
-    const observer = new ResizeObserver(() => positionOverlay(lastPositions.current))
-    observer.observe(bubble.current)
-    return () => observer.disconnect()
-  }, [activeSlug])
   useEffect(() => {
     function handleEscape(event: KeyboardEvent) {
       if (event.key !== 'Escape' || selectedPost || document.querySelector('dialog[open]')) return
@@ -217,183 +84,7 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
     }
     document.addEventListener('keydown', handleEscape)
     return () => document.removeEventListener('keydown', handleEscape)
-  }, [activeSlug, selectedPost, listOpen])
-  useEffect(() => {
-    const element = surface.current
-    if (!element || !ready) return
-    function wheel(event: WheelEvent) {
-      if (event.target instanceof Element && event.target.closest('.town-bubble')) return
-      event.preventDefault()
-      if (residentDrag.current) return
-      const rect = element?.getBoundingClientRect()
-      if (!rect) return
-      const delta =
-        event.deltaY *
-        (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? latest.current.size.height : 1)
-      renderer.current?.follow(null)
-      updateView(
-        zoomTownAt(currentView.current, Math.exp(-Math.max(-300, Math.min(300, delta)) * 0.002), {
-          x: event.clientX - rect.left,
-          y: event.clientY - rect.top
-        })
-      )
-    }
-    element.addEventListener('wheel', wheel, { passive: false })
-    return () => element.removeEventListener('wheel', wheel)
-  }, [ready])
-
-  function point(event: PointerEvent) {
-    const rect = surface.current?.getBoundingClientRect()
-    return {
-      x: event.clientX - (rect?.left ?? 0),
-      y: event.clientY - (rect?.top ?? 0),
-      pointerType: event.pointerType
-    }
-  }
-  function selectResident(slug: string) {
-    renderer.current?.follow(slug)
-    setActiveSlug(activeSlug === slug ? null : slug)
-  }
-  function pointerDown(event: PointerEvent<HTMLDivElement>) {
-    if (!ready || event.button !== 0 || pointers.current.size >= 2) return
-    if (
-      !pointers.current.size &&
-      event.target instanceof Element &&
-      event.target.closest('.town-bubble')
-    ) {
-      didDrag.current = false
-      return
-    }
-    if (!pointers.current.size) {
-      didDrag.current = false
-      origin.current = point(event)
-      rotateDrag.current = event.pointerType !== 'touch' && rotateMode
-      const person = event.target instanceof Element ? event.target.closest('.town-person') : null
-      const slug = rotateDrag.current ? null : person?.getAttribute('data-slug')
-      if (slug) {
-        residentDrag.current = { slug, pointerId: event.pointerId, started: false }
-        renderer.current?.focus(slug)
-        event.currentTarget.setPointerCapture(event.pointerId)
-      } else {
-        renderer.current?.follow(null)
-        if (!person) event.currentTarget.setPointerCapture(event.pointerId)
-      }
-    }
-    if (
-      pointers.current.size &&
-      (event.pointerType !== 'touch' || [...pointers.current.values()][0].pointerType !== 'touch')
-    )
-      return
-    pointers.current.set(event.pointerId, point(event))
-    if (pointers.current.size > 1) {
-      renderer.current?.endResidentDrag(true)
-      residentDrag.current = null
-      setDraggedSlug(null)
-      renderer.current?.follow(null)
-      renderer.current?.focus(null)
-      for (const id of pointers.current.keys()) event.currentTarget.setPointerCapture(id)
-      didDrag.current = true
-      setDragging(true)
-    }
-  }
-  function pointerMove(event: PointerEvent<HTMLDivElement>) {
-    if (!ready || !pointers.current.has(event.pointerId)) return
-    const previous = [...pointers.current.values()]
-    const before = pointers.current.get(event.pointerId)
-    if (!before) return
-    const next = point(event)
-    pointers.current.set(event.pointerId, next)
-    if (origin.current && Math.hypot(next.x - origin.current.x, next.y - origin.current.y) > 6)
-      didDrag.current = true
-    if (!didDrag.current) return
-    event.currentTarget.setPointerCapture(event.pointerId)
-    setDragging(true)
-    const resident = residentDrag.current
-    if (resident) {
-      const start = resident.started ? before : (origin.current ?? before)
-      if (!resident.started) {
-        resident.started = true
-        setActiveSlug(null)
-        setDraggedSlug(resident.slug)
-        renderer.current?.beginResidentDrag(resident.slug)
-      }
-      renderer.current?.moveResidentDrag(next.x - start.x, next.y - start.y)
-      return
-    }
-    renderer.current?.focus(null)
-    if (pointers.current.size === 2) {
-      const after = [...pointers.current.values()]
-      updateView(
-        gestureTownView(currentView.current, [previous[0], previous[1]], [after[0], after[1]])
-      )
-    } else if (rotateDrag.current) {
-      updateView(
-        rotateTownAt(
-          currentView.current,
-          ((next.x - before.x) / latest.current.size.width) * Math.PI * 2,
-          {
-            x: latest.current.size.width / 2,
-            y: latest.current.size.height / 2
-          }
-        )
-      )
-    } else
-      updateView({
-        ...currentView.current,
-        x: currentView.current.x + next.x - before.x,
-        y: currentView.current.y + next.y - before.y
-      })
-  }
-  function pointerUp(event: PointerEvent<HTMLDivElement>) {
-    if (!pointers.current.has(event.pointerId)) return
-    if (event.type !== 'pointerup') {
-      cancelGesture()
-      return
-    }
-    const resident = residentDrag.current
-    if (resident?.pointerId === event.pointerId) {
-      if (resident.started) releasedResident.current = resident.slug
-      renderer.current?.endResidentDrag(event.type !== 'pointerup')
-      renderer.current?.focus(null)
-      residentDrag.current = null
-      setDraggedSlug(null)
-      if (!resident.started && event.type === 'pointerup') {
-        selectResident(resident.slug)
-        // Pointer capture retargets the click to the surface; handle this tap here.
-        didDrag.current = true
-      }
-    }
-    if (!didDrag.current && !resident) setActiveSlug(null)
-    pointers.current.delete(event.pointerId)
-    origin.current = [...pointers.current.values()][0] ?? null
-    if (pointers.current.size) rotateDrag.current = false
-    if (event.currentTarget.hasPointerCapture(event.pointerId))
-      event.currentTarget.releasePointerCapture(event.pointerId)
-    if (!pointers.current.size) {
-      setDragging(false)
-      origin.current = null
-    }
-  }
-  function cancelGesture() {
-    renderer.current?.endResidentDrag(true)
-    renderer.current?.focus(null)
-    residentDrag.current = null
-    setDraggedSlug(null)
-    const ids = [...pointers.current.keys()]
-    pointers.current.clear()
-    for (const id of ids) {
-      if (surface.current?.hasPointerCapture(id)) surface.current.releasePointerCapture(id)
-    }
-    origin.current = null
-    rotateDrag.current = false
-    didDrag.current = true
-    setDragging(false)
-  }
-  useEffect(() => {
-    window.addEventListener('blur', cancelGesture)
-    return () => window.removeEventListener('blur', cancelGesture)
-  }, [])
-
+  }, [activeSlug, selectedPost, listOpen, buttons])
   function openPost(event: MouseEvent<HTMLAnchorElement>, post: BlogPostSummary) {
     if (!shouldOpenPostModal(event)) return
     event.preventDefault()
@@ -409,20 +100,12 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
         ref={surface}
         data-camera-mode={rotateMode ? 'rotate' : 'pan'}
         className={`sticker-surface${ready ? ' is-ready' : ''}${dragging ? ' is-dragging' : ''}`}
-        onPointerDown={pointerDown}
-        onPointerMove={pointerMove}
-        onPointerUp={pointerUp}
-        onPointerCancel={pointerUp}
-        onLostPointerCapture={(event) => {
-          if (event.target === event.currentTarget && pointers.current.has(event.pointerId))
-            pointerUp(event)
-        }}
-        onClickCapture={(event) => {
-          if (didDrag.current && event.detail !== 0) {
-            event.preventDefault()
-            event.stopPropagation()
-          }
-        }}
+        onPointerDown={input.pointerDown}
+        onPointerMove={input.pointerMove}
+        onPointerUp={input.pointerUp}
+        onPointerCancel={input.pointerUp}
+        onLostPointerCapture={input.lostPointerCapture}
+        onClickCapture={input.clickCapture}
       >
         <canvas ref={canvas} className="sticker-canvas" aria-hidden="true" tabIndex={-1} />
         {loading && (
@@ -447,11 +130,10 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
               aria-controls={activeSlug === post.slug ? 'town-bubble' : undefined}
               onClick={() => selectResident(post.slug)}
               onPointerEnter={() => {
-                if (!pointers.current.size && releasedResident.current !== post.slug)
-                  renderer.current?.focus(post.slug)
+                input.enterResident(post.slug)
               }}
               onPointerLeave={(event) => {
-                if (releasedResident.current === post.slug) releasedResident.current = null
+                input.leaveResident(post.slug)
                 if (!event.currentTarget.matches(':focus-visible')) renderer.current?.focus(null)
               }}
               onFocus={(event) => {
@@ -469,126 +151,36 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
             </button>
           ))}
         {ready && activePost && (
-          <div ref={bubble} id="town-bubble" className="town-bubble" data-side="above">
-            <div className="town-bubble__meta">
-              <time dateTime={activePost.date}>{activePost.date.replaceAll('-', '.')}</time>
-              {activePost.slug === sorted[0]?.slug && <span>New</span>}
-              <button
-                type="button"
-                aria-label="吹き出しを閉じる"
-                onClick={() => {
-                  setActiveSlug(null)
-                  buttons.current.get(activePost.slug)?.focus({ preventScroll: true })
-                }}
-              >
-                ×
-              </button>
-            </div>
-            <Link
-              to="/blog/$slug"
-              params={{ slug: activePost.slug }}
-              preload={false}
-              aria-haspopup="dialog"
-              onClick={(event) => openPost(event, activePost)}
-            >
-              <span className="town-bubble__title">{activePost.title}</span>
-              <span className="town-bubble__read">
-                記事を読む <span aria-hidden="true">↗</span>
-              </span>
-            </Link>
-          </div>
+          <TownBubble
+            post={activePost}
+            newestSlug={sorted[0]?.slug}
+            bubble={bubble}
+            onClose={closeBubble}
+            openPost={openPost}
+          />
         )}
       </div>
-      <button
-        ref={listToggle}
-        className="town-list-toggle"
-        type="button"
-        aria-expanded={listVisible}
-        aria-controls="town-article-list"
-        disabled={loading}
-        onClick={() => setListOpen(!listOpen)}
-      >
-        <span aria-hidden="true">☷</span> 記事一覧 <small>{visiblePosts.length}</small>
-      </button>
-      <section
-        id="town-article-list"
-        className="town-list"
-        aria-labelledby="town-list-heading"
-        hidden={!listVisible}
-      >
-        <div className="town-list__heading">
-          <div>
-            <span className="town-list__eyebrow">NOTES FROM THE TOWN</span>
-            <h2 ref={listHeading} id="town-list-heading" tabIndex={-1}>
-              記事一覧 <small>{visiblePosts.length}</small>
-            </h2>
-          </div>
-          {ready && (
-            <button
-              type="button"
-              aria-label="記事一覧を閉じる"
-              onClick={() => {
-                setListOpen(false)
-                listToggle.current?.focus()
-              }}
-            >
-              ×
-            </button>
-          )}
-        </div>
-        {failed && (
-          <p role="status" className="town-list__status">
-            街を表示できないため、記事一覧を表示しています。
-          </p>
-        )}
-        <form
-          className="town-search"
-          onSubmit={(event) => {
-            event.preventDefault()
-            void navigate({
-              search: { topic: topic || undefined, q: query || undefined },
-              replace: true
-            })
-          }}
-        >
-          <input
-            type="search"
-            aria-label="記事を検索"
-            placeholder="タイトルやキーワードで探す"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-          />
-          <button type="submit">検索</button>
-        </form>
-        {(topic || q) && (
-          <div className="town-list__filter">
-            <span>{[topic, q].filter(Boolean).join(' / ')}</span>
-            <Link to="/" search={{}} replace>
-              絞り込みを解除 ×
-            </Link>
-          </div>
-        )}
-        <div className="town-list__posts">
-          {visiblePosts.map((post) => (
-            <Link
-              key={post.slug}
-              to="/blog/$slug"
-              params={{ slug: post.slug }}
-              preload={false}
-              aria-haspopup="dialog"
-              onClick={(event) => openPost(event, post)}
-            >
-              <span>{post.title}</span>
-              <div>
-                <time dateTime={post.date}>{post.date.replaceAll('-', '.')}</time>
-                {post.slug === sorted[0]?.slug && <small>New</small>}
-                <span aria-hidden="true">↗</span>
-              </div>
-            </Link>
-          ))}
-          {!visiblePosts.length && <p role="status">該当する記事がありません。</p>}
-        </div>
-      </section>
+      <TownArticleList
+        visiblePosts={visiblePosts}
+        newestSlug={sorted[0]?.slug}
+        topic={topic}
+        q={q}
+        loading={loading}
+        ready={ready}
+        failed={failed}
+        listVisible={listVisible}
+        listToggle={listToggle}
+        listHeading={listHeading}
+        onToggle={() => setListOpen(!listOpen)}
+        onClose={closeList}
+        openPost={openPost}
+        onSearch={(query) => {
+          void navigate({
+            search: { topic: topic || undefined, q: query || undefined },
+            replace: true
+          })
+        }}
+      />
       {ready && !visiblePosts.length && !listOpen && (
         <div className="sticker-empty" role="status">
           <p>該当する記事がありません。</p>
@@ -614,66 +206,25 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
           )}
         </div>
         {ready && (
-          <fieldset className="board-controls" aria-label="街の表示操作">
-            <button
-              className="town-camera-mode"
-              type="button"
-              aria-label="回転モード"
-              aria-pressed={rotateMode}
-              title="移動／回転を切り替え（タッチでは常に2本指で回転）"
-              onClick={() => setRotateMode(!rotateMode)}
-            >
-              {rotateMode ? '回転' : '移動'}
-            </button>
-            <button
-              type="button"
-              aria-label="縮小"
-              onClick={() => {
-                renderer.current?.follow(null)
-                updateView(
-                  zoomTownAt(currentView.current, 1 / 1.25, {
-                    x: size.width / 2,
-                    y: size.height / 2
-                  })
-                )
-              }}
-            >
-              −
-            </button>
-            <span>{Math.round(zoom * 100)}%</span>
-            <button
-              type="button"
-              aria-label="拡大"
-              onClick={() => {
-                renderer.current?.follow(null)
-                updateView(
-                  zoomTownAt(currentView.current, 1.25, { x: size.width / 2, y: size.height / 2 })
-                )
-              }}
-            >
-              +
-            </button>
-            <button
-              type="button"
-              aria-label="全体表示"
-              onClick={() => {
-                renderer.current?.follow(null)
-                updateView(fitTown(size, currentView.current.rotation))
-              }}
-            >
-              ⛶
-            </button>
-            <button
-              type="button"
-              aria-label="初期位置に戻る"
-              onClick={() => {
-                renderer.current?.follow(articles[0]?.slug ?? null)
-                updateView(initialTownView(size, articles[0]))
-              }}
-            >
-              ↺
-            </button>
-          </fieldset>
+          <TownCameraControls
+            rotateMode={rotateMode}
+            zoom={zoom}
+            onToggleRotate={() => setRotateMode(!rotateMode)}
+            onZoom={(factor) => {
+              renderer.current?.follow(null)
+              updateView(
+                zoomTownAt(currentView.current, factor, { x: size.width / 2, y: size.height / 2 })
+              )
+            }}
+            onFit={() => {
+              renderer.current?.follow(null)
+              updateView(fitTown(size, currentView.current.rotation))
+            }}
+            onReset={() => {
+              renderer.current?.follow(articles[0]?.slug ?? null)
+              updateView(initialTownView(size, articles[0]))
+            }}
+          />
         )}
       </footer>
       {selectedPost && (
