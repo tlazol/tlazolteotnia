@@ -37,6 +37,30 @@ export async function handlePostReaction(
   request: Request,
   slug: string
 ) {
+  try {
+    // Cloudflare supplies this header. Never use cookies or X-Forwarded-For as a fallback.
+    // Requests without connection metadata share a bucket, including local development.
+    const ip = request.headers.get('CF-Connecting-IP') || 'unknown'
+    const { success } = await context.reactionRateLimiter.limit({
+      key: `tlazolteotnia:reactions:ip:${ip}`
+    })
+    if (!success) {
+      return Response.json(
+        { error: '送信が多すぎます。しばらく待ってからお試しください。' },
+        {
+          status: 429,
+          headers: { 'Cache-Control': 'private, no-store', 'Retry-After': '60' }
+        }
+      )
+    }
+  } catch (error) {
+    console.error('Failed to check reaction rate limit', error)
+    return Response.json(
+      { error: 'リアクションを送信できませんでした。' },
+      { status: 503, headers: { 'Cache-Control': 'private, no-store' } }
+    )
+  }
+
   const post = await requirePost(slug)
   const emoji = readReactionEmoji(await request.formData())
   try {

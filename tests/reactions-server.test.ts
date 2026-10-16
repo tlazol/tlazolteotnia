@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { describe, expect, it, vi } from 'vitest'
 import { loadHomeData, loadPostData } from '#/lib/blog-data.server'
 import type { RuntimeDependencies } from '#/lib/cloudflare-context'
 import { handleGetReactions, handlePostReaction } from '#/lib/reaction-api.server'
@@ -160,6 +161,7 @@ function makeContext(db: FakeD1, cache?: FakeCache): RuntimeDependencies {
     db: db as unknown as D1Database,
     reactionCountsCache: (cache as unknown as Cache) ?? null,
     reactionCookieSecret: 'test-secret-at-least-long-enough',
+    reactionRateLimiter: { limit: vi.fn(async () => ({ success: true })) },
     waitUntil: null
   }
 }
@@ -171,6 +173,96 @@ function request(cookie?: string) {
 }
 
 describe('reaction server', () => {
+  it('limits cookie-free and rotated-cookie writes across articles by connection IP', async () => {
+    const db = new FakeD1()
+    const context = makeContext(db)
+    const callsByKey = new Map<string, number>()
+    const config = JSON.parse(readFileSync('wrangler.jsonc', 'utf8'))
+    const binding = config.ratelimits?.find(
+      (entry: { name: string }) => entry.name === 'REACTION_RATE_LIMITER'
+    )
+    expect(binding?.simple).toEqual({ limit: 30, period: 60 })
+    context.reactionRateLimiter.limit = vi.fn(async ({ key }) => {
+      const calls = (callsByKey.get(key) ?? 0) + 1
+      callsByKey.set(key, calls)
+      return { success: calls <= binding.simple.limit }
+    })
+
+    const send = (index: number, ip = '192.0.2.1') => {
+      const slug = index % 2 ? 'react-router-renewal' : 'react-router-to-tanstack-start'
+      const headers = new Headers({ 'CF-Connecting-IP': ip })
+      headers.set('X-Forwarded-For', `198.51.100.${index}`)
+      if (index % 2) headers.set('Cookie', `reaction_visitor=${String(index).padStart(43, 'a')}`)
+      return handlePostReaction(
+        context,
+        new Request(`https://example.com/api/reactions/${slug}`, {
+          method: 'POST',
+          headers,
+          body: new URLSearchParams({ emoji: '👍' })
+        }),
+        slug
+      )
+    }
+
+    for (let index = 0; index < 30; index++) {
+      expect((await send(index)).status).toBe(200)
+    }
+    const prepare = vi.spyOn(db, 'prepare')
+    for (const index of [30, 31]) {
+      const response = await send(index)
+      expect(response.status).toBe(429)
+      expect(response.headers.get('Retry-After')).toBe('60')
+      expect(response.headers.get('Cache-Control')).toBe('private, no-store')
+      expect(response.headers.get('Set-Cookie')).toBeNull()
+      expect(await response.json()).toEqual({
+        error: '送信が多すぎます。しばらく待ってからお試しください。'
+      })
+    }
+    expect(prepare).not.toHaveBeenCalled()
+    expect(db.votes.size).toBe(30)
+    expect([...db.counts.values()].reduce((sum, count) => sum + count, 0)).toBe(30)
+    expect(callsByKey.size).toBe(1)
+
+    expect((await handleGetReactions(context, request(), 'react-router-renewal')).status).toBe(200)
+    expect([...callsByKey.values()]).toEqual([32])
+    expect((await send(32, '192.0.2.2')).status).toBe(200)
+    expect(db.votes.size).toBe(31)
+  })
+
+  it('shares a limited fallback bucket when connection IP is unavailable', async () => {
+    const context = makeContext(new FakeD1())
+    const limit = vi.fn(async () => ({ success: false }))
+    context.reactionRateLimiter.limit = limit
+    for (const ip of ['198.51.100.1', '198.51.100.2']) {
+      const req = new Request('https://example.com/api/reactions/react-router-renewal', {
+        method: 'POST',
+        headers: { 'X-Forwarded-For': ip, Cookie: `reaction_visitor=${ip.padStart(43, 'a')}` },
+        body: 'invalid form body'
+      })
+      const readBody = vi.spyOn(req, 'formData')
+      expect((await handlePostReaction(context, req, 'react-router-renewal')).status).toBe(429)
+      expect(readBody).not.toHaveBeenCalled()
+    }
+    expect(limit).toHaveBeenCalledTimes(2)
+    expect(limit.mock.calls[0]).toEqual(limit.mock.calls[1])
+  })
+
+  it('rejects writes without touching D1 when the rate limiter fails', async () => {
+    const db = new FakeD1()
+    const context = makeContext(db)
+    context.reactionRateLimiter.limit = vi.fn().mockRejectedValue(new Error('Limiter unavailable'))
+    const prepare = vi.spyOn(db, 'prepare')
+    const response = await handlePostReaction(
+      context,
+      new Request('https://example.com/api/reactions/react-router-renewal', { method: 'POST' }),
+      'react-router-renewal'
+    )
+    expect(response.status).toBe(503)
+    expect(response.headers.get('Cache-Control')).toBe('private, no-store')
+    expect(await response.json()).toEqual({ error: 'リアクションを送信できませんでした。' })
+    expect(prepare).not.toHaveBeenCalled()
+  })
+
   it('accepts only allowlisted form values', () => {
     const allowed = new FormData()
     allowed.set('emoji', '🚀')

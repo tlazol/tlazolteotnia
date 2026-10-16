@@ -8,6 +8,13 @@
   "preview_urls": true,
   "routes": [{ "pattern": "0rga.org", "custom_domain": true }],
   "upload_source_maps": true,
+  "ratelimits": [
+    {
+      "name": "REACTION_RATE_LIMITER",
+      "namespace_id": "1834269501",
+      "simple": { "limit": 30, "period": 60 }
+    }
+  ],
   "d1_databases": [
     {
       "binding": "DB",

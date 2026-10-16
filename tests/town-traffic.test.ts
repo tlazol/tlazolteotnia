@@ -212,9 +212,12 @@ describe('town animation lifecycle', () => {
       expect(trafficDraws).toBe(2)
       const moving = positions
       town.render(renderer, 100, false)
+      // Stopping redraws once to reset blinking without advancing residents.
+      expect(positions).toEqual(moving)
+      expect(trafficDraws).toBe(3)
       town.render(renderer, 10000, false)
       expect(positions).toEqual(moving)
-      expect(trafficDraws).toBe(2)
+      expect(trafficDraws).toBe(3)
       town.update({ ...view, x: 20 }, size)
       town.render(renderer, 10050, false)
       expect(positions).toEqual(moving)

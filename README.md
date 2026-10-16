@@ -35,3 +35,13 @@ Cloudflare configuration, the D1 binding, custom domain, and migrations live in 
 npx wrangler secret put REACTION_COOKIE_SECRET
 npm run deploy
 ```
+
+Reaction POSTs use the `REACTION_RATE_LIMITER` binding configured in `wrangler.jsonc`: 30 attempts
+per minute per connection IP, shared across articles and independent of visitor cookies. Rejected
+requests return HTTP 429 before parsing the form or accessing D1. If the limiter is unavailable,
+writes return HTTP 503; reads remain available. Requests without `CF-Connecting-IP` share a fallback
+bucket, including local development; forwarded headers are not used as an identity fallback.
+
+These are approximate limits per Cloudflare location, not a global quota or a one-person-one-vote
+guarantee. Visitors sharing an IP also share the limit. Keep the rate-limit namespace dedicated to
+this site. See the [Cloudflare Rate Limiting binding documentation](https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/).

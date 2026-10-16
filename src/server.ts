@@ -9,6 +9,7 @@ export default {
         db: env.DB,
         reactionCountsCache: await caches.open('reaction-counts'),
         reactionCookieSecret: env.REACTION_COOKIE_SECRET,
+        reactionRateLimiter: env.REACTION_RATE_LIMITER,
         waitUntil: ctx.waitUntil.bind(ctx),
         nonce
       }
