@@ -22,15 +22,15 @@ import {
 import {
   clampTownView,
   fitTown,
+  getTownBounds,
   nearestResidentRoute,
   placeTownBubble,
   layoutTownArticles as randomTownArticles,
-  type TownArticle,
-  townBounds,
-  townToBoard
+  type TownArticle
 } from '../src/lib/town-posts'
 import { createTownScene } from '../src/lib/town-three.client'
 import { trafficPose } from '../src/lib/town-traffic'
+import { townToBoard } from '../src/lib/town-view'
 
 const posts: BlogPostSummary[] = Array.from({ length: 46 }, (_, i) => ({
   slug: `post-${i}`,
@@ -638,6 +638,7 @@ describe('town viewport and conversations', () => {
   })
 
   it('fits all landmarks and clamps panning without relying on article count', () => {
+    const townBounds = getTownBounds()
     for (const viewport of [size, { width: 390, height: 844 }]) {
       const fitted = fitTown(viewport)
       expect(fitted.x + townBounds.left * fitted.zoom).toBeGreaterThanOrEqual(0)

@@ -9,7 +9,7 @@ import {
   townBuildingBounds,
   townLayoutScale
 } from '../src/lib/town-layout'
-import { townToBoard } from '../src/lib/town-posts'
+import { townToBoard } from '../src/lib/town-view'
 import { townLakeStrips } from '../src/lib/town-terrain'
 import { createTownScene } from '../src/lib/town-three.client'
 

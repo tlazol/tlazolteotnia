@@ -1,8 +1,8 @@
 type Point = { x: number; z: number }
 // Make room for resident-sized entrances without widening the traffic lanes.
 export const townLayoutScale = 2.2
-export type TownRoad = { points: Point[]; width: number; trail?: boolean }
-export type TownBuildingKind =
+type TownRoad = { points: Point[]; width: number; trail?: boolean }
+type TownBuildingKind =
   | 'house'
   | 'shop'
   | 'burger'
@@ -24,7 +24,7 @@ export type TownBuildingKind =
   | 'market'
   | 'cottage'
   | 'office'
-export type TownBuilding = Point & {
+type TownBuilding = Point & {
   kind: TownBuildingKind
   variant: number
   label?: string
@@ -174,7 +174,7 @@ export const onettRoads: TownRoad[] = [
 ]
 
 // Local bounds include eaves, fences, porches and shop furniture, not just walls.
-export function townBuildingFootprint(kind: TownBuildingKind) {
+function townBuildingFootprint(kind: TownBuildingKind) {
   switch (kind) {
     case 'library':
     case 'police':

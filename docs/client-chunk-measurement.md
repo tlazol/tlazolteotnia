@@ -1,6 +1,6 @@
 # Client chunk measurement
 
-Measured on 2026-10-16 for the R6–R8 refactoring, using Node.js v24.17.0,
+Measured on 2026-10-16 for the R6–R9 refactoring, using Node.js v24.17.0,
 npm 12.0.2, Vite 8.3.4, and the repository's TanStack Start + Cloudflare Vite configuration.
 The baseline was commit `e2f57cefcfca435596fcfc15623333d0c39832b4`.
 No dependency or bundler configuration changes were made.
@@ -17,15 +17,16 @@ The generated `dist/server/assets/_tanstack-start-manifest_v-*.js` describes the
 preloads for each route. The measurement takes the union of `__root__` and `/` preloads,
 deduplicates paths, and measures the corresponding JavaScript files in `dist/client`.
 The server manifest supplies client asset paths; server bundle sizes are not counted.
-The after column includes the same-day review fixes for Lights Out runtime failure handling;
-that rebuild used `WRANGLER_LOG_PATH=/private/tmp/r678-review-wrangler.log npm run build`.
+The after column includes the same-day review fixes for Lights Out runtime failure handling
+and R9's removal of unused exports and the redundant town bounds constant. The final build
+used `WRANGLER_LOG_PATH=/private/tmp/r9-final-wrangler.log npm run build`.
 
 | Home route's initial JS preloads | Before | After | Reduction |
 | --- | ---: | ---: | ---: |
-| Uncompressed bytes | 579,521 | 426,861 | 152,660 |
-| Sum of individually gzip-compressed files | 192,667 | 144,147 | 48,520 |
+| Uncompressed bytes | 579,521 | 426,857 | 152,664 |
+| Sum of individually gzip-compressed files | 192,667 | 144,142 | 48,525 |
 
-These are asset-size measurements of the complete R6–R8 changes, not measured HTTP transfer
+These are asset-size measurements of the complete R6–R9 changes, not measured HTTP transfer
 sizes or load times. They exclude CSS, images, fonts, server data, and dynamic imports such as
 the town renderer. Chunk count changes are a consequence of bundler partitioning.
 
@@ -33,7 +34,7 @@ Before the change, the home route's preload list included
 `article-content-ChJlsvG-.js` (150,737 bytes, gzip 48,110 bytes), containing the article UI,
 Markdown rendering, and syntax highlighting.
 After the change, neither the root nor home preload list includes the article content chunks.
-The home component chunk `routes-Cz-59LMp.js` dynamically imports
+The home component chunk `routes-CeXu9GLn.js` dynamically imports
 `article-content-CfVb7836.js`, which re-exports the shared implementation in
 `article-content-BUv5zj00.js`. The `/blog/$slug` preload list still includes that shared
 implementation for direct article access.
@@ -89,6 +90,9 @@ production split.
 
 Session evidence: `/private/tmp/r678-before-build.log`, `/private/tmp/r678-after-build.log`,
 `/private/tmp/r678-before-chunks.json`, `/private/tmp/r678-after-chunks.json`, and
-`/private/tmp/r678-browser-articles.log`. The final review build and size calculation are recorded in
-`/private/tmp/r678-review-build.log` and `/private/tmp/r678-review-chunks.json`.
+`/private/tmp/r678-browser-articles.log`. R9 repeated the browser checks and the final build;
+the results are recorded in `/private/tmp/r9-browser-articles.log`,
+`/private/tmp/r9-final-build.log`, and `/private/tmp/r9-final-chunks.json`.
+The R6–R8 review measured 426,861 uncompressed bytes and 144,147 gzip bytes;
+R9's small export cleanup accounts for the final table's updated values.
 These temporary files are local verification artifacts.

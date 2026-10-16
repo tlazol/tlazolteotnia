@@ -5,8 +5,6 @@ import { townPersonStyles } from './town-person'
 import { type TrafficRoute, trafficPose } from './town-traffic'
 import { type TownView, townToBoard } from './town-view'
 
-export { townToBoard } from './town-view'
-
 export type TownArticle = {
   slug: string
   variant: number
@@ -130,8 +128,6 @@ export function getTownBounds(rotation = 0) {
     bottom: Math.max(...projected.map((p) => p.y)) + 220
   }
 }
-export const townBounds = getTownBounds()
-
 export function fitTown(size: SceneSize, rotation = 0): TownView {
   const townBounds = getTownBounds(rotation)
   const zoom = Math.max(

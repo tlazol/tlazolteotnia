@@ -1,6 +1,6 @@
 import type { TrafficBody } from './town-traffic'
 
-export type TownActivity = {
+type TownActivity = {
   kind: 'talk' | 'play' | 'stretch' | 'look'
   start: number
   end: number

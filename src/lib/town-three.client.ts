@@ -3,13 +3,13 @@ import type { SceneSize } from './scene-math'
 import { createTownCamera, updateTownCamera } from './town-camera'
 import { containsTownGround } from './town-coast'
 import { createTownNavigation } from './town-navigation'
-import { clampTownView, type TownArticle, townToBoard } from './town-posts'
+import { clampTownView, type TownArticle } from './town-posts'
 import { createTownResidents } from './town-residents'
 import { createTownSceneBatches, residentLiftHeight } from './town-scene-batches'
 import { createTownSceneCompositor } from './town-scene-compositor'
 import { createTownSceneResources } from './town-scene-resources'
 import { createTownStaticModel } from './town-static-model'
-import { boardToTown, type TownView } from './town-view'
+import { boardToTown, type TownView, townToBoard } from './town-view'
 
 export function createTownScene(articles?: TownArticle[]) {
   const camera = createTownCamera()
