@@ -1,9 +1,13 @@
-import { type BoardView, zoomBoardAt } from './sticker-board'
+import { type SceneView, zoomViewAt } from './scene-math'
 
 // Missing rotation means the original diagonal view.
-export type TownView = BoardView & { rotation?: number }
+export type TownView = SceneView & { rotation?: number }
 type Point = { x: number; y: number }
-export const townSession: { view?: TownView } = {}
+// Kept in memory for route navigation; only written by client effects and events.
+export const townSession: {
+  view?: TownView
+  search?: { topic?: string; q?: string }
+} = {}
 
 const elevation = Math.PI / 4
 const sinElevation = Math.sin(elevation)
@@ -45,7 +49,7 @@ export function rotateTownAt(view: TownView, delta: number, point: Point): TownV
 }
 
 export function zoomTownAt(view: TownView, factor: number, point: Point): TownView {
-  return { ...view, ...zoomBoardAt(view, factor, point) }
+  return { ...view, ...zoomViewAt(view, factor, point) }
 }
 
 export function gestureTownView(

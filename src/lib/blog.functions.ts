@@ -22,25 +22,16 @@ function applyPrivateHeaders(cookie?: string) {
   if (cookie) setResponseHeader('Set-Cookie', cookie)
 }
 
-export const getHomeData = createServerFn({ method: 'GET' }).handler(async ({ context }) => {
-  const result = await loadHomeData(context, getRequest())
-  applyPrivateHeaders(result.cookie)
-  return { posts: result.posts, reactionsBySlug: result.reactionsBySlug }
+export const getHomeData = createServerFn({ method: 'GET' }).handler(async () => {
+  // Keep the existing cache policy; home data no longer needs a visitor cookie.
+  setResponseHeader('Cache-Control', 'private, no-store')
+  return loadHomeData()
 })
 
 export const getPostData = createServerFn({ method: 'GET' })
   .validator(validateSlug)
   .handler(async ({ context, data }) => {
     const result = await loadPostData(context, getRequest(), data.slug)
-    applyPrivateHeaders(result?.cookie)
-    if (!result) return null
-    return { post: result.post, posts: result.posts, reactions: result.reactions }
-  })
-
-export const getModalPostData = createServerFn({ method: 'GET' })
-  .validator(validateSlug)
-  .handler(async ({ context, data }) => {
-    const result = await loadPostData(context, getRequest(), data.slug, false)
     applyPrivateHeaders(result?.cookie)
     if (!result) return null
     return { post: result.post, reactions: result.reactions }

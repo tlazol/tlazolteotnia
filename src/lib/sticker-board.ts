@@ -1,7 +1,6 @@
 import { type BlogPostSummary, sortBlogPostsNewestFirst } from './blog-post'
+import { hashSlug } from './scene-math'
 
-export type BoardView = { x: number; y: number; zoom: number }
-export type BoardSize = { width: number; height: number }
 const stickerShapes = ['die-cut', 'rounded', 'ticket', 'beveled', 'scalloped', 'ribbon'] as const
 export const hologramFinishes = ['prism', 'glitter', 'aurora', 'laser'] as const
 export type Sticker = {
@@ -17,12 +16,6 @@ export type Sticker = {
   eyeCount: number
   lines: string[]
   fontSize: number
-}
-
-export function hashSlug(slug: string) {
-  let hash = 2166136261
-  for (const char of slug) hash = Math.imul(hash ^ char.charCodeAt(0), 16777619)
-  return hash >>> 0
 }
 
 // Width estimates are conservative; the renderer measures the loaded font as well.
@@ -127,74 +120,3 @@ export function layoutStickers(posts: BlogPostSummary[]) {
   }
   return { stickers, width: halfWidth * 2, height: halfHeight * 2 }
 }
-
-export function filterStickerPosts(posts: BlogPostSummary[], topic: string, query: string) {
-  const terms = query.normalize('NFKC').toLocaleLowerCase().trim().split(/\s+/).filter(Boolean)
-  return posts.filter((post) => {
-    const text = [post.title, post.description, ...post.tags]
-      .join(' ')
-      .normalize('NFKC')
-      .toLocaleLowerCase()
-    return (!topic || post.tags.includes(topic)) && terms.every((term) => text.includes(term))
-  })
-}
-
-export function fitBoard(size: BoardSize, bounds: BoardSize): BoardView {
-  const zoom = Math.min(
-    1,
-    (size.width - 36) / Math.max(1, bounds.width),
-    (size.height - 150) / Math.max(1, bounds.height)
-  )
-  return {
-    x: (size.width - bounds.width * zoom) / 2,
-    y: 84 + (size.height - 150 - bounds.height * zoom) / 2,
-    zoom
-  }
-}
-
-export function initialBoardView(size: BoardSize, bounds: BoardSize): BoardView {
-  const zoom = 0.8
-  return clampBoardView(
-    {
-      x: (size.width - bounds.width * zoom) / 2,
-      y: (size.height - bounds.height * zoom) / 2,
-      zoom
-    },
-    size,
-    bounds
-  )
-}
-
-export function clampBoardView(view: BoardView, size: BoardSize, bounds: BoardSize): BoardView {
-  const zoom = Math.max(Math.min(0.15, fitBoard(size, bounds).zoom), Math.min(2.5, view.zoom))
-  const width = bounds.width * zoom
-  const height = bounds.height * zoom
-  return {
-    zoom,
-    x:
-      width <= size.width - 32
-        ? (size.width - width) / 2
-        : Math.max(size.width - width - 40, Math.min(40, view.x)),
-    y:
-      height <= size.height - 120
-        ? (size.height - height) / 2
-        : Math.max(size.height - height - 60, Math.min(100, view.y))
-  }
-}
-
-export function zoomBoardAt(
-  view: BoardView,
-  factor: number,
-  point: { x: number; y: number }
-): BoardView {
-  const zoom = Math.max(0.02, Math.min(2.5, view.zoom * factor))
-  const ratio = zoom / view.zoom
-  return { zoom, x: point.x - (point.x - view.x) * ratio, y: point.y - (point.y - view.y) * ratio }
-}
-
-// Kept in memory for route navigation; never populated during server rendering.
-export const boardSession: {
-  view?: BoardView
-  search?: { topic?: string; q?: string }
-  key?: string
-} = {}

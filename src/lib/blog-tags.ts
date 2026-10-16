@@ -1,3 +1,5 @@
+import type { BlogPostSummary } from './blog-post'
+
 export type TagFilter = {
   name: string
   count: number
@@ -25,4 +27,15 @@ export function getTagFilters(posts: TaggedPost[]): TagFilter[] {
 
 export function filterPostsByTag<Post extends TaggedPost>(posts: Post[], selectedTag: string) {
   return selectedTag ? posts.filter((post) => post.tags.includes(selectedTag)) : posts
+}
+
+export function filterBlogPosts(posts: BlogPostSummary[], topic: string, query: string) {
+  const terms = query.normalize('NFKC').toLocaleLowerCase().trim().split(/\s+/).filter(Boolean)
+  return posts.filter((post) => {
+    const text = [post.title, post.description, ...post.tags]
+      .join(' ')
+      .normalize('NFKC')
+      .toLocaleLowerCase()
+    return (!topic || post.tags.includes(topic)) && terms.every((term) => text.includes(term))
+  })
 }

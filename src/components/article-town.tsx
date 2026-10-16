@@ -2,8 +2,9 @@ import { Link, useNavigate, useSearch } from '@tanstack/react-router'
 import { createClientOnlyFn } from '@tanstack/react-start'
 import { type MouseEvent, type PointerEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { type BlogPostSummary, sortBlogPostsNewestFirst } from '#/lib/blog-post'
+import { filterBlogPosts } from '#/lib/blog-tags'
 import { shouldOpenPostModal } from '#/lib/post-modal'
-import { type BoardSize, boardSession, filterStickerPosts } from '#/lib/sticker-board'
+import type { SceneSize } from '#/lib/scene-math'
 import type { createArticleTown, ResidentScreenPosition } from '#/lib/town-articles.client'
 import {
   clampTownView,
@@ -30,8 +31,8 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
   const navigate = useNavigate({ from: '/' })
   const sorted = useMemo(() => sortBlogPostsNewestFirst(posts), [posts])
   const articles = useMemo(() => layoutTownArticles(sorted), [sorted])
-  const visiblePosts = useMemo(() => filterStickerPosts(sorted, topic, q), [sorted, topic, q])
-  const [size, setSize] = useState<BoardSize>({ width: 0, height: 0 })
+  const visiblePosts = useMemo(() => filterBlogPosts(sorted, topic, q), [sorted, topic, q])
+  const [size, setSize] = useState<SceneSize>({ width: 0, height: 0 })
   const [zoom, setZoom] = useState(1)
   const [ready, setReady] = useState(false)
   const [failed, setFailed] = useState(false)
@@ -55,7 +56,7 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
   const buttons = useRef(new Map<string, HTMLButtonElement>())
   const renderer = useRef<ReturnType<typeof createArticleTown> | null>(null)
   const currentView = useRef<TownView>({ x: 0, y: 0, zoom: 1 })
-  const previousSize = useRef<BoardSize | null>(null)
+  const previousSize = useRef<SceneSize | null>(null)
   const restoredView = useRef(townSession.view)
   const pointers = useRef(new Map<number, Point & { pointerType: string }>())
   const origin = useRef<Point | null>(null)
@@ -72,14 +73,12 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
     renderer.current?.update(clamped, latest.current.size)
     setZoom(clamped.zoom)
     townSession.view = clamped
-    boardSession.key = 'town'
   }
 
   function positionOverlay(positions: ResidentScreenPosition[], nextView?: TownView) {
     if (nextView) {
       currentView.current = nextView
       townSession.view = nextView
-      boardSession.key = 'town'
     }
     lastPositions.current = positions
     const state = latest.current
@@ -188,7 +187,7 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
     renderer.current?.filter(visiblePosts.map((post) => post.slug))
     setActiveSlug(null)
     renderer.current?.focus(null)
-    boardSession.search = { topic: topic || undefined, q: q || undefined }
+    townSession.search = { topic: topic || undefined, q: q || undefined }
     setQuery(q)
   }, [visiblePosts, topic, q])
   useEffect(() => {

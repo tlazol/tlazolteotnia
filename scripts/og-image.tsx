@@ -3,7 +3,8 @@ import { Resvg } from '@resvg/resvg-js'
 import type { ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { BlogPostSummary } from '../src/lib/blog-post'
-import { hashSlug, layoutStickers, type Sticker } from '../src/lib/sticker-board'
+import { hashSlug } from '../src/lib/scene-math'
+import { layoutStickers, type Sticker } from '../src/lib/sticker-board'
 import { foilPalettes, palettes, stickerMaterial } from '../src/lib/sticker-colors'
 
 const imageWidth = 1200

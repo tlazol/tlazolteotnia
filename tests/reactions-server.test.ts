@@ -1,15 +1,15 @@
 import { readFileSync } from 'node:fs'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import * as blogSource from '#/lib/blog.server'
 import { loadHomeData, loadPostData } from '#/lib/blog-data.server'
 import type { RuntimeDependencies } from '#/lib/cloudflare-context'
 import { handleGetReactions, handlePostReaction } from '#/lib/reaction-api.server'
+import * as reactionStore from '#/lib/reactions.server'
 import { createReaction, getPostReactions, readReactionEmoji } from '#/lib/reactions.server'
 
 class FakeD1 {
   readonly votes = new Set<string>()
   readonly counts = new Map<string, number>()
-  listReads = 0
-  voteListReads = 0
 
   prepare(sql: string) {
     return new FakeStatement(this, sql)
@@ -50,61 +50,7 @@ class FakeStatement {
     return count as T | null
   }
 
-  async all<T>() {
-    if (this.sql.startsWith('SELECT post_slug, emoji, count')) {
-      this.db.listReads += 1
-      const slugs = new Set(this.values)
-      return {
-        results: [...this.db.counts.entries()]
-          .map(([key, count]) => {
-            const separator = key.lastIndexOf('|')
-            return {
-              post_slug: key.slice(0, separator),
-              emoji: key.slice(separator + 1),
-              count
-            }
-          })
-          .filter((row) => slugs.has(row.post_slug))
-      } as D1Result<T>
-    }
-    throw new Error(`Unexpected all: ${this.sql}`)
-  }
-
   async result() {
-    if (this.sql.startsWith('SELECT post_slug, emoji, count')) {
-      this.db.listReads += 1
-      const slugs = new Set(this.values)
-      return {
-        results: [...this.db.counts.entries()]
-          .map(([key, count]) => {
-            const separator = key.lastIndexOf('|')
-            return {
-              post_slug: key.slice(0, separator),
-              emoji: key.slice(separator + 1),
-              count
-            }
-          })
-          .filter((row) => slugs.has(row.post_slug))
-      }
-    }
-    if (this.sql.startsWith('SELECT post_slug, emoji FROM reaction_votes')) {
-      this.db.voteListReads += 1
-      const prefix = `${this.values[0]}|`
-      const slugs = new Set(this.values.slice(1))
-      return {
-        results: [...this.db.votes]
-          .filter((key) => key.startsWith(prefix))
-          .map((key) => {
-            const value = key.slice(prefix.length)
-            const separator = value.lastIndexOf('|')
-            return {
-              post_slug: value.slice(0, separator),
-              emoji: value.slice(separator + 1)
-            }
-          })
-          .filter((row) => slugs.has(row.post_slug))
-      }
-    }
     if (this.sql.startsWith('SELECT emoji, count')) {
       const prefix = `${this.values[0]}|`
       return {
@@ -125,44 +71,11 @@ class FakeStatement {
   }
 }
 
-class FakeCache {
-  readonly entries = new Map<string, Response>()
-
-  async match(request: RequestInfo | URL) {
-    return this.entries.get(cacheKey(request))?.clone()
-  }
-
-  async put(request: RequestInfo | URL, response: Response) {
-    this.entries.set(cacheKey(request), response.clone())
-  }
-
-  async delete(request: RequestInfo | URL) {
-    return this.entries.delete(cacheKey(request))
-  }
-}
-
-class DeferredCache extends FakeCache {
-  releasePut: (() => void) | undefined
-
-  override async put(request: RequestInfo | URL, response: Response) {
-    await new Promise<void>((resolve) => {
-      this.releasePut = resolve
-    })
-    await super.put(request, response)
-  }
-}
-
-function cacheKey(request: RequestInfo | URL) {
-  return request instanceof Request ? request.url : String(request)
-}
-
-function makeContext(db: FakeD1, cache?: FakeCache): RuntimeDependencies {
+function makeContext(db: FakeD1): RuntimeDependencies {
   return {
     db: db as unknown as D1Database,
-    reactionCountsCache: (cache as unknown as Cache) ?? null,
     reactionCookieSecret: 'test-secret-at-least-long-enough',
-    reactionRateLimiter: { limit: vi.fn(async () => ({ success: true })) },
-    waitUntil: null
+    reactionRateLimiter: { limit: vi.fn(async () => ({ success: true })) }
   }
 }
 
@@ -173,6 +86,8 @@ function request(cookie?: string) {
 }
 
 describe('reaction server', () => {
+  afterEach(() => vi.restoreAllMocks())
+
   it('limits cookie-free and rotated-cookie writes across articles by connection IP', async () => {
     const db = new FakeD1()
     const context = makeContext(db)
@@ -379,87 +294,44 @@ describe('reaction server', () => {
     expect(await writeResult.json()).toEqual({ error: 'リアクションを送信できませんでした。' })
   })
 
-  it('renders home and post loaders with empty reactions when D1 reads fail', async () => {
-    const context = makeContext({
-      prepare() {
-        throw new Error('D1 unavailable')
-      }
-    } as unknown as FakeD1)
-    const home = await loadHomeData(context, request())
-    expect(home.posts.length).toBeGreaterThan(0)
-    expect(home.reactionsBySlug).toEqual({})
-
-    const post = await loadPostData(context, request(), 'react-router-renewal')
+  it('renders post content with empty reactions when D1 reads fail', async () => {
+    const db = new FakeD1()
+    vi.spyOn(db, 'prepare').mockImplementation(() => {
+      throw new Error('D1 unavailable')
+    })
+    const post = await loadPostData(makeContext(db), request(), 'react-router-renewal')
     expect(post).toMatchObject({ post: { slug: 'react-router-renewal' }, reactions: [] })
+    expect(post?.cookie).toBeUndefined()
   })
 
-  it('caches public counts while reading visitor votes on every home load', async () => {
-    const db = new FakeD1()
-    const cache = new FakeCache()
-    const context = makeContext(db, cache)
-    db.counts.set('react-router-renewal|👍', 1)
-    const first = await loadHomeData(context, request())
-    expect(first.reactionsBySlug['react-router-renewal']?.[0]?.count).toBe(1)
-
-    db.counts.set('react-router-renewal|👍', 2)
-    const cached = await loadHomeData(context, request())
-    expect(cached.reactionsBySlug['react-router-renewal']?.[0]?.count).toBe(1)
-    expect(db.listReads).toBe(1)
-    expect(db.voteListReads).toBe(2)
+  it('loads home summaries without reaction storage or a visitor cookie', async () => {
+    const readReactions = vi.spyOn(reactionStore, 'getPostReactions')
+    const home = await loadHomeData()
+    expect(readReactions).not.toHaveBeenCalled()
+    expect(home.posts.length).toBeGreaterThan(0)
+    expect(Object.keys(home)).toEqual(['posts'])
   })
 
-  it('stores public counts after returning the home response', async () => {
-    const db = new FakeD1()
-    const cache = new DeferredCache()
-    const context = makeContext(db, cache)
-    const backgroundTasks: Promise<unknown>[] = []
-    context.waitUntil = (task) => backgroundTasks.push(task)
-    db.counts.set('react-router-renewal|👍', 1)
-
-    const home = await loadHomeData(context, request())
-
-    expect(home.reactionsBySlug['react-router-renewal']?.[0]?.count).toBe(1)
-    expect(backgroundTasks).toHaveLength(1)
-    expect(cache.entries).toHaveLength(0)
-    cache.releasePut?.()
-    await Promise.all(backgroundTasks)
-    expect(cache.entries).toHaveLength(1)
-  })
-
-  it('invalidates cached counts after a new reaction', async () => {
-    const db = new FakeD1()
-    const cache = new FakeCache()
-    const context = makeContext(db, cache)
-    const firstVisitor = request(`reaction_visitor=${'a'.repeat(43)}`)
-    const nextVisitor = request(`reaction_visitor=${'b'.repeat(43)}`)
-    await createReaction(context, firstVisitor, 'react-router-renewal', '👍')
-
-    const first = await loadHomeData(context, firstVisitor)
-    expect(first.reactionsBySlug['react-router-renewal']?.[0]?.count).toBe(1)
-
-    await createReaction(context, nextVisitor, 'react-router-renewal', '👍')
-    const refreshed = await loadHomeData(context, firstVisitor)
-    expect(refreshed.reactionsBySlug['react-router-renewal']?.[0]?.count).toBe(2)
-    expect(db.listReads).toBe(2)
-  })
-
-  it('keeps visitor reactions private when public counts are cached', async () => {
-    const db = new FakeD1()
-    const cache = new FakeCache()
-    const context = makeContext(db, cache)
-    const cookie = `reaction_visitor=${'a'.repeat(43)}`
+  it('returns only the selected post and preserves visitor reactions', async () => {
+    const readSummaries = vi.spyOn(blogSource, 'getBlogPosts')
+    const context = makeContext(new FakeD1())
+    const first = await loadPostData(context, request(), 'react-router-renewal')
+    expect(first?.cookie).toMatch(/^reaction_visitor=/)
+    expect(first).not.toHaveProperty('posts')
+    const cookie = first?.cookie?.split(';')[0]
     await createReaction(context, request(cookie), 'react-router-renewal', '👍')
+    const restored = await loadPostData(context, request(cookie), 'react-router-renewal')
+    expect(restored?.reactions).toEqual([{ emoji: '👍', count: 1, reacted: true }])
+    expect(restored?.cookie).toBeUndefined()
+    const otherVisitor = await loadPostData(context, request(), 'react-router-renewal')
+    expect(otherVisitor?.reactions).toEqual([{ emoji: '👍', count: 1, reacted: false }])
+    expect(readSummaries).not.toHaveBeenCalled()
+  })
 
-    const home = await loadHomeData(context, request(cookie))
-
-    expect(home.reactionsBySlug['react-router-renewal']).toEqual([
-      { emoji: '👍', count: 1, reacted: true }
-    ])
-
-    const otherVisitor = await loadHomeData(context, request(`reaction_visitor=${'b'.repeat(43)}`))
-    expect(otherVisitor.reactionsBySlug['react-router-renewal']).toEqual([
-      { emoji: '👍', count: 1, reacted: false }
-    ])
-    expect(db.listReads).toBe(1)
+  it('returns null without accessing D1 when the post is missing', async () => {
+    const db = new FakeD1()
+    const prepare = vi.spyOn(db, 'prepare')
+    expect(await loadPostData(makeContext(db), request(), 'missing-post')).toBeNull()
+    expect(prepare).not.toHaveBeenCalled()
   })
 })

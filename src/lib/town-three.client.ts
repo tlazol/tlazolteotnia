@@ -32,7 +32,7 @@ import {
   type WebGLRenderer,
   WebGLRenderTarget
 } from 'three'
-import { type BoardSize, hashSlug } from './sticker-board'
+import { hashSlug, type SceneSize } from './scene-math'
 import { type ActiveResident, updateTownActivities } from './town-activity'
 import { townArchitecture } from './town-architecture'
 import { bicycleCrank, bicycleGrip, bicyclePose } from './town-bicycle-pose'
@@ -354,7 +354,7 @@ export function createTownScene(articles?: TownArticle[]) {
   const projected = new Vector3()
   const world = new Vector3()
   const screen = new Vector2()
-  let viewport: BoardSize = { width: 0, height: 0 }
+  let viewport: SceneSize = { width: 0, height: 0 }
   const visibility = new Map<string, boolean>()
   let visibilityTime = -Infinity
 
@@ -2907,7 +2907,7 @@ export function createTownScene(articles?: TownArticle[]) {
         }
       })
     },
-    update(view: TownView, size: BoardSize) {
+    update(view: TownView, size: SceneSize) {
       if ((view.rotation ?? 0) !== (currentView.rotation ?? 0)) visibilityTime = -Infinity
       currentView = view
       viewport = size

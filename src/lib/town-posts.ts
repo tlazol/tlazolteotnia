@@ -1,5 +1,5 @@
 import type { BlogPostSummary } from './blog-post'
-import { type BoardSize, hashSlug } from './sticker-board'
+import { hashSlug, type SceneSize } from './scene-math'
 import { onettBuildings, onettHills, onettRoads, onettToTown, townLayoutScale } from './town-layout'
 import { townPersonStyles } from './town-person'
 import { type TrafficRoute, trafficPose } from './town-traffic'
@@ -132,7 +132,7 @@ export function getTownBounds(rotation = 0) {
 }
 export const townBounds = getTownBounds()
 
-export function fitTown(size: BoardSize, rotation = 0): TownView {
+export function fitTown(size: SceneSize, rotation = 0): TownView {
   const townBounds = getTownBounds(rotation)
   const zoom = Math.max(
     0.03,
@@ -150,7 +150,7 @@ export function fitTown(size: BoardSize, rotation = 0): TownView {
   }
 }
 
-export function clampTownView(view: TownView, size: BoardSize): TownView {
+export function clampTownView(view: TownView, size: SceneSize): TownView {
   const townBounds = getTownBounds(view.rotation)
   const zoom = Math.max(Math.min(0.15, fitTown(size, view.rotation).zoom), Math.min(2.5, view.zoom))
   const clamp = (value: number, min: number, max: number) =>
@@ -163,7 +163,7 @@ export function clampTownView(view: TownView, size: BoardSize): TownView {
   }
 }
 
-export function initialTownView(size: BoardSize, article?: TownArticle): TownView {
+export function initialTownView(size: SceneSize, article?: TownArticle): TownView {
   const pose = article
     ? trafficPose(article.route, 0)
     : { x: 2000 * townLayoutScale, z: 600 * townLayoutScale }
@@ -182,8 +182,8 @@ export function initialTownView(size: BoardSize, article?: TownArticle): TownVie
 
 export function placeTownBubble(
   point: { x: number; y: number },
-  bubble: BoardSize,
-  viewport: BoardSize
+  bubble: SceneSize,
+  viewport: SceneSize
 ) {
   const left = Math.max(
     12,

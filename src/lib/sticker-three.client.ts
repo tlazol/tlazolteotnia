@@ -10,15 +10,9 @@ import {
   Vector2,
   WebGLRenderer
 } from 'three'
-import {
-  type BoardSize,
-  type BoardView,
-  hashSlug,
-  hologramFinishes,
-  type Sticker
-} from './sticker-board'
+import { hashSlug, type SceneSize, type SceneView } from './scene-math'
+import { hologramFinishes, type Sticker } from './sticker-board'
 import { foilPalettes, palettes, stickerMaterial } from './sticker-colors'
-import { createTownScene } from './town-three.client'
 
 function sparkle(ctx: CanvasRenderingContext2D, x: number, y: number, radius: number) {
   ctx.beginPath()
@@ -34,7 +28,7 @@ function sparkle(ctx: CanvasRenderingContext2D, x: number, y: number, radius: nu
   ctx.fill()
 }
 
-function createStickerTexture(sticker: Sticker, eyes: boolean, isNewest: boolean) {
+function createStickerTexture(sticker: Sticker, eyes: boolean) {
   const { width, height, seed, lines, fontSize } = sticker
   const finish = seed % 3
   const colors = palettes[(seed >>> 8) % palettes.length]
@@ -170,11 +164,6 @@ function createStickerTexture(sticker: Sticker, eyes: boolean, isNewest: boolean
         break
     }
   }
-  const newLabel = new Path2D()
-  if (isNewest) {
-    newLabel.roundRect(width / 2 + 34, 12, 100, 34, 8)
-    outline.addPath(newLabel)
-  }
   ctx.fillStyle = stickerMaterial.edge
   ctx.fill(outline)
 
@@ -276,15 +265,6 @@ function createStickerTexture(sticker: Sticker, eyes: boolean, isNewest: boolean
   sparkle(ctx, width / 2 - 46, 36, 6)
   sparkle(ctx, width / 2 + 72, height - 30, 5)
 
-  if (isNewest) {
-    ctx.fillStyle = stickerMaterial.edge
-    ctx.strokeStyle = stickerMaterial.keyline
-    ctx.lineWidth = 4
-    ctx.font = '700 26px "IBM Plex Mono", monospace'
-    ctx.strokeText('New!!', width / 2 + 84, 29)
-    ctx.fillText('New!!', width / 2 + 84, 29)
-  }
-
   // The foil is exposed around the opaque ink. Keep this independent of the topcoat.
   // Rebuild the material mask from the print so the wider white edge stays matte.
   maskCtx.clearRect(0, 0, mask.width, mask.height)
@@ -312,12 +292,6 @@ function createStickerTexture(sticker: Sticker, eyes: boolean, isNewest: boolean
   maskCtx.lineWidth = 4
   maskCtx.strokeText(sticker.post.date.replaceAll('-', '.'), width / 2, height - 30)
   maskCtx.fillText(sticker.post.date.replaceAll('-', '.'), width / 2, height - 30)
-  if (isNewest) {
-    maskCtx.font = '700 26px "IBM Plex Mono", monospace'
-    maskCtx.lineWidth = 4
-    maskCtx.strokeText('New!!', width / 2 + 84, 29)
-    maskCtx.fillText('New!!', width / 2 + 84, 29)
-  }
   // Pack both layers in one texture: red = exposed foil, alpha = clear laminate.
   // Black underneath restores the print's surface without exposing foil through it.
   maskCtx.globalCompositeOperation = 'destination-over'
@@ -330,11 +304,7 @@ export function createStickerScene(
   canvas: HTMLCanvasElement,
   stickers: Sticker[],
   onError: () => void,
-  {
-    eyes = false,
-    newestSlug,
-    town = false
-  }: { eyes?: boolean; newestSlug?: string; town?: boolean } = {}
+  { eyes = false }: { eyes?: boolean } = {}
 ) {
   const renderer = new WebGLRenderer({
     canvas,
@@ -344,16 +314,14 @@ export function createStickerScene(
   })
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
   renderer.setClearColor(0x101114, 0)
-  renderer.autoClear = !town
   const scene = new Scene()
   const camera = new OrthographicCamera(0, 1, 0, 1, 0.1, 100)
   camera.position.z = 10
   const geometry = new PlaneGeometry(1, 1, 24, 20)
   const meshes: Mesh<PlaneGeometry, ShaderMaterial>[] = []
   const textures: CanvasTexture[] = []
-  let townScene: ReturnType<typeof createTownScene> | undefined
-  let size: BoardSize = { width: 1, height: 1 }
-  let view: BoardView = { x: 0, y: 0, zoom: 1 }
+  let size: SceneSize = { width: 1, height: 1 }
+  let view: SceneView = { x: 0, y: 0, zoom: 1 }
   let hovered = -1
   let frame = 0
   let idleTimer = 0
@@ -380,14 +348,12 @@ export function createStickerScene(
     geometry.dispose()
     for (const mesh of meshes) mesh.material.dispose()
     for (const texture of textures) texture.dispose()
-    townScene?.dispose()
     renderer.dispose()
   }
 
   try {
-    if (town) townScene = createTownScene()
     for (const sticker of stickers) {
-      const texture = createStickerTexture(sticker, eyes, sticker.post.slug === newestSlug)
+      const texture = createStickerTexture(sticker, eyes)
       textures.push(texture.art, texture.materialMask)
       const material = new ShaderMaterial({
         side: DoubleSide,
@@ -704,15 +670,10 @@ export function createStickerScene(
       }
       mesh.renderOrder = index === hovered ? stickers.length : index
     })
-    if (townScene) {
-      renderer.clear()
-      townScene.render(renderer, now, !reducedMotion.matches)
-      renderer.clearDepth()
-    }
     renderer.render(scene, camera)
     if (!reducedMotion.matches && (now < activeUntil || animating))
       frame = requestAnimationFrame(render)
-    else if ((stickers.length || townScene) && !reducedMotion.matches)
+    else if (stickers.length && !reducedMotion.matches)
       idleTimer = window.setTimeout(requestRender, 1000 / 30)
   }
 
@@ -754,7 +715,6 @@ export function createStickerScene(
   }
   function visibility() {
     if (document.hidden) {
-      townScene?.pause()
       cancelAnimationFrame(frame)
       window.clearTimeout(idleTimer)
       frame = 0
@@ -774,7 +734,7 @@ export function createStickerScene(
       dragTarget.y = Math.max(-1, Math.min(1, dragTarget.y - deltaY / 180))
       requestRender()
     },
-    update(nextView: BoardView, nextSize: BoardSize, nextHovered: number) {
+    update(nextView: SceneView, nextSize: SceneSize, nextHovered: number) {
       if (disposed) return
       view = nextView
       hovered = nextHovered
@@ -782,7 +742,6 @@ export function createStickerScene(
         size = nextSize
         renderer.setSize(size.width, size.height, false)
       }
-      townScene?.update(view, size)
       activeUntil = performance.now() + 650
       requestRender()
     },

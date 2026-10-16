@@ -346,23 +346,3 @@ function ReactionPicker({
     </div>
   )
 }
-
-export function ReactionSummary({ reactions }: { reactions: ReactionCount[] }) {
-  if (reactions.length === 0) return null
-  const shown = reactions.slice(0, 4)
-  return (
-    <ul className="mt-3 flex list-none flex-wrap gap-1.5 p-0" aria-label="Reactions">
-      {shown.map((reaction) => (
-        <li
-          className="inline-flex items-center gap-1 rounded-md border border-[var(--line)] bg-[rgba(7,16,11,0.72)] px-2 py-1 text-[0.68rem] font-semibold text-[var(--muted)]"
-          key={reaction.emoji}
-        >
-          <span aria-hidden="true">{reaction.emoji}</span> {reaction.count}
-        </li>
-      ))}
-      {reactions.length > 4 && (
-        <li className="px-1 py-1 text-[0.68rem] text-[var(--dim)]">+{reactions.length - 4} more</li>
-      )}
-    </ul>
-  )
-}

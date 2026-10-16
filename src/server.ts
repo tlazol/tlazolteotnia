@@ -2,15 +2,13 @@ import handler from '@tanstack/react-start/server-entry'
 import { createCspNonce, createHtmlSecurityHeaders } from '#/lib/security-headers'
 
 export default {
-  async fetch(request: Request, env: Env, ctx: ExecutionContext) {
+  async fetch(request: Request, env: Env) {
     const nonce = createCspNonce()
     const response = await handler.fetch(request, {
       context: {
         db: env.DB,
-        reactionCountsCache: await caches.open('reaction-counts'),
         reactionCookieSecret: env.REACTION_COOKIE_SECRET,
         reactionRateLimiter: env.REACTION_RATE_LIMITER,
-        waitUntil: ctx.waitUntil.bind(ctx),
         nonce
       }
     })

@@ -1,6 +1,6 @@
 import { Link } from '@tanstack/react-router'
 import { useEffect, useRef, useState } from 'react'
-import { getModalPostData } from '#/lib/blog.functions'
+import { getPostData } from '#/lib/blog.functions'
 import type { BlogPostSummary } from '#/lib/blog-post'
 import { getPostAccent } from '#/lib/post-accent'
 import { ArticleContent } from './article-content'
@@ -8,7 +8,7 @@ import { ArticleContent } from './article-content'
 export function PostModal({ post, onClose }: { post: BlogPostSummary; onClose: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null)
   const closeButton = useRef<HTMLButtonElement>(null)
-  const [data, setData] = useState<Awaited<ReturnType<typeof getModalPostData>>>(null)
+  const [data, setData] = useState<Awaited<ReturnType<typeof getPostData>>>(null)
   const [failed, setFailed] = useState(false)
 
   useEffect(() => {
@@ -27,7 +27,7 @@ export function PostModal({ post, onClose }: { post: BlogPostSummary; onClose: (
 
   useEffect(() => {
     let cancelled = false
-    getModalPostData({ data: { slug: post.slug } })
+    getPostData({ data: { slug: post.slug } })
       .then((result) => {
         if (cancelled) return
         setData(result)

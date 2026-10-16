@@ -1,14 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { parseBlogPosts, sortBlogPostsNewestFirst } from '../src/lib/blog-post'
-import {
-  clampBoardView,
-  filterStickerPosts,
-  fitBoard,
-  initialBoardView,
-  layoutStickers,
-  wrapStickerTitle,
-  zoomBoardAt
-} from '../src/lib/sticker-board'
+import { hashSlug } from '../src/lib/scene-math'
+import { layoutStickers, wrapStickerTitle } from '../src/lib/sticker-board'
 
 const sources = import.meta.glob<string>('../content/blog/*.md', {
   eager: true,
@@ -22,6 +15,12 @@ const posts = sortBlogPostsNewestFirst(
 )
 
 describe('sticker board', () => {
+  it('preserves the seeds used by existing sticker and resident designs', () => {
+    expect(
+      ['', 'react-router-renewal', 'jev-and-gpt-customer-support', '日本語'].map(hashSlug)
+    ).toEqual([2166136261, 903066047, 2991010919, 1409693518])
+  })
+
   it('lays out every published article deterministically inside the board', () => {
     const board = layoutStickers(posts)
     expect(board).toEqual(layoutStickers(posts))
@@ -119,62 +118,5 @@ describe('sticker board', () => {
         ).toBe(true)
       }
     })
-  })
-
-  it('centers the newest article in the initial desktop and mobile viewport', () => {
-    for (const selected of [posts, posts.slice(0, 2), posts.slice(0, 1)]) {
-      const board = layoutStickers(selected)
-      for (const size of [
-        { width: 1440, height: 900 },
-        { width: 390, height: 844 }
-      ]) {
-        const view = initialBoardView(size, board)
-        expect(view.x + board.stickers[0].x * view.zoom).toBeCloseTo(size.width / 2)
-        expect(view.y + board.stickers[0].y * view.zoom).toBeCloseTo(size.height / 2)
-      }
-    }
-  })
-
-  it('combines tags and normalized search across title, description and tags', () => {
-    const sample = [
-      {
-        slug: 'one',
-        title: 'TypeScript 入門',
-        description: '実践的な型の説明',
-        tags: ['コード'],
-        date: '2026-01-01'
-      }
-    ]
-    expect(filterStickerPosts(sample, 'コード', 'ＴＹＰＥＳＣＲＩＰＴ 型')).toEqual(sample)
-    expect(filterStickerPosts(sample, '', 'コード')).toEqual(sample)
-    expect(filterStickerPosts(sample, '別のタグ', 'typescript')).toEqual([])
-    expect(filterStickerPosts(sample, '', '存在しない')).toEqual([])
-  })
-
-  it('zooms around the cursor without moving its world position', () => {
-    const view = { x: -120, y: 70, zoom: 0.8 }
-    const cursor = { x: 500, y: 320 }
-    const next = zoomBoardAt(view, 1.5, cursor)
-    expect((cursor.x - next.x) / next.zoom).toBeCloseTo((cursor.x - view.x) / view.zoom)
-    expect((cursor.y - next.y) / next.zoom).toBeCloseTo((cursor.y - view.y) / view.zoom)
-  })
-
-  it('fits all articles and bounds panning on desktop and mobile', () => {
-    const board = layoutStickers(posts)
-    for (const size of [
-      { width: 1440, height: 900 },
-      { width: 390, height: 844 }
-    ]) {
-      const fit = fitBoard(size, board)
-      expect(fit.x).toBeGreaterThanOrEqual(0)
-      expect(fit.y).toBeGreaterThanOrEqual(80)
-      expect(fit.x + board.width * fit.zoom).toBeLessThanOrEqual(size.width)
-      expect(fit.y + board.height * fit.zoom).toBeLessThanOrEqual(size.height - 60)
-      const initial = initialBoardView(size, board)
-      const far = clampBoardView({ ...initial, x: -1e6, y: -1e6 }, size, board)
-      expect(far.x + board.width * far.zoom).toBeGreaterThanOrEqual(size.width - 40)
-      expect(far.y + board.height * far.zoom).toBeGreaterThanOrEqual(size.height - 60)
-      expect(Object.values(fitBoard(size, layoutStickers([]))).every(Number.isFinite)).toBe(true)
-    }
   })
 })

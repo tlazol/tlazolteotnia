@@ -1,5 +1,5 @@
 import { WebGLRenderer } from 'three'
-import type { BoardSize } from './sticker-board'
+import type { SceneSize } from './scene-math'
 import type { TownArticle } from './town-posts'
 import { createTownScene } from './town-three.client'
 import type { TownView } from './town-view'
@@ -77,7 +77,7 @@ export function createArticleTown(
       town.endResidentDrag(cancel)
       wake()
     },
-    update(view: TownView, size: BoardSize) {
+    update(view: TownView, size: SceneSize) {
       if (!size.width || !size.height) return
       hasSize = true
       if (

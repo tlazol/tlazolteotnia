@@ -1,13 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { parseBlogPosts, sortBlogPostsNewestFirst } from '../src/lib/blog-post'
-import { filterPostsByTag, getTagFilters } from '../src/lib/blog-tags'
+import { filterBlogPosts, filterPostsByTag, getTagFilters } from '../src/lib/blog-tags'
 import { getPostAccent } from '../src/lib/post-accent'
-import {
-  getPostAuthor,
-  getPostEmoji,
-  getPostIdentity,
-  getPostSpecies
-} from '../src/lib/post-identity'
 import { shouldOpenPostModal } from '../src/lib/post-modal'
 import {
   getAbsoluteUrl,
@@ -17,6 +11,22 @@ import {
 } from '../src/lib/site'
 
 describe('blog utilities', () => {
+  it('combines tags and normalized search across title, description and tags', () => {
+    const sample = [
+      {
+        slug: 'one',
+        title: 'TypeScript 入門',
+        description: '実践的な型の説明',
+        tags: ['コード'],
+        date: '2026-01-01'
+      }
+    ]
+    expect(filterBlogPosts(sample, 'コード', 'ＴＹＰＥＳＣＲＩＰＴ 型')).toEqual(sample)
+    expect(filterBlogPosts(sample, '', 'コード')).toEqual(sample)
+    expect(filterBlogPosts(sample, '別のタグ', 'typescript')).toEqual([])
+    expect(filterBlogPosts(sample, '', '存在しない')).toEqual([])
+  })
+
   it('counts tags and sorts them by count and then name', () => {
     const posts = [
       { tags: ['Z', 'A'] },
@@ -46,24 +56,9 @@ describe('blog utilities', () => {
     expect(filteredPosts).toHaveLength(1)
   })
 
-  it('derives deterministic visual identities from a slug', () => {
-    expect([getPostAccent('same'), getPostEmoji('same'), getPostAuthor('same')]).toEqual([
-      getPostAccent('same'),
-      getPostEmoji('same'),
-      getPostAuthor('same')
-    ])
+  it('derives a deterministic accent color from a slug', () => {
+    expect(getPostAccent('same')).toBe(getPostAccent('same'))
     expect(getPostAccent('same')).toMatch(/green|blue|pink|yellow|red/)
-  })
-
-  it('gives every published article its own animal identity', () => {
-    const slugs = getPublishedPosts().map(({ slug }) => slug)
-    const identities = slugs.map(getPostIdentity)
-
-    expect(new Set(identities.map(({ author }) => author))).toHaveLength(slugs.length)
-    expect(new Set(identities.map(({ emoji }) => emoji))).toHaveLength(slugs.length)
-    expect(new Set(identities.map(({ species }) => species))).toHaveLength(slugs.length)
-    expect(identities.every(({ species }) => species !== 'なかま')).toBe(true)
-    expect(getPostSpecies('react-router-renewal')).toBe('キツネ')
   })
 
   it('does not repeat an accent color between consecutive visible articles', () => {

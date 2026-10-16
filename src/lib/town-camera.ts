@@ -1,5 +1,5 @@
 import { OrthographicCamera } from 'three'
-import type { BoardSize } from './sticker-board'
+import type { SceneSize } from './scene-math'
 import type { TownView } from './town-view'
 
 const elevation = Math.PI / 4
@@ -23,7 +23,7 @@ function orientCamera(camera: OrthographicCamera, rotation: number) {
   camera.updateMatrixWorld()
 }
 
-export function updateTownCamera(camera: OrthographicCamera, view: TownView, size: BoardSize) {
+export function updateTownCamera(camera: OrthographicCamera, view: TownView, size: SceneSize) {
   orientCamera(camera, view.rotation ?? 0)
   camera.left = -view.x / view.zoom
   camera.right = (size.width - view.x) / view.zoom

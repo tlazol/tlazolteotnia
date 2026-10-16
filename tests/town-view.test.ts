@@ -1,6 +1,6 @@
 import { Vector3 } from 'three'
 import { describe, expect, it } from 'vitest'
-import { zoomBoardAt } from '../src/lib/sticker-board'
+import { zoomViewAt } from '../src/lib/scene-math'
 import { createTownCamera, updateTownCamera } from '../src/lib/town-camera'
 import { clampTownView, fitTown, getTownBounds } from '../src/lib/town-posts'
 import {
@@ -12,13 +12,21 @@ import {
 } from '../src/lib/town-view'
 
 describe('town projection', () => {
+  it('zooms around the cursor without moving its world position', () => {
+    const view = { x: -120, y: 70, zoom: 0.8 }
+    const cursor = { x: 500, y: 320 }
+    const next = zoomViewAt(view, 1.5, cursor)
+    expect((cursor.x - next.x) / next.zoom).toBeCloseTo((cursor.x - view.x) / view.zoom)
+    expect((cursor.y - next.y) / next.zoom).toBeCloseTo((cursor.y - view.y) / view.zoom)
+  })
+
   it('projects the ground to sticker coordinates during pan, zoom, and resize', () => {
     const camera = createTownCamera()
     const initial = { x: -240, y: -370, zoom: 0.8 }
     const views = [
       initial,
       { ...initial, x: 40, y: 90 },
-      zoomBoardAt(initial, 2.1, { x: 317, y: 241 })
+      zoomViewAt(initial, 2.1, { x: 317, y: 241 })
     ]
     for (const size of [
       { width: 1280, height: 720 },

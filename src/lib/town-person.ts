@@ -1,4 +1,4 @@
-import { hashSlug } from './sticker-board'
+import { hashSlug } from './scene-math'
 
 // Stable order preserves the article-to-costume mapping. Each resident is designed
 // as a girl; the role names are costume identifiers, not the old body designs.

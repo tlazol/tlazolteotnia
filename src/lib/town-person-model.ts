@@ -1,4 +1,4 @@
-import { hashSlug } from './sticker-board'
+import { hashSlug } from './scene-math'
 import { bicycleGrip, bicyclePose, bicycleSegment, type CyclingMotion } from './town-bicycle-pose'
 import { townPersonAppearance, townPersonStyle } from './town-person'
 import type { PersonShape } from './town-person-geometry'
