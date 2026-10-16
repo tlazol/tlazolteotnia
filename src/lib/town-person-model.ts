@@ -139,6 +139,34 @@ export function createPersonParts(variant: number, identity: string, riding = fa
     if (!riding) shaft.motion = tip.motion = 'arm'
   }
 
+  // The white-hooded traveller from this article's original illustration.
+  if (identity === 'give-the-ai-precise-instructions') {
+    const white = 0xf3f2ff
+    const ink = 0x171e37
+    const blue = 0x407bea
+    piece('girlSkirt', 0, 27, 0, 27, 28, 21, white)
+    round(0, 53, -1, 38, 42, 36, white)
+    round(0, 51, 13, 27, 29, 11, ink)
+    for (const side of [-1, 1]) {
+      trim(side * 5.5, 50, 18.7, 3, 8, 1.5, 0x69e6ff)
+      trim(side * 4, 34, 10, 1.2, 9, 1.2, blue)
+      add('girlLimb', side * 5, 10, 0, 4, 15, 4, ink).motion = 'leg'
+      add('girlRound', side * 5, 3, 2, 7, 6, 10, ink).motion = 'leg'
+      add('girlLimb', side * 12, 29, 0, 9, 20, 10, white, side * 0.12).motion = 'arm'
+      add('girlRound', side * 13, 20, 1, 5, 5, 5, ink).motion = 'arm'
+    }
+    for (const [x, y] of [
+      [-8, 62],
+      [0, 63],
+      [8, 62]
+    ])
+      lock(x, y, 17, 10, 13, 5, -0.65, blue)
+    // A small violet mushroom brooch recalls the jewel beside the traveller.
+    trim(0, 28, 11, 2, 5, 2, 0xbcc8fa)
+    piece('girlCap', 0, 31, 11, 8, 5, 5, 0x8e79d6)
+    return parts
+  }
+
   // A taller cranium and tapered jaw keep the face readable from the town camera.
   piece('girlBody', 0, 30, 0, 16, 17, 11, cloth)
   round(0, riding ? 26.5 : 24, 0, 13, 8, 10, dark)
