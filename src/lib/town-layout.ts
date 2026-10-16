@@ -173,6 +173,40 @@ export const onettRoads: TownRoad[] = [
   ])
 ]
 
+// Include crossings and endpoint joins, deduplicating multi-road junctions.
+export function townRoadJunctions() {
+  const junctions: Point[] = []
+  const segments = onettRoads.flatMap((road) =>
+    road.points.slice(1).map((end, index) => ({ road, start: road.points[index], end }))
+  )
+  function add(point: Point) {
+    if (!junctions.some((other) => Math.hypot(point.x - other.x, point.z - other.z) < 1))
+      junctions.push(point)
+  }
+  for (const [index, a] of segments.entries()) {
+    for (const b of segments.slice(index + 1)) {
+      if (a.road === b.road) continue
+      // Shared endpoints also cover collinear joins at the coastal road.
+      for (const p of [a.start, a.end]) {
+        if ([b.start, b.end].some((q) => Math.hypot(p.x - q.x, p.z - q.z) < 1)) add(p)
+      }
+      const ax = a.end.x - a.start.x
+      const az = a.end.z - a.start.z
+      const bx = b.end.x - b.start.x
+      const bz = b.end.z - b.start.z
+      const cross = ax * bz - az * bx
+      if (Math.abs(cross) < 0.001) continue
+      const dx = b.start.x - a.start.x
+      const dz = b.start.z - a.start.z
+      const t = (dx * bz - dz * bx) / cross
+      const u = (dx * az - dz * ax) / cross
+      if (t >= -1e-6 && t <= 1 + 1e-6 && u >= -1e-6 && u <= 1 + 1e-6)
+        add({ x: a.start.x + t * ax, z: a.start.z + t * az })
+    }
+  }
+  return junctions
+}
+
 // Local bounds include eaves, fences, porches and shop furniture, not just walls.
 function townBuildingFootprint(kind: TownBuildingKind) {
   switch (kind) {

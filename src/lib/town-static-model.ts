@@ -12,7 +12,8 @@ import {
   onettToTown,
   townBuildingAccess,
   townBuildingBounds,
-  townLayoutScale
+  townLayoutScale,
+  townRoadJunctions
 } from './town-layout'
 import { createTownPartWriter, type Part, type TownShape, townColors } from './town-model-parts'
 import type { TownObstacle } from './town-navigation'
@@ -481,6 +482,55 @@ export function createTownStaticModel(detailed: boolean) {
       box(120, 90, 0, 15, 8, 14, colors.cream).emission = 'lamp'
       part('disc', 120, 3, 0, 140, 0.1, 140, 0xffce87).emission = 'glow'
     }
+  }
+  // Place a lamp just outside each junction's sidewalk, including trail joins.
+  // Search outward so diagonal corners stay clear of all adjoining road surfaces.
+  for (const junction of townRoadJunctions()) {
+    let position: { x: number; z: number } | undefined
+    for (let radius = 40; radius <= 200 && !position; radius += 4) {
+      for (let step = 0; step < 64; step++) {
+        const angle = (step * Math.PI * 2) / 64
+        const point = {
+          x: junction.x + Math.cos(angle) * radius,
+          z: junction.z + Math.sin(angle) * radius
+        }
+        const clearance = nearestTownRoad(point, onettRoads).distance
+        if (clearance < 10 || clearance > 18) continue
+        if (
+          onettBuildings.some((lot) => {
+            const bounds = townBuildingBounds(lot)
+            return (
+              point.x + 10 > bounds.left &&
+              point.x - 10 < bounds.right &&
+              point.z + 10 > bounds.back &&
+              point.z - 10 < lot.frontage.z
+            )
+          })
+        )
+          continue
+        if (
+          obstacles.some(
+            (obstacle) =>
+              point.x > obstacle.left - 5 &&
+              point.x < obstacle.right + 5 &&
+              point.z > obstacle.top - 5 &&
+              point.z < obstacle.bottom + 5
+          )
+        )
+          continue
+        position = point
+        break
+      }
+    }
+    if (!position) continue
+    placement.x = position.x
+    placement.z = position.z
+    placement.yaw = Math.atan2(position.z - junction.z, junction.x - position.x)
+    box(0, 5, 0, 10, 10, 10, colors.curb)
+    box(0, 47, 0, 5, 94, 5, colors.wood)
+    box(10, 94, 0, 24, 5, 5, colors.wood)
+    box(20, 90, 0, 15, 8, 14, colors.cream).emission = 'lamp'
+    part('disc', 20, 3, 0, 140, 0.1, 140, 0xffce87).emission = 'glow'
   }
   return { parts, forestParts, obstacles }
 }

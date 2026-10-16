@@ -97,6 +97,7 @@ describe('blog post parser', () => {
     expect(
       sortBlogPostsNewestFirst(posts.filter((post) => !post.draft)).map((post) => post.slug)
     ).toEqual([
+      'give-the-ai-precise-instructions',
       'jev-and-gpt-customer-support',
       'retired-programmer',
       'reducing-smartphone-screen-time',
