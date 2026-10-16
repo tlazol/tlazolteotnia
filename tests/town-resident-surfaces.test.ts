@@ -3,7 +3,7 @@ import {
   InstancedMesh,
   Matrix4,
   Mesh,
-  MeshBasicMaterial,
+  MeshLambertMaterial,
   Raycaster,
   type Scene,
   Vector3,
@@ -44,8 +44,9 @@ describe('resident head surfaces', () => {
         setRenderTarget: () => {},
         clear: () => {},
         render: (scene: Scene) => {
-          if (scene.background) return
-          for (const batch of scene.children) {
+          if (!scene.background) return
+          const traffic = scene.children.find((child) => child.type === 'Scene')
+          for (const batch of traffic?.children ?? []) {
             if (!(batch instanceof InstancedMesh)) continue
             for (let index = 0; index < batch.count; index++) {
               batch.getMatrixAt(index, matrix)
@@ -67,7 +68,7 @@ describe('resident head surfaces', () => {
                 batch.getColorAt(index, color)
                 mesh.userData.tint = color.getHex()
                 mesh.userData.face =
-                  batch.material instanceof MeshBasicMaterial && !!batch.material.map
+                  batch.material instanceof MeshLambertMaterial && !!batch.material.map
                 mesh.userData.scalp =
                   !mesh.userData.face &&
                   Math.abs(position.x - pose.x) < 0.001 &&
@@ -182,11 +183,12 @@ it('batches repeated costumes without adding draw calls per resident', () => {
       setRenderTarget: () => {},
       clear: () => {},
       render: (scene: Scene) => {
-        if (scene.background) return
-        for (const mesh of scene.children) {
+        if (!scene.background) return
+        const traffic = scene.children.find((child) => child.type === 'Scene')
+        for (const mesh of traffic?.children ?? []) {
           if (!(mesh instanceof InstancedMesh)) continue
           batches++
-          if (mesh.material instanceof MeshBasicMaterial && mesh.material.map) faces += mesh.count
+          if (mesh.material instanceof MeshLambertMaterial && mesh.material.map) faces += mesh.count
         }
       }
     } as unknown as WebGLRenderer

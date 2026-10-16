@@ -43,7 +43,7 @@ function rendererStub() {
   return { renderer, render }
 }
 describe('town scene lifecycle', () => {
-  it('keeps the static pass cached while traffic moves and invalidates both when the camera changes', () => {
+  it('caches an unchanged world and redraws shared shadows when traffic or the camera changes', () => {
     const resources = createTownSceneResources()
     const batches = createTownSceneBatches(resources)
     const compositor = createTownSceneCompositor(
@@ -67,19 +67,17 @@ describe('town scene lifecycle', () => {
     compositor.invalidateTraffic()
     render.mockClear()
     compositor.render(renderer, compositor.needsUpdate, true)
-    expect(render.mock.calls.slice(0, 2).map(([scene]) => scene)).toEqual([
+    expect(render.mock.calls.slice(0, 3).map(([scene]) => scene)).toEqual([
+      batches.scene,
       batches.traffic,
       batches.selection
     ])
-    expect(render).toHaveBeenCalledTimes(3)
+    expect(render).toHaveBeenCalledTimes(4)
     compositor.invalidate()
     render.mockClear()
     compositor.render(renderer, compositor.needsUpdate, false)
-    expect(render.mock.calls.slice(0, 2).map(([scene]) => scene)).toEqual([
-      batches.scene,
-      batches.traffic
-    ])
-    expect(render).toHaveBeenCalledTimes(3)
+    expect(render.mock.calls.map(([scene]) => scene)).toEqual([batches.scene, expect.anything()])
+    expect(render).toHaveBeenCalledTimes(2)
     expect(renderer.getRenderTarget()).toBeNull()
     compositor.dispose()
     batches.dispose()
@@ -99,7 +97,10 @@ describe('town scene lifecycle', () => {
     render.mockImplementation((scene) => {
       for (const mesh of scene.children) {
         if (mesh instanceof Mesh && mesh.material instanceof ShaderMaterial) {
-          const { selectionDepth, townDepth } = mesh.material.uniforms
+          const { selectionDepth, trafficDepth, townDepth } = mesh.material.uniforms
+          expect(trafficDepth.value === townDepth.value).toBe(
+            selectionDepth.value === townDepth.value
+          )
           bindings.push(selectionDepth.value === townDepth.value)
         }
       }

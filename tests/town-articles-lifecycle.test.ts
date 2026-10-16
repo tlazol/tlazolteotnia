@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => {
     residentPosition: vi.fn()
   }
   const renderer = {
+    shadowMap: { enabled: false, type: 0 },
     setPixelRatio: vi.fn(),
     getPixelRatio: () => 1,
     setSize: vi.fn(),
@@ -27,6 +28,7 @@ const mocks = vi.hoisted(() => {
   return { town, renderer }
 })
 vi.mock('three', () => ({
+  PCFShadowMap: 1,
   WebGLRenderer: class {
     constructor() {
       Object.assign(this, mocks.renderer)
@@ -99,12 +101,18 @@ describe('article town renderer lifecycle', () => {
     expect(t.positions).toHaveBeenCalledTimes(2)
     t.town.dispose()
   })
-  it('renders on demand under reduced motion and restarts continuous updates when it changes', () => {
+  it('updates daylight each second under reduced motion and restarts continuous updates when it changes', () => {
     const t = setup()
     t.media.matches = true
     t.frame()
     expect(mocks.town.render).toHaveBeenLastCalledWith(mocks.renderer, 0, false)
-    expect(vi.getTimerCount()).toBe(0)
+    expect(vi.getTimerCount()).toBe(1)
+    vi.advanceTimersByTime(999)
+    expect(t.frames.size).toBe(0)
+    vi.advanceTimersByTime(1)
+    expect(t.frames.size).toBe(1)
+    t.frame(1000)
+    expect(mocks.town.render).toHaveBeenLastCalledWith(mocks.renderer, 1000, false)
     t.town.select('resident')
     expect(t.frames.size).toBe(1)
     t.frame(10)

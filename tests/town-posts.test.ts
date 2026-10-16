@@ -3,7 +3,7 @@ import {
   Matrix4,
   Mesh,
   Raycaster,
-  type Scene,
+  Scene,
   ShaderMaterial,
   Vector3,
   type WebGLRenderer
@@ -523,9 +523,10 @@ describe('article residents', () => {
     const town = createTownScene([rider])
     let wheels: InstancedMesh | undefined
     const renderSpy = vi.spyOn(renderer, 'render').mockImplementation((scene) => {
-      for (const mesh of scene.children) {
+      if (!(scene instanceof Scene) || !scene.background) return
+      scene.traverse((mesh) => {
         if (mesh instanceof InstancedMesh && mesh.geometry.type === 'TorusGeometry') wheels = mesh
-      }
+      })
     })
     try {
       town.update(view, size)

@@ -11,6 +11,7 @@ export type Part = {
   pitch: number
   yaw: number
   color: number
+  emission?: 'window' | 'lamp' | 'glow'
   motion?: PersonPart['motion'] | 'wheel'
 }
 export type TownShape =

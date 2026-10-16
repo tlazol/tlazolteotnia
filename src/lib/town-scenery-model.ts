@@ -112,7 +112,6 @@ export function createTownSceneryModels(
 
   function tree(x: number, z: number, size = 1, elevation = 0) {
     const terrain = terrainAt(x, z)
-    box(x + 16, elevation + 1, z + 12, 74 * size, 1, 58 * size, colors.shadow)
     if (terrain.scenery !== 'tree') {
       landscapeScenery(x, z, size, elevation, terrain)
       return

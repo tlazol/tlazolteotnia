@@ -25,7 +25,7 @@ export function createTownSceneCompositor(
 ) {
   let dirty = true
   let trafficDirty = false
-  // Cache the static town so sticker glints don't redraw thousands of town objects.
+  // Cache the lit world when neither residents, camera nor daylight changes.
   const target = new WebGLRenderTarget(1, 1, {
     minFilter: LinearFilter,
     magFilter: LinearFilter,
@@ -53,15 +53,14 @@ export function createTownSceneCompositor(
   const backdrop = new Scene()
   const backdropCamera = new OrthographicCamera(-1, 1, 1, -1, 0, 1)
   const backdropGeometry = new PlaneGeometry(2, 2)
-  // Compare the cached town depth with the moving residents so trees and buildings
-  // still occlude them, without rendering the whole town on every animation frame.
+  // The world contains traffic too, so surfaces cast shadows across both.
+  // Separate traffic depth preserves selection silhouettes behind buildings only.
   const backdropMaterial = new ShaderMaterial({
     depthTest: false,
     depthWrite: false,
     uniforms: {
       townMap: { value: target.texture },
       townDepth: { value: target.depthTexture },
-      trafficMap: { value: trafficTarget.texture },
       trafficDepth: { value: trafficTarget.depthTexture },
       selectionDepth: { value: target.depthTexture },
       selectionEnabled: { value: false },
@@ -79,7 +78,6 @@ export function createTownSceneCompositor(
     fragmentShader: `
       uniform sampler2D townMap;
       uniform sampler2D townDepth;
-      uniform sampler2D trafficMap;
       uniform sampler2D trafficDepth;
       uniform sampler2D selectionDepth;
       uniform bool selectionEnabled;
@@ -89,17 +87,15 @@ export function createTownSceneCompositor(
       varying vec2 vUv;
 
       float visibleDepth(vec2 uv) {
-        return min(texture2D(townDepth, uv).r, texture2D(trafficDepth, uv).r);
+        return texture2D(townDepth, uv).r;
       }
 
       void main() {
         vec2 uv = vUv;
         float townZ = texture2D(townDepth, uv).r;
         float trafficZ = texture2D(trafficDepth, uv).r;
-        gl_FragColor = trafficZ < townZ
-          ? texture2D(trafficMap, uv)
-          : texture2D(townMap, uv);
-        float depth = min(townZ, trafficZ);
+        gl_FragColor = texture2D(townMap, uv);
+        float depth = townZ;
         float neighborDepth = max(
           max(visibleDepth(uv + vec2(texelSize.x, 0.0)),
               visibleDepth(uv - vec2(texelSize.x, 0.0))),
@@ -113,7 +109,7 @@ export function createTownSceneCompositor(
         // Reveal only selected parts behind the town; nearer residents stay intact.
         if (selectionEnabled) {
           float selectedZ = texture2D(selectionDepth, uv).r;
-          if (selectedZ < 1.0 && townZ < selectedZ && townZ <= trafficZ) {
+          if (selectedZ < 1.0 && townZ < selectedZ && townZ < trafficZ) {
             gl_FragColor.rgb = mix(gl_FragColor.rgb, selectionColor, 0.35);
           }
         }
@@ -146,24 +142,26 @@ export function createTownSceneCompositor(
     },
     render(renderer: WebGLRenderer, updateTraffic: boolean, selected: boolean) {
       const previousTarget = renderer.getRenderTarget()
-      if (dirty) {
+      const updateWorld = dirty || trafficDirty || updateTraffic
+      if (updateWorld) {
         renderer.setRenderTarget(target)
         renderer.clear()
         renderer.render(scene, camera)
         dirty = false
       }
-      if (updateTraffic) {
+      if (updateWorld && selected) {
         renderer.setRenderTarget(trafficTarget)
         renderer.clear()
         renderer.render(traffic, camera)
-        if (selected) {
-          renderer.setRenderTarget(selectionTarget)
-          renderer.clear()
-          renderer.render(selection, camera)
-        }
+        renderer.setRenderTarget(selectionTarget)
+        renderer.clear()
+        renderer.render(selection, camera)
       }
       // An unrendered selection target may still have its pre-resize depth size.
       // Do not upload it through a sampler before Three initializes its framebuffer.
+      backdropMaterial.uniforms.trafficDepth.value = selected
+        ? trafficTarget.depthTexture
+        : target.depthTexture
       backdropMaterial.uniforms.selectionDepth.value = selected
         ? selectionTarget.depthTexture
         : target.depthTexture

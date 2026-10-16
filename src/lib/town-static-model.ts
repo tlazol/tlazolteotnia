@@ -478,7 +478,8 @@ export function createTownStaticModel(detailed: boolean) {
       box(0, 63, 4, 12, 4, 2, colors.cream)
       box(100, 47, 0, 5, 94, 5, colors.wood)
       box(110, 94, 0, 24, 5, 5, colors.wood)
-      box(120, 90, 0, 15, 8, 14, colors.cream)
+      box(120, 90, 0, 15, 8, 14, colors.cream).emission = 'lamp'
+      part('disc', 120, 3, 0, 140, 0.1, 140, 0xffce87).emission = 'glow'
     }
   }
   return { parts, forestParts, obstacles }

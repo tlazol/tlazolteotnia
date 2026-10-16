@@ -1,4 +1,4 @@
-import { WebGLRenderer } from 'three'
+import { PCFShadowMap, WebGLRenderer } from 'three'
 import type { SceneSize } from './scene-math'
 import type { TownArticle } from './town-posts'
 import { createTownScene } from './town-three.client'
@@ -15,6 +15,8 @@ export function createArticleTown(
   onFailure: () => void
 ) {
   const renderer = new WebGLRenderer({ canvas, antialias: false, alpha: false })
+  renderer.shadowMap.enabled = true
+  renderer.shadowMap.type = PCFShadowMap
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
   const town = createTownScene(articles)
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
@@ -44,7 +46,8 @@ export function createArticleTown(
       renderer.clear()
       const view = town.render(renderer, now, !reducedMotion.matches)
       onPositions(town.projectResidents(now), view)
-      if (!disposed && !unavailable && !reducedMotion.matches) timer = setTimeout(wake, 1000 / 30)
+      if (!disposed && !unavailable)
+        timer = setTimeout(wake, reducedMotion.matches ? 1000 : 1000 / 30)
     } catch (error) {
       fail(error)
     }

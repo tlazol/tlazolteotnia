@@ -2,6 +2,7 @@ import { Raycaster, Vector2, Vector3, type WebGLRenderer } from 'three'
 import type { SceneSize } from './scene-math'
 import { createTownCamera, updateTownCamera } from './town-camera'
 import { containsTownGround } from './town-coast'
+import { createTownLighting } from './town-lighting'
 import { createTownNavigation } from './town-navigation'
 import { clampTownView, type TownArticle } from './town-posts'
 import { createTownResidents } from './town-residents'
@@ -16,6 +17,7 @@ export function createTownScene(articles?: TownArticle[]) {
   const resources = createTownSceneResources()
   const batches = createTownSceneBatches(resources)
   const { scene, occluders } = batches
+  const lighting = createTownLighting(scene, resources)
   const compositor = createTownSceneCompositor(scene, batches.traffic, batches.selection, camera)
   const residents = createTownResidents(articles)
   let navigation = createTownNavigation([], containsTownGround)
@@ -138,6 +140,7 @@ export function createTownScene(articles?: TownArticle[]) {
     },
     pause: residents.pause,
     render(renderer: WebGLRenderer, now: number, motion: boolean) {
+      const lightingChanged = lighting.update(new Date(), currentView, viewport)
       const { delta, changed } = residents.advance(now, motion)
       let updateTraffic = compositor.needsUpdate || changed
       if (updateTraffic) {
@@ -150,6 +153,8 @@ export function createTownScene(articles?: TownArticle[]) {
           dragged: residents.dragged
         })
       }
+      // A lighting-only redraw does not change resident poses or instance buffers.
+      if (lightingChanged) compositor.invalidate()
       const followed = residents.followedSlug
         ? residents.articleResidents.get(residents.followedSlug)
         : undefined
@@ -170,6 +175,7 @@ export function createTownScene(articles?: TownArticle[]) {
           compositor.invalidate()
           updateTraffic = true
           updateTownCamera(camera, currentView, viewport)
+          lighting.update(new Date(), currentView, viewport)
         }
       }
       compositor.render(
@@ -180,6 +186,7 @@ export function createTownScene(articles?: TownArticle[]) {
       return currentView
     },
     dispose() {
+      lighting.dispose()
       batches.dispose()
       resources.dispose()
       compositor.dispose()

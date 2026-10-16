@@ -8,6 +8,7 @@ import {
   LatheGeometry,
   LinearMipmapLinearFilter,
   MeshBasicMaterial,
+  MeshLambertMaterial,
   NearestFilter,
   RepeatWrapping,
   RGBAFormat,
@@ -22,18 +23,6 @@ import {
   personBlinkFrames
 } from './town-person-geometry'
 import { townTerrain } from './town-terrain'
-
-function shadeFaces(geometry: BufferGeometry) {
-  const normals = geometry.getAttribute('normal')
-  const shades = new Float32Array(normals.count * 3)
-  for (let i = 0; i < normals.count; i++) {
-    // The main faces retain the sampled color; only side faces have a fixed shade.
-    const shade =
-      normals.getX(i) > 0.9 ? 0.72 : normals.getX(i) > 0.25 && normals.getY(i) > 0.1 ? 0.84 : 1
-    shades.set([shade, shade, shade], i * 3)
-  }
-  geometry.setAttribute('color', new Float32BufferAttribute(shades, 3))
-}
 
 // Small repeating tiles keep surface detail on a deliberate pixel grid.
 function tileTexture(kind: 'grass' | 'roof') {
@@ -159,12 +148,16 @@ export function createTownSceneResources() {
     tree: treeGeometry()
   }
   for (const [shape, geometry] of Object.entries(geometries)) {
-    if (shape !== 'land' && !shape.startsWith('girl')) shadeFaces(geometry)
+    // White vertex colors preserve instance tints without baking a light direction.
+    if (shape !== 'land') {
+      const colors = new Float32Array(geometry.getAttribute('position').count * 3).fill(1)
+      geometry.setAttribute('color', new Float32BufferAttribute(colors, 3))
+    }
     geometry.computeBoundingBox()
   }
-  const material = new MeshBasicMaterial({ vertexColors: true })
+  const material = new MeshLambertMaterial({ vertexColors: true })
   const faceTexture = createPersonFaceTexture()
-  const faceMaterial = new MeshBasicMaterial({
+  const faceMaterial = new MeshLambertMaterial({
     map: faceTexture,
     transparent: true,
     alphaTest: 0.02
@@ -178,9 +171,30 @@ export function createTownSceneResources() {
   }
   const grassTexture = tileTexture('grass')
   const roofTexture = tileTexture('roof')
-  const grassMaterial = new MeshBasicMaterial({ map: grassTexture, vertexColors: true })
-  const roofMaterial = new MeshBasicMaterial({ map: roofTexture, vertexColors: true })
+  const grassMaterial = new MeshLambertMaterial({ map: grassTexture, vertexColors: true })
+  const roofMaterial = new MeshLambertMaterial({ map: roofTexture, vertexColors: true })
+  const windowMaterial = new MeshLambertMaterial({ emissive: 0xffbc68, emissiveIntensity: 0 })
+  const lampMaterial = new MeshLambertMaterial({ emissive: 0xffcf83, emissiveIntensity: 0 })
+  const lampGlowMaterial = new MeshBasicMaterial({
+    color: 0xffcf83,
+    transparent: true,
+    opacity: 0,
+    depthWrite: false
+  })
+  lampGlowMaterial.onBeforeCompile = (shader) => {
+    shader.vertexShader = `varying vec2 glowUv;\n${shader.vertexShader}`.replace(
+      '#include <uv_vertex>',
+      '#include <uv_vertex>\nglowUv = uv;'
+    )
+    shader.fragmentShader = `varying vec2 glowUv;\n${shader.fragmentShader}`.replace(
+      '#include <color_fragment>',
+      '#include <color_fragment>\ndiffuseColor.a *= pow(max(0.0, 1.0 - length(glowUv - 0.5) * 2.0), 2.0);'
+    )
+  }
   return {
+    windowMaterial,
+    lampMaterial,
+    lampGlowMaterial,
     geometries,
     material,
     faceMaterial,
@@ -189,6 +203,9 @@ export function createTownSceneResources() {
     dispose() {
       for (const geometry of Object.values(geometries)) geometry.dispose()
       material.dispose()
+      windowMaterial.dispose()
+      lampMaterial.dispose()
+      lampGlowMaterial.dispose()
       faceMaterial.dispose()
       faceTexture.dispose()
       grassMaterial.dispose()

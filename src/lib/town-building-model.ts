@@ -22,8 +22,7 @@ export function createTownBuildingModels(
   // Work in facade coordinates so front and side details share the same construction.
   function facade(x: number, z: number, side = false) {
     return (u: number, y: number, out: number, w: number, h: number, d: number, c: number) => {
-      if (side) box(x + out, y, z + u, d, h, w, c)
-      else box(x + u, y, z + out, w, h, d, c)
+      return side ? box(x + out, y, z + u, d, h, w, c) : box(x + u, y, z + out, w, h, d, c)
     }
   }
 
@@ -37,7 +36,7 @@ export function createTownBuildingModels(
   ) {
     const face = facade(x, z, side)
     face(0, y, 2, 38, 36, 4, colors.cream)
-    face(0, y, 5, 30, 28, 3, colors.window)
+    face(0, y, 5, 30, 28, 3, colors.window).emission = 'window'
     if (!detailed) return
     // Curtains and partly lowered blinds vary by room, with glass in front of them.
     if (interior % 3 === 0) {
@@ -49,8 +48,8 @@ export function createTownBuildingModels(
       face(0, y + 9, 7, 28, 9, 1, colors.pavement)
       for (const dy of [6, 10]) face(0, y + dy, 8, 28, 1, 1, colors.curb)
     }
-    face(-8, y + 5, 7.5, 5, 15, 1, colors.glass)
-    face(7, y - 6, 7, 8, 8, 1, colors.glass)
+    face(-8, y + 5, 7.5, 5, 15, 1, colors.glass).emission = 'window'
+    face(7, y - 6, 7, 8, 8, 1, colors.glass).emission = 'window'
     face(0, y, 8, 3, 28, 2, colors.cream)
     face(0, y - 2, 8, 30, 3, 2, colors.cream)
     face(0, y - 19, 5, 44, 4, 12, colors.curb)
@@ -166,7 +165,6 @@ export function createTownBuildingModels(
     const width = 180 + (variant % 3) * 18
     const depth = variant % 3 === 2 ? 126 : 152
     const height = 88 + (variant % 2) * 24
-    box(x + 18, 1, z + 18, width + 38, 1, depth + 35, colors.shadow)
     box(x, 6, z, width + 12, 12, depth + 12, colors.curb)
     box(x, height / 2 + 12, z, width, height, depth, walls[variant % walls.length])
     box(x, height + 14, z, width + 28, 8, depth + 28, colors.ink)
@@ -195,7 +193,7 @@ export function createTownBuildingModels(
       front(0, 70, 10, 48, 5, 26, roofs[variant % roofs.length])
       for (const dx of [-19, 19]) front(dx, 61, 5, 4, 14, 12, colors.wood)
       front(26, 48, 5, 10, 16, 7, colors.ink)
-      front(26, 49, 9, 6, 9, 3, colors.sand)
+      front(26, 49, 9, 6, 9, 3, colors.sand).emission = 'lamp'
       front(-25, 36, 3, 10, 6, 2, colors.cream)
       // Corner boards, foundation joints, gutters, and a downspout with a shoe.
       for (const sign of [-1, 1]) {
@@ -318,7 +316,6 @@ export function createTownBuildingModels(
     const depth = 164
     const height = floors * 48 + 20
     const tint = kind === 'office' ? colors.glass : colors.brick
-    box(x + 20, 1, z + 20, width + 40, 1, depth + 40, colors.shadow)
     box(x, 5, z, width + 18, 10, depth + 18, colors.curb)
     box(x, height / 2 + 10, z, width, height, depth, tint)
     box(x, height + 15, z, width + 20, 10, depth + 20, colors.cream)

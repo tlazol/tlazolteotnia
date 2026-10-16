@@ -24,6 +24,7 @@ export function createTownSceneBatches(resources: ReturnType<typeof createTownSc
   scene.background = new Color(townColors.ocean)
   const traffic = new Scene()
   const selection = new Scene()
+  scene.add(traffic)
   const meshes: InstancedMesh[] = []
   const occluders: InstancedMesh[] = []
   const transform = new Object3D()
@@ -91,31 +92,48 @@ export function createTownSceneBatches(resources: ReturnType<typeof createTownSc
         'disc',
         'wheel'
       ] as const) {
-        const items = collection[shape] ?? []
-        if (!items.length) continue
-        const mesh = new InstancedMesh(
-          geometries[shape],
-          shape === 'ground' || shape === 'land'
-            ? grassMaterial
-            : shape === 'roof'
-              ? roofMaterial
-              : material,
-          items.length
-        )
-        items.forEach((item, index) => {
-          transform.position.set(item.x, item.y, item.z)
-          transform.rotation.set(item.pitch, item.yaw, item.angle, 'YXZ')
-          transform.scale.set(item.width, item.height, item.depth)
-          transform.updateMatrix()
-          mesh.setMatrixAt(index, transform.matrix)
-          mesh.setColorAt(index, color.setHex(item.color))
-        })
-        mesh.instanceMatrix.needsUpdate = true
-        if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
-        mesh.computeBoundingSphere()
-        meshes.push(mesh)
-        if (collection === parts) occluders.push(mesh)
-        scene.add(mesh)
+        // Spatial batches allow the view and shadow cameras to cull distant details.
+        const groups = new Map<string, Part[]>()
+        for (const item of collection[shape] ?? []) {
+          const key = `${Math.floor(item.x / 768)}:${Math.floor(item.z / 768)}:${item.emission ?? ''}`
+          const group = groups.get(key) ?? []
+          group.push(item)
+          groups.set(key, group)
+        }
+        for (const items of groups.values()) {
+          const emission = items[0].emission
+          const mesh = new InstancedMesh(
+            geometries[shape],
+            emission === 'window'
+              ? resources.windowMaterial
+              : emission === 'lamp'
+                ? resources.lampMaterial
+                : emission === 'glow'
+                  ? resources.lampGlowMaterial
+                  : shape === 'ground' || shape === 'land'
+                    ? grassMaterial
+                    : shape === 'roof'
+                      ? roofMaterial
+                      : material,
+            items.length
+          )
+          items.forEach((item, index) => {
+            transform.position.set(item.x, item.y, item.z)
+            transform.rotation.set(item.pitch, item.yaw, item.angle, 'YXZ')
+            transform.scale.set(item.width, item.height, item.depth)
+            transform.updateMatrix()
+            mesh.setMatrixAt(index, transform.matrix)
+            mesh.setColorAt(index, color.setHex(item.color))
+          })
+          mesh.castShadow = shape !== 'land' && shape !== 'ground' && emission !== 'glow'
+          mesh.receiveShadow = emission !== 'glow'
+          mesh.instanceMatrix.needsUpdate = true
+          if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
+          mesh.computeBoundingSphere()
+          meshes.push(mesh)
+          if (collection === parts && emission !== 'glow') occluders.push(mesh)
+          scene.add(mesh)
+        }
       }
     }
     for (const shape of Object.keys(movingParts) as TownShape[]) {
@@ -129,6 +147,8 @@ export function createTownSceneBatches(resources: ReturnType<typeof createTownSc
         : undefined
       if (blink) geometry.setAttribute('blinkFrame', blink)
       const mesh = new InstancedMesh(geometry, partMaterial, items.length)
+      mesh.castShadow = !isFace
+      mesh.receiveShadow = true
       mesh.instanceMatrix.setUsage(DynamicDrawUsage)
       // Residents travel outside their initial bounds; let the GPU clip these batches.
       mesh.frustumCulled = false
