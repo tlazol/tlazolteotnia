@@ -98,15 +98,22 @@ export function createTownStaticModel(detailed: boolean) {
       rimStart = end
       rimTint = nextTint
     }
-    // A broad southern beach and low sandy terraces bring the shore near town.
-    box(x, -238, south + beach / 2, coastStep + 100, 6, beach + 220, colors.shallows)
-    box(x, -227, south + beach / 2, coastStep, 16, beach, colors.sand)
-    box(x, -218, south + beach - 18, coastStep, 2, 32, 0xdab878)
-    box(x - 8, -235, south + beach + 30, 68, 2, 7, colors.waterHighlight)
-    if (beach > 290) {
-      for (let step = 0; step < 5; step++)
-        box(x, -35 - step * 45, south + step * 34, coastStep, 45, 78, colors.sand)
-      box(x + 19, -218, south + beach * 0.72, 24, 2, 4, colors.cream)
+    // Dry sand meets the town at y = -1, the same surface used by residents.
+    // Only the outer terraces descend to the water, outside the walkable beach.
+    const shore = south + beach
+    box(x, -238, south + beach / 2, coastStep + 100, 6, beach + 620, colors.shallows)
+    box(x, -110, south + beach / 2, coastStep, 218, beach, colors.sand)
+    for (let step = 0; step < 5; step++) {
+      const top = -1 - (step + 1) * 44
+      box(x, (top - 239) / 2, shore + step * 36 + 18, coastStep, top + 239, 36, colors.sand)
+    }
+    box(x, -220, shore + 162, coastStep, 2, 32, 0xdab878)
+    box(x - 8, -235, shore + 210, 68, 2, 7, colors.waterHighlight)
+    if (detailed) {
+      for (let ripple = 1; ripple <= 3; ripple++) {
+        box(x - 35 + ripple * 19, -0.5, south + beach * (ripple / 4), 34, 0.5, 3, 0xdab878)
+      }
+      if (index % 3 === 0) box(x + 19, 0, south + beach * 0.72, 8, 2, 5, colors.cream)
     }
     for (const edge of [north, south]) {
       const direction = edge === north ? -1 : 1

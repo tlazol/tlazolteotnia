@@ -11,6 +11,7 @@ import {
 import { describe, expect, it, vi } from 'vitest'
 import type { BlogPostSummary } from '../src/lib/blog-post'
 import { createTownCamera, updateTownCamera } from '../src/lib/town-camera'
+import { beachWalkingSegments, containsTownGround } from '../src/lib/town-coast'
 import {
   nearestTownRoad,
   onettBuildings,
@@ -342,7 +343,11 @@ describe('article residents', () => {
         counts.set(key, (counts.get(key) ?? 0) + 1)
         for (let time = 0; time <= 1000; time += 5) {
           const point = trafficPose(article.route, time)
-          expect(nearestTownRoad(point, onettRoads).distance).toBeLessThanOrEqual(0.001)
+          if (beachWalkingSegments.some((segment) => segment.start === article.route.start)) {
+            expect(containsTownGround(point)).toBe(true)
+          } else {
+            expect(nearestTownRoad(point, onettRoads).distance).toBeLessThanOrEqual(0.001)
+          }
           for (const hill of onettHills) {
             const center = onettToTown(hill.x, hill.y)
             expect(

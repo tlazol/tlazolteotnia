@@ -1,5 +1,6 @@
 import type { BlogPostSummary } from './blog-post'
 import { hashSlug, type SceneSize } from './scene-math'
+import { beachWalkingSegments, coastColumns, coastStep } from './town-coast'
 import { onettBuildings, onettHills, onettRoads, onettToTown, townLayoutScale } from './town-layout'
 import { townPersonStyles } from './town-person'
 import { type TrafficRoute, trafficPose } from './town-traffic'
@@ -56,12 +57,14 @@ const residentRoadSegments = onettRoads.flatMap((road) =>
   })
 )
 
+const residentSegments = [...residentRoadSegments, ...beachWalkingSegments]
+
 // Shuffle the full catalogue once per visit; filtering keeps these residents in place.
 export function layoutTownArticles(
   posts: BlogPostSummary[],
   random: () => number = Math.random
 ): TownArticle[] {
-  const segments = [...residentRoadSegments]
+  const segments = [...residentSegments]
   for (let i = segments.length - 1; i > 0; i--) {
     const j = Math.floor(random() * (i + 1))
     ;[segments[i], segments[j]] = [segments[j], segments[i]]
@@ -87,7 +90,7 @@ export function layoutTownArticles(
   })
 }
 
-// Choose a lane to rejoin after walking back from the drop location.
+// Choose a street or beach circuit to rejoin after walking from the drop location.
 export function nearestResidentRoute(
   point: { x: number; z: number },
   route: TrafficRoute,
@@ -95,7 +98,7 @@ export function nearestResidentRoute(
 ) {
   let nearest = route
   let distance = Infinity
-  for (const segment of residentRoadSegments) {
+  for (const segment of residentSegments) {
     const radius = Math.min(segment.lane, Math.abs(route.lane))
     for (const lane of [-radius, radius]) {
       const candidate = { ...route, ...segment, lane, progress: 0 }
@@ -118,7 +121,16 @@ export function nearestResidentRoute(
   return nearest
 }
 
-const landmarks = [...onettRoads.flatMap((road) => road.points), ...onettBuildings]
+const landmarks = [
+  ...onettRoads.flatMap((road) => road.points),
+  ...onettBuildings,
+  ...coastColumns.flatMap(({ x, south, beach }) => [
+    { x: x - coastStep / 2, z: south },
+    { x: x + coastStep / 2, z: south },
+    { x: x - coastStep / 2, z: south + beach },
+    { x: x + coastStep / 2, z: south + beach }
+  ])
+]
 export function getTownBounds(rotation = 0) {
   const projected = landmarks.map((p) => townToBoard(p.x, p.z, 0, rotation))
   return {
@@ -131,7 +143,7 @@ export function getTownBounds(rotation = 0) {
 export function fitTown(size: SceneSize, rotation = 0): TownView {
   const townBounds = getTownBounds(rotation)
   const zoom = Math.max(
-    0.03,
+    0.01,
     Math.min(
       1,
       (size.width - 32) / (townBounds.right - townBounds.left),

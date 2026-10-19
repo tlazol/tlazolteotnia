@@ -13,16 +13,31 @@ export const coastColumns = Array.from({ length: 100 }, (_, index) => {
     x: x * townLayoutScale,
     north: Math.round((-1000 - reach * 4200 + inlet) / 32) * 32 * townLayoutScale,
     south: Math.round((-1000 + reach * 3400 + inlet - bay) / 32) * 32 * townLayoutScale,
-    beach: 100 + Math.round(Math.exp(-(((x - 3500) / 1700) ** 2)) * 320)
+    beach: 440 + Math.round(Math.exp(-(((x - 3500) / 1700) ** 2)) * 1000)
   }
 })
 
 export function containsTownGround(point: TownPoint) {
-  const coast = coastColumns[Math.round((point.x - coastColumns[0].x) / coastStep)]
-  return (
-    !!coast &&
-    point.z > coast.north + 12 &&
-    point.z < coast.south - 12 &&
-    !inTownLake(point.x, point.z, 12)
-  )
+  // Apply the same margin to both axes, including the sides of stepped coves.
+  const first = Math.round((point.x - 12 - coastColumns[0].x) / coastStep)
+  const last = Math.round((point.x + 12 - coastColumns[0].x) / coastStep)
+  if (!coastColumns[first] || !coastColumns[last]) return false
+  for (let index = first; index <= last; index++) {
+    const coast = coastColumns[index]
+    if (!(point.z > coast.north + 12 && point.z < coast.south + coast.beach - 12)) return false
+  }
+  return !inTownLake(point.x, point.z, 12)
 }
+
+// Keep each complete walking circuit inside the shared dry sand of adjacent coves.
+export const beachWalkingSegments = [44, 50, 56, 62, 68, 74].map((index) => {
+  const columns = coastColumns.slice(index, index + 5)
+  const inland = Math.max(...columns.map((column) => column.south))
+  const shore = Math.min(...columns.map((column) => column.south + column.beach))
+  const z = (inland + shore) / 2
+  return {
+    start: { x: columns[0].x, z },
+    end: { x: columns[columns.length - 1].x, z },
+    lane: 48
+  }
+})
