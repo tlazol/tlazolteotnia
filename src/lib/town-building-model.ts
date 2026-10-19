@@ -17,7 +17,7 @@ export function createTownBuildingModels(
     architecture: ReturnType<typeof townTerrain>['architecture']
     detailed: boolean
   },
-  { bench, flowerbed, sign, fence }: ReturnType<typeof createTownSceneryModels>
+  { bench, flowerbed, sign }: ReturnType<typeof createTownSceneryModels>
 ) {
   // Work in facade coordinates so front and side details share the same construction.
   function facade(x: number, z: number, side = false) {
@@ -26,42 +26,19 @@ export function createTownBuildingModels(
     }
   }
 
-  function windowDetail(
-    x: number,
-    y: number,
-    z: number,
-    side = false,
-    shutters = false,
-    interior = 0
-  ) {
+  function windowDetail(x: number, y: number, z: number, side = false, shutters = false) {
     const face = facade(x, z, side)
     face(0, y, 2, 38, 36, 4, colors.cream)
     face(0, y, 5, 30, 28, 3, colors.window).emission = 'window'
     if (!detailed) return
-    // Curtains and partly lowered blinds vary by room, with glass in front of them.
-    if (interior % 3 === 0) {
-      for (const dx of [-11, 11]) {
-        face(dx, y + 1, 7, 6, 25, 1, colors.sand)
-        face(dx, y - 5, 8, 7, 2, 1, colors.wood)
-      }
-    } else if (interior % 3 === 1) {
-      face(0, y + 9, 7, 28, 9, 1, colors.pavement)
-      for (const dy of [6, 10]) face(0, y + dy, 8, 28, 1, 1, colors.curb)
-    }
+    // Keep the glazing clear of bars and layered ornaments that read as a fence.
     face(-8, y + 5, 7.5, 5, 15, 1, colors.glass).emission = 'window'
     face(7, y - 6, 7, 8, 8, 1, colors.glass).emission = 'window'
-    face(0, y, 8, 3, 28, 2, colors.cream)
-    face(0, y - 2, 8, 30, 3, 2, colors.cream)
     face(0, y - 19, 5, 44, 4, 12, colors.curb)
     face(0, y + 19, 3, 42, 3, 7, colors.pavement)
-    face(4, y - 7, 10, 3, 2, 2, colors.door)
-    for (const dx of [-17, 17]) face(dx, y - 16, 5, 2, 2, 2, colors.window)
     if (shutters) {
       for (const sign of [-1, 1]) {
         face(sign * 25, y, 3, 10, 32, 4, colors.window)
-        for (let dy = -10; dy <= 10; dy += 5) {
-          face(sign * 25, y + dy, 6, 8, 2, 2, colors.glass)
-        }
       }
     }
   }
@@ -182,8 +159,8 @@ export function createTownBuildingModels(
     front(0, 36, 5, 25, 46, 3, colors.door)
     front(7, 34, 8, 3, 3, 2, colors.stripe)
     for (const side of [-1, 1]) {
-      windowDetail(x + side * 59, 63, z + depth / 2, false, variant % 2 === 0, variant + side)
-      windowDetail(x + width / 2, 63, z + side * 38, true, false, variant + side + 2)
+      windowDetail(x + side * 59, 63, z + depth / 2, false, variant % 2 === 0)
+      windowDetail(x + width / 2, 63, z + side * 38, true)
     }
     if (detailed) {
       // Recessed door panels, porch brackets, and a warm porch light.
@@ -300,13 +277,9 @@ export function createTownBuildingModels(
     box(x + 61, 20, z + 137, 6, 40, 6, colors.trunk)
     box(x + 61, 43, z + 137, 23, 16, 17, roofs[variant % roofs.length])
     box(x - 75, 17, z + 140, 74, 32, 22, colors.hedge)
-    // Horizontal siding and a short picket fence echo the town's sprite details.
+    // Horizontal siding echoes the town's sprite details.
     for (let y = 24; y < height; y += detailed ? 12 : 18) {
       box(x, y, z + depth / 2 + 0.5, width, 2, 1, colors.curb)
-    }
-    box(x + width / 2 + 35, 23, z, 5, 5, 172, colors.cream)
-    for (let p = -76; p <= 76; p += 25) {
-      box(x + width / 2 + 35, 20, z + p, 8, 40, 10, colors.cream)
     }
   }
 
@@ -378,28 +351,20 @@ export function createTownBuildingModels(
       const y = 42 + floor * 48
       if (floors > 1 || !detailed) {
         for (const dx of [-78, -26, 26, 78]) {
-          windowDetail(x + dx, y, z + 82, false, false, variant + floor + (dx + 78) / 52)
+          windowDetail(x + dx, y, z + 82)
         }
       }
       for (const dz of [-48, 4, 56]) {
-        windowDetail(x + width / 2, y, z + dz, true, false, variant + floor)
+        windowDetail(x + width / 2, y, z + dz, true)
       }
       // Upper floors have balconies; the ground-floor entrance stays open.
       if (kind === 'apartment' && floor > 0) {
         box(x, y - 18, z + 96, width + 12, 7, 30, colors.cream)
-        box(x, y - 2, z + 111, width + 12, 3, 4, colors.window)
-        box(x, y - 14, z + 111, width + 12, 3, 4, colors.cream)
         if (detailed) {
-          for (let dx = -112; dx <= 112; dx += 14) {
-            box(x + dx, y - 8, z + 111, 3, 14, 3, colors.cream)
-          }
-          for (const dx of [-52, 0, 52]) box(x + dx, y - 6, z + 97, 3, 23, 26, colors.pavement)
           box(x + 94, y - 9, z + 98, 22, 12, 12, colors.curb)
           for (const dy of [-3, 1, 5]) box(x + 94, y - 9 + dy, z + 105, 17, 1.5, 2, colors.window)
           box(x - 78, y - 10, z + 103, 23, 9, 10, colors.wood)
           for (const dx of [-85, -75]) box(x + dx, y - 3, z + 103, 8, 9, 8, colors.hedge)
-        } else {
-          box(x, y - 8, z + 111, width + 12, 12, 3, colors.pavement)
         }
       } else if (kind === 'office') {
         box(x, y + 21, z + 85, width, 5, 5, colors.cream)
@@ -622,7 +587,6 @@ export function createTownBuildingModels(
   function library(variant: number) {
     if (variant === 1) {
       school(0, 0)
-      fence(480, 370)
       return
     }
     if (variant === 2) {
@@ -766,8 +730,8 @@ export function createTownBuildingModels(
         box(x, height + 33, 86, 18, 16, 3, colors.window)
       }
       for (const dx of [-49, 49]) box(x + dx, height / 2 + 12, 77, 6, height, 4, colors.cream)
-      windowDetail(x, 109, 76, false, true, variant)
-      windowDetail(x - 23, 49, 76, false, false, variant + 1)
+      windowDetail(x, 109, 76, false, true)
+      windowDetail(x - 23, 49, 76)
       box(x + 28, 35, 78, 28, 50, 5, colors.cream)
       box(x + 28, 35, 82, 21, 44, 3, colors.door)
       box(x + 28, 47, 84, 13, 13, 2, colors.glass)
@@ -922,9 +886,9 @@ export function createTownBuildingModels(
     } else {
       part('roof', 0, 89, 0, 192, 92, 160, accent)
       part('gable', 0, 90, 81, 178, 83, 3, colors.cream)
-      windowDetail(0, 124, 84, false, false, variant)
+      windowDetail(0, 124, 84)
     }
-    for (const x of [-52, 52]) windowDetail(x, 49, 68, false, true, variant)
+    for (const x of [-52, 52]) windowDetail(x, 49, 68, false, true)
     windowDetail(83, 48, 0, true)
     box(0, 34, 71, 27, 51, 6, colors.door)
     box(0, 45, 75, 17, 20, 2, colors.glass)
@@ -934,8 +898,6 @@ export function createTownBuildingModels(
     box(0, 81, 105, 196, 8, 84, accent, 0, 0.12)
     for (const x of [-84, 84]) {
       box(x, 45, 135, 7, 74, 7, colors.cream)
-      box(x, 30, 107, 5, 5, 55, colors.cream)
-      for (const z of [87, 105, 123]) box(x, 21, z, 4, 22, 4, colors.cream)
     }
     const chimneyTop = flatRoof ? 128 : 178
     box(-47, chimneyTop - 35, -34, 22, 66, 24, colors.brick)
@@ -1039,7 +1001,7 @@ export function createTownBuildingModels(
         part('roof', 0, height + 82, 38, 97, 48, 94, colors.window)
         for (const x of [-80, 80]) box(x, height + 32, -8, 43, 10, 96, colors.glass)
       }
-      for (const x of [-75, 75]) windowDetail(x, 58, 78, false, false, variant)
+      for (const x of [-75, 75]) windowDetail(x, 58, 78)
       front(0, 39, 4, 40, 58, 6, colors.window)
       front(0, 42, 8, 30, 43, 3, colors.glass)
       front(0, 39, 11, 3, 58, 3, colors.cream)

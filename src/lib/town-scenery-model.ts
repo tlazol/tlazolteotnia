@@ -215,17 +215,5 @@ export function createTownSceneryModels(
       })
     }
   }
-  function fence(width: number, depth: number) {
-    for (const side of [-1, 1]) {
-      box((side * width) / 2, 23, 0, 5, 7, depth, colors.cream)
-      for (let z = -depth / 2; z <= depth / 2; z += 20)
-        box((side * width) / 2, 20, z, 6, 40, 6, colors.cream)
-      box(side * (width / 4 + 15), 23, depth / 2, width / 2 - 30, 7, 5, colors.cream)
-    }
-    for (let x = -width / 2; x <= width / 2; x += 20) {
-      if (Math.abs(x) > 30) box(x, 20, depth / 2, 6, 40, 6, colors.cream)
-    }
-  }
-
-  return { tree, bench, flowerbed, park, sign, fence }
+  return { tree, bench, flowerbed, park, sign }
 }
