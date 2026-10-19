@@ -23,10 +23,12 @@ export function createTownLighting(
   sun.shadow.normalBias = 0.6
   sun.shadow.bias = -0.00005
   scene.add(sun, sun.target, ambient)
-  const warm = new Color(0xffb86b)
-  const sky = new Color(0xc9dfff)
+  const warm = new Color(0xffaa61)
+  const sky = new Color(0xd6edff)
+  const duskSky = new Color(0xbda4cd)
   const nightSky = new Color(0x708acb)
-  const ground = new Color(0xc4bb9b)
+  const ground = new Color(0xc7cbb5)
+  const duskGround = new Color(0xc78d76)
   const nightGround = new Color(0x394363)
   const ocean = new Color(townColors.ocean)
   const darkOcean = new Color(0x101d38)
@@ -77,11 +79,14 @@ export function createTownLighting(
         lightKey = nextLightKey
         if (lightingChanged) {
           direction.set(light.direction.x, light.direction.y, light.direction.z)
-          sun.color.setHex(0xfff5df).lerp(warm, light.warmth)
+          sun.color.setHex(0xfff9ed).lerp(warm, light.warmth)
           sun.intensity = light.sun
           sun.castShadow = light.sun > 0
-          ambient.color.copy(sky).lerp(nightSky, light.night)
-          ambient.groundColor.copy(ground).lerp(nightGround, light.night)
+          ambient.color.copy(sky).lerp(duskSky, light.warmth).lerp(nightSky, light.night)
+          ambient.groundColor
+            .copy(ground)
+            .lerp(duskGround, light.warmth)
+            .lerp(nightGround, light.night)
           ambient.intensity = light.ambient
           resources.windowMaterial.emissiveIntensity = light.night * 0.85
           resources.lampMaterial.emissiveIntensity = light.night * 1.8

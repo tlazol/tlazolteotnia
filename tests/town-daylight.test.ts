@@ -30,23 +30,32 @@ describe('town daylight', () => {
     expect(evening.direction.x).toBeGreaterThan(0)
     expect(noon.direction.y).toBeGreaterThan(morning.direction.y * 3)
     expect(morning.warmth).toBeGreaterThan(noon.warmth)
+    expect(morning.warmth).toBeLessThan(evening.warmth)
+    expect(noon.sun).toBeGreaterThan(morning.sun)
+    expect(noon.sun).toBeGreaterThan(evening.sun)
+    expect(noon.ambient).toBeGreaterThan(morning.ambient)
+    expect(morning.ambient).toBeGreaterThan(evening.ambient)
+    expect(evening.ambient).toBeGreaterThan(night.ambient)
     expect(noon.night).toBe(0)
     expect(night.night).toBe(1)
     expect(night.sun).toBe(0)
     expect(night.ambient).toBeGreaterThan(0)
   })
 
-  it.each([0, 5, 6, 12, 17, 19, 24])('stays continuous across the %s:00 boundary', (hour) => {
-    const before = townDaylight(localTime(hour, 0, -1))
-    const after = townDaylight(localTime(hour, 0, 1))
-    for (const key of ['sun', 'ambient', 'warmth', 'night'] as const)
-      expect(Math.abs(after[key] - before[key])).toBeLessThan(0.001)
-    expect(
-      new Vector3(...Object.values(before.direction)).distanceTo(
-        new Vector3(...Object.values(after.direction))
-      )
-    ).toBeLessThan(0.001)
-  })
+  it.each([0, 5, 6, 9, 12, 15, 17, 18, 19, 24])(
+    'stays continuous across the %s:00 boundary',
+    (hour) => {
+      const before = townDaylight(localTime(hour, 0, -1))
+      const after = townDaylight(localTime(hour, 0, 1))
+      for (const key of ['sun', 'ambient', 'warmth', 'night'] as const)
+        expect(Math.abs(after[key] - before[key])).toBeLessThan(0.001)
+      expect(
+        new Vector3(...Object.values(before.direction)).distanceTo(
+          new Vector3(...Object.values(after.direction))
+        )
+      ).toBeLessThan(0.001)
+    }
+  )
 
   it('uses the viewer timezone for the same instant, including a local date change', () => {
     const previous = process.env.TZ
