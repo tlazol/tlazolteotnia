@@ -75,18 +75,14 @@ export function createTownStaticModel(detailed: boolean) {
   const terrainAt = (x: number, z: number) =>
     townTerrain(x * placement.scale + placement.x, z * placement.scale + placement.z)
   const { tree, park } = createTownSceneryModels(writer, colors, terrainAt)
-  box(2000, -246, -1000, 60000, 8, 60000, colors.ocean)
+  // Keep the sea just below the walking surface (y = -1) at the water's edge.
+  box(2000, -8, -1000, 60000, 8, 60000, colors.ocean)
   part('land', 0, 0, 0, 1, 1, 1, 0xffffff)
   for (const [index, { x, north, south, beach }] of coastColumns.entries()) {
     const center = (north + south) / 2
     const depth = south - north
-    // The submerged shelf, narrow beach, rock strata and grassy rim all follow
-    // the same irregular coast, including the sides of the coves.
-    box(x, -238, center, coastStep + 260, 6, depth + 290, colors.shallows)
-    box(x, -227, center, coastStep + 120, 16, depth + 150, colors.sand)
-    box(x, -172, center, coastStep, 102, depth, colors.wood)
-    box(x, -84, center, coastStep, 74, depth, colors.brick)
-    box(x, -25, center, coastStep, 44, depth, colors.sand)
+    // The submerged shelf and grassy rim follow the same irregular coast.
+    box(x, -3.5, center, coastStep + 260, 1, depth + 290, colors.shallows)
     // Keep the rim below the grass at y = -1 so their top faces never coincide.
     let rimStart = north
     let rimTint = townTerrain(x, north + coastStep / 2).shadow
@@ -99,31 +95,27 @@ export function createTownStaticModel(detailed: boolean) {
       rimTint = nextTint
     }
     // Dry sand meets the town at y = -1, the same surface used by residents.
-    // Only the outer terraces descend to the water, outside the walkable beach.
+    // Wet sand and foam meet the water without an unwalkable cliff or staircase.
     const shore = south + beach
-    box(x, -238, south + beach / 2, coastStep + 100, 6, beach + 620, colors.shallows)
-    box(x, -110, south + beach / 2, coastStep, 218, beach, colors.sand)
-    for (let step = 0; step < 5; step++) {
-      const top = -1 - (step + 1) * 44
-      box(x, (top - 239) / 2, shore + step * 36 + 18, coastStep, top + 239, 36, colors.sand)
+    box(x, -3.5, south + beach / 2, coastStep + 100, 1, beach + 400, colors.shallows)
+    box(x, -3, south + beach / 2, coastStep, 4, beach, colors.sand)
+    box(x, -0.9, shore - 48, coastStep, 0.2, 96, 0xdab878)
+    box(x, -0.6, shore - 5, coastStep, 0.2, 10, 0xe3f5ed)
+    // Continue the tide line around the exposed sides of the stepped coves.
+    for (const direction of [-1, 1]) {
+      const neighbor = coastColumns[index + direction]
+      const start = neighbor ? Math.max(south, neighbor.south + neighbor.beach) : south
+      if (start >= shore) continue
+      const edge = x + (direction * coastStep) / 2
+      box(edge - direction * 48, -0.9, (start + shore) / 2, 96, 0.2, shore - start, 0xdab878)
+      box(edge - direction * 5, -0.6, (start + shore) / 2, 10, 0.2, shore - start, 0xe3f5ed)
     }
-    box(x, -220, shore + 162, coastStep, 2, 32, 0xdab878)
-    box(x - 8, -235, shore + 210, 68, 2, 7, colors.waterHighlight)
+    box(x - 8, -2.5, shore + 45 + (index % 3) * 8, coastStep * 0.7, 0.5, 5, colors.waterHighlight)
     if (detailed) {
       for (let ripple = 1; ripple <= 3; ripple++) {
         box(x - 35 + ripple * 19, -0.5, south + beach * (ripple / 4), 34, 0.5, 3, 0xdab878)
       }
       if (index % 3 === 0) box(x + 19, 0, south + beach * 0.72, 8, 2, 5, colors.cream)
-    }
-    for (const edge of [north, south]) {
-      const direction = edge === north ? -1 : 1
-      box(x + 12, -91, edge + direction * 2, 38, 7, 5, colors.wood)
-      box(x - 20, -154, edge + direction * 2, 52, 5, 5, colors.sand)
-      box(x - 9, -218, edge + direction * 85, 63, 2, 6, colors.waterHighlight)
-      if (index % 5 === 0 && (edge === north || beach < 180)) {
-        box(x + 26, -221, edge + direction * 190, 34, 38, 28, colors.treeOutline)
-        box(x + 22, -201, edge + direction * 190, 29, 4, 24, colors.curb)
-      }
     }
   }
   // Citrine lakes: pale mineral banks, chartreuse shallows and jade depths.
@@ -149,7 +141,7 @@ export function createTownStaticModel(detailed: boolean) {
     const seed = hashSlug(`sea:${i}`)
     const x = -14000 + (seed % 30000)
     const z = -13000 + ((seed >>> 12) % 28000)
-    box(x, -240, z, 24 + (seed % 54), 1, 4, colors.shallows)
+    box(x, -3.75, z, 24 + (seed % 54), 0.5, 4, colors.shallows)
   }
   for (const hill of onettHills) {
     const point = onettToTown(hill.x, hill.y)

@@ -20,7 +20,16 @@ describe('walkable beach', () => {
     (detailed) => {
       const model = createTownStaticModel(detailed)
       const navigation = createTownNavigation(model.obstacles, containsTownGround)
-      for (const { x, south, beach } of coastColumns) {
+      const surfaceHeight = (x: number, z: number) =>
+        Math.max(
+          ...model.parts.box
+            .filter(
+              (part) =>
+                Math.abs(x - part.x) <= part.width / 2 && Math.abs(z - part.z) <= part.depth / 2
+            )
+            .map((part) => part.y + part.height / 2)
+        )
+      for (const [index, { x, south, beach }] of coastColumns.entries()) {
         const point = { x, z: south + beach / 2 }
         expect(beach).toBeGreaterThanOrEqual(440)
         expect(navigation.canStand(point)).toBe(true)
@@ -31,8 +40,34 @@ describe('walkable beach', () => {
         expect(surface && surface.y + surface.height / 2).toBe(-1)
         expect(navigation.findPath({ x, z: south - 16 }, point)).toEqual([point])
         expect(navigation.canStand({ x, z: south + beach - 24 })).toBe(true)
+        expect(navigation.findPath(point, { x, z: south + beach - 24 })).toEqual([
+          { x, z: south + beach - 24 }
+        ])
+        // A resident can reach the tide line, with water immediately below their feet.
+        // Sampling beyond the sand catches both a lowered ocean and coastal stairs.
+        for (const distance of [-24, 0, 24, 100, 250]) {
+          const height = surfaceHeight(x, south + beach + distance)
+          expect(height).toBeGreaterThanOrEqual(-4)
+          expect(height).toBeLessThanOrEqual(0)
+        }
         expect(navigation.canStand({ x, z: south + beach })).toBe(false)
         expect(navigation.canStand({ x, z: south + beach + 250 })).toBe(false)
+        // Also cross the exposed sides of coves and the two ends of the beach.
+        for (const direction of [-1, 1]) {
+          const neighbor = coastColumns[index + direction]
+          const start = neighbor ? Math.max(south, neighbor.south + neighbor.beach) : south
+          const shore = south + beach
+          if (shore - start < 48) continue
+          const edge = x + (direction * coastStep) / 2
+          const z = (start + shore) / 2
+          expect(navigation.canStand({ x: edge - direction * 24, z })).toBe(true)
+          expect(navigation.canStand({ x: edge + direction * 24, z })).toBe(false)
+          for (const distance of [-24, 24, 100]) {
+            const height = surfaceHeight(edge + direction * distance, z)
+            expect(height).toBeGreaterThanOrEqual(-4)
+            expect(height).toBeLessThanOrEqual(0)
+          }
+        }
       }
       for (const segment of beachWalkingSegments) {
         const route = { ...segment, progress: 0, speed: 12 }
@@ -121,8 +156,8 @@ describe('walkable beach', () => {
     } as unknown as WebGLRenderer
     try {
       const size = { width: 1280, height: 720 }
-      const destination = trafficPose({ ...beachWalkingSegments[2], progress: 0.5, speed: 12 }, 0)
-      destination.z += 100
+      const shore = coastColumns[58]
+      const destination = { x: shore.x, z: shore.south + shore.beach - 24 }
       const center = townToBoard(destination.x, destination.z)
       town.follow(null)
       town.update({ x: 640 - center.x * zoom, y: 360 - center.y * zoom, zoom }, size)

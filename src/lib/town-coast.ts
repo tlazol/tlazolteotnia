@@ -2,7 +2,7 @@ import { townLayoutScale } from './town-layout'
 import type { TownPoint } from './town-navigation'
 import { inTownLake } from './town-terrain'
 // A headland with stepped coves. Share its outline between the ground,
-// cliff terraces and planting so no trees or grass extend over the water.
+// shoreline and planting so no trees or grass extend over the water.
 export const coastStep = 96 * townLayoutScale
 export const coastColumns = Array.from({ length: 100 }, (_, index) => {
   const x = -2352 + index * 96

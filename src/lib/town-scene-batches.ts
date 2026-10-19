@@ -96,7 +96,10 @@ export function createTownSceneBatches(resources: ReturnType<typeof createTownSc
         // Spatial batches allow the view and shadow cameras to cull distant details.
         const groups = new Map<string, Part[]>()
         for (const item of collection[shape] ?? []) {
-          const key = `${Math.floor(item.x / 768)}:${Math.floor(item.z / 768)}:${item.emission ?? ''}`
+          // Flat coastal layers receive shadows from residents, but must not
+          // shadow each other across their sub-unit height differences.
+          const aboveGround = item.y + item.height / 2 > 0
+          const key = `${Math.floor(item.x / 768)}:${Math.floor(item.z / 768)}:${item.emission ?? ''}:${aboveGround}`
           const group = groups.get(key) ?? []
           group.push(item)
           groups.set(key, group)
@@ -126,7 +129,11 @@ export function createTownSceneBatches(resources: ReturnType<typeof createTownSc
             mesh.setMatrixAt(index, transform.matrix)
             mesh.setColorAt(index, color.setHex(item.color))
           })
-          mesh.castShadow = shape !== 'land' && shape !== 'ground' && emission !== 'glow'
+          mesh.castShadow =
+            shape !== 'land' &&
+            shape !== 'ground' &&
+            emission !== 'glow' &&
+            items[0].y + items[0].height / 2 > 0
           mesh.receiveShadow = emission !== 'glow'
           mesh.instanceMatrix.needsUpdate = true
           if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
