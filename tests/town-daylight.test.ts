@@ -2,6 +2,7 @@ import {
   Color,
   DirectionalLight,
   type InstancedMesh,
+  PointLight,
   Scene,
   Vector3,
   type WebGLRenderer,
@@ -13,6 +14,7 @@ import { createTownLighting } from '../src/lib/town-lighting'
 import { createTownSceneResources } from '../src/lib/town-scene-resources'
 import { createTownStaticModel } from '../src/lib/town-static-model'
 import { createTownScene } from '../src/lib/town-three.client'
+import { boardToTown } from '../src/lib/town-view'
 
 const localTime = (hour: number, minute = 0, second = 0) =>
   new Date(2026, 9, 16, hour, minute, second)
@@ -63,6 +65,103 @@ describe('town daylight', () => {
 })
 
 describe('town lighting integration', () => {
+  it('lights streetlamp positions at night and preserves their state through detail rebuilds', () => {
+    const scene = new Scene()
+    const resources = createTownSceneResources()
+    const lighting = createTownLighting(scene, resources)
+    const view = { x: 640, y: 360, zoom: 1 }
+    const size = { width: 1280, height: 720 }
+    const lights = () =>
+      scene.children.filter((child): child is PointLight => child instanceof PointLight)
+    try {
+      const detailed = createTownStaticModel(true)
+      lighting.setStreetLamps(detailed.streetLamps)
+      expect(lights()).toHaveLength(
+        detailed.parts.disc.filter((part) => part.emission === 'glow').length
+      )
+      lighting.update(localTime(12), view, size)
+      expect(lights().every((light) => light.intensity === 0)).toBe(true)
+      lighting.update(localTime(21), view, size)
+      for (const [index, light] of lights().entries()) {
+        const lamp = detailed.streetLamps[index]
+        expect(light.position.toArray()).toEqual([lamp.x, lamp.y, lamp.z])
+        expect(light.intensity).toBeGreaterThan(0)
+        expect(light.distance).toBeGreaterThan(lamp.y)
+        expect(light.castShadow).toBe(false)
+      }
+      const oldLights = lights()
+      const disposals = oldLights.map((light) => vi.spyOn(light, 'dispose'))
+      lighting.setStreetLamps(createTownStaticModel(false).streetLamps)
+      expect(lighting.update(localTime(21), view, size)).toBe(true)
+      expect(lights()).toHaveLength(oldLights.length)
+      expect(lights().every((light) => light.intensity > 0)).toBe(true)
+      expect(oldLights.every((light) => light.parent === null)).toBe(true)
+      for (const dispose of disposals) expect(dispose).toHaveBeenCalledOnce()
+      lighting.update(localTime(12), view, size)
+      expect(lights().every((light) => light.intensity === 0)).toBe(true)
+    } finally {
+      lighting.dispose()
+      resources.dispose()
+    }
+    expect(scene.children).toHaveLength(0)
+  })
+
+  it.each([0, Math.PI / 2])('keeps off-screen light spill at camera rotation %s', (rotation) => {
+    const scene = new Scene()
+    const resources = createTownSceneResources()
+    const lighting = createTownLighting(scene, resources)
+    const size = { width: 800, height: 500 }
+    try {
+      for (const zoom of [0.4, 1, 2.5]) {
+        const view = { x: 400, y: 250, zoom, rotation }
+        const radius = 130 * zoom
+        const screenPoints = [
+          [400, 250],
+          [-radius + 1, 250],
+          [800 + radius - 1, 250],
+          [400, -radius + 1],
+          [400, 500 + radius - 1],
+          [-radius - 1, 250],
+          [800 + radius + 1, 250],
+          [400, -radius - 1],
+          [400, 500 + radius + 1]
+        ]
+        lighting.setStreetLamps(
+          screenPoints.map(([x, y]) => ({
+            ...boardToTown((x - view.x) / zoom, (y - view.y) / zoom + 90 / Math.SQRT2, rotation),
+            y: 90
+          }))
+        )
+        lighting.update(localTime(21), view, size)
+        const lights = scene.children.filter((child) => child instanceof PointLight)
+        expect(lights.map((light) => light.visible)).toEqual([
+          true,
+          true,
+          true,
+          true,
+          true,
+          false,
+          false,
+          false,
+          false
+        ])
+        expect(lighting.update(localTime(21), view, size)).toBe(false)
+        // A stationary night still responds to panning and viewport changes.
+        lighting.update(localTime(21), { ...view, x: view.x + 2 }, size)
+        expect(lights[5].visible).toBe(true)
+        expect(lights[2].visible).toBe(false)
+        lighting.update(localTime(21), view, { width: 802, height: 502 })
+        expect(lights[6].visible).toBe(true)
+        expect(lights[8].visible).toBe(true)
+        lighting.update(localTime(12), view, size)
+        expect(lights.every((light) => !light.visible)).toBe(true)
+      }
+    } finally {
+      lighting.dispose()
+      resources.dispose()
+    }
+  })
+
   it('keeps unchanged night lighting cached across midnight and resumes updates at dawn', () => {
     const scene = new Scene()
     const resources = createTownSceneResources()

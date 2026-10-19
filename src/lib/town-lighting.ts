@@ -1,9 +1,17 @@
-import { Box3, Color, DirectionalLight, HemisphereLight, type Scene, Vector3 } from 'three'
+import {
+  Box3,
+  Color,
+  DirectionalLight,
+  HemisphereLight,
+  PointLight,
+  type Scene,
+  Vector3
+} from 'three'
 import type { SceneSize } from './scene-math'
 import { townDaylight } from './town-daylight'
 import { townColors } from './town-model-parts'
 import type { createTownSceneResources } from './town-scene-resources'
-import { boardToTown, type TownView } from './town-view'
+import { boardToTown, type TownView, townToBoard } from './town-view'
 
 export function createTownLighting(
   scene: Scene,
@@ -25,11 +33,32 @@ export function createTownLighting(
   const direction = new Vector3()
   const bounds = new Box3()
   const point = new Vector3()
+  const streetLights: PointLight[] = []
+  let night = 0
+  function clearStreetLights() {
+    for (const light of streetLights) {
+      scene.remove(light)
+      light.dispose()
+    }
+    streetLights.length = 0
+  }
   let timeKey = ''
   let lightKey = ''
   let viewKey = ''
 
   return {
+    setStreetLamps(lamps: readonly { x: number; y: number; z: number }[]) {
+      clearStreetLights()
+      viewKey = ''
+      for (const lamp of lamps) {
+        // Match the stylized light pools without inverse-square falloff in town units.
+        const light = new PointLight(0xffcf83, night * 2, 130, 0)
+        light.position.set(lamp.x, lamp.y, lamp.z)
+        light.visible = false
+        scene.add(light)
+        streetLights.push(light)
+      }
+    },
     update(date: Date, view: TownView, size: SceneSize) {
       const nextTimeKey = `${Math.floor(date.getTime() / 1000)}:${date.getTimezoneOffset()}`
       let lightingChanged = false
@@ -57,6 +86,8 @@ export function createTownLighting(
           resources.windowMaterial.emissiveIntensity = light.night * 0.85
           resources.lampMaterial.emissiveIntensity = light.night * 1.8
           resources.lampGlowMaterial.opacity = light.night * 0.32
+          night = light.night
+          for (const lamp of streetLights) lamp.intensity = night * 2
           if (scene.background instanceof Color)
             scene.background.copy(ocean).lerp(darkOcean, light.night)
         }
@@ -66,6 +97,25 @@ export function createTownLighting(
       )
       if (!lightingChanged && nextViewKey === viewKey) return false
       viewKey = nextViewKey
+      for (const lamp of streetLights) {
+        // Cull the projected light sphere, not the bulb: off-screen lamps can
+        // still illuminate people at the edge of the orthographic town view.
+        const projected = townToBoard(
+          lamp.position.x,
+          lamp.position.z,
+          lamp.position.y,
+          view.rotation
+        )
+        const x = projected.x * view.zoom + view.x
+        const y = projected.y * view.zoom + view.y
+        const radius = lamp.distance * view.zoom
+        lamp.visible =
+          night > 0 &&
+          x + radius >= 0 &&
+          x - radius <= size.width &&
+          y + radius >= 0 &&
+          y - radius <= size.height
+      }
       const resolution = size.width < 768 ? 1024 : 2048
       if (sun.shadow.mapSize.x !== resolution) {
         sun.shadow.map?.dispose()
@@ -119,6 +169,7 @@ export function createTownLighting(
       return true
     },
     dispose() {
+      clearStreetLights()
       sun.shadow.dispose()
       scene.remove(sun, sun.target, ambient)
     }

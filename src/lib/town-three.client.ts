@@ -132,6 +132,7 @@ export function createTownScene(articles?: TownArticle[]) {
       if (nextBlockKey !== blockKey) {
         const model = createTownStaticModel(detailed)
         batches.rebuild(model.parts, model.forestParts, residents.residents, detailed)
+        lighting.setStreetLamps(model.streetLamps)
         navigation = createTownNavigation(model.obstacles, containsTownGround)
         blockKey = nextBlockKey
         visibilityTime = -Infinity

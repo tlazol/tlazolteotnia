@@ -39,6 +39,7 @@ export function createTownStaticModel(detailed: boolean) {
   }
   const forestParts: Partial<Record<TownShape, Part[]>> = {}
   const obstacles: TownObstacle[] = []
+  const streetLamps: Part[] = []
   let distantForest = false
   const placement = { x: 0, z: 0, yaw: 0, scale: 1 }
   const writer = createTownPartWriter((shape, item) => {
@@ -479,7 +480,9 @@ export function createTownStaticModel(detailed: boolean) {
       box(0, 63, 4, 12, 4, 2, colors.cream)
       box(100, 47, 0, 5, 94, 5, colors.wood)
       box(110, 94, 0, 24, 5, 5, colors.wood)
-      box(120, 90, 0, 15, 8, 14, colors.cream).emission = 'lamp'
+      const lamp = box(120, 90, 0, 15, 8, 14, colors.cream)
+      lamp.emission = 'lamp'
+      streetLamps.push(lamp)
       part('disc', 120, 3, 0, 140, 0.1, 140, 0xffce87).emission = 'glow'
     }
   }
@@ -529,8 +532,10 @@ export function createTownStaticModel(detailed: boolean) {
     box(0, 5, 0, 10, 10, 10, colors.curb)
     box(0, 47, 0, 5, 94, 5, colors.wood)
     box(10, 94, 0, 24, 5, 5, colors.wood)
-    box(20, 90, 0, 15, 8, 14, colors.cream).emission = 'lamp'
+    const lamp = box(20, 90, 0, 15, 8, 14, colors.cream)
+    lamp.emission = 'lamp'
+    streetLamps.push(lamp)
     part('disc', 20, 3, 0, 140, 0.1, 140, 0xffce87).emission = 'glow'
   }
-  return { parts, forestParts, obstacles }
+  return { parts, forestParts, obstacles, streetLamps }
 }
