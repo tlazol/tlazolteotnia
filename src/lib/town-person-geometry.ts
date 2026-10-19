@@ -1,4 +1,5 @@
 import {
+  BoxGeometry,
   BufferGeometry,
   DataTexture,
   Float32BufferAttribute,
@@ -127,6 +128,7 @@ function faceGeometry(slot: number) {
 
 export function createPersonGeometries() {
   return {
+    girlTrim: new BoxGeometry(1, 1, 1),
     girlHead: rings(headProfile, headSegments, true),
     girlCrown: crownGeometry(),
     girlCrownStraight: crownGeometry('straight'),

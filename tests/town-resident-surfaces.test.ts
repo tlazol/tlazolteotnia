@@ -3,7 +3,7 @@ import {
   InstancedMesh,
   Matrix4,
   Mesh,
-  MeshLambertMaterial,
+  MeshToonMaterial,
   Raycaster,
   type Scene,
   Vector3,
@@ -68,7 +68,7 @@ describe('resident head surfaces', () => {
                 batch.getColorAt(index, color)
                 mesh.userData.tint = color.getHex()
                 mesh.userData.face =
-                  batch.material instanceof MeshLambertMaterial && !!batch.material.map
+                  batch.material instanceof MeshToonMaterial && !!batch.material.map
                 mesh.userData.scalp =
                   !mesh.userData.face &&
                   Math.abs(position.x - pose.x) < 0.001 &&
@@ -188,7 +188,7 @@ it('batches repeated costumes without adding draw calls per resident', () => {
         for (const mesh of traffic?.children ?? []) {
           if (!(mesh instanceof InstancedMesh)) continue
           batches++
-          if (mesh.material instanceof MeshLambertMaterial && mesh.material.map) faces += mesh.count
+          if (mesh.material instanceof MeshToonMaterial && mesh.material.map) faces += mesh.count
         }
       }
     } as unknown as WebGLRenderer

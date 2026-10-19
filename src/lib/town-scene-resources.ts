@@ -9,9 +9,12 @@ import {
   LinearMipmapLinearFilter,
   MeshBasicMaterial,
   MeshLambertMaterial,
+  MeshToonMaterial,
   NearestFilter,
+  RedFormat,
   RepeatWrapping,
   RGBAFormat,
+  ShaderChunk,
   SRGBColorSpace,
   TorusGeometry,
   Vector2
@@ -156,14 +159,37 @@ export function createTownSceneResources() {
     geometry.computeBoundingBox()
   }
   const material = new MeshLambertMaterial({ vertexColors: true })
+  // Three discrete light bands, shared by skin, hair, clothes and facial features.
+  const personGradient = new DataTexture(new Uint8Array([45, 130, 255]), 3, 1, RedFormat)
+  personGradient.minFilter = personGradient.magFilter = NearestFilter
+  personGradient.needsUpdate = true
+  const personMaterial = new MeshToonMaterial({
+    vertexColors: true,
+    gradientMap: personGradient
+  })
   const faceTexture = createPersonFaceTexture()
-  const faceMaterial = new MeshLambertMaterial({
+  const faceMaterial = new MeshToonMaterial({
+    gradientMap: personGradient,
     map: faceTexture,
     transparent: true,
     alphaTest: 0.02
   })
+  for (const toonMaterial of [personMaterial, faceMaterial]) {
+    toonMaterial.onBeforeCompile = (shader) => {
+      // Keep the time-of-day fill light uniform so it cannot soften the cel bands.
+      shader.fragmentShader = shader.fragmentShader.replace(
+        '#include <lights_pars_begin>',
+        ShaderChunk.lights_pars_begin.replace(
+          'float hemiDiffuseWeight = 0.5 * dotNL + 0.5;',
+          'float hemiDiffuseWeight = 0.5;'
+        )
+      )
+    }
+  }
   // Each face selects its own eyelid row while sharing the same texture and draw call.
-  faceMaterial.onBeforeCompile = (shader) => {
+  const compileFaceLighting = faceMaterial.onBeforeCompile
+  faceMaterial.onBeforeCompile = (shader, renderer) => {
+    compileFaceLighting.call(faceMaterial, shader, renderer)
     shader.vertexShader = `attribute float blinkFrame;\n${shader.vertexShader}`.replace(
       '#include <uv_vertex>',
       `#include <uv_vertex>\nvMapUv.y = (vMapUv.y + blinkFrame) / ${personBlinkFrames.toFixed(1)};`
@@ -197,12 +223,15 @@ export function createTownSceneResources() {
     lampGlowMaterial,
     geometries,
     material,
+    personMaterial,
     faceMaterial,
     grassMaterial,
     roofMaterial,
     dispose() {
       for (const geometry of Object.values(geometries)) geometry.dispose()
       material.dispose()
+      personMaterial.dispose()
+      personGradient.dispose()
       windowMaterial.dispose()
       lampMaterial.dispose()
       lampGlowMaterial.dispose()

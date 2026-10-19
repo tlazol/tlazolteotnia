@@ -19,7 +19,8 @@ type MovingPart = { part: Part; resident: Resident }
 export const residentLiftHeight = 28
 
 export function createTownSceneBatches(resources: ReturnType<typeof createTownSceneResources>) {
-  const { geometries, material, faceMaterial, grassMaterial, roofMaterial } = resources
+  const { geometries, material, personMaterial, faceMaterial, grassMaterial, roofMaterial } =
+    resources
   const scene = new Scene()
   scene.background = new Color(townColors.ocean)
   const traffic = new Scene()
@@ -140,7 +141,11 @@ export function createTownSceneBatches(resources: ReturnType<typeof createTownSc
       const items = movingParts[shape] ?? []
       if (!items.length) continue
       const isFace = shape.startsWith('girlFace')
-      const partMaterial = isFace ? faceMaterial : material
+      const partMaterial = isFace
+        ? faceMaterial
+        : shape.startsWith('girl')
+          ? personMaterial
+          : material
       const geometry = isFace ? geometries[shape].clone() : geometries[shape]
       const blink = isFace
         ? new InstancedBufferAttribute(new Float32Array(items.length), 1).setUsage(DynamicDrawUsage)

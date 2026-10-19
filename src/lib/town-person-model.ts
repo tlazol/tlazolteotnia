@@ -4,7 +4,7 @@ import { townPersonAppearance, townPersonStyle } from './town-person'
 import type { PersonShape } from './town-person-geometry'
 
 export type PersonPart = {
-  shape: PersonShape | 'box'
+  shape: PersonShape
   x: number
   y: number
   z: number
@@ -87,7 +87,7 @@ export function createPersonParts(variant: number, identity: string, riding = fa
     d: number,
     c: number,
     angle = 0
-  ) => piece('box', x, y, z, w, h, d, c, angle)
+  ) => piece('girlTrim', x, y, z, w, h, d, c, angle)
   const lock = (
     x: number,
     y: number,
