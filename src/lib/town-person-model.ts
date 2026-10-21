@@ -22,7 +22,14 @@ export type PersonPart = {
 export const personHipHeight = 13
 export const personShoulderHeight = 25
 const neckHeight = 26.5
-export const personHead = { x: 0, y: 42, z: 3, width: 35, height: 31, depth: 31 }
+export const personHead = {
+  x: 0,
+  y: 42,
+  z: 3,
+  width: 35,
+  height: 31,
+  depth: 31
+}
 // Tip the face up toward the 45° town camera so the eyes read from above.
 export const personHeadTilt = -0.2
 const ridingLean = 0.2
@@ -98,7 +105,18 @@ export function createPersonParts(variant: number, identity: string, riding = fa
     }
     // Riding limbs are posed separately, so walking limbs and hand-held props stay home.
     if (riding && limb) return
-    const part: PersonPart = { shape, x, y, z, width, height, depth, color, angle, pitch }
+    const part: PersonPart = {
+      shape,
+      x,
+      y,
+      z,
+      width,
+      height,
+      depth,
+      color,
+      angle,
+      pitch
+    }
     if (limb) part.motion = frame
     if (glowing) part.glow = true
     parts.push(part)
@@ -401,6 +419,14 @@ export function createPersonParts(variant: number, identity: string, riding = fa
             body('girlBall', 0, y, y < 19 ? 9.5 - (y - 10) * 0.25 : 6.4, 1.8, 1.8, 1, neon)
         })
         head('girlCowl', hx, hy, hz, 35, 31, 31, coat)
+        head('girlCowlRim', hx, hy, hz, 35, 31, 31, coat)
+        for (const side of ['L', 'R'] as const)
+          head(`girlCowlSeam${side}`, hx, hy, hz, 35, 31, 31, mix(coat, black, 0.25))
+        // Drawstrings hang from the hood with toggles that light up.
+        for (const side of [-1, 1]) {
+          head('girlLimb', side * 4.5, 31.5, hz + 15, 1.1, 7, 1.1, white)
+          lit(() => head('girlBall', side * 4.5, 28, hz + 15.3, 2.2, 2.8, 2.2, neon))
+        }
         for (const side of [-1, 1]) put('leg', 'girlLimb', side * 4, 5.6, 0.2, 5.6, 8, 5.8, shoes)
       })
       break
@@ -838,6 +864,9 @@ export function createPersonParts(variant: number, identity: string, riding = fa
         for (const side of [-1, 1]) body('girlBall', side * 9.5, 24.5, 0, 7, 5, 7, steel)
         // A closed helm with a plume and breathing slits.
         head('girlCowl', hx, hy, hz, hw, hh, hd, steel)
+        head('girlCowlRim', hx, hy, hz, hw, hh, hd, steel)
+        for (const side of ['L', 'R'] as const)
+          head(`girlCowlSeam${side}`, hx, hy, hz, hw, hh, hd, mix(steel, white, 0.4))
         // A mecha pilot's helm: the slits glow, and so does the crest.
         lit(() => {
           for (let a = -0.5; a < 0.6; a += 0.25)
@@ -986,6 +1015,9 @@ export function createPersonParts(variant: number, identity: string, riding = fa
           )
         body('girlCap', 0, 21.5, 6.6, 3, 2.4, 2.4, 0x8e79d6)
         head('girlCowl', hx, hy, hz, 35, 31, 31, 0xf6f5ff)
+        head('girlCowlRim', hx, hy, hz, 35, 31, 31, 0xf6f5ff)
+        for (const side of ['L', 'R'] as const)
+          head(`girlCowlSeam${side}`, hx, hy, hz, 35, 31, 31, 0xd8d6ea)
         for (const [x, y, a] of [
           [11, 56, -0.9],
           [15, 52, -1.2],

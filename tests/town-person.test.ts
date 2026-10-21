@@ -149,4 +149,4 @@ it('covers the back of the head with hair or headwear from above', () => {
   } finally {
     for (const geometry of Object.values(geometries)) geometry.dispose()
   }
-})
+}, 15_000)

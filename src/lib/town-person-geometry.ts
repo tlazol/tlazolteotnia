@@ -150,34 +150,137 @@ function bangHem(bangs: HairBangs, a: number) {
   }
 }
 
+// Rounded clumps with sharp creases between them: 1 on a clump's ridge, 0 in a crease.
+const clump = (angle: number, count: number) =>
+  1 - (1 - Math.abs(Math.cos((angle * count) / 2))) ** 2.2
+
+// Hair falls in clumps that spiral out of a whorl on the back of the crown. The creases
+// sink below the shell, so the toon ramp draws them as strand lines. Behind the fringe
+// the hair is layered: a fuller lower layer steps out under a jagged ledge, and its
+// tips flick outward at the hem, so the back never reads as one smooth dome.
+const whorl = { latitude: 1.08, count: 15, depth: 0.05 }
+function hairStrands(a: number, t: number, [x, y, z]: Point) {
+  const length = Math.hypot(x, y, z)
+  const [wy, wz] = [Math.sin(whorl.latitude), -Math.cos(whorl.latitude)]
+  const along = (y * wy + z * wz) / length
+  const across = (y * -wz + z * wy) / length
+  const distance = Math.acos(clamp(along, -1, 1))
+  const swirl = Math.atan2(across, x / length) + distance * 0.45
+  const ridge = clump(swirl, whorl.count)
+  const back = smooth(0.9, 1.6, Math.abs(a))
+  const ledge = 0.4 - 0.12 * clump(a + 0.15, 9)
+  const layer = 0.04 * (1 - smooth(ledge - 0.05, ledge, t)) * back
+  const flick = 0.06 * ridge * (1 - smooth(0, 0.16, t)) * back
+  const crown = 0.035 * Math.exp(-((distance / 0.6) ** 2))
+  // The fringe keeps its full standoff toward the hem, so it still shades the eyes.
+  const fringe = 1 - (1 - back) * (1 - smooth(0.2, 0.45, t))
+  const crease = whorl.depth * (1 - ridge) * smooth(0.1, 0.55, distance) * fringe
+  return 1 - crease + layer + flick + crown
+}
+
+// Fabric for hoods: a pointed peak at the back and folds gathering at the hem.
+function hoodCloth(a: number, t: number) {
+  const back = Math.abs(Math.abs(a) - Math.PI)
+  const peak = 0.13 * Math.exp(-((back / 0.45) ** 2)) * Math.exp(-(((t - 0.68) / 0.16) ** 2))
+  const folds = 0.05 * (1 - clump(a + 0.2, 7)) * (1 - smooth(0.05, 0.5, t))
+  return 1 + peak - folds
+}
+
+// The hood's hem: low over the eyes, then draping past the jaw without hair's pointed tips.
+function cowlHem(a: number) {
+  const weight = 1 - smooth(0.8, 1.3, Math.abs(a))
+  const side = -0.2 - 0.17 * smooth(1.35, 2.3, Math.abs(a))
+  const front = -0.13 + 0.02 * Math.cos(a * 6)
+  return weight * front + (1 - weight) * side - 0.12 * smooth(0.9, 1.8, Math.abs(a))
+}
+
 // Hair cap over the head. The face window opens below the fringe; the sides fall to the
 // jaw and the nape. A short inner lip gives the hem visible thickness.
-function hairShell(hem: (a: number) => number, inflate: number, segments = 48, rows = 14) {
+function hairShell(
+  hem: (a: number) => number,
+  inflate: number,
+  surface?: (a: number, t: number, point: Point) => number,
+  segments = 80,
+  rows = 18
+) {
   const grid: Point[][] = []
   const columns = Array.from(
     { length: segments + 1 },
     (_, col) => -Math.PI + (col / segments) * tau
   )
   const bottoms = columns.map((a) => Math.asin(clamp(hem(a) * 2, -0.98, 0.98)))
-  grid.push(columns.map((a, col) => headPoint(a, bottoms[col], 0.985)))
+  const shape = (a: number, latitude: number, t: number, scale: number) => {
+    const point = headPoint(a, latitude, scale)
+    return surface ? headPoint(a, latitude, scale * surface(a, t, point)) : point
+  }
+  grid.push(columns.map((a, col) => shape(a, bottoms[col], 0, 0.985)))
   for (let row = 0; row <= rows; row++) {
     const t = row / rows
     grid.push(
-      columns.map((a, col) => {
-        const latitude = bottoms[col] + (Math.PI / 2 - bottoms[col]) * t ** 0.85
-        // Faint strands catch the toon light without a texture.
-        const strands = 1 + 0.012 * Math.cos(a * 14) * Math.sin(t * Math.PI)
-        return headPoint(a, latitude, inflate * strands)
-      })
+      columns.map((a, col) =>
+        shape(a, bottoms[col] + (Math.PI / 2 - bottoms[col]) * t ** 0.85, t, inflate)
+      )
     )
   }
   return build(grid)
 }
 
+// The sides end in pointed tips around the nape.
 function sideHem(a: number, front: number) {
-  const side = -0.2 - 0.17 * smooth(1.35, 2.3, Math.abs(a))
+  const tips = 0.05 * (1 - Math.abs(Math.sin(a * 5.5))) ** 1.6
+  const side = -0.2 - 0.17 * smooth(1.35, 2.3, Math.abs(a)) - tips * smooth(0.9, 1.5, Math.abs(a))
   const weight = 1 - smooth(0.8, 1.3, Math.abs(a))
   return weight * front + (1 - weight) * side
+}
+
+// A rolled edge along a hem: hood openings and helmet rims.
+function hemRoll(hem: (a: number) => number, inflate: number, from: number, to: number) {
+  return build(
+    Array.from({ length: 9 }, (_, row) => {
+      const turn = (row / 8) * tau
+      return Array.from({ length: 49 }, (_, col) => {
+        const a = from + ((to - from) * col) / 48
+        const y = hem(a) + 0.035 * Math.cos(turn)
+        return headPoint(a, Math.asin(clamp(y * 2, -0.98, 0.98)), inflate + 0.05 * Math.sin(turn))
+      })
+    })
+  )
+}
+
+// Seams either side of a hood's middle panel, running from the brow over the crown to
+// the nape and riding the hood's own surface.
+function hoodSeam(side: number) {
+  const x0 = side * 0.17
+  return build(
+    [-1, 0, 1].map((edge) =>
+      Array.from({ length: 41 }, (_, row) => {
+        const turn = -0.35 + ((Math.PI + 0.9) * row) / 40
+        const dx = x0 + edge * 0.022
+        const reach = Math.sqrt(1 - dx * dx)
+        const a = Math.atan2(dx, reach * Math.cos(turn))
+        const bottom = Math.asin(clamp(cowlHem(a) * 2, -0.98, 0.98))
+        const latitude = Math.max(Math.asin(reach * Math.sin(turn)), bottom + 0.03)
+        const t = clamp((latitude - bottom) / (Math.PI / 2 - bottom)) ** (1 / 0.85)
+        return headPoint(a, latitude, 1.2 * hoodCloth(a, t) + (edge ? 0.004 : 0.024))
+      })
+    )
+  )
+}
+
+// A long-hair mass falling behind the face in clumps, each ending in a point.
+function hairMass(profile: Profile, from: number, to: number, count: number, segments = 56) {
+  return build(
+    profile.map(([y, radius]) =>
+      Array.from({ length: segments + 1 }, (_, col) => {
+        const a = from + ((to - from) * col) / segments
+        const ridge = clump(a - Math.PI, count)
+        const r = radius * (1 - 0.08 * (1 - ridge))
+        // The lower rows stretch down at each ridge into a tip.
+        const tip = 0.1 * ridge ** 4 * smooth(-0.25, -0.5, y)
+        return [Math.sin(a) * r, y - tip, Math.cos(a) * r] as Point
+      })
+    )
+  )
 }
 
 // A thin "angel ring" highlight across the front of the crown, tapering at both ends.
@@ -267,7 +370,7 @@ export function createPersonGeometries() {
   const shells = Object.fromEntries(
     hairBangs.map((bangs) => [
       `girlHair_${bangs}`,
-      hairShell((a) => sideHem(a, bangHem(bangs, a)), 1.075)
+      hairShell((a) => sideHem(a, bangHem(bangs, a)), 1.075, hairStrands)
     ])
   ) as Record<`girlHair_${HairBangs}`, BufferGeometry>
   return {
@@ -387,18 +490,15 @@ export function createPersonGeometries() {
     ),
     girlHairband: headBand(0.32, 0.5, 1.1),
     girlCuff: headBand(0.16, 0.46, 1.16),
-    // Hoods leave a wide face opening and drape down past the jaw.
-    girlHood: hairShell((a) => sideHem(a, 0.26) - 0.12 * smooth(0.9, 1.8, Math.abs(a)), 1.2, 40),
     // A space helmet: a big shell around the head with the whole face open.
-    girlHelmet: hairShell((a) => -0.5 + 0.92 * clamp(1 - Math.abs(a) / 1.25) ** 0.5, 1.3, 40),
-    // The same hood pulled low over the eyes.
-    girlCowl: hairShell(
-      (a) => sideHem(a, -0.13 + 0.02 * Math.cos(a * 6)) - 0.12 * smooth(0.9, 1.8, Math.abs(a)),
-      1.2,
-      40
-    ),
+    girlHelmet: hairShell((a) => -0.5 + 0.92 * clamp(1 - Math.abs(a) / 1.25) ** 0.5, 1.3),
+    // A hood pulled low over the eyes, with a rolled edge around the opening.
+    girlCowl: hairShell(cowlHem, 1.2, hoodCloth),
+    girlCowlRim: hemRoll(cowlHem, 1.2, -1.75, 1.75),
+    girlCowlSeamL: hoodSeam(-1),
+    girlCowlSeamR: hoodSeam(1),
     // A bob or long-hair mass behind and beside the face, open at the front.
-    girlHairBell: lathe(
+    girlHairBell: hairMass(
       [
         [0.5, 0.42],
         [0.3, 0.49],
@@ -407,11 +507,9 @@ export function createPersonGeometries() {
         [-0.5, 0.38],
         [-0.46, 0.3]
       ],
-      24,
       0.95,
       tau - 0.95,
-      0.03,
-      10
+      13
     ),
     // A hanging lock: rounded root, full body and a pointed tip.
     girlLock: lathe(
