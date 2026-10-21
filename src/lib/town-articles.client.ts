@@ -14,7 +14,7 @@ export function createArticleTown(
   onPositions: (positions: ResidentScreenPosition[], view: TownView) => void,
   onFailure: () => void
 ) {
-  const renderer = new WebGLRenderer({ canvas, antialias: false, alpha: false })
+  const renderer = new WebGLRenderer({ canvas, antialias: true, alpha: false })
   renderer.shadowMap.enabled = true
   renderer.shadowMap.type = PCFShadowMap
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))

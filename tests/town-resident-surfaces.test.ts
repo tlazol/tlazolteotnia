@@ -14,6 +14,10 @@ import { townPersonStyle, townPersonStyles } from '../src/lib/town-person'
 import type { TownArticle } from '../src/lib/town-posts'
 import { createTownScene } from '../src/lib/town-three.client'
 import { trafficPose } from '../src/lib/town-traffic'
+import { pavementHeight } from '../src/lib/town-world'
+
+// Residents stand on the raised pavement.
+const base = pavementHeight + 0.5
 
 describe('resident head surfaces', () => {
   it.each(['walker', 'bicycle'] as const)(
@@ -45,7 +49,7 @@ describe('resident head surfaces', () => {
         clear: () => {},
         render: (scene: Scene) => {
           if (!scene.background) return
-          const traffic = scene.children.find((child) => child.type === 'Scene')
+          const traffic = scene.getObjectByName('town-residents')
           for (const batch of traffic?.children ?? []) {
             if (!(batch instanceof InstancedMesh)) continue
             for (let index = 0; index < batch.count; index++) {
@@ -59,7 +63,7 @@ describe('resident head surfaces', () => {
                 if (
                   Math.abs(position.x - pose.x) > 25 ||
                   Math.abs(position.z - pose.z) > 25 ||
-                  position.y < (40 + lift) * scale
+                  position.y - base < (40 + lift) * scale
                 )
                   return
                 const mesh = new Mesh(batch.geometry, batch.material)
@@ -72,7 +76,7 @@ describe('resident head surfaces', () => {
                 mesh.userData.scalp =
                   !mesh.userData.face &&
                   Math.abs(position.x - pose.x) < 0.001 &&
-                  Math.abs(position.y - (54 + lift) * scale) < 0.001 &&
+                  Math.abs(position.y - base - (54 + lift) * scale) < 0.001 &&
                   Math.abs(position.z - pose.z - (lean + 1) * scale) < 0.001
                 heads[variant].push(mesh)
               })
@@ -95,7 +99,7 @@ describe('resident head surfaces', () => {
           for (const side of [-1, 1]) {
             const origin = new Vector3(side * 5.7, 52.164 + lift, lean + 60)
               .multiplyScalar(scale)
-              .add(new Vector3(pose.x, 0, pose.z))
+              .add(new Vector3(pose.x, base, pose.z))
             ray.set(origin, new Vector3(0, 0, -1))
             const first = ray.intersectObjects(heads[variant], false)[0]
             expect(first, `missing eye cover on costume ${variant}`).toBeDefined()
@@ -107,7 +111,7 @@ describe('resident head surfaces', () => {
             for (let z = -14.75; z < 16; z += 1) {
               const origin = new Vector3(x, 100 + lift, lean + z)
                 .multiplyScalar(scale)
-                .add(new Vector3(pose.x, 0, pose.z))
+                .add(new Vector3(pose.x, base, pose.z))
               ray.set(origin, new Vector3(0, -1, 0))
               const hits = ray.intersectObjects(heads[variant], false)
               if (!hits.some((hit) => hit.object.userData.scalp)) continue
@@ -127,7 +131,7 @@ describe('resident head surfaces', () => {
                 const origin = direction.z
                   ? new Vector3(u, y + lift, lean + 30)
                   : new Vector3(-direction.x * 30, y + lift, lean + u)
-                origin.multiplyScalar(scale).add(new Vector3(pose.x, 0, pose.z))
+                origin.multiplyScalar(scale).add(new Vector3(pose.x, base, pose.z))
                 ray.set(origin, direction)
                 const hits = ray.intersectObjects(heads[variant], false)
                 const first = hits[0]
@@ -184,7 +188,7 @@ it('batches repeated costumes without adding draw calls per resident', () => {
       clear: () => {},
       render: (scene: Scene) => {
         if (!scene.background) return
-        const traffic = scene.children.find((child) => child.type === 'Scene')
+        const traffic = scene.getObjectByName('town-residents')
         for (const mesh of traffic?.children ?? []) {
           if (!(mesh instanceof InstancedMesh)) continue
           batches++

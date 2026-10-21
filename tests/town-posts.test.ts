@@ -1,25 +1,16 @@
 import {
+  GreaterDepth,
   InstancedMesh,
+  type Material,
   Matrix4,
-  Mesh,
-  Raycaster,
   Scene,
-  ShaderMaterial,
   Vector3,
   type WebGLRenderer
 } from 'three'
 import { describe, expect, it, vi } from 'vitest'
 import type { BlogPostSummary } from '../src/lib/blog-post'
 import { createTownCamera, updateTownCamera } from '../src/lib/town-camera'
-import { beachWalkingSegments, containsTownGround } from '../src/lib/town-coast'
-import {
-  nearestTownRoad,
-  onettBuildings,
-  onettHills,
-  onettRoads,
-  onettToTown,
-  townLayoutScale
-} from '../src/lib/town-layout'
+import { createTownMaterials } from '../src/lib/town-materials'
 import {
   clampTownView,
   fitTown,
@@ -29,9 +20,48 @@ import {
   layoutTownArticles as randomTownArticles,
   type TownArticle
 } from '../src/lib/town-posts'
+import { buildTownStatic } from '../src/lib/town-static'
 import { createTownScene } from '../src/lib/town-three.client'
-import { trafficPose } from '../src/lib/town-traffic'
+import { type TrafficRoute, trafficPose } from '../src/lib/town-traffic'
 import { townToBoard } from '../src/lib/town-view'
+import { containsTownGround, walkerLane, walkSegments } from '../src/lib/town-world'
+
+// Tall buildings inside the street grid, shared by the drop and occlusion tests.
+const buildings = (() => {
+  const materials = createTownMaterials()
+  const statics = buildTownStatic(materials)
+  const boxes = statics.occluders.filter(
+    (box) => box.maxY > 200 && Math.abs(box.minX) < 2400 && Math.abs(box.minZ) < 1600
+  )
+  statics.dispose()
+  materials.dispose()
+  return boxes
+})()
+const buildingCenters = buildings.map((box) => ({
+  x: (box.minX + box.maxX) / 2,
+  z: (box.minZ + box.maxZ) / 2
+}))
+
+// True when the point lies on the route's capsule circuit.
+function onCircuit(point: { x: number; z: number }, route: TrafficRoute) {
+  for (let time = 0; time < 400; time += 0.05) {
+    const pose = trafficPose(route, time)
+    if (Math.hypot(pose.x - point.x, pose.z - point.z) < 1) return true
+  }
+  return false
+}
+const onAnyCircuit = (point: { x: number; z: number }, route: TrafficRoute) =>
+  walkSegments.some((segment) =>
+    [-1, 1].some((side) =>
+      onCircuit(point, {
+        ...route,
+        start: segment.start,
+        end: segment.end,
+        lane: side * Math.abs(route.lane),
+        progress: 0
+      })
+    )
+  )
 
 const posts: BlogPostSummary[] = Array.from({ length: 46 }, (_, i) => ({
   slug: `post-${i}`,
@@ -52,23 +82,28 @@ const renderer = {
 // Scene interaction tests use repeatable layouts; randomness is tested separately.
 const layoutTownArticles = (catalogue: BlogPostSummary[]) =>
   randomTownArticles(catalogue, () => 0.5)
+// An avenue beside the plaza with a clear view from the default camera.
+const street = walkSegments[23]
+const beach = walkSegments.find(
+  (segment) => segment.lane === segment.cycleLane && segment.lane < 40
+)
+if (!beach) throw new Error('Beach promenade missing')
 const streetResident: TownArticle = {
   slug: 'retired-programmer',
   variant: 15,
   kind: 'walker',
   route: {
-    start: onettRoads[11].points[0],
-    end: onettRoads[11].points[1],
-    lane: -48,
+    start: street.start,
+    end: street.end,
+    lane: -walkerLane,
     progress: 0.4,
     speed: 10
   }
 }
 
 describe('article residents', () => {
-  it('refreshes occlusion, follows and drags residents with a rotated camera', () => {
+  it('follows and drags residents with a rotated camera', () => {
     const town = createTownScene([streetResident])
-    const raycast = vi.spyOn(Raycaster.prototype, 'intersectObjects').mockReturnValue([])
     try {
       town.update(view, size)
       town.render(renderer, 0, false)
@@ -82,8 +117,7 @@ describe('article residents', () => {
         expect(followed.rotation ?? 0).toBe(rotation)
         const positions = town.projectResidents(step * 16)
         expect(positions[0].x).toBeCloseTo(size.width / 2)
-        expect(positions[0].visible).toBe(true)
-        expect(raycast).toHaveBeenCalledTimes(step + 1)
+        expect(positions[0].inView).toBe(true)
 
         town.beginResidentDrag(streetResident.slug)
         town.moveResidentDrag(80, -40)
@@ -96,20 +130,17 @@ describe('article residents', () => {
         expect(town.residentPosition(streetResident.slug)).toEqual(before)
       }
     } finally {
-      raycast.mockRestore()
       town.dispose()
     }
   })
 
   it('reuses occlusion checks during camera movement but refreshes moving residents', () => {
     const town = createTownScene([streetResident])
-    const raycast = vi.spyOn(Raycaster.prototype, 'intersectObjects').mockReturnValue([])
     try {
       town.update(view, size)
       town.render(renderer, 0, false)
       const initial = town.projectResidents(0)[0]
       expect(initial.visible).toBe(true)
-      expect(raycast).toHaveBeenCalledTimes(1)
 
       town.follow(null)
       const pose = town.residentPosition(streetResident.slug)
@@ -124,43 +155,34 @@ describe('article residents', () => {
         town.render(renderer, step * 16, false)
         expect(town.projectResidents(step * 16)[0].visible).toBe(true)
       }
-      expect(raycast).toHaveBeenCalledTimes(1)
       expect(town.projectResidents(180)[0].visible).toBe(true)
-      expect(raycast).toHaveBeenCalledTimes(2)
 
       town.follow(streetResident.slug)
       town.render(renderer, 196, true)
       town.projectResidents(196)
       town.render(renderer, 212, true)
       town.projectResidents(212)
-      expect(raycast).toHaveBeenCalledTimes(2)
 
       town.update({ ...view, zoom: 0.3 }, size)
       town.render(renderer, 228, false)
       town.projectResidents(228)
-      expect(raycast).toHaveBeenCalledTimes(3)
     } finally {
-      raycast.mockRestore()
       town.dispose()
     }
   })
 
   it('checks residents entering the viewport before the next visibility refresh', () => {
     const town = createTownScene([streetResident])
-    const raycast = vi.spyOn(Raycaster.prototype, 'intersectObjects').mockReturnValue([])
     try {
       town.follow(null)
       town.update({ x: -100000, y: -100000, zoom: 1 }, size)
       town.render(renderer, 0, false)
       expect(town.projectResidents(0)[0].visible).toBe(false)
-      expect(raycast).not.toHaveBeenCalled()
 
       town.follow(streetResident.slug)
       town.render(renderer, 16, false)
       expect(town.projectResidents(16)[0].visible).toBe(true)
-      expect(raycast).toHaveBeenCalledTimes(1)
     } finally {
-      raycast.mockRestore()
       town.dispose()
     }
   })
@@ -171,17 +193,21 @@ describe('article residents', () => {
       const article = layoutTownArticles(posts).find((person) => person.kind === kind)
       if (!article) throw new Error('Resident missing')
       const original = structuredClone(article.route)
-      for (const point of [...onettBuildings, { x: -10000, z: 10000 }]) {
+      for (const point of [...buildingCenters, { x: -10000, z: 10000 }]) {
         const route = nearestResidentRoute(point, article.route)
         expect(route.speed).toBe(article.route.speed)
-        expect(Math.abs(route.lane)).toBeLessThanOrEqual(Math.abs(article.route.lane))
-        expect(nearestTownRoad(route.start, onettRoads).distance).toBeLessThanOrEqual(0)
-        expect(nearestTownRoad(route.end, onettRoads).distance).toBeLessThanOrEqual(0)
-        for (let time = 0; time <= 1000; time += 20) {
-          expect(
-            nearestTownRoad(trafficPose(route, time), onettRoads).distance
-          ).toBeLessThanOrEqual(0)
-        }
+        expect(
+          walkSegments.some((segment) => segment.start === route.start && segment.end === route.end)
+        ).toBe(true)
+        expect(Math.abs(route.lane)).toBeLessThanOrEqual(
+          Math.max(
+            ...walkSegments.map((segment) =>
+              kind === 'bicycle' ? segment.cycleLane : segment.lane
+            )
+          )
+        )
+        for (let time = 0; time <= 1000; time += 20)
+          expect(containsTownGround(trafficPose(route, time))).toBe(true)
       }
       expect(article.route).toEqual(original)
     }
@@ -193,11 +219,14 @@ describe('article residents', () => {
       for (const zoom of [1, 0.3, 2.5]) {
         const article = structuredClone(streetResident)
         article.kind = kind
-        article.route.lane = kind === 'bicycle' ? 29 : 48
-        // The lawn beside the northern footpath stays clear of the new streetfront lots.
-        article.route.progress =
-          (onettRoads[4].points[0].x - article.route.start.x - 80) /
-          (article.route.end.x - article.route.start.x - 160)
+        // The open sand beside the promenade leaves room to drop a resident anywhere.
+        article.route = {
+          start: beach.start,
+          end: beach.end,
+          lane: beach.lane,
+          progress: 0.5,
+          speed: kind === 'bicycle' ? 28 : 10
+        }
         const town = createTownScene([article])
         try {
           town.update({ ...view, zoom }, size)
@@ -215,7 +244,7 @@ describe('article residents', () => {
           town.render(renderer, 200, false)
           expect(town.residentPosition(article.slug)).toEqual(held)
           if (!held) throw new Error('Resident missing')
-          expect(nearestTownRoad(held, onettRoads).distance).toBeGreaterThan(0)
+          expect(onCircuit(held, article.route)).toBe(false)
           town.render(renderer, 300, true)
           town.render(renderer, 400, true)
           const walkingBack = town.residentPosition(article.slug)
@@ -241,8 +270,7 @@ describe('article residents', () => {
             expect(Math.hypot(next.x - previous.x, next.z - previous.z)).toBeLessThanOrEqual(
               article.route.speed * 0.1 + 0.001
             )
-            if (now >= 40000)
-              expect(nearestTownRoad(next, onettRoads).distance).toBeLessThanOrEqual(0)
+            if (now === 60900) expect(onAnyCircuit(next, article.route)).toBe(true)
             previous = next
           }
           expect(previous).not.toEqual(walkingBack)
@@ -262,7 +290,7 @@ describe('article residents', () => {
       const original = town.residentPosition(article.slug)
       if (!original) throw new Error('Resident missing')
       const from = townToBoard(original.x, original.z)
-      for (const point of [...onettBuildings, { x: -20000, z: -20000 }]) {
+      for (const point of [...buildingCenters, { x: -20000, z: -20000 }]) {
         const to = townToBoard(point.x, point.z)
         town.beginResidentDrag(article.slug)
         town.moveResidentDrag(to.x - from.x, to.y - from.y)
@@ -308,7 +336,7 @@ describe('article residents', () => {
     expect(layoutTownArticles([])).toEqual([])
     expect(new Set(full.map((person) => person.kind))).toEqual(new Set(['walker', 'bicycle']))
     for (const person of full) {
-      expect(Math.abs(person.route.lane)).toBeLessThanOrEqual(person.kind === 'bicycle' ? 29 : 48)
+      expect(Math.abs(person.route.lane)).toBeLessThanOrEqual(walkerLane)
     }
   })
 
@@ -329,33 +357,20 @@ describe('article residents', () => {
   })
 
   it.each([0, 0.25, 0.5, 0.999])(
-    'spreads residents across town and keeps circuits outside hills (%s)',
+    'spreads residents across town and keeps circuits on walkable ground (%s)',
     (value) => {
       const articles = randomTownArticles(posts, () => value)
       const positions = articles.map((article) => trafficPose(article.route, 0))
-      expect(Math.min(...positions.map((point) => point.z))).toBeLessThan(-1600 * townLayoutScale)
-      expect(Math.max(...positions.map((point) => point.z))).toBeGreaterThan(1500 * townLayoutScale)
-      expect(Math.min(...positions.map((point) => point.x))).toBeLessThan(650 * townLayoutScale)
-      expect(Math.max(...positions.map((point) => point.x))).toBeGreaterThan(3100 * townLayoutScale)
+      expect(Math.min(...positions.map((point) => point.z))).toBeLessThan(-1000)
+      expect(Math.max(...positions.map((point) => point.z))).toBeGreaterThan(1000)
+      expect(Math.min(...positions.map((point) => point.x))).toBeLessThan(-1500)
+      expect(Math.max(...positions.map((point) => point.x))).toBeGreaterThan(1500)
       const counts = new Map<string, number>()
       for (const article of articles) {
         const key = JSON.stringify([article.route.start, article.route.end])
         counts.set(key, (counts.get(key) ?? 0) + 1)
-        for (let time = 0; time <= 1000; time += 5) {
-          const point = trafficPose(article.route, time)
-          if (beachWalkingSegments.some((segment) => segment.start === article.route.start)) {
-            expect(containsTownGround(point)).toBe(true)
-          } else {
-            expect(nearestTownRoad(point, onettRoads).distance).toBeLessThanOrEqual(0.001)
-          }
-          for (const hill of onettHills) {
-            const center = onettToTown(hill.x, hill.y)
-            expect(
-              Math.abs(point.x - center.x) < hill.width / 2 + 12 &&
-                Math.abs(point.z - center.z) < hill.depth / 2 + 12
-            ).toBe(false)
-          }
-        }
+        for (let time = 0; time <= 1000; time += 5)
+          expect(containsTownGround(trafficPose(article.route, time))).toBe(true)
       }
       expect(counts.size).toBeGreaterThan(20)
       expect(Math.max(...counts.values()) - Math.min(...counts.values())).toBeLessThanOrEqual(1)
@@ -414,21 +429,26 @@ describe('article residents', () => {
   )
 
   it('disables a building-occluded resident while keeping a visible street resident selectable', () => {
-    const building = onettBuildings[0]
+    // Just north-west of a tall building, the camera looks over its roof.
+    const building = buildings.reduce((tallest, box) => (box.maxY > tallest.maxY ? box : tallest))
+    const behind = { x: (building.minX + building.maxX) / 2, z: building.minZ - 30 }
     const town = createTownScene([
       {
         slug: 'behind-building',
         variant: 0,
         kind: 'walker',
         route: {
-          start: { x: building.x - 48, z: building.z - 40 },
-          end: { x: building.x - 48, z: building.z + 120 },
-          lane: 48,
-          progress: 0,
+          start: { x: behind.x - 100, z: behind.z },
+          end: { x: behind.x + 100, z: behind.z },
+          lane: 0.001,
+          progress: 0.5,
           speed: 0
         }
       },
-      structuredClone(streetResident)
+      {
+        ...structuredClone(streetResident),
+        route: { start: beach.start, end: beach.end, lane: beach.lane, progress: 0.5, speed: 0 }
+      }
     ])
     try {
       town.follow(null)
@@ -454,39 +474,31 @@ describe('article residents', () => {
     other.route.start.x += 400
     other.route.end.x += 400
     const town = createTownScene([streetResident, other])
-    type RenderTarget = Parameters<WebGLRenderer['setRenderTarget']>[0]
-    let target: RenderTarget = null
-    const passes: { scene: Scene; target: RenderTarget }[] = []
-    const targetSpy = vi.spyOn(renderer, 'setRenderTarget').mockImplementation((next) => {
-      target = next
-    })
+    let rendered: Scene | undefined
     const renderSpy = vi.spyOn(renderer, 'render').mockImplementation((scene) => {
-      passes.push({ scene: scene as Scene, target })
+      rendered = scene as Scene
     })
+    // X-ray instances of the selected resident, drawn only where buildings hide it.
     function render(now: number) {
-      passes.length = 0
       town.render(renderer, now, false)
-      const backdrop = passes.at(-1)?.scene.children[0]
-      if (!(backdrop instanceof Mesh) || !(backdrop.material instanceof ShaderMaterial))
-        throw new Error('Town backdrop missing')
-      const uniforms = backdrop.material.uniforms
-      return {
-        enabled: uniforms.selectionEnabled.value,
-        selection: uniforms.selectionEnabled.value
-          ? passes.find((pass) => pass.target?.depthTexture === uniforms.selectionDepth.value)
-              ?.scene
-          : undefined
-      }
+      const silhouettes: InstancedMesh[] = []
+      rendered?.traverse((object) => {
+        if (
+          object instanceof InstancedMesh &&
+          (object.material as Material).depthFunc === GreaterDepth &&
+          object.count > 0
+        )
+          silhouettes.push(object)
+      })
+      return silhouettes
     }
-    function expectSelected(scene: Scene | undefined, slug: string) {
-      if (!scene) throw new Error('Selected resident missing')
+    function expectSelected(meshes: InstancedMesh[], slug: string) {
       const pose = town.residentPosition(slug)
       if (!pose) throw new Error('Resident missing')
       const matrix = new Matrix4()
       const point = new Vector3()
       let count = 0
-      for (const mesh of scene.children) {
-        if (!(mesh instanceof InstancedMesh)) continue
+      for (const mesh of meshes) {
         for (let index = 0; index < mesh.count; index++) {
           mesh.getMatrixAt(index, matrix)
           point.setFromMatrixPosition(matrix)
@@ -498,26 +510,23 @@ describe('article residents', () => {
     }
     try {
       town.update(view, size)
-      expect(render(0)).toEqual({ enabled: false, selection: undefined })
+      expect(render(0)).toEqual([])
       town.select(streetResident.slug)
-      const first = render(100)
-      expect(first.enabled).toBe(true)
-      expectSelected(first.selection, streetResident.slug)
+      expectSelected(render(100), streetResident.slug)
       town.select(other.slug)
-      expectSelected(render(200).selection, other.slug)
+      expectSelected(render(200), other.slug)
       town.update({ ...view, zoom: 0.3 }, size)
-      expectSelected(render(300).selection, other.slug)
+      expectSelected(render(300), other.slug)
       town.select(null)
-      expect(render(400)).toEqual({ enabled: false, selection: undefined })
+      expect(render(400)).toEqual([])
       town.select(other.slug)
-      expectSelected(render(500).selection, other.slug)
+      expectSelected(render(500), other.slug)
       town.filter([streetResident.slug])
-      expect(render(600)).toEqual({ enabled: false, selection: undefined })
+      expect(render(600)).toEqual([])
       town.filter([streetResident.slug, other.slug])
-      expectSelected(render(700).selection, other.slug)
+      expectSelected(render(700), other.slug)
     } finally {
       renderSpy.mockRestore()
-      targetSpy.mockRestore()
       town.dispose()
     }
   })
@@ -530,7 +539,12 @@ describe('article residents', () => {
     const renderSpy = vi.spyOn(renderer, 'render').mockImplementation((scene) => {
       if (!(scene instanceof Scene) || !scene.background) return
       scene.traverse((mesh) => {
-        if (mesh instanceof InstancedMesh && mesh.geometry.type === 'TorusGeometry') wheels = mesh
+        if (
+          mesh instanceof InstancedMesh &&
+          mesh.geometry.type === 'TorusGeometry' &&
+          (mesh.material as Material).depthFunc !== GreaterDepth
+        )
+          wheels = mesh
       })
     })
     try {
@@ -587,8 +601,8 @@ describe('town viewport and conversations', () => {
     articles.forEach((article, index) => {
       article.route = {
         ...article.route,
-        start: onettRoads[1].points[0],
-        end: onettRoads[1].points[1],
+        start: walkSegments[23].start,
+        end: walkSegments[23].end,
         progress: 0.35 + index * 0.3
       }
     })

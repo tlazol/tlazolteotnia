@@ -1,72 +1,99 @@
-import { Raycaster, Vector2, Vector3, type WebGLRenderer } from 'three'
+import { Color, Scene, Vector3, type WebGLRenderer } from 'three'
 import type { SceneSize } from './scene-math'
+import { createTownAmbient } from './town-ambient'
 import { createTownCamera, updateTownCamera } from './town-camera'
-import { containsTownGround } from './town-coast'
 import { createTownLighting } from './town-lighting'
+import { createTownMaterials } from './town-materials'
 import { createTownNavigation } from './town-navigation'
 import { clampTownView, type TownArticle } from './town-posts'
+import { createResidentBatches, residentLiftHeight } from './town-resident-batches'
 import { createTownResidents } from './town-residents'
-import { createTownSceneBatches, residentLiftHeight } from './town-scene-batches'
-import { createTownSceneCompositor } from './town-scene-compositor'
-import { createTownSceneResources } from './town-scene-resources'
-import { createTownStaticModel } from './town-static-model'
+import { buildTownStatic, type TownOccluder } from './town-static'
 import { boardToTown, type TownView, townToBoard } from './town-view'
+import { containsTownGround } from './town-world'
+
+// Ray/box slab test along the camera's viewing direction.
+function blocks(box: TownOccluder, origin: Vector3, direction: Vector3) {
+  let near = 0
+  let far = Number.POSITIVE_INFINITY
+  const ranges: [number, number, number, number][] = [
+    [origin.x, direction.x, box.minX, box.maxX],
+    [origin.y, direction.y, box.minY, box.maxY],
+    [origin.z, direction.z, box.minZ, box.maxZ]
+  ]
+  for (const [start, step, min, max] of ranges) {
+    if (Math.abs(step) < 1e-9) {
+      if (start < min || start > max) return false
+      continue
+    }
+    const a = (min - start) / step
+    const b = (max - start) / step
+    near = Math.max(near, Math.min(a, b))
+    far = Math.min(far, Math.max(a, b))
+    if (near > far) return false
+  }
+  return true
+}
 
 export function createTownScene(articles?: TownArticle[]) {
   const camera = createTownCamera()
-  const resources = createTownSceneResources()
-  const batches = createTownSceneBatches(resources)
-  const { scene, occluders } = batches
-  const lighting = createTownLighting(scene, resources)
-  const compositor = createTownSceneCompositor(scene, batches.traffic, batches.selection, camera)
+  const scene = new Scene()
+  scene.background = new Color(0x2a7bb6)
+  const materials = createTownMaterials()
+  const statics = buildTownStatic(materials)
+  scene.add(statics.group)
+  const ambient = createTownAmbient(materials)
+  scene.add(ambient.group)
+  const lighting = createTownLighting(scene, materials, statics.pools)
   const residents = createTownResidents(articles)
-  let navigation = createTownNavigation([], containsTownGround)
-  let blockKey = ''
-  let viewKey = ''
+  const batches = createResidentBatches()
+  batches.rebuild(residents.residents)
+  scene.add(batches.group)
+  const navigation = createTownNavigation(statics.obstacles, containsTownGround)
   let currentView: TownView = { x: 0, y: 0, zoom: 1 }
   let zoom = 1
-  const raycaster = new Raycaster()
+  let viewport: SceneSize = { width: 0, height: 0 }
+  let anisotropy = false
   const projected = new Vector3()
   const world = new Vector3()
-  const screen = new Vector2()
-  let viewport: SceneSize = { width: 0, height: 0 }
+  const towardCamera = new Vector3()
   const visibility = new Map<string, boolean>()
-  let visibilityTime = -Infinity
+  let visibilityTime = Number.NEGATIVE_INFINITY
+
+  function occluded(point: Vector3) {
+    camera.getWorldDirection(towardCamera).negate()
+    return statics.occluders.some((box) => blocks(box, point, towardCamera))
+  }
+
   return {
+    get stats() {
+      return statics.stats
+    },
     beginResidentDrag(slug: string) {
       residents.beginResidentDrag(slug)
-      compositor.invalidateTraffic()
     },
     moveResidentDrag(dx: number, dy: number) {
       residents.moveResidentDrag(boardToTown(dx / zoom, dy / zoom, currentView.rotation))
-      compositor.invalidateTraffic()
-      visibilityTime = -Infinity
+      visibilityTime = Number.NEGATIVE_INFINITY
     },
     endResidentDrag(cancel = false) {
       residents.endResidentDrag(navigation, cancel)
-      compositor.invalidateTraffic()
-      visibilityTime = -Infinity
+      visibilityTime = Number.NEGATIVE_INFINITY
     },
     select(slug: string | null) {
       residents.select(slug)
-      compositor.invalidateTraffic()
     },
     follow: residents.follow,
     focus: residents.focus,
     filter(slugs: string[]) {
       residents.filter(slugs)
-      compositor.invalidate()
-      visibilityTime = -Infinity
+      visibilityTime = Number.NEGATIVE_INFINITY
     },
     residentPosition: residents.residentPosition,
     projectResidents(now: number) {
-      // Pan and zoom preserve the orthographic viewing direction. Keep occlusion
-      // checks on their own cadence, including while the camera follows a resident.
+      // Keep occlusion checks on their own cadence, including while following a resident.
       const checkVisibility = now - visibilityTime >= 180
-      if (checkVisibility) {
-        visibilityTime = now
-        scene.updateMatrixWorld()
-      }
+      if (checkVisibility) visibilityTime = now
       return [...residents.articleResidents.entries()].map(([slug, resident]) => {
         const { x, z } = resident.pose
         const riding = resident.kind === 'bicycle'
@@ -92,12 +119,7 @@ export function createTownScene(articles?: TownArticle[]) {
         ) {
           // Visibility is sampled at the face, independently of tall hats and props.
           world.set(x, (riding ? 60 : 50) * resident.scale + (lifted ? residentLiftHeight : 0), z)
-          world.project(camera)
-          screen.set(world.x, world.y)
-          world.set(x, (riding ? 60 : 50) * resident.scale + (lifted ? residentLiftHeight : 0), z)
-          raycaster.setFromCamera(screen, camera)
-          raycaster.far = raycaster.ray.origin.distanceTo(world) - 8
-          visibility.set(slug, raycaster.intersectObjects(occluders, false).length === 0)
+          visibility.set(slug, !occluded(world))
         }
         return {
           slug,
@@ -116,46 +138,34 @@ export function createTownScene(articles?: TownArticle[]) {
       })
     },
     update(view: TownView, size: SceneSize) {
-      if ((view.rotation ?? 0) !== (currentView.rotation ?? 0)) visibilityTime = -Infinity
+      if ((view.rotation ?? 0) !== (currentView.rotation ?? 0))
+        visibilityTime = Number.NEGATIVE_INFINITY
       currentView = view
       viewport = size
       zoom = view.zoom
-      const nextKey = [view.x, view.y, view.zoom, view.rotation ?? 0, size.width, size.height].join(
-        ':'
-      )
-      if (nextKey === viewKey) return
-      viewKey = nextKey
-      compositor.invalidate()
       updateTownCamera(camera, view, size)
-      const detailed = view.zoom >= 0.45
-      const nextBlockKey = `${detailed}`
-      if (nextBlockKey !== blockKey) {
-        const model = createTownStaticModel(detailed)
-        batches.rebuild(model.parts, model.forestParts, residents.residents, detailed)
-        lighting.setStreetLamps(model.streetLamps)
-        navigation = createTownNavigation(model.obstacles, containsTownGround)
-        blockKey = nextBlockKey
-        visibilityTime = -Infinity
-      }
-      compositor.resize(view, size)
     },
     pause: residents.pause,
     render(renderer: WebGLRenderer, now: number, motion: boolean) {
-      const lightingChanged = lighting.update(new Date(), currentView, viewport)
-      const { delta, changed } = residents.advance(now, motion)
-      let updateTraffic = compositor.needsUpdate || changed
-      if (updateTraffic) {
-        residents.updatePoses(delta, navigation)
-        batches.update({
-          elapsed: residents.elapsed,
-          motion,
-          selectedSlug: residents.selectedSlug,
-          visibleSlugs: residents.visibleSlugs,
-          dragged: residents.dragged
-        })
+      if (!anisotropy) {
+        anisotropy = true
+        materials.atlas.texture.anisotropy = Math.min(
+          8,
+          renderer.capabilities?.getMaxAnisotropy() ?? 1
+        )
       }
-      // A lighting-only redraw does not change resident poses or instance buffers.
-      if (lightingChanged) compositor.invalidate()
+      lighting.update(new Date(), currentView, viewport)
+      const { delta } = residents.advance(now, motion)
+      residents.updatePoses(delta, navigation)
+      batches.update({
+        elapsed: residents.elapsed,
+        motion,
+        selectedSlug: residents.selectedSlug,
+        visibleSlugs: residents.visibleSlugs,
+        dragged: residents.dragged
+      })
+      materials.uniforms.uTime.value = residents.elapsed
+      ambient.update(residents.elapsed, lighting.night)
       const followed = residents.followedSlug
         ? residents.articleResidents.get(residents.followedSlug)
         : undefined
@@ -172,25 +182,19 @@ export function createTownScene(articles?: TownArticle[]) {
         )
         if (next.x !== currentView.x || next.y !== currentView.y) {
           currentView = next
-          viewKey = ''
-          compositor.invalidate()
-          updateTraffic = true
           updateTownCamera(camera, currentView, viewport)
           lighting.update(new Date(), currentView, viewport)
         }
       }
-      compositor.render(
-        renderer,
-        updateTraffic,
-        !!residents.selectedSlug && !!residents.visibleSlugs?.has(residents.selectedSlug)
-      )
+      renderer.render(scene, camera)
       return currentView
     },
     dispose() {
       lighting.dispose()
       batches.dispose()
-      resources.dispose()
-      compositor.dispose()
+      ambient.dispose()
+      statics.dispose()
+      materials.dispose()
     }
   }
 }

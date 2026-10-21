@@ -1,8 +1,8 @@
 import type { WebGLRenderer } from 'three'
 import { describe, expect, it } from 'vitest'
 import { type ActiveResident, updateTownActivities } from '../src/lib/town-activity'
-import { onettRoads } from '../src/lib/town-layout'
 import { createTownScene } from '../src/lib/town-three.client'
+import { walkerLane, walkSegments } from '../src/lib/town-world'
 
 function walker(x: number, phase = 1): ActiveResident {
   return { kind: 'walker', scale: 1, pose: { x, z: 0, yaw: 0 }, phase }
@@ -75,16 +75,14 @@ describe('town activities', () => {
   })
 
   it('holds the scene positions while playing and resumes the same route afterwards', () => {
-    const road = onettRoads[2]
-    const start = road.points[0]
-    const end = road.points[1]
+    const { start, end } = walkSegments[4]
     const length = Math.hypot(end.x - start.x, end.z - start.z) - 160
     const town = createTownScene(
       [0, 2].map((variant, index) => ({
         slug: `player-${index}`,
         variant,
         kind: 'walker',
-        route: { start, end, lane: -48, progress: 0.28 + (index * 75) / length, speed: 12 }
+        route: { start, end, lane: -walkerLane, progress: 0.28 + (index * 75) / length, speed: 12 }
       }))
     )
     const renderer = {

@@ -1,10 +1,9 @@
 import type { BlogPostSummary } from './blog-post'
 import { hashSlug, type SceneSize } from './scene-math'
-import { beachWalkingSegments, coastColumns, coastStep } from './town-coast'
-import { onettBuildings, onettHills, onettRoads, onettToTown, townLayoutScale } from './town-layout'
 import { townPersonStyles } from './town-person'
 import { type TrafficRoute, trafficPose } from './town-traffic'
 import { type TownView, townToBoard } from './town-view'
+import { coastOutline, townPeaks, walkSegments } from './town-world'
 
 export type TownArticle = {
   slug: string
@@ -13,51 +12,7 @@ export type TownArticle = {
   route: TrafficRoute
 }
 
-// Residents walk at ground level, so trim paths where the raised hills cover them.
-const residentRoadSegments = onettRoads.flatMap((road) =>
-  road.points.slice(1).flatMap((end, index) => {
-    const start = road.points[index]
-    const dx = end.x - start.x
-    const dz = end.z - start.z
-    let intervals = [{ start: 0, end: 1 }]
-    for (const hill of onettHills) {
-      const center = onettToTown(hill.x, hill.y)
-      let enter = 0
-      let exit = 1
-      for (const [origin, delta, middle, extent] of [
-        [start.x, dx, center.x, hill.width / 2 + 60],
-        [start.z, dz, center.z, hill.depth / 2 + 60]
-      ]) {
-        if (delta === 0) {
-          if (Math.abs(origin - middle) > extent) exit = -1
-        } else {
-          const a = (middle - extent - origin) / delta
-          const b = (middle + extent - origin) / delta
-          enter = Math.max(enter, Math.min(a, b))
-          exit = Math.min(exit, Math.max(a, b))
-        }
-      }
-      if (enter >= exit) continue
-      intervals = intervals.flatMap((interval) => {
-        if (exit <= interval.start || enter >= interval.end) return [interval]
-        return [
-          { start: interval.start, end: Math.max(interval.start, enter) },
-          { start: Math.min(interval.end, exit), end: interval.end }
-        ].filter((part) => part.end > part.start)
-      })
-    }
-    return intervals
-      .filter((part) => (part.end - part.start) * Math.hypot(dx, dz) >= 120)
-      .map((part) => ({
-        start:
-          part.start === 0 ? start : { x: start.x + dx * part.start, z: start.z + dz * part.start },
-        end: part.end === 1 ? end : { x: start.x + dx * part.end, z: start.z + dz * part.end },
-        lane: road.trail ? 9 : road.width / 2 + 9
-      }))
-  })
-)
-
-const residentSegments = [...residentRoadSegments, ...beachWalkingSegments]
+const residentSegments = walkSegments
 
 // Shuffle the full catalogue once per visit; filtering keeps these residents in place.
 export function layoutTownArticles(
@@ -82,7 +37,7 @@ export function layoutTownArticles(
       route: {
         start: segment.start,
         end: segment.end,
-        lane: (random() < 0.5 ? -1 : 1) * Math.min(segment.lane, riding ? 29 : 48),
+        lane: (random() < 0.5 ? -1 : 1) * (riding ? segment.cycleLane : segment.lane),
         progress: 0.08 + ((slot + random()) / count) * 0.84,
         speed: (riding ? 28 : 10) + (seed % 5)
       }
@@ -98,10 +53,12 @@ export function nearestResidentRoute(
 ) {
   let nearest = route
   let distance = Infinity
+  // Cyclists ride along the curb; walkers keep to the middle of the pavement.
+  const riding = route.speed > 20
   for (const segment of residentSegments) {
-    const radius = Math.min(segment.lane, Math.abs(route.lane))
+    const radius = riding ? segment.cycleLane : segment.lane
     for (const lane of [-radius, radius]) {
-      const candidate = { ...route, ...segment, lane, progress: 0 }
+      const candidate = { ...route, start: segment.start, end: segment.end, lane, progress: 0 }
       const start = trafficPose(candidate, 0)
       const end = trafficPose({ ...candidate, progress: 1 }, 0)
       const dx = end.x - start.x
@@ -121,23 +78,14 @@ export function nearestResidentRoute(
   return nearest
 }
 
-const landmarks = [
-  ...onettRoads.flatMap((road) => road.points),
-  ...onettBuildings,
-  ...coastColumns.flatMap(({ x, south, beach }) => [
-    { x: x - coastStep / 2, z: south },
-    { x: x + coastStep / 2, z: south },
-    { x: x - coastStep / 2, z: south + beach },
-    { x: x + coastStep / 2, z: south + beach }
-  ])
-]
+const landmarks = [...coastOutline().map((point) => ({ ...point, height: 0 })), ...townPeaks]
 export function getTownBounds(rotation = 0) {
-  const projected = landmarks.map((p) => townToBoard(p.x, p.z, 0, rotation))
+  const projected = landmarks.map((p) => townToBoard(p.x, p.z, p.height, rotation))
   return {
-    left: Math.min(...projected.map((p) => p.x)) - 220,
-    right: Math.max(...projected.map((p) => p.x)) + 220,
-    top: Math.min(...projected.map((p) => p.y)) - 300,
-    bottom: Math.max(...projected.map((p) => p.y)) + 220
+    left: Math.min(...projected.map((p) => p.x)) - 160,
+    right: Math.max(...projected.map((p) => p.x)) + 160,
+    top: Math.min(...projected.map((p) => p.y)) - 220,
+    bottom: Math.max(...projected.map((p) => p.y)) + 160
   }
 }
 export function fitTown(size: SceneSize, rotation = 0): TownView {
@@ -172,9 +120,7 @@ export function clampTownView(view: TownView, size: SceneSize): TownView {
 }
 
 export function initialTownView(size: SceneSize, article?: TownArticle): TownView {
-  const pose = article
-    ? trafficPose(article.route, 0)
-    : { x: 2000 * townLayoutScale, z: 600 * townLayoutScale }
+  const pose = article ? trafficPose(article.route, 0) : { x: 600, z: 200 }
   const point = townToBoard(pose.x, pose.z, 28)
   const zoom = 1
   return clampTownView(

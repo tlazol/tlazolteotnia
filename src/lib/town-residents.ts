@@ -1,11 +1,11 @@
 import type { Box3 } from 'three'
 import { hashSlug } from './scene-math'
 import { type ActiveResident, updateTownActivities } from './town-activity'
-import { nearestTownRoad, onettRoads } from './town-layout'
 import type { createTownNavigation, TownPoint } from './town-navigation'
 import { townPersonStyle } from './town-person'
 import { nearestResidentRoute, type TownArticle } from './town-posts'
 import { avoidTraffic, type TrafficRoute, trafficPose } from './town-traffic'
+import { carLane, townRoads } from './town-world'
 
 export type Resident = ActiveResident & {
   variant: number
@@ -34,58 +34,28 @@ export function createTownResidents(articles?: TownArticle[]) {
   let focusedSlug: string | null = null
   let dragged: { resident: Resident; pose: Resident['pose'] } | null = null
   let visibleSlugs = articles ? new Set(articles.map((article) => article.slug)) : null
-  for (const [roadIndex, road] of onettRoads.entries()) {
-    if (road.trail) continue
-    for (let segment = 1; segment < road.points.length; segment++) {
-      const a = road.points[segment - 1]
-      const b = road.points[segment]
-      const heading = Math.atan2(b.x - a.x, b.z - a.z)
-      const placements = [
-        { t: 0.24, lane: -19, kind: 'car' },
-        { t: 0.68, lane: 29, kind: 'bicycle' },
-        { t: 0.16, lane: 48, kind: 'walker' },
-        { t: 0.47, lane: -48, kind: 'walker' },
-        { t: 0.79, lane: 48, kind: 'walker' }
-      ] as const
-      for (const [index, placement] of placements.entries()) {
-        if (articles && placement.kind !== 'car') continue
-        // The short hospital approach only has room for a pedestrian.
-        if (road.width < 78 && index !== 2) continue
-        const lane = road.width < 78 ? road.width / 2 + 9 : placement.lane
-        const point = {
-          x: a.x + (b.x - a.x) * placement.t + Math.cos(heading) * lane,
-          z: a.z + (b.z - a.z) * placement.t - Math.sin(heading) * lane
-        }
-        // Leave intersections clear, including sidewalks crossing another street.
-        if (
-          nearestTownRoad(
-            point,
-            onettRoads.filter((other) => other !== road && !other.trail)
-          ).distance < 45
-        )
-          continue
-        const variant = roadIndex + segment + index
-        const route: TrafficRoute = {
-          start: a,
-          end: b,
-          lane,
-          progress: placement.t,
-          speed: placement.kind === 'car' ? 54 : placement.kind === 'bicycle' ? 30 : 12
-        }
-        const key = `${roadIndex}:${segment}:${index}`
-        const resident: Resident = {
-          variant,
-          route,
-          kind: placement.kind,
-          scale: placement.kind === 'car' ? 1 : personScale(variant),
-          phase: variant * 1.7,
-          blinkPhase: (hashSlug(key) / 0xffffffff) * 10,
-          time: placement.kind === 'walker' ? elapsed : undefined,
-          pose: trafficPose(route, elapsed)
-        }
-        residents.push(resident)
-      }
+  // Cars loop along individual block faces, keeping the island's traffic gentle.
+  for (const [roadIndex, road] of townRoads.entries()) {
+    if (roadIndex % 2) continue
+    const key = `car:${roadIndex}`
+    const seed = hashSlug(key)
+    const variant = seed % 97
+    const route: TrafficRoute = {
+      start: road.start,
+      end: road.end,
+      lane: (seed & 1 ? 1 : -1) * carLane,
+      progress: 0.15 + ((seed >>> 8) % 70) / 100,
+      speed: 58 + (seed % 12)
     }
+    residents.push({
+      variant,
+      route,
+      kind: 'car',
+      scale: 1,
+      phase: variant * 1.7,
+      blinkPhase: (seed / 0xffffffff) * 10,
+      pose: trafficPose(route, elapsed)
+    })
   }
   for (const article of articles ?? []) {
     const resident: Resident = {

@@ -1,4 +1,4 @@
-import type { InstancedMesh, Scene, WebGLRenderer, WebGLRenderTarget } from 'three'
+import { InstancedMesh, type Scene, type WebGLRenderer } from 'three'
 import { describe, expect, it, vi } from 'vitest'
 import { createTownScene } from '../src/lib/town-three.client'
 import {
@@ -176,25 +176,20 @@ describe('town traffic routes', () => {
 })
 
 describe('town animation lifecycle', () => {
-  it('caches the town and freezes residents during reduced motion and tab suspension', () => {
+  it('freezes residents during reduced motion and tab suspension', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date(2026, 9, 16, 12))
     const town = createTownScene()
-    let target: WebGLRenderTarget | null = null
-    let townDraws = 0
+    let draws = 0
     let positions: number[] = []
     const renderer = {
-      getRenderTarget: () => target,
-      setRenderTarget: (next: WebGLRenderTarget | null) => {
-        target = next
-      },
-      clear: () => {},
       render: (scene: Scene) => {
-        if (!scene.background) return
-        townDraws++
-        const traffic = scene.children.find((child) => child.type === 'Scene')
-        const mesh = traffic?.children[0] as InstancedMesh
-        if (mesh?.isInstancedMesh) positions = Array.from(mesh.instanceMatrix.array)
+        draws++
+        const residents = scene.getObjectByName('town-residents')
+        const mesh = residents?.children.find(
+          (child): child is InstancedMesh => child instanceof InstancedMesh && child.count > 0
+        )
+        if (mesh) positions = Array.from(mesh.instanceMatrix.array)
       }
     } as unknown as WebGLRenderer
     try {
@@ -206,19 +201,14 @@ describe('town animation lifecycle', () => {
       expect(initial.length).toBeGreaterThan(0)
       town.render(renderer, 50, true)
       expect(positions).not.toEqual(initial)
-      expect(townDraws).toBe(2)
       const moving = positions
       town.render(renderer, 100, false)
-      // Stopping redraws once to reset blinking without advancing residents.
       expect(positions).toEqual(moving)
-      expect(townDraws).toBe(3)
       town.render(renderer, 10000, false)
       expect(positions).toEqual(moving)
-      expect(townDraws).toBe(3)
       town.update({ ...view, x: 20 }, size)
       town.render(renderer, 10050, false)
       expect(positions).toEqual(moving)
-      expect(townDraws).toBe(4)
       town.render(renderer, 10100, true)
       town.render(renderer, 10150, true)
       expect(positions).not.toEqual(moving)
@@ -228,7 +218,7 @@ describe('town animation lifecycle', () => {
       expect(positions).toEqual(resumed)
       town.render(renderer, 90050, true)
       expect(positions).not.toEqual(resumed)
-      expect(target).toBeNull()
+      expect(draws).toBe(9)
     } finally {
       town.dispose()
       vi.useRealTimers()
