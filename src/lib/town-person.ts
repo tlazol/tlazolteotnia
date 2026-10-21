@@ -1,120 +1,55 @@
 import { hashSlug } from './scene-math'
 
-// Stable order preserves the article-to-costume mapping. Each resident is designed
-// as a girl; the role names are costume identifiers, not the old body designs.
+// Each article picks one of these girls by hash; colors vary with the article identity.
+// Hair, fringe, eyes and outfit are designed together so no two read alike.
 export const townPersonStyles = [
-  { role: 'cap-child', hair: 'bob', scale: 0.88, skirt: false, face: 0 },
-  { role: 'dress-child', hair: 'twintails', scale: 0.88, skirt: true, face: 4 },
-  { role: 'casual', hair: 'waves', scale: 1, skirt: false, face: 3 },
-  { role: 'dress', hair: 'long', scale: 1, skirt: true, face: 1 },
-  { role: 'hoodie', hair: 'short', scale: 0.96, skirt: false, face: 2 },
-  { role: 'cardigan', hair: 'ponytail', scale: 1, skirt: true, face: 5 },
-  { role: 'kindergartner', hair: 'braids', scale: 0.84, skirt: true, face: 3 },
-  { role: 'schoolchild', hair: 'bob', scale: 0.9, skirt: true, face: 2 },
-  { role: 'student', hair: 'long', scale: 0.96, skirt: true, face: 0 },
-  { role: 'salaryman', hair: 'ponytail', scale: 1, skirt: false, face: 3 },
-  { role: 'doctor', hair: 'braids', scale: 1, skirt: false, face: 5 },
-  { role: 'office-lady', hair: 'bun', scale: 1, skirt: true, face: 1 },
-  { role: 'magical-girl', hair: 'twintails', scale: 0.96, skirt: true, face: 4 },
-  { role: 'chef', hair: 'bun', scale: 0.98, skirt: true, face: 3 },
-  { role: 'firefighter', hair: 'ponytail', scale: 1, skirt: false, face: 0 },
-  { role: 'police', hair: 'bob', scale: 1, skirt: true, face: 5 },
-  { role: 'builder', hair: 'braids', scale: 0.98, skirt: false, face: 2 },
-  { role: 'farmer', hair: 'twintails', scale: 0.96, skirt: false, face: 3 },
-  { role: 'astronaut', hair: 'short', scale: 1, skirt: false, face: 0 },
-  { role: 'alien', hair: 'bun', scale: 0.96, skirt: true, face: 4 },
-  { role: 'nurse', hair: 'bob', scale: 1, skirt: true, face: 4 },
-  { role: 'hero', hair: 'ponytail', scale: 1, skirt: true, face: 2 },
-  { role: 'wizard', hair: 'waves', scale: 1, skirt: true, face: 5 },
-  { role: 'witch', hair: 'long', scale: 1, skirt: true, face: 1 },
-  { role: 'knight', hair: 'braids', scale: 1, skirt: true, face: 0 },
-  { role: 'ninja', hair: 'ponytail', scale: 0.96, skirt: false, face: 5 },
-  { role: 'pirate', hair: 'waves', scale: 1, skirt: true, face: 3 },
-  { role: 'fairy', hair: 'twintails', scale: 0.88, skirt: true, face: 2 },
-  { role: 'vampire', hair: 'long', scale: 1, skirt: true, face: 4 },
-  { role: 'robot', hair: 'bob', scale: 1, skirt: true, face: 0 }
+  { role: 'sailor', hair: 'long', bangs: 'blunt', eyes: 0, scale: 1 },
+  { role: 'blazer', hair: 'bob', bangs: 'swept', eyes: 2, scale: 1 },
+  { role: 'parka', hair: 'short', bangs: 'pointy', eyes: 3, scale: 0.94 },
+  { role: 'maid', hair: 'twintails', bangs: 'blunt', eyes: 0, scale: 0.98 },
+  { role: 'miko', hair: 'hime', bangs: 'blunt', eyes: 1, scale: 1 },
+  { role: 'yukata', hair: 'buns', bangs: 'parted', eyes: 5, scale: 0.96 },
+  { role: 'witch', hair: 'wavy', bangs: 'swept', eyes: 2, scale: 1 },
+  { role: 'idol', hair: 'twintails', bangs: 'wispy', eyes: 4, scale: 0.98 },
+  { role: 'nurse', hair: 'bob', bangs: 'parted', eyes: 1, scale: 1 },
+  { role: 'patissier', hair: 'ponytail', bangs: 'wispy', eyes: 5, scale: 0.98 },
+  { role: 'raincoat', hair: 'short', bangs: 'blunt', eyes: 0, scale: 0.9 },
+  { role: 'cheer', hair: 'ponytail', bangs: 'pointy', eyes: 4, scale: 0.98 },
+  { role: 'gothic', hair: 'drills', bangs: 'blunt', eyes: 2, scale: 0.98 },
+  { role: 'overalls', hair: 'braids', bangs: 'wispy', eyes: 5, scale: 0.94 },
+  { role: 'magical', hair: 'sidetail', bangs: 'pointy', eyes: 4, scale: 0.96 },
+  { role: 'cardigan', hair: 'halfup', bangs: 'parted', eyes: 3, scale: 1 },
+  { role: 'sporty', hair: 'short', bangs: 'swept', eyes: 2, scale: 1 },
+  { role: 'artist', hair: 'bob', bangs: 'wispy', eyes: 1, scale: 0.96 },
+  { role: 'china', hair: 'buns', bangs: 'blunt', eyes: 0, scale: 0.98 },
+  { role: 'princess', hair: 'wavy', bangs: 'parted', eyes: 0, scale: 1 },
+  { role: 'catgirl', hair: 'bob', bangs: 'pointy', eyes: 2, scale: 0.96 },
+  { role: 'bunny', hair: 'lowtails', bangs: 'wispy', eyes: 3, scale: 0.92 },
+  { role: 'winter', hair: 'long', bangs: 'swept', eyes: 5, scale: 1 },
+  { role: 'explorer', hair: 'braids', bangs: 'parted', eyes: 1, scale: 0.98 }
 ] as const
+
+export type TownPersonStyle = (typeof townPersonStyles)[number]
 
 export function townPersonStyle(variant: number) {
   return townPersonStyles[variant % townPersonStyles.length]
 }
 
-type Costume = (typeof townPersonStyles)[number]
-type Hair = Costume['hair'] | 'flipped-bob' | 'wolf' | 'curly-twintails' | 'sidetail'
-type Headwear =
-  | 'costume'
-  | 'none'
-  | 'casquette'
-  | 'knit'
-  | 'bucket'
-  | 'beret'
-  | 'goggles'
-  | 'mirror'
-  | 'visor'
-  | 'knight'
-
-const hairColors = [
-  0x303a55, 0x815844, 0xb96b4c, 0xc4a37e, 0xe5ce94, 0xdce4ee, 0x8095b2, 0xb5a0d2, 0x76577e,
-  0xbc829d, 0xe4afba, 0x91c3ae
+// Natural shades first, then pastel anime colors.
+export const townHairColors = [
+  0x3a2c3c, 0x6a4535, 0xa5653f, 0xe6be72, 0xf3dfae, 0xd8645a, 0xf2a6bd, 0xb79be3, 0x8ac6ea,
+  0x93d3b6, 0xe9e7f2, 0x4a5a9c
 ] as const
+const skinTones = [0xffe8db, 0xfde0cd, 0xf4cdb2, 0xdcab8a, 0xb98264] as const
 
-const hairChoices: Record<Costume['hair'], readonly Hair[]> = {
-  bob: ['bob', 'flipped-bob', 'wolf'],
-  twintails: ['twintails', 'curly-twintails', 'sidetail'],
-  waves: ['waves', 'wolf', 'curly-twintails'],
-  long: ['long', 'waves', 'sidetail'],
-  short: ['short', 'wolf', 'flipped-bob'],
-  ponytail: ['ponytail', 'sidetail', 'wolf'],
-  braids: ['braids', 'flipped-bob', 'long'],
-  bun: ['bun', 'curly-twintails', 'sidetail']
-}
-
-// Costume hats stay recognizable. Optional headwear belongs only to everyday outfits.
-const headwearChoices: Partial<Record<Costume['role'], readonly Headwear[]>> = {
-  'dress-child': ['none', 'beret'],
-  casual: ['casquette', 'bucket', 'beret'],
-  dress: ['none', 'beret'],
-  hoodie: ['knit', 'mirror'],
-  cardigan: ['beret', 'knit', 'casquette'],
-  student: ['none', 'beret'],
-  salaryman: ['none', 'casquette'],
-  doctor: ['goggles'],
-  'office-lady': ['none', 'beret'],
-  firefighter: ['goggles'],
-  builder: ['goggles'],
-  astronaut: ['visor'],
-  knight: ['knight'],
-  robot: ['visor']
-}
-
-export function townPersonAppearance(variant: number, identity: string) {
-  const style = townPersonStyle(variant)
+export function townPersonAppearance(identity: string) {
   const choose = <T>(key: string, choices: readonly T[]) =>
     choices[(hashSlug(`${key}:${identity}`) >>> 8) % choices.length]
-  const headwear = choose('headwear', headwearChoices[style.role] ?? ['costume'])
-  // Low ties and short cuts fit under hats; high buns and tails remain on bare heads.
-  const hair = choose(
-    'haircut',
-    headwear === 'none' ||
-      (headwear === 'costume' &&
-        ['magical-girl', 'alien', 'hero', 'ninja', 'fairy', 'vampire'].includes(style.role))
-      ? hairChoices[style.hair]
-      : hairChoices[style.hair].filter(
-          (hair) => !['bun', 'twintails', 'curly-twintails', 'ponytail'].includes(hair)
-        )
-  )
   return {
-    hair,
-    hairColor: choose('hair-color', hairColors),
-    headwear,
-    fringe: choose('fringe', [
-      'straight',
-      'swept',
-      'round',
-      'locks',
-      'pointed',
-      'curtain'
-    ] as const),
-    shortFringe: ['goggles', 'mirror', 'visor', 'knight'].includes(headwear)
+    hairColor: choose('hair', townHairColors),
+    skin: choose('skin', skinTones),
+    // Alternate outfit colorways, interpreted by each costume.
+    tone: choose('tone', [0, 1, 2, 3] as const),
+    ahoge: choose('ahoge', [false, false, true] as const)
   }
 }

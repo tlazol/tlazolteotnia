@@ -1,129 +1,131 @@
-import { BoxGeometry, Mesh, MeshBasicMaterial, Raycaster, Vector3 } from 'three'
+import { Mesh, MeshBasicMaterial, Raycaster, Vector3 } from 'three'
 import { describe, expect, it } from 'vitest'
-import { townPersonAppearance, townPersonStyles } from '../src/lib/town-person'
-import { createPersonGeometries } from '../src/lib/town-person-geometry'
-import { createPersonParts } from '../src/lib/town-person-model'
+import { townHairColors, townPersonAppearance, townPersonStyles } from '../src/lib/town-person'
+import { createPersonGeometries, headPoint, personFace } from '../src/lib/town-person-geometry'
+import {
+  createPersonParts,
+  type PersonPart,
+  personHead,
+  personHeadTilt
+} from '../src/lib/town-person-model'
 
-const examples = townPersonStyles.flatMap((_, variant) =>
-  Array.from({ length: 8 }, (_, sample) => ({ variant, identity: `resident-${variant}-${sample}` }))
-)
+const examples = [
+  ...townPersonStyles.flatMap((_, variant) =>
+    Array.from({ length: 6 }, (_, sample) => ({
+      variant,
+      identity: `resident-${variant}-${sample}`
+    }))
+  ),
+  { variant: 0, identity: 'give-the-ai-precise-instructions' }
+]
 
-it('preserves the existing article-to-costume slots', () => {
-  expect(townPersonStyles.map(({ role }) => role)).toEqual([
-    'cap-child',
-    'dress-child',
-    'casual',
-    'dress',
-    'hoodie',
-    'cardigan',
-    'kindergartner',
-    'schoolchild',
-    'student',
-    'salaryman',
-    'doctor',
-    'office-lady',
-    'magical-girl',
-    'chef',
-    'firefighter',
-    'police',
-    'builder',
-    'farmer',
-    'astronaut',
-    'alien',
-    'nurse',
-    'hero',
-    'wizard',
-    'witch',
-    'knight',
-    'ninja',
-    'pirate',
-    'fairy',
-    'vampire',
-    'robot'
-  ])
+it('gives every girl her own hairstyle, fringe and eyes', () => {
+  const roles = townPersonStyles.map(({ role }) => role)
+  expect(new Set(roles).size).toBe(roles.length)
+  const looks = townPersonStyles.map(({ hair, bangs, eyes }) => `${hair}/${bangs}/${eyes}`)
+  expect(new Set(looks).size).toBe(looks.length)
 })
 
-it('keeps each appearance stable, with hair colors independent of clothes', () => {
-  const appearances = examples.map(({ variant, identity }) =>
-    townPersonAppearance(variant, identity)
-  )
-  expect(new Set(appearances.map(({ hairColor }) => hairColor)).size).toBe(12)
-  expect(new Set(appearances.map(({ hair }) => hair)).size).toBe(12)
-  expect(new Set(appearances.map(({ fringe }) => fringe)).size).toBe(6)
-  expect(new Set(appearances.map(({ headwear }) => headwear)).size).toBe(10)
-  const colorsByCloth = new Map<number, Set<number>>()
+it('keeps each appearance stable and independent of the costume', () => {
+  const colors = new Set(examples.map(({ identity }) => townPersonAppearance(identity).hairColor))
+  expect(colors.size).toBe(townHairColors.length)
   for (const { variant, identity } of examples) {
     const before = createPersonParts(variant, identity)
     createPersonParts((variant + 1) % townPersonStyles.length, 'another-resident', true)
     expect(createPersonParts(variant, identity)).toEqual(before)
-    const cloth = before[0].color
-    const colors = colorsByCloth.get(cloth) ?? new Set<number>()
-    colors.add(townPersonAppearance(variant, identity).hairColor)
-    colorsByCloth.set(cloth, colors)
   }
-  for (const colors of colorsByCloth.values()) expect(colors.size).toBeGreaterThan(1)
 })
 
-describe('eyes stay covered across appearance combinations', () => {
-  it.each([false, true])(
-    'covers the whole eye area from front and oblique views (riding=%s)',
-    (riding) => {
-      const geometries = { ...createPersonGeometries(), box: new BoxGeometry(1, 1, 1) }
-      const material = new MeshBasicMaterial()
-      const ray = new Raycaster()
-      const lift = riding ? 10 : 0
-      const lean = riding ? -7 : 0
-      const views = [
-        new Vector3(0, 0, 1),
-        new Vector3(-0.7, 0.35, 1).normalize(),
-        new Vector3(0.7, 0.35, 1).normalize()
-      ]
-      try {
-        for (const { variant, identity } of examples) {
-          const meshes = createPersonParts(variant, identity, riding).map((part) => {
-            const { shape, x, y, z, width, height, depth, angle, pitch, color } = part
-            for (const value of [x, y, z, width, height, depth, angle, pitch, color])
-              expect(Number.isFinite(value), `${identity}: ${shape}`).toBe(true)
-            expect(Math.min(width, height, depth)).toBeGreaterThan(0)
-            const mesh = new Mesh(geometries[shape], material)
-            mesh.name = shape
-            mesh.position.set(x, y, z)
-            mesh.scale.set(width, height, depth)
-            mesh.rotation.set(pitch, 0, angle, 'YXZ')
-            mesh.updateMatrixWorld()
-            return mesh
-          })
-          // Sample both eyes' centers and edges, not just a point behind each lens.
-          for (const side of [-1, 1]) {
-            for (const [x, y] of [
-              [5.1, 52.2],
-              [3, 52.2],
-              [7.2, 52.2],
-              [5.1, 54.4],
-              [5.1, 50]
-            ]) {
-              const target = new Vector3(side * x, y + lift, lean + 15)
-              for (const view of views) {
-                ray.set(target.clone().addScaledVector(view, 80), view.clone().negate())
-                const hit = ray.intersectObjects(meshes, false)[0]
-                expect(hit, `${identity}: missing head`).toBeDefined()
-                expect(
-                  hit.object.name,
-                  `${identity}: exposed eye at ${side * x}, ${y}`
-                ).not.toMatch(/^girl(?:Head|Face)/)
-              }
-            }
-          }
-          // The mouth remains readable underneath the fringe or equipment.
-          ray.set(new Vector3(0, 43.4 + lift, 80 + lean), new Vector3(0, 0, -1))
-          const mouth = ray.intersectObjects(meshes, false)[0]
-          expect(mouth?.object.name, `${identity}: hidden mouth`).toMatch(/^girlFace/)
-        }
-      } finally {
-        for (const geometry of Object.values(geometries)) geometry.dispose()
-        material.dispose()
-      }
-    },
-    20000
+function meshes(parts: PersonPart[], geometries: ReturnType<typeof createPersonGeometries>) {
+  const material = new MeshBasicMaterial()
+  return parts.map((part) => {
+    const { shape, x, y, z, width, height, depth, angle, pitch, color } = part
+    for (const value of [x, y, z, width, height, depth, angle, pitch, color])
+      expect(Number.isFinite(value), shape).toBe(true)
+    expect(Math.min(width, height, depth)).toBeGreaterThan(0)
+    const mesh = new Mesh(geometries[shape], material)
+    mesh.name = shape
+    mesh.position.set(x, y, z)
+    mesh.scale.set(width, height, depth)
+    mesh.rotation.set(pitch, 0, angle, 'YXZ')
+    mesh.updateMatrixWorld()
+    return mesh
+  })
+}
+
+// Where a point on the unit head lands once the head is placed and tilted.
+function onHead(a: number, y: number, riding: boolean) {
+  const [x, py, z] = headPoint(a, Math.asin(y * 2), 1.012)
+  const local = new Vector3(
+    x * personHead.width,
+    py * personHead.height + personHead.y,
+    z * personHead.depth + personHead.z
   )
+  // Tilt about the neck, then lean onto the saddle as the model does.
+  const pivot = new Vector3(0, 26.5, 0)
+  local
+    .sub(pivot)
+    .applyAxisAngle(new Vector3(1, 0, 0), personHeadTilt)
+    .add(pivot)
+  if (riding) {
+    local.sub(new Vector3(0, 13, 0)).applyAxisAngle(new Vector3(1, 0, 0), 0.2)
+    local.add(new Vector3(0, 35, -7))
+  }
+  return local
+}
+
+describe('faces read from the 45° town camera', () => {
+  it.each([false, true])('shows both eyes and the mouth (riding=%s)', (riding) => {
+    const geometries = createPersonGeometries()
+    const ray = new Raycaster()
+    // Facing the camera, and turned a quarter either way.
+    const views = [0, -Math.PI / 4, Math.PI / 4].map((yaw) =>
+      new Vector3(Math.sin(yaw), 1, Math.cos(yaw)).normalize()
+    )
+    try {
+      for (const { variant, identity } of examples) {
+        const scene = meshes(createPersonParts(variant, identity, riding), geometries)
+        const targets = [
+          ...[-1, 1].map((side) => onHead(side * personFace.eyeAngle, personFace.eyeY, riding)),
+          onHead(0, personFace.mouthY, riding)
+        ]
+        for (const target of targets) {
+          for (const view of views) {
+            // Skip the far eye when the head turns away from the camera.
+            if (target.x * view.x < -4) continue
+            ray.set(target.clone().addScaledVector(view, 200), view.clone().negate())
+            const hit = ray.intersectObjects(scene, false)[0]
+            expect(hit?.object.name, `${identity}: hidden face at ${target.toArray()}`).toMatch(
+              /^girlFace/
+            )
+          }
+        }
+      }
+    } finally {
+      for (const geometry of Object.values(geometries)) geometry.dispose()
+    }
+  })
+})
+
+it('covers the back of the head with hair or headwear from above', () => {
+  const geometries = createPersonGeometries()
+  const ray = new Raycaster()
+  try {
+    for (const { variant, identity } of examples) {
+      const scene = meshes(createPersonParts(variant, identity), geometries)
+      // Offset from x = 0, where rays would graze the seam of the revolved meshes.
+      for (let x = -11.5; x < 12; x += 2) {
+        for (let z = -9.5; z < 2; z += 2) {
+          ray.set(new Vector3(x, 200, z), new Vector3(0, -1, 0))
+          const hit = ray.intersectObjects(scene, false)[0]
+          expect(hit, `${identity}: missing head at ${x}, ${z}`).toBeDefined()
+          expect(hit.object.name, `${identity}: bare scalp at ${x}, ${z}`).not.toMatch(
+            /^girl(?:Head|Face)/
+          )
+        }
+      }
+    }
+  } finally {
+    for (const geometry of Object.values(geometries)) geometry.dispose()
+  }
 })

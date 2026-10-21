@@ -28,6 +28,7 @@ import {
   createPersonGeometries,
   personBlinkFrames
 } from './town-person-geometry'
+import { personHipHeight, personShoulderHeight } from './town-person-model'
 import type { Resident } from './town-residents'
 import {
   carParts,
@@ -79,14 +80,19 @@ export function createResidentBatches() {
   gradient.minFilter = gradient.magFilter = NearestFilter
   gradient.needsUpdate = true
   const personMaterial = new MeshToonMaterial({ vertexColors: true, gradientMap: gradient })
+  // Faces take a gentler ramp, so the terminator never splits a cheek in two.
+  const softGradient = new DataTexture(new Uint8Array([185, 225, 255]), 3, 1, RedFormat)
+  softGradient.minFilter = softGradient.magFilter = NearestFilter
+  softGradient.needsUpdate = true
+  const skinMaterial = new MeshToonMaterial({ vertexColors: true, gradientMap: softGradient })
   const faceTexture = createPersonFaceTexture()
   const faceMaterial = new MeshToonMaterial({
-    gradientMap: gradient,
+    gradientMap: softGradient,
     map: faceTexture,
     transparent: true,
     alphaTest: 0.02
   })
-  for (const material of [personMaterial, faceMaterial]) {
+  for (const material of [personMaterial, skinMaterial, faceMaterial]) {
     material.onBeforeCompile = (shader) => {
       // Keep the time-of-day fill light uniform so it cannot soften the cel bands.
       shader.fragmentShader = shader.fragmentShader.replace(
@@ -126,6 +132,7 @@ export function createResidentBatches() {
 
   function materialFor(shape: MovingShape): Material {
     if (shape.startsWith('girlFace')) return faceMaterial
+    if (shape === 'girlHead') return skinMaterial
     if (shape.startsWith('girl')) return personMaterial
     if (shape === 'light') return lightMaterial
     return vehicleMaterial
@@ -179,7 +186,8 @@ export function createResidentBatches() {
       if (blink) geometry.setAttribute('blinkFrame', blink)
       const mesh = new InstancedMesh(geometry, materialFor(shape), items.length)
       mesh.castShadow = !face && shape !== 'light'
-      mesh.receiveShadow = true
+      // Fringe shadows would darken the whole face at town scale.
+      mesh.receiveShadow = !face && shape !== 'girlHead'
       mesh.instanceMatrix.setUsage(DynamicDrawUsage)
       // Residents travel outside their initial bounds; let the GPU clip these batches.
       mesh.frustumCulled = false
@@ -249,7 +257,8 @@ export function createResidentBatches() {
               rotation = -2.6 * envelope
             }
           }
-          const pivotY = (part.motion === 'leg' ? 22 : 36) * resident.scale
+          const pivotY =
+            (part.motion === 'leg' ? personHipHeight : personShoulderHeight) * resident.scale
           const offsetY = part.y - pivotY
           y = pivotY + offsetY * Math.cos(rotation) - part.z * Math.sin(rotation)
           localZ = offsetY * Math.sin(rotation) + part.z * Math.cos(rotation)
@@ -310,9 +319,11 @@ export function createResidentBatches() {
       clear()
       for (const geometry of Object.values(geometries)) geometry.dispose()
       gradient.dispose()
+      softGradient.dispose()
       faceTexture.dispose()
       for (const material of [
         personMaterial,
+        skinMaterial,
         faceMaterial,
         vehicleMaterial,
         lightMaterial,

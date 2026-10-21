@@ -2,7 +2,8 @@ export type CyclingMotion = 'thigh' | 'shin' | 'shoe' | 'crank' | 'pedal'
 type Joint = { y: number; z: number }
 
 export const bicycleCrank = { y: 13, z: 0, radius: 6 }
-export const bicycleGrip = { y: 35, z: 18 }
+// The bars sit close to the saddle so short chibi arms reach them.
+export const bicycleGrip = { y: 37, z: 8 }
 
 // Local Y is the limb's long axis; overlap rounded ends at the joints.
 export function bicycleSegment(from: Joint, to: Joint, overlap = 2) {
@@ -26,8 +27,8 @@ export function bicyclePose(motion: CyclingMotion, side: number, cycle: number) 
 
   const hip = { y: 35, z: -7 }
   const ankle = { y: pedal.y + 5, z: pedal.z - 4 }
-  const thighLength = 16
-  const shinLength = 17
+  const thighLength = 12
+  const shinLength = 12.5
   const dy = ankle.y - hip.y
   const dz = ankle.z - hip.z
   const distance = Math.hypot(dy, dz)
