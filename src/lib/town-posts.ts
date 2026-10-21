@@ -26,7 +26,7 @@ export function layoutTownArticles(
   }
   return posts.map(({ slug }, index) => {
     const seed = hashSlug(slug)
-    const riding = (seed >>> 16) % 4 === 0
+    const riding = slug !== 'skills-inventory' && (seed >>> 16) % 4 === 0
     const segment = segments[index % segments.length]
     const count = Math.ceil((posts.length - (index % segments.length)) / segments.length)
     const slot = Math.floor(index / segments.length)

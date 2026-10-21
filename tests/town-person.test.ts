@@ -16,7 +16,8 @@ const examples = [
       identity: `resident-${variant}-${sample}`
     }))
   ),
-  { variant: 0, identity: 'give-the-ai-precise-instructions' }
+  { variant: 0, identity: 'give-the-ai-precise-instructions' },
+  { variant: 0, identity: 'skills-inventory' }
 ]
 
 it('gives every girl her own hairstyle, fringe and eyes', () => {

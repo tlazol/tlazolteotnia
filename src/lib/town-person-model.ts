@@ -69,14 +69,15 @@ export function createPersonParts(variant: number, identity: string, riding = fa
   const style = townPersonStyle(variant)
   const look = townPersonAppearance(identity)
   const traveller = identity === 'give-the-ai-precise-instructions'
-  const role = traveller ? 'traveller' : style.role
-  const hairstyle = traveller ? 'short' : style.hair
-  const bangs = traveller ? 'pointy' : style.bangs
-  const eyes = traveller ? 0 : style.eyes
-  const hair: number = traveller ? 0x3f7de0 : look.hairColor
+  const stocktaker = identity === 'skills-inventory'
+  const role = traveller ? 'traveller' : stocktaker ? 'stocktaker' : style.role
+  const hairstyle = traveller ? 'short' : stocktaker ? 'buns' : style.hair
+  const bangs = traveller ? 'pointy' : stocktaker ? 'shaggy' : style.bangs
+  const eyes = traveller ? 0 : stocktaker ? 4 : style.eyes
+  const hair: number = traveller ? 0x3f7de0 : stocktaker ? 0x2f8f83 : look.hairColor
   const { tone } = look
   const skin: number = look.skin
-  const neon: number = traveller ? 0x6fe8ff : look.neon
+  const neon: number = traveller ? 0x6fe8ff : stocktaker ? 0xff5f57 : look.neon
   const parts: PersonPart[] = []
   let glowing = false
   // Parts put inside are drawn as neon.
@@ -997,6 +998,74 @@ export function createPersonParts(variant: number, identity: string, riding = fa
         head('girlTrim', ...onFace(-0.35, 0.03, 1.12), 6, 1, 0.5, white, 0.35)
         head('girlLimb', 17.5, 47, 6, 2.4, 18, 2.4, fin)
         head('girlBall', 17.5, 56, 6, 3, 3, 3, fin)
+      })
+      break
+    }
+    case 'stocktaker': {
+      // An inventory clerk: hi-vis vest, a barcode scanner, and a shelf of skills on her back.
+      const vest = 0xf2c935
+      const wood = 0xb07a4c
+      const strap = 0x3a3448
+      top = sleeve = 0xf4eedf
+      lower = 0x2f3a5c
+      skirtLength = 10
+      socks = lower
+      shoes = 0x4a3530
+      hairTie = neon
+      details.push(() => {
+        body('girlTorso', 0, 20, 0, 17.4, 11, 13.2, vest)
+        body('girlTrim', 0, 20.5, 6.7, 2.2, 10, 0.6, top)
+        body('girlTrim', -4.4, 17.6, 6.7, 3.6, 3.6, 0.6, 0xd8a820)
+        lit(() => body('girlTorso', 0, 22.6, 0, 17.8, 1, 13.6, 0xf4f7ff))
+        for (const side of [-1, 1]) {
+          body('girlTrim', side * 4.8, 25.4, -2, 2, 1.2, 13, strap)
+          body('girlTrim', side * 4.8, 24, -8.5, 1.6, 2, 5, strap)
+        }
+        // The shelf pack: wooden posts and boards, stocked with books, jars and boxes.
+        for (const side of [-1, 1]) {
+          body('girlTrim', side * 11.5, 22, -14.5, 1.8, 30, 1.8, wood)
+          lit(() => body('girlBall', side * 11.5, 37.6, -14.5, 2.4, 2.4, 2.4, neon))
+        }
+        body('girlTrim', 0, 21, -10.8, 22, 26, 0.8, 0x8a5a38)
+        for (const y of [8, 16.5, 25, 33.5]) body('girlTrim', 0, y, -14.5, 24.6, 1.2, 8, wood)
+        for (const [x, height, color] of [
+          [-8, 6.5, 0xe5505f],
+          [-5.6, 7, 0x4a7ee0],
+          [-3.4, 5.6, 0x3faa7a],
+          [-1.2, 6.8, 0xf2c55c],
+          [1, 6, 0x9b78d8]
+        ])
+          body('girlTrim', x, 8.6 + height / 2, -15, 2, height, 5.4, color)
+        body('girlTrim', 5.5, 10.5, -15, 7, 3.8, 5.4, 0xe9e1cc)
+        for (const [x, color] of [
+          [-6.5, 0x6fd6e8],
+          [0, 0xf49ab4],
+          [6.5, 0xb6e36a]
+        ] as const) {
+          body('girlBall', x, 20.6, -15, 5, 7, 5, color)
+          body('girlTrim', x, 24.2, -15, 3.4, 1, 3.4, wood)
+        }
+        for (const [x, width, color] of [
+          [-6, 9, 0xc99a5e],
+          [4.5, 11, 0xd9b27a]
+        ] as const) {
+          body('girlTrim', x, 28.8, -15, width, 5.4, 6.4, color)
+          body('girlTrim', x, 28.8, -18.3, 3, 2, 0.3, white)
+        }
+        // Barcode scanner with a red read window and its beam.
+        hand('girlTrim', 11.6, 15, 4.5, 3, 3.2, 7, 0x2a2f3a)
+        hand('girlTrim', 11.6, 12.6, 1.8, 2.4, 4.6, 2.4, 0x2a2f3a, 0, 0.35)
+        lit(() => {
+          hand('girlTrim', 11.6, 15, 8.1, 2.4, 2.2, 0.4, neon)
+          hand('girlTrim', 11.6, 12.3, 13.6, 0.5, 0.5, 12, neon, 0, 0.45)
+        })
+        // A cardboard box under the other arm, taped and labelled.
+        hand('girlTrim', -12.4, 13.5, 3, 6.4, 6, 8, 0xc99a5e)
+        hand('girlTrim', -12.4, 16.55, 3, 6.6, 0.3, 1.8, 0xeadcb0)
+        hand('girlTrim', -15.65, 13.5, 4.5, 0.3, 2.4, 3.4, white)
+        // A pencil pushed through one bun.
+        head('girlLimb', 11.5, 58.5, hz - 3, 1.8, 20, 1.8, gold, -0.9)
+        head('girlBall', 19.3, 64, hz - 3, 2.2, 2.4, 2.2, pink, -0.9)
       })
       break
     }

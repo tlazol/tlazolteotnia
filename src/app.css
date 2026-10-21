@@ -643,6 +643,11 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+/* Keep descriptions readable beside long identifiers; the wrapper scrolls on mobile. */
+.markdown-table:has(td:first-child > code) table {
+  min-width: 46rem;
+}
+
 .markdown-table th,
 .markdown-table td {
   padding: 0.8rem 1rem;
