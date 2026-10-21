@@ -6,11 +6,15 @@ import { createTownLighting } from './town-lighting'
 import { createTownMaterials } from './town-materials'
 import { createTownNavigation } from './town-navigation'
 import { clampTownView, type TownArticle } from './town-posts'
-import { createResidentBatches, residentLiftHeight } from './town-resident-batches'
+import {
+  createResidentBatches,
+  residentBaseHeight,
+  residentLiftHeight
+} from './town-resident-batches'
 import { createTownResidents } from './town-residents'
 import { buildTownStatic, type TownOccluder } from './town-static'
-import { boardToTown, type TownView, townToBoard } from './town-view'
-import { containsTownGround } from './town-world'
+import { boardToTownTerrain, type TownView, townToBoard } from './town-view'
+import { containsTownGround, terrainSurfaceHeight } from './town-world'
 
 // Ray/box slab test along the camera's viewing direction.
 function blocks(box: TownOccluder, origin: Vector3, direction: Vector3) {
@@ -59,6 +63,7 @@ export function createTownScene(articles?: TownArticle[]) {
   const towardCamera = new Vector3()
   const visibility = new Map<string, boolean>()
   let visibilityTime = Number.NEGATIVE_INFINITY
+  let dragGround: { x: number; y: number } | null = null
 
   function occluded(point: Vector3) {
     camera.getWorldDirection(towardCamera).negate()
@@ -71,13 +76,23 @@ export function createTownScene(articles?: TownArticle[]) {
     },
     beginResidentDrag(slug: string) {
       residents.beginResidentDrag(slug)
+      const pose = residents.dragged?.pose
+      dragGround = pose
+        ? townToBoard(pose.x, pose.z, terrainSurfaceHeight(pose.x, pose.z), currentView.rotation)
+        : null
     },
     moveResidentDrag(dx: number, dy: number) {
-      residents.moveResidentDrag(boardToTown(dx / zoom, dy / zoom, currentView.rotation))
+      const pose = residents.dragged?.pose
+      if (!pose || !dragGround) return
+      dragGround.x += dx / zoom
+      dragGround.y += dy / zoom
+      const target = boardToTownTerrain(dragGround.x, dragGround.y, currentView.rotation)
+      residents.moveResidentDrag({ x: target.x - pose.x, z: target.z - pose.z })
       visibilityTime = Number.NEGATIVE_INFINITY
     },
     endResidentDrag(cancel = false) {
       residents.endResidentDrag(navigation, cancel)
+      dragGround = null
       visibilityTime = Number.NEGATIVE_INFINITY
     },
     select(slug: string | null) {
@@ -107,7 +122,8 @@ export function createTownScene(articles?: TownArticle[]) {
             )
           : 44 * resident.scale
         const lifted = resident === residents.dragged
-        world.set(x, headHeight + (lifted ? residentLiftHeight : 0), z)
+        const base = residentBaseHeight(resident)
+        world.set(x, base + headHeight + (lifted ? residentLiftHeight : 0), z)
         projected.copy(world).project(camera)
         const px = ((projected.x + 1) * viewport.width) / 2
         const py = ((1 - projected.y) * viewport.height) / 2
@@ -118,7 +134,11 @@ export function createTownScene(articles?: TownArticle[]) {
           residents.visibleSlugs?.has(slug)
         ) {
           // Visibility is sampled at the face, independently of tall hats and props.
-          world.set(x, (riding ? 60 : 50) * resident.scale + (lifted ? residentLiftHeight : 0), z)
+          world.set(
+            x,
+            base + (riding ? 60 : 50) * resident.scale + (lifted ? residentLiftHeight : 0),
+            z
+          )
           visibility.set(slug, !occluded(world))
         }
         return {
@@ -170,7 +190,12 @@ export function createTownScene(articles?: TownArticle[]) {
         ? residents.articleResidents.get(residents.followedSlug)
         : undefined
       if (followed) {
-        const point = townToBoard(followed.pose.x, followed.pose.z, 28, currentView.rotation)
+        const point = townToBoard(
+          followed.pose.x,
+          followed.pose.z,
+          residentBaseHeight(followed) + 28,
+          currentView.rotation
+        )
         const next = clampTownView(
           {
             ...currentView,

@@ -63,7 +63,7 @@ describe('resident simulation', () => {
     expect(resident.pose).toEqual(before)
     expect(simulation.dragged).toBeNull()
   })
-  it('restores the pose when a drop has no walkable return path', () => {
+  it('restores the pose when dropped outside valid ground', () => {
     const { simulation, resident } = setup()
     const before = { ...resident.pose }
     simulation.beginResidentDrag(article.slug)
@@ -71,6 +71,28 @@ describe('resident simulation', () => {
     simulation.endResidentDrag(createTownNavigation([], () => false))
     expect(resident.pose).toEqual(before)
     expect(resident.returning).toBeUndefined()
+  })
+  it('keeps a resident on disconnected ground until it is dragged back to a reachable area', () => {
+    const { simulation, resident, tick } = setup()
+    simulation.beginResidentDrag(article.slug)
+    simulation.moveResidentDrag({ x: 300, z: 300 })
+    const dropped = { ...resident.pose }
+    const isolated = createTownNavigation(
+      [],
+      (point) => Math.hypot(point.x - dropped.x, point.z - dropped.z) < 30
+    )
+    simulation.endResidentDrag(isolated)
+    for (let i = 1; i <= 200; i++) tick(i * 100)
+    expect(resident.pose.x).toBe(dropped.x)
+    expect(resident.pose.z).toBe(dropped.z)
+    expect(resident.time).toBe(0)
+    expect(resident.returning).toBeUndefined()
+    simulation.beginResidentDrag(article.slug)
+    simulation.moveResidentDrag({ x: -285, z: -300 })
+    simulation.endResidentDrag(navigation)
+    expect(resident.returning?.path.length).toBeGreaterThan(0)
+    tick(20100)
+    expect(resident.time).toBeGreaterThan(0)
   })
   it('walks a dropped resident back to its route and resumes its route clock', () => {
     const { simulation, resident, tick } = setup()

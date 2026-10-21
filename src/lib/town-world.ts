@@ -184,6 +184,39 @@ export function terrainHeight(x: number, z: number) {
   return beach + relief
 }
 
+export const terrainGrid = { x: -6560, z: -5120, step: 80, columns: 165, rows: 120 }
+const terrainHeights = new Float32Array((terrainGrid.columns + 1) * (terrainGrid.rows + 1)).fill(
+  NaN
+)
+
+export function terrainVertexHeight(column: number, row: number) {
+  const index = row * (terrainGrid.columns + 1) + column
+  if (Number.isNaN(terrainHeights[index]))
+    terrainHeights[index] = terrainHeight(
+      terrainGrid.x + column * terrainGrid.step,
+      terrainGrid.z + row * terrainGrid.step
+    )
+  return terrainHeights[index]
+}
+
+// Interpolate the same alternating triangles used by the rendered terrain.
+export function terrainSurfaceHeight(x: number, z: number) {
+  const gx = (x - terrainGrid.x) / terrainGrid.step
+  const gz = (z - terrainGrid.z) / terrainGrid.step
+  const column = Math.floor(gx)
+  const row = Math.floor(gz)
+  if (column < 0 || row < 0 || column >= terrainGrid.columns || row >= terrainGrid.rows) return -48
+  const u = gx - column
+  const v = gz - row
+  const a = terrainVertexHeight(column, row)
+  const b = terrainVertexHeight(column + 1, row)
+  const c = terrainVertexHeight(column, row + 1)
+  const d = terrainVertexHeight(column + 1, row + 1)
+  if ((column + row) % 2)
+    return u + v <= 1 ? a + (b - a) * u + (c - a) * v : d + (c - d) * (1 - u) + (b - d) * (1 - v)
+  return u <= v ? a + (d - c) * u + (c - a) * v : a + (b - a) * u + (d - b) * v
+}
+
 // Distance from the visible waterline, used by the sea shader and the beach planting.
 export function waterDistance(x: number, z: number) {
   return islandDistance(x, z) + shorelineInland(x, z).inland
@@ -199,9 +232,7 @@ export function inSand(x: number, z: number) {
 }
 
 export function containsTownGround(point: TownPoint) {
-  if (waterDistance(point.x, point.z) > -50) return false
-  const height = terrainHeight(point.x, point.z)
-  return height > -1.5 && height < 1.5
+  return waterDistance(point.x, point.z) < 0 && terrainSurfaceHeight(point.x, point.z) > waterLevel
 }
 
 function rect(left: number, right: number, top: number, bottom: number): Rect {

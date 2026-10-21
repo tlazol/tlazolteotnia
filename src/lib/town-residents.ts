@@ -17,6 +17,7 @@ export type Resident = ActiveResident & {
   phase: number
   blinkPhase: number
   placed?: boolean
+  stationary?: boolean
 }
 function personScale(variant: number) {
   return townPersonStyle(variant).scale
@@ -108,6 +109,7 @@ export function createTownResidents(articles?: TownArticle[]) {
       for (const [slug, resident] of articleResidents) {
         if (
           resident !== dragged?.resident &&
+          !resident.stationary &&
           (resident.slug === selectedSlug || resident.slug !== focusedSlug) &&
           visibleSlugs?.has(slug)
         ) {
@@ -168,6 +170,7 @@ export function createTownResidents(articles?: TownArticle[]) {
       const moving = new Set(
         active.filter(
           (resident) =>
+            !resident.stationary &&
             !resident.activity &&
             (!resident.placed ||
               (delta > 0 &&
@@ -206,16 +209,15 @@ export function createTownResidents(articles?: TownArticle[]) {
     endResidentDrag(navigation: TownNavigation, cancel = false) {
       if (!dragged) return
       const { resident, pose } = dragged
-      if (cancel) {
+      if (cancel || !navigation.canStand(resident.pose)) {
         resident.pose = pose
       } else {
         const route = nearestResidentRoute(resident.pose, resident.route, navigation.canStand)
         const path = navigation.findPath(resident.pose, trafficPose(route, 0))
-        if (path) {
-          resident.returning = { path, route }
-          resident.avoidance = undefined
-          resident.previousPose = undefined
-        } else resident.pose = pose
+        resident.returning = path ? { path, route } : undefined
+        resident.stationary = !path
+        resident.avoidance = undefined
+        resident.previousPose = undefined
       }
       dragged = null
     },

@@ -37,9 +37,15 @@ import {
   type MovingShape,
   personParts
 } from './town-vehicles'
-import { pavementHeight } from './town-world'
+import { pavementHeight, terrainSurfaceHeight } from './town-world'
 
 export const residentLiftHeight = 28
+
+export function residentBaseHeight(resident: Resident) {
+  return resident.kind === 'car'
+    ? 1.2
+    : terrainSurfaceHeight(resident.pose.x, resident.pose.z) + pavementHeight + 0.5
+}
 
 type Batch = {
   mesh: InstancedMesh
@@ -230,6 +236,7 @@ export function createResidentBatches() {
     visibleSlugs: Set<string> | null
     dragged: Resident | null
   }) {
+    const bases = new Map<Resident, number>()
     for (const { mesh, selection, items, blink } of batches) {
       selection.count = 0
       items.forEach(({ part, resident }, index) => {
@@ -277,7 +284,8 @@ export function createResidentBatches() {
           height = pose.height * resident.scale
           pitch = pose.pitch
         }
-        const base = resident.kind === 'car' ? 1.2 : pavementHeight + 0.5
+        const base = bases.get(resident) ?? residentBaseHeight(resident)
+        bases.set(resident, base)
         transform.position.set(
           x + part.x * Math.cos(yaw) + localZ * Math.sin(yaw),
           base +

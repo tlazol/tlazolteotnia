@@ -10,6 +10,7 @@ import {
   railEnds,
   railway,
   terrainHeight,
+  terrainSurfaceHeight,
   townBlocks,
   townRoads,
   walkSegments,
@@ -25,6 +26,29 @@ const statics = (() => {
 })()
 
 describe('town world', () => {
+  it('accepts hills, farmland and dry sand while rejecting sea, lakes and solid structures', () => {
+    const navigation = createTownNavigation(statics.obstacles, containsTownGround)
+    for (const [x, z] of [
+      [-1800, -3000],
+      [4200, 0],
+      [-1200, 3400]
+    ]) {
+      expect(containsTownGround({ x, z })).toBe(true)
+    }
+    expect(terrainSurfaceHeight(-1800, -3000)).toBeGreaterThan(100)
+    expect(terrainSurfaceHeight(-1200, 3400)).toBeLessThan(-1.5)
+    for (const [x, z] of [
+      [-4100, 700],
+      [7000, 0]
+    ]) {
+      expect(navigation.canStand({ x, z })).toBe(false)
+    }
+    for (const box of statics.occluders) {
+      expect(
+        navigation.canStand({ x: (box.minX + box.maxX) / 2, z: (box.minZ + box.maxZ) / 2 })
+      ).toBe(false)
+    }
+  })
   it('keeps every building clear of the streets and of each other', () => {
     const roads = townRoads.map(({ start, end }) => ({
       left: Math.min(start.x, end.x) - carriageway,

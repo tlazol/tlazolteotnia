@@ -50,7 +50,9 @@ import {
   streets,
   summit,
   type TownBlock,
+  terrainGrid,
   terrainHeight,
+  terrainVertexHeight,
   townBlocks,
   townPavements,
   townRoads,
@@ -246,17 +248,9 @@ export function buildTownStatic(materials: TownMaterials) {
 
   // ── Terrain ────────────────────────────────────────────────────────────────
   function terrain() {
-    const step = 80
-    const x0 = -6560
-    const z0 = -5120
-    const columns = 165
-    const rows = 120
-    const heights = new Float32Array((columns + 1) * (rows + 1))
-    for (let row = 0; row <= rows; row++)
-      for (let column = 0; column <= columns; column++)
-        heights[row * (columns + 1) + column] = terrainHeight(x0 + column * step, z0 + row * step)
+    const { step, x: x0, z: z0, columns, rows } = terrainGrid
     const at = (column: number, row: number) =>
-      [x0 + column * step, heights[row * (columns + 1) + column], z0 + row * step] as const
+      [x0 + column * step, terrainVertexHeight(column, row), z0 + row * step] as const
     for (let row = 0; row < rows; row++) {
       for (let column = 0; column < columns; column++) {
         const a = at(column, row)
@@ -1317,6 +1311,7 @@ export function buildTownStatic(materials: TownMaterials) {
         b.box(x, 1, z, 30, 2, 64, palette.flowers[Math.floor(rng() * 5)], { ry: rng(), flat: true })
       } else {
         tree(b, x, z, 'palm', rng, 1.1 + rng() * 0.3)
+        solid(x, z, 17)
       }
     }
     // Lifeguard tower.
@@ -1331,6 +1326,7 @@ export function buildTownStatic(materials: TownMaterials) {
       b.cylinder(32, 180, -32, 2, 70, palette.frame)
       b.box(44, 205, -32, 22, 14, 1, 0xf2c94c, { faces: face.pz | face.nz })
     })
+    solid(-2000, boardwalk.z + 340, 45)
     // Volleyball net.
     b.frame(-3100, boardwalk.z + 320, 0.2, () => {
       for (const side of [-1, 1]) b.box(side * 90, 40, 0, 5, 80, 5, palette.trim)
@@ -1448,6 +1444,7 @@ export function buildTownStatic(materials: TownMaterials) {
         const x = fieldGrid.x + orchard.column * 560 + 60 + column * 90
         const z = fieldGrid.z + orchard.row * 480 + 60 + row * 90
         tree(b, x, z, 'round', rng, 0.7, terrainHeight(x, z))
+        solid(x, z, 10)
         for (let apple = 0; apple < 3; apple++)
           b.blob(
             x + (rng() - 0.5) * 40,
@@ -1543,14 +1540,20 @@ export function buildTownStatic(materials: TownMaterials) {
                   ? 'cone'
                   : 'round'
         tree(b, px, pz, kind, rng, 0.9 + rng() * 0.7, height - 2, 0)
+        solid(px, pz, 20)
         planted++
-        if (rng() < 0.08) rockCluster(b, px + 60, pz + 40, 40 + rng() * 40, rng, height)
+        if (rng() < 0.08) {
+          const size = 40 + rng() * 40
+          rockCluster(b, px + 60, pz + 40, size, rng, height)
+          solid(px + 60, pz + 40, size)
+        }
       }
     }
     // Lakeside cabin and jetty.
     const cabin = { x: -3700, z: 1180 }
     if (islandDistance(cabin.x, cabin.z) < 0) {
       const y = terrainHeight(cabin.x, cabin.z)
+      solid(cabin.x - 80 * Math.sin(Math.PI * 0.85), cabin.z - 80 * Math.cos(Math.PI * 0.85), 110)
       b.frame(
         cabin.x,
         cabin.z,
@@ -1573,6 +1576,7 @@ export function buildTownStatic(materials: TownMaterials) {
       [60, -40, 0x6fc3d6],
       [10, 90, 0xf2c94c]
     ].entries()) {
+      solid(camp.x + dx, camp.z + dz, 55)
       b.frame(
         camp.x + dx,
         camp.z + dz,
@@ -1609,6 +1613,7 @@ export function buildTownStatic(materials: TownMaterials) {
     // A radio mast on the eastern hill.
     const mast = { x: 1600, z: -3600 }
     const mastY = terrainHeight(mast.x, mast.z)
+    solid(mast.x, mast.z, 40)
     b.frame(
       mast.x,
       mast.z,
@@ -1652,6 +1657,8 @@ export function buildTownStatic(materials: TownMaterials) {
   beach()
   farm()
   const forestTrees = wilderness()
+  for (const box of occluders)
+    obstacles.push({ left: box.minX, right: box.maxX, top: box.minZ, bottom: box.maxZ })
 
   const group = new Group()
   group.name = 'town-static'

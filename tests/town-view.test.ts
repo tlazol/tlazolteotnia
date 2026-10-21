@@ -5,13 +5,30 @@ import { createTownCamera, updateTownCamera } from '../src/lib/town-camera'
 import { clampTownView, fitTown, getTownBounds } from '../src/lib/town-posts'
 import {
   boardToTown,
+  boardToTownTerrain,
   gestureTownView,
   rotateTownAt,
   townToBoard,
   zoomTownAt
 } from '../src/lib/town-view'
+import { terrainSurfaceHeight } from '../src/lib/town-world'
 
 describe('town projection', () => {
+  it('picks the terrain under the cursor on hills and beaches at every camera orientation', () => {
+    for (const rotation of [0, Math.PI / 2, Math.PI, -Math.PI / 2]) {
+      for (const [x, z] of [
+        [-1800, -3000],
+        [4200, 0],
+        [-1200, 3400],
+        [7000, 0]
+      ]) {
+        const board = townToBoard(x, z, terrainSurfaceHeight(x, z), rotation)
+        const point = boardToTownTerrain(board.x, board.y, rotation)
+        expect(point.x).toBeCloseTo(x, 2)
+        expect(point.z).toBeCloseTo(z, 2)
+      }
+    }
+  })
   it('zooms around the cursor without moving its world position', () => {
     const view = { x: -120, y: 70, zoom: 0.8 }
     const cursor = { x: 500, y: 320 }
