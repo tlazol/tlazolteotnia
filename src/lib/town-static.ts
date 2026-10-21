@@ -759,7 +759,8 @@ export function buildTownStatic(materials: TownMaterials) {
     const rng = mulberry32(4242)
     ground(inner, colors.lawn, surface.grass)
     // Pond with a stone rim, lily pads and a small island.
-    b.cylinder(parkPond.x, 3, parkPond.z, parkPond.radiusX + 16, 6, colors.stone, {
+    // Keep the rim's top below the water surface so the two discs don't z-fight.
+    b.cylinder(parkPond.x, 2.5, parkPond.z, parkPond.radiusX + 16, 5, colors.stone, {
       radiusZ: parkPond.radiusZ + 16,
       segments: 24,
       surface: surface.stone,
