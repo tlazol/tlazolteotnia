@@ -61,11 +61,11 @@ function onHead(a: number, y: number, riding: boolean) {
     py * personHead.height + personHead.y,
     z * personHead.depth + personHead.z
   )
-  // Tilt about the neck, then lean onto the saddle as the model does.
+  // Tilt about the neck (riders lift against the lean), then lean onto the saddle.
   const pivot = new Vector3(0, 26.5, 0)
   local
     .sub(pivot)
-    .applyAxisAngle(new Vector3(1, 0, 0), personHeadTilt)
+    .applyAxisAngle(new Vector3(1, 0, 0), riding ? personHeadTilt - 0.2 : personHeadTilt)
     .add(pivot)
   if (riding) {
     local.sub(new Vector3(0, 13, 0)).applyAxisAngle(new Vector3(1, 0, 0), 0.2)
@@ -75,32 +75,53 @@ function onHead(a: number, y: number, riding: boolean) {
 }
 
 describe('faces read from the 45° town camera', () => {
-  it.each([false, true])('shows both eyes and the mouth (riding=%s)', (riding) => {
+  it.each([false, true])('hide the eyes but show the mouth (riding=%s)', (riding) => {
     const geometries = createPersonGeometries()
     const ray = new Raycaster()
     // Facing the camera, and turned a quarter either way.
     const views = [0, -Math.PI / 4, Math.PI / 4].map((yaw) =>
       new Vector3(Math.sin(yaw), 1, Math.cos(yaw)).normalize()
     )
+    const { eyeAngle, eyeY, eyeHalfHeight, mouthY } = personFace
+    // The center, corners, lash wing and rims of each eye (positive is outward).
+    const eye = [
+      [0, 0],
+      [-0.12, 0],
+      [0.12, 0],
+      [0.17, 0.06],
+      [0.1, -eyeHalfHeight * 0.8],
+      [0, eyeHalfHeight * 0.8],
+      [0, -eyeHalfHeight * 0.8]
+    ]
+    const misses: string[] = []
     try {
       for (const { variant, identity } of examples) {
         const scene = meshes(createPersonParts(variant, identity, riding), geometries)
         const targets = [
-          ...[-1, 1].map((side) => onHead(side * personFace.eyeAngle, personFace.eyeY, riding)),
-          onHead(0, personFace.mouthY, riding)
+          ...[-1, 1].flatMap((side) =>
+            eye.map(([a, y]) => ({
+              point: onHead(side * (eyeAngle + a), eyeY + y, riding),
+              shown: false
+            }))
+          ),
+          { point: onHead(0, mouthY, riding), shown: true }
         ]
-        for (const target of targets) {
+        for (const { point, shown } of targets) {
           for (const view of views) {
-            // Skip the far eye when the head turns away from the camera.
-            if (target.x * view.x < -4) continue
-            ray.set(target.clone().addScaledVector(view, 200), view.clone().negate())
+            // Skip the far eye when the head turns away from the camera. The mouth only
+            // needs to read head-on; turned away, the cheek and fringe may hide it.
+            if (point.x * view.x < -4 || (shown && view.x !== 0)) continue
+            ray.set(point.clone().addScaledVector(view, 200), view.clone().negate())
             const hit = ray.intersectObjects(scene, false)[0]
-            expect(hit?.object.name, `${identity}: hidden face at ${target.toArray()}`).toMatch(
-              /^girlFace/
-            )
+            const face = /^girl(?:Face|Head)/.test(hit?.object.name ?? '')
+            if (face !== shown)
+              misses.push(
+                `${riding} ${views.indexOf(view)} ${identity} ${shown ? 'mouth' : 'eye'} ${hit?.object.name} at ${point.toArray().map((v) => v.toFixed(1))}`
+              )
           }
         }
       }
+      expect(misses).toEqual([])
     } finally {
       for (const geometry of Object.values(geometries)) geometry.dispose()
     }

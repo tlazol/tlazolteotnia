@@ -108,7 +108,19 @@ const sphere = (rows = 12, segments = 16) =>
     })
   )
 
-export const hairBangs = ['blunt', 'parted', 'swept', 'pointy', 'wispy'] as const
+// The long fringes fall past the eyes and hide them, stopping above the mouth.
+export const hairBangs = [
+  'blunt',
+  'parted',
+  'swept',
+  'pointy',
+  'wispy',
+  'curtain',
+  'split',
+  'sweep',
+  'shaggy',
+  'side'
+] as const
 export type HairBangs = (typeof hairBangs)[number]
 
 // Hem heights in head units (the head spans -0.5 to 0.5). The eyes stop at 0.035.
@@ -124,6 +136,17 @@ function bangHem(bangs: HairBangs, a: number) {
       return 0.1 - 0.065 * Math.abs(Math.sin(a * 5.2 + 0.3)) ** 0.6
     case 'wispy':
       return 0.11 - 0.07 * Math.max(0, Math.cos(a * 8.5)) ** 2.5
+    case 'curtain':
+      return -0.16 + 0.012 * Math.cos(a * 9)
+    case 'split':
+      return -0.18 + 0.17 * clamp(1 - Math.abs(a) / 0.2) ** 1.2 + 0.015 * Math.abs(Math.sin(a * 6))
+    case 'sweep':
+      return -0.2 + 0.03 * smooth(-0.7, 0.7, a) + 0.015 * Math.abs(Math.sin(a * 7))
+    // Long over the right eye only; the left one is left for an eyepatch.
+    case 'side':
+      return -0.19 + 0.26 * smooth(-0.05, -0.3, a) + 0.015 * Math.abs(Math.sin(a * 7))
+    case 'shaggy':
+      return -0.15 - 0.05 * Math.abs(Math.sin(a * 5.2 + 0.3)) ** 0.6
   }
 }
 
@@ -183,6 +206,41 @@ function headBand(low: number, high: number, inflate: number, from = -Math.PI, t
   )
 }
 
+// A patch on the head surface between two hem lines; masks, visors and eye bands.
+function facePatch(
+  from: number,
+  to: number,
+  low: (a: number) => number,
+  high: (a: number) => number,
+  inflate: number,
+  segments = 32
+) {
+  return build(
+    Array.from({ length: 7 }, (_, row) =>
+      Array.from({ length: segments + 1 }, (_, col) => {
+        const a = from + ((to - from) * col) / segments
+        const y = low(a) + ((high(a) - low(a)) * row) / 6
+        return headPoint(a, Math.asin(clamp(y * 2, -0.98, 0.98)), inflate)
+      })
+    )
+  )
+}
+
+// An oval patch around one eye: glasses lenses and their rims. Spikes turn it into a star.
+function eyePatch(side: number, radius: number, inflate: number, spikes = 0) {
+  return build(
+    Array.from({ length: 5 }, (_, row) =>
+      Array.from({ length: spikes ? 41 : 25 }, (_, col) => {
+        const t = (col / (spikes ? 40 : 24)) * tau
+        const r = (row / 4) * (spikes ? 0.9 + 0.2 * Math.cos(t * spikes + Math.PI / 2) : 1)
+        const a = side * personFace.eyeAngle + Math.cos(t) * radius * r * side
+        const y = personFace.eyeY + Math.sin(t) * radius * 0.78 * r
+        return headPoint(a, Math.asin(y * 2), inflate)
+      })
+    )
+  )
+}
+
 const faceSlots = 6
 const faceSpan = 1.7
 const faceLow = -0.44
@@ -230,10 +288,115 @@ export function createPersonGeometries() {
     girlFace4: faceGeometry(4),
     girlFace5: faceGeometry(5),
     girlHalo: hairHalo(),
+    girlLensL: eyePatch(-1, 0.2, 1.05),
+    girlLensR: eyePatch(1, 0.2, 1.05),
+    girlRimL: eyePatch(-1, 0.235, 1.04),
+    girlRimR: eyePatch(1, 0.235, 1.04),
+    // Oversized goggles, and party glasses with star-shaped lenses.
+    girlBigLensL: eyePatch(-1, 0.3, 1.075),
+    girlBigLensR: eyePatch(1, 0.3, 1.075),
+    girlBigRimL: eyePatch(-1, 0.36, 1.06),
+    girlBigRimR: eyePatch(1, 0.36, 1.06),
+    girlStarL: eyePatch(-1, 0.27, 1.05, 5),
+    girlStarR: eyePatch(1, 0.27, 1.05, 5),
+    girlStarRimL: eyePatch(-1, 0.32, 1.04, 5),
+    girlStarRimR: eyePatch(1, 0.32, 1.04, 5),
+    // A band over both eyes: sunglasses, sleep masks, blindfolds and ski goggles.
+    girlShades: facePatch(
+      -1.05,
+      1.05,
+      () => -0.25,
+      () => 0.07,
+      1.045
+    ),
+    girlStrap: headBand(Math.asin(-0.3), Math.asin(0.06), 1.025, 0.6, tau - 0.6),
+    // A domino mask whose wings sweep up at the temples.
+    girlDomino: facePatch(
+      -0.78,
+      0.78,
+      (a) => -0.25 + 0.1 * smooth(0.5, 0.78, Math.abs(a)) + 0.08 * clamp(1 - Math.abs(a) / 0.14),
+      (a) => 0.06 + 0.1 * smooth(0.45, 0.78, Math.abs(a)),
+      1.045
+    ),
+    // A cyborg visor: a narrow blade that wraps past the temples.
+    girlVisor: facePatch(
+      -1.4,
+      1.4,
+      (a) => -0.24 + 0.08 * smooth(0.6, 1.4, Math.abs(a)),
+      (a) => 0.07 - 0.05 * smooth(0.6, 1.4, Math.abs(a)),
+      1.1,
+      40
+    ),
+    // A paper talisman or cloth hanging straight down from the brow.
+    girlOfuda: facePatch(
+      -0.62,
+      0.62,
+      () => -0.24,
+      () => 0.3,
+      1.09
+    ),
+    girlCloth: facePatch(
+      -0.72,
+      0.72,
+      (a) => -0.24 + 0.012 * Math.cos(a * 30),
+      () => 0.05,
+      1.065
+    ),
+    // A sheer veil with a scalloped hem, for fortune tellers and princesses.
+    girlVeil: facePatch(
+      -1.15,
+      1.15,
+      (a) => -0.24 - 0.02 * Math.abs(Math.sin(a * 7)) + 0.06 * smooth(0.8, 1.15, Math.abs(a)),
+      () => 0.12,
+      1.1,
+      48
+    ),
+    // A diving mask: one big pane in a thick rubber skirt.
+    girlDiveRim: facePatch(
+      -0.8,
+      0.8,
+      (a) => -0.245 + 0.05 * smooth(0.5, 0.8, Math.abs(a)),
+      (a) => 0.14 - 0.06 * smooth(0.5, 0.8, Math.abs(a)),
+      1.09
+    ),
+    girlDivePane: facePatch(
+      -0.7,
+      0.7,
+      (a) => -0.225 + 0.05 * smooth(0.4, 0.7, Math.abs(a)),
+      (a) => 0.11 - 0.06 * smooth(0.4, 0.7, Math.abs(a)),
+      1.11
+    ),
+    // An astronaut's gold sun visor, well clear of the face inside the helmet.
+    girlSunVisor: facePatch(
+      -1.15,
+      1.15,
+      () => -0.13,
+      () => 0.38,
+      1.315,
+      40
+    ),
+    // A bandage wrapped all the way round at eye height.
+    girlBandage: headBand(Math.asin(-0.44), 0, 1.05),
+    // A fox mask over the upper face, leaving the mouth free.
+    girlFox: facePatch(
+      -1,
+      1,
+      (a) => -0.21 + 0.03 * smooth(0.6, 1, Math.abs(a)),
+      (a) => 0.2 - 0.06 * smooth(0.5, 1, Math.abs(a)),
+      1.05
+    ),
     girlHairband: headBand(0.32, 0.5, 1.1),
     girlCuff: headBand(0.16, 0.46, 1.16),
     // Hoods leave a wide face opening and drape down past the jaw.
     girlHood: hairShell((a) => sideHem(a, 0.26) - 0.12 * smooth(0.9, 1.8, Math.abs(a)), 1.2, 40),
+    // A space helmet: a big shell around the head with the whole face open.
+    girlHelmet: hairShell((a) => -0.5 + 0.92 * clamp(1 - Math.abs(a) / 1.25) ** 0.5, 1.3, 40),
+    // The same hood pulled low over the eyes.
+    girlCowl: hairShell(
+      (a) => sideHem(a, -0.13 + 0.02 * Math.cos(a * 6)) - 0.12 * smooth(0.9, 1.8, Math.abs(a)),
+      1.2,
+      40
+    ),
     // A bob or long-hair mass behind and beside the face, open at the front.
     girlHairBell: lathe(
       [

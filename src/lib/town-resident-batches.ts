@@ -115,6 +115,8 @@ export function createResidentBatches() {
   }
   const vehicleMaterial = new MeshLambertMaterial({ vertexColors: true })
   const lightMaterial = new MeshBasicMaterial({ vertexColors: true })
+  // Neon trims and lenses ignore the daylight, so they glow at night.
+  const neonMaterial = new MeshBasicMaterial({ vertexColors: true })
   // Silhouettes of the selected resident show through buildings. Drawn after the
   // town and before residents, so only the hidden parts remain.
   const xrayMaterial = new MeshBasicMaterial({
@@ -130,7 +132,8 @@ export function createResidentBatches() {
   const transform = new Object3D()
   const color = new Color()
 
-  function materialFor(shape: MovingShape): Material {
+  function materialFor(shape: MovingShape, glow: boolean): Material {
+    if (glow) return neonMaterial
     if (shape.startsWith('girlFace')) return faceMaterial
     if (shape === 'girlHead') return skinMaterial
     if (shape.startsWith('girl')) return personMaterial
@@ -153,7 +156,7 @@ export function createResidentBatches() {
 
   function rebuild(residents: Resident[]) {
     clear()
-    const grouped = new Map<MovingShape, Batch['items']>()
+    const grouped = new Map<string, { shape: MovingShape; glow: boolean; items: Batch['items'] }>()
     for (const resident of residents) {
       resident.bounds = new Box3()
       for (const part of residentModel(resident)) {
@@ -166,9 +169,11 @@ export function createResidentBatches() {
           height: part.height * resident.scale,
           depth: part.depth * resident.scale
         }
-        const items = grouped.get(part.shape) ?? []
-        items.push({ part: scaled, resident })
-        grouped.set(part.shape, items)
+        const glow = !!part.glow
+        const key = `${part.shape}${glow ? ':glow' : ''}`
+        const entry = grouped.get(key) ?? { shape: part.shape, glow, items: [] }
+        entry.items.push({ part: scaled, resident })
+        grouped.set(key, entry)
         transform.position.set(scaled.x, scaled.y, scaled.z)
         transform.rotation.set(scaled.pitch, 0, scaled.angle, 'YXZ')
         transform.scale.set(scaled.width, scaled.height, scaled.depth)
@@ -177,17 +182,17 @@ export function createResidentBatches() {
         if (bounds) resident.bounds.union(bounds.clone().applyMatrix4(transform.matrix))
       }
     }
-    for (const [shape, items] of grouped) {
+    for (const { shape, glow, items } of grouped.values()) {
       const face = shape.startsWith('girlFace')
       const geometry = face ? geometries[shape].clone() : geometries[shape]
       const blink = face
         ? new InstancedBufferAttribute(new Float32Array(items.length), 1).setUsage(DynamicDrawUsage)
         : undefined
       if (blink) geometry.setAttribute('blinkFrame', blink)
-      const mesh = new InstancedMesh(geometry, materialFor(shape), items.length)
-      mesh.castShadow = !face && shape !== 'light'
+      const mesh = new InstancedMesh(geometry, materialFor(shape, glow), items.length)
+      mesh.castShadow = !face && !glow && shape !== 'light'
       // Fringe shadows would darken the whole face at town scale.
-      mesh.receiveShadow = !face && shape !== 'girlHead'
+      mesh.receiveShadow = !face && !glow && shape !== 'girlHead'
       mesh.instanceMatrix.setUsage(DynamicDrawUsage)
       // Residents travel outside their initial bounds; let the GPU clip these batches.
       mesh.frustumCulled = false
@@ -327,6 +332,7 @@ export function createResidentBatches() {
         faceMaterial,
         vehicleMaterial,
         lightMaterial,
+        neonMaterial,
         xrayMaterial
       ])
         material.dispose()

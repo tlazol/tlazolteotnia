@@ -1,6 +1,6 @@
 import { bicycleGrip, bicyclePose, bicycleSegment, type CyclingMotion } from './town-bicycle-pose'
 import { townPersonAppearance, townPersonStyle } from './town-person'
-import type { PersonShape } from './town-person-geometry'
+import { headPoint, type PersonShape, personFace } from './town-person-geometry'
 
 export type PersonPart = {
   shape: PersonShape
@@ -14,6 +14,8 @@ export type PersonPart = {
   angle: number
   pitch: number
   motion?: 'leg' | 'arm' | CyclingMotion
+  // Unlit neon: lenses, seams and LEDs that glow at night.
+  glow?: boolean
 }
 
 // Two heads tall: legs end at the hips, the torso at the neck, and the head fills the rest.
@@ -67,15 +69,25 @@ export function createPersonParts(variant: number, identity: string, riding = fa
   const hair: number = traveller ? 0x3f7de0 : look.hairColor
   const { tone } = look
   const skin: number = look.skin
+  const neon: number = traveller ? 0x6fe8ff : look.neon
   const parts: PersonPart[] = []
+  let glowing = false
+  // Parts put inside are drawn as neon.
+  const lit = (draw: () => void) => {
+    glowing = true
+    draw()
+    glowing = false
+  }
 
   const put = (
     frame: Frame,
     ...[shape, x, y, z, width, height, depth, color, angle = 0, pitch = 0]: PartArgs
   ) => {
     if (frame === 'head') {
-      ;[y, z] = rotate(y, z, neckHeight, personHeadTilt)
-      pitch += personHeadTilt
+      // Riders lift their heads against the lean, so hat brims and fringes sit the same.
+      const tilt = riding ? personHeadTilt - ridingLean : personHeadTilt
+      ;[y, z] = rotate(y, z, neckHeight, tilt)
+      pitch += tilt
     }
     const limb = frame === 'leg' || frame === 'arm'
     if (riding && !limb) {
@@ -88,6 +100,7 @@ export function createPersonParts(variant: number, identity: string, riding = fa
     if (riding && limb) return
     const part: PersonPart = { shape, x, y, z, width, height, depth, color, angle, pitch }
     if (limb) part.motion = frame
+    if (glowing) part.glow = true
     parts.push(part)
   }
   const body = (...args: PartArgs) => put('body', ...args)
@@ -125,6 +138,22 @@ export function createPersonParts(variant: number, identity: string, riding = fa
   const hx = personHead.x
   const hy = personHead.y
   const hz = personHead.z
+  const { width: hw, height: hh, depth: hd } = personHead
+  // Eye covers are shaped on the head surface, so they share the head's placement.
+  const cover = (shape: PersonShape, color: number) => head(shape, hx, hy, hz, hw, hh, hd, color)
+  // A point on the head surface at an angle and height in head units, for trims on covers.
+  const onFace = (a: number, y: number, inflate: number) => {
+    const [x, py, z] = headPoint(a, Math.asin(y * 2), inflate)
+    return [hx + x * hw, hy + py * hh, hz + z * hd] as const
+  }
+  const glasses = (frame: number, lens: number) => {
+    for (const side of ['L', 'R'] as const) {
+      cover(`girlRim${side}`, frame)
+      // Every lens doubles as a HUD and lights up from inside.
+      lit(() => cover(`girlLens${side}`, lens))
+    }
+    head('girlTrim', 0, 40.6, 19.4, 4.4, 0.8, 0.8, frame)
+  }
 
   // Outfit defaults; each costume below overrides what it needs.
   let top = white
@@ -164,7 +193,11 @@ export function createPersonParts(variant: number, identity: string, riding = fa
       details.push(() => {
         body('girlTrim', 0, 23.2, 5.7, 4.4, 5, 1, white)
         bow('body', 0, 23.4, 6.6, 0xe5505f, 0.7)
-        for (const y of [17.5, 20]) body('girlBall', 2.6, y, 6.3, 1.4, 1.4, 1, gold)
+        lit(() => {
+          for (const y of [17.5, 20]) body('girlBall', 2.6, y, 6.3, 1.4, 1.4, 1, neon)
+        })
+        // Round smart glasses with a HUD in her neon.
+        glasses(black, mix(neon, white, 0.55))
       })
       break
     }
@@ -179,6 +212,8 @@ export function createPersonParts(variant: number, identity: string, riding = fa
         body('girlBall', 0, 25, -6.8, 15, 7.5, 8, top)
         for (const side of [-1, 1]) body('girlTrim', side * 2.4, 21.6, 6.9, 0.9, 5, 0.9, white)
         body('girlTrim', 0, 15.5, 6.6, 9, 3.6, 1, 0x5a6b8c)
+        lit(() => body('girlTrim', 0, 15.5, 7.2, 7, 0.6, 0.4, neon))
+        glasses(white, mix(neon, 0x1c2030, 0.55))
       })
       break
     }
@@ -198,6 +233,11 @@ export function createPersonParts(variant: number, identity: string, riding = fa
         head('girlHairband', hx, hy, hz, 35, 31, 31, white)
         for (const x of [-9, -3, 3, 9])
           head('girlBall', x, 57.5, 9 - Math.abs(x) * 0.35, 6, 3.6, 3, white)
+        // An android maid: a status lamp on the headdress and a lit apron hem.
+        lit(() => {
+          head('girlBall', 0, 57.8, 10.2, 2.6, 2.6, 1.6, neon)
+          body('girlTrim', 0, 9.6, 10.6, 12, 0.6, 0.6, neon, 0, -0.32)
+        })
       })
       hairTie = black
       break
@@ -215,6 +255,16 @@ export function createPersonParts(variant: number, identity: string, riding = fa
         for (const side of [-1, 1])
           body('girlTrim', side * 1.5, 23.8, 6, 2.2, 4.6, 1, 0xd8434f, side * 0.5)
         body('girlTorso', 0, 19.5, 0, 16.4, 2, 12.4, 0xd8434f)
+        // An onmyoji's paper face cloth, marked with a red seal.
+        cover('girlCloth', white)
+        for (const [size, color, inflate] of [
+          [6, 0xd8434f, 1.08],
+          [4, white, 1.09],
+          [1.8, 0xd8434f, 1.1]
+        ] as const)
+          head('girlBall', ...onFace(0, -0.08, inflate), size, size, 0.6, color)
+        // The seal is a hologram projected onto the cloth.
+        lit(() => head('girlBall', ...onFace(0, -0.08, 1.11), 1.8, 1.8, 0.6, 0xff4a6a))
       })
       break
     }
@@ -239,6 +289,14 @@ export function createPersonParts(variant: number, identity: string, riding = fa
           body('girlBall', x, y, z, 2.6, 2.6, 1, white)
         head('girlBall', 13, 51, 8, 5, 5, 3, pink)
         head('girlBall', 15.5, 49, 6, 4, 4, 3, 0xffffff)
+        // A festival fox mask with red markings.
+        cover('girlFox', white)
+        for (const side of [-1, 1]) {
+          lit(() => head('girlTrim', side * 7.3, 39.8, 18.9, 5.4, 1.2, 0.8, 0xff4a6a, side * 0.35))
+          head('girlEar', side * 8.5, 50.5, 15.5, 6, 7, 3, white, side * -0.2, -0.3)
+          head('girlEar', side * 8.5, 50.2, 16.6, 3, 4, 2, 0xd8434f, side * -0.2, -0.3)
+        }
+        lit(() => head('girlBall', 0, 46, 18.8, 2.2, 3, 1, 0xff4a6a))
       })
       break
     }
@@ -253,22 +311,13 @@ export function createPersonParts(variant: number, identity: string, riding = fa
       details.push(() => {
         body('girlHairBell', 0, 19.5, -0.8, 22, 15, 17, 0x29243a)
         bow('body', 0, 24.2, 6.4, gold, 0.75)
-        head('girlDisc', hx, 55.5, hz, 50, 2.4, 48, 0x29243a)
-        head('girlCone', hx, 67.5, hz - 1, 30, 26, 30, 0x29243a, 0, -0.18)
-        head(
-          'girlDisc',
-          hx,
-          57.2,
-          hz - 0.3,
-          29.6,
-          3,
-          29.6,
-          pick(tone, [0xe85a6c, gold, 0x8ad0c0, 0xb79be3]),
-          0,
-          -0.18
-        )
-        hand('girlLimb', 11.5, 12, 3, 1.4, 12, 1.4, 0x9b6b47, 0, 0.5)
-        hand('girlBall', 11.5, 8, 6, 3.4, 3.4, 3.4, gold)
+        // Pulled low, so the drooping brim shades the eyes.
+        head('girlDisc', hx, 48.5, hz + 1, 52, 2.4, 50, 0x29243a, 0, 0.25)
+        head('girlCone', hx, 63.5, hz - 2, 32, 26, 32, 0x29243a, 0, -0.18)
+        // A techno-witch: a neon hat band and a staff tipped with a plasma orb.
+        lit(() => head('girlDisc', hx, 53.2, hz - 1.2, 31.6, 3, 31.6, neon, 0, -0.18))
+        hand('girlLimb', 11.5, 12, 3, 1.4, 12, 1.4, 0x5a6070, 0, 0.5)
+        lit(() => hand('girlBall', 11.5, 8, 6, 3.4, 3.4, 3.4, neon))
       })
       break
     }
@@ -286,8 +335,14 @@ export function createPersonParts(variant: number, identity: string, riding = fa
         body('girlTorso', 0, 25.4, 0.3, 8.5, 1.8, 7.5, black)
         bow('body', 0, 22.5, 6.6, white, 0.9)
         hand('girlLimb', -11.5, 14.6, 2.6, 2, 5, 2, 0x5c5c6c)
-        hand('girlBall', -11.5, 17.6, 3, 3.4, 3.4, 3.4, 0xc8ccd6)
-        for (const side of [-1, 1]) head('girlEar', side * 12, 55.5, 9, 5, 5, 1.6, gold, side * 0.3)
+        // A virtual idol: a glowing mic and holographic star clips.
+        lit(() => {
+          hand('girlBall', -11.5, 17.6, 3, 3.4, 3.4, 3.4, mix(color, white, 0.4))
+          for (const side of [-1, 1])
+            head('girlEar', side * 12, 55.5, 9, 5, 5, 1.6, mix(color, white, 0.5), side * 0.3)
+        })
+        // Tinted stage glasses in her member color.
+        glasses(white, mix(color, white, 0.35))
       })
       break
     }
@@ -300,8 +355,11 @@ export function createPersonParts(variant: number, identity: string, riding = fa
       details.push(() => {
         body('girlTorso', 0, 25.4, 0.4, 11, 2.4, 9, white)
         head('girlCap', hx, 58, hz + 3, 18, 6, 12, white, 0, -0.35)
-        head('girlTrim', hx, 58.6, hz + 9.4, 4.4, 1.3, 1, 0xe5505f, 0, -0.35)
-        head('girlTrim', hx, 58.6, hz + 9.4, 1.3, 4.4, 1, 0xe5505f, 0, -0.35)
+        // A med-bay nurse: the cross is a lit panel.
+        lit(() => {
+          head('girlTrim', hx, 58.6, hz + 9.4, 4.4, 1.3, 1, 0xff4a6a, 0, -0.35)
+          head('girlTrim', hx, 58.6, hz + 9.4, 1.3, 4.4, 1, 0xff4a6a, 0, -0.35)
+        })
       })
       break
     }
@@ -316,7 +374,7 @@ export function createPersonParts(variant: number, identity: string, riding = fa
         body('girlLock', 0, 14.5, 8.3, 14, 11, 2, apron, 0, -0.3)
         body('girlTorso', 0, 25.4, 0.4, 10, 2.6, 9, apron)
         for (const y of [17, 20, 23])
-          for (const x of [-2.6, 2.6]) body('girlBall', x, y, 6.3, 1.4, 1.4, 1, 0xd8d2cc)
+          for (const x of [-2.6, 2.6]) lit(() => body('girlBall', x, y, 6.3, 1.4, 1.4, 1, neon))
         head('girlCap', hx, 59.5, hz - 1, 24, 6, 22, white)
         for (const [x, y, z] of [
           [-6, 64.5, -1],
@@ -337,9 +395,12 @@ export function createPersonParts(variant: number, identity: string, riding = fa
       shoes = pick(tone, [0xe25a6a, 0xf6cf4a, 0xf6cf4a, 0xe25a6a])
       hat = true
       details.push(() => {
-        for (const y of [12, 16, 20, 23.5])
-          body('girlBall', 0, y, y < 19 ? 9.5 - (y - 10) * 0.25 : 6.4, 1.8, 1.8, 1, 0x3a3a4a)
-        head('girlHood', hx, hy, hz, 35, 31, 31, coat)
+        // LED snaps for walking home in the dark.
+        lit(() => {
+          for (const y of [12, 16, 20, 23.5])
+            body('girlBall', 0, y, y < 19 ? 9.5 - (y - 10) * 0.25 : 6.4, 1.8, 1.8, 1, neon)
+        })
+        head('girlCowl', hx, hy, hz, 35, 31, 31, coat)
         for (const side of [-1, 1]) put('leg', 'girlLimb', side * 4, 5.6, 0.2, 5.6, 8, 5.8, shoes)
       })
       break
@@ -357,6 +418,15 @@ export function createPersonParts(variant: number, identity: string, riding = fa
         body('girlSkirt', 0, 11.2, 0, 23.2, 1.6, 20, white)
         for (const side of [-1, 1])
           hand('girlBall', side * 11.6, 15.8, 1, 10, 9, 9, side > 0 ? team : gold)
+        // Light-up pom-pom cores.
+        lit(() => {
+          for (const side of [-1, 1]) hand('girlBall', side * 11.6, 15.8, 4.2, 4, 4, 4, neon)
+        })
+        // Star-shaped party glasses.
+        for (const side of ['L', 'R'] as const) {
+          cover(`girlStarRim${side}`, team)
+          lit(() => cover(`girlStar${side}`, 0xfff0a0))
+        }
       })
       break
     }
@@ -377,6 +447,24 @@ export function createPersonParts(variant: number, identity: string, riding = fa
         for (const x of [-10, -5, 0, 5, 10])
           head('girlBall', x, 57.3 - Math.abs(x) * 0.15, 8.5 - Math.abs(x) * 0.35, 5, 3, 2.6, white)
         head('girlBall', -13, 55, 6, 5, 5, 4, ribbon)
+        // A black lace blindfold tied with her ribbon.
+        cover('girlShades', black)
+        cover('girlStrap', black)
+        // Its lace is fibre optic.
+        lit(() => {
+          for (const x of [-11, -5.5, 0, 5.5, 11])
+            head(
+              'girlBall',
+              x,
+              37.2,
+              18.6 - Math.abs(x) * 0.33,
+              3.6,
+              2,
+              1.6,
+              mix(ribbon, white, 0.4)
+            )
+        })
+        bow('head', 15.5, 40, 4, ribbon, 0.7)
       })
       break
     }
@@ -391,18 +479,11 @@ export function createPersonParts(variant: number, identity: string, riding = fa
         body('girlTorso', 0, 14.5, 0, 16.4, 6, 12.4, denim)
         body('girlTrim', 0, 20.5, 5.9, 9, 6, 1.2, denim)
         for (const side of [-1, 1]) body('girlTrim', side * 4, 23.5, 3, 1.6, 5, 7, denim)
-        head('girlDisc', hx, 55, hz + 1, 50, 2, 48, 0xeed39a)
-        head('girlCap', hx, 58.5, hz, 31, 9, 30, 0xeed39a)
-        head(
-          'girlDisc',
-          hx,
-          56,
-          hz,
-          32.6,
-          3.6,
-          31.6,
-          pick(tone, [0xe5505f, 0x6b8fe6, 0x4a8a5a, 0xf08a3c])
-        )
+        // The straw hat sits low enough to shade her eyes.
+        head('girlDisc', hx, 49, hz + 1, 54, 2, 52, 0xeed39a, 0, 0.22)
+        head('girlCap', hx, 55.5, hz, 33, 12, 32, 0xeed39a)
+        // A hydroponics farmer's hat, banded with grow-light.
+        lit(() => head('girlDisc', hx, 52, hz, 32.6, 3.6, 31.6, neon))
       })
       break
     }
@@ -418,8 +499,13 @@ export function createPersonParts(variant: number, identity: string, riding = fa
         body('girlSkirt', 0, 16.5, 0, 24, 7, 20, dress)
         bow('body', 0, 22.5, 6.8, 0xe5505f, 1.3)
         hand('girlLimb', 11.5, 13, 3, 1.4, 11, 1.4, white, 0, 0.5)
-        hand('girlBall', 11.5, 9.2, 5.8, 4.4, 4.4, 2.4, gold)
+        lit(() => hand('girlBall', 11.5, 9.2, 5.8, 4.4, 4.4, 2.4, mix(dress, white, 0.45)))
         for (const side of [-1, 1]) head('girlLock', side * 14, 54, -2, 3, 7, 2, white, side * -0.9)
+        // A masquerade mask with jewels on its wings.
+        cover('girlDomino', pick(tone, [0x6a3a8a, 0x2f3c66, 0xb03a6a, 0x3a3448]))
+        lit(() => {
+          for (const side of [-1, 1]) head('girlBall', side * 12.2, 47, 14, 2.6, 2.6, 2, neon)
+        })
       })
       break
     }
@@ -431,6 +517,7 @@ export function createPersonParts(variant: number, identity: string, riding = fa
         body('girlTrim', 0, 22.5, 5.8, 4, 6.5, 1, white)
         bow('body', 0, 24, 6.4, 0x6a6f85, 0.6)
         for (const y of [16.5, 19.5]) body('girlBall', 0, y, 6.5, 1.3, 1.3, 1, white)
+        glasses(0x8a5a3e, mix(neon, white, 0.7))
       })
       break
     }
@@ -446,6 +533,12 @@ export function createPersonParts(variant: number, identity: string, riding = fa
         for (const side of [-1, 1])
           hand('girlLimb', side * 11.6, 21, 1.6, 1, 8, 1, white, side * 0.25)
         head('girlHairband', hx, hy, hz, 35, 31, 31, white)
+        // Wraparound sports sunglasses with a mirrored stripe.
+        cover('girlShades', 0x2a3048)
+        lit(() => {
+          head('girlTrim', 0, 41.5, 18.5, 14, 0.8, 0.6, neon)
+          body('girlTrim', 0, 19.5, 6.6, 0.4, 11, 0.4, neon)
+        })
       })
       break
     }
@@ -460,7 +553,11 @@ export function createPersonParts(variant: number, identity: string, riding = fa
           [3, 11, 0x4a7ee0],
           [5, 18, gold]
         ] as const)
-          body('girlBall', x, y, y < 19 ? 9.6 - (y - 10) * 0.28 : 6.4, 2.2, 2.2, 1, color)
+          lit(() =>
+            body('girlBall', x, y, y < 19 ? 9.6 - (y - 10) * 0.28 : 6.4, 2.2, 2.2, 1, color)
+          )
+        // A light pen instead of a brush.
+        lit(() => hand('girlBall', 11.5, 9.6, 4.4, 1.6, 1.6, 1.6, neon))
         bow('body', 0, 23.5, 6.4, 0xe5505f, 0.6)
         const beret = pick(tone, [0xd84a5a, 0x3a3448, 0x4a6ac8, 0x6a8a4a])
         head('girlCap', -2.5, 57.8, hz, 36, 9, 34, beret, 0.2)
@@ -481,6 +578,8 @@ export function createPersonParts(variant: number, identity: string, riding = fa
         body('girlTorso', 0, 25.5, 0.3, 9, 2.4, 8, gold)
         body('girlTrim', 2.6, 22.5, 5.8, 1, 6, 1, gold, -0.6)
         for (const side of [-1, 1]) head('girlLock', side * 11.5, 46, -4, 2.6, 8, 2.6, 0xe5505f)
+        // Little round kung-fu sunglasses.
+        glasses(gold, mix(0xff4a6a, 0x2a2632, 0.35))
       })
       break
     }
@@ -502,7 +601,12 @@ export function createPersonParts(variant: number, identity: string, riding = fa
           [6, 3.5]
         ])
           head('girlEar', x, 58.2 + h / 2, 7 - Math.abs(x) * 0.4, 4.4, h, 2, gold)
-        head('girlBall', hx, 59, 9.5, 2.6, 2.6, 2, 0xe5505f)
+        lit(() => head('girlBall', hx, 59, 9.5, 2.6, 2.6, 2, neon))
+        // A lace veil falls from the tiara, edged with pearls.
+        cover('girlVeil', 0xfbf6f4)
+        // Nothing hangs in front of the mouth.
+        for (const a of [-0.9, -0.6, -0.3, 0.3, 0.6, 0.9])
+          head('girlBall', ...onFace(a, -0.255, 1.11), 2, 2, 1.2, white)
       })
       break
     }
@@ -515,10 +619,11 @@ export function createPersonParts(variant: number, identity: string, riding = fa
       shoes = 0x3a3448
       details.push(() => {
         body('girlTorso', 0, 25.4, 0.3, 9, 2, 8, 0xe5505f)
-        body('girlBall', 0, 24, 5.4, 2.6, 2.6, 2.6, gold)
+        lit(() => body('girlBall', 0, 24, 5.4, 2.6, 2.6, 2.6, neon))
         for (const side of [-1, 1]) {
           head('girlEar', side * 10.5, 59.5, hz - 1, 10, 11, 5, hair, side * -0.32)
-          head('girlEar', side * 10.5, 59, hz + 0.4, 5.5, 6.5, 3.4, pink, side * -0.32)
+          // Cyber cat ears with lit inner panels.
+          lit(() => head('girlEar', side * 10.5, 59, hz + 0.4, 5.5, 6.5, 3.4, neon, side * -0.32))
         }
         for (const [y, z, p] of [
           [12.5, -8.5, 1.1],
@@ -542,8 +647,14 @@ export function createPersonParts(variant: number, identity: string, riding = fa
         body('girlTrim', 0, 18.5, 6.4, 7, 5, 1, white)
         for (const side of [-1, 1]) {
           head('girlLock', side * 5.5, 66, -1, 6.5, 19, 3.4, white, side * -0.14)
-          head('girlLock', side * 5.5, 65, 0.2, 3.4, 13, 2.8, pink, side * -0.14)
+          lit(() => {
+            head('girlLock', side * 5.5, 65, 0.2, 3.4, 13, 2.8, neon, side * -0.14)
+            // Sleepy eyes shown on the display of her sleep mask.
+            head('girlTrim', side * 7.3, 39.2, 18.6, 4.5, 0.9, 0.6, neon, side * -0.2)
+          })
         }
+        cover('girlShades', 0xf8c6d6)
+        cover('girlStrap', 0xf8c6d6)
       })
       break
     }
@@ -565,6 +676,10 @@ export function createPersonParts(variant: number, identity: string, riding = fa
         head('girlCap', hx, 56, hz - 0.5, 37.5, 15, 36, scarf)
         head('girlCuff', hx, hy, hz, 35, 31, 31, scarf)
         head('girlBall', hx, 64, hz - 2, 9, 9, 9, white)
+        // Ski goggles worn over the beanie.
+        cover('girlStrap', 0x3a3448)
+        lit(() => cover('girlShades', pick(tone, [0xf2a24a, 0x6fc0e8, 0xb48ae8, 0x7ad0a0])))
+        head('girlTrim', -4, 42, 18.4, 7, 0.8, 0.6, white, 0.25)
         for (const side of [-1, 1]) put('leg', 'girlLimb', side * 4, 5.6, 0.3, 5.6, 8, 5.8, shoes)
       })
       break
@@ -585,7 +700,274 @@ export function createPersonParts(variant: number, identity: string, riding = fa
         // A field cap with a forward visor, unlike the farm girl's straw hat.
         head('girlCap', hx, 56.5, hz - 0.5, 37.5, 13, 36, pack)
         head('girlDisc', hx, 52, hz + 15.5, 24, 2, 11, pack, 0, -0.15)
-        head('girlBall', hx, 56, hz + 17.5, 5, 4, 1.6, gold)
+        lit(() => head('girlBall', hx, 56, hz + 17.5, 5, 4, 1.6, neon))
+        // Scanner goggles on a leather strap.
+        cover('girlStrap', 0x7b4b3a)
+        glasses(gold, mix(neon, 0x9fd4e0, 0.5))
+      })
+      break
+    }
+    case 'astronaut': {
+      const suit = 0xf3f1ec
+      const accent = pick(tone, [0xe8605a, 0x4f7fe0, 0xf2a24a, 0x52c1d6])
+      top = sleeve = lower = legs = suit
+      hands = 0xd8d6d0
+      skirtLength = 8
+      skirtWidth = 22
+      socks = undefined
+      shoes = 0xb8bcc6
+      hat = true
+      details.push(() => {
+        body('girlTrim', 0, 19, 6.4, 8, 5, 1.2, 0xc8ccd6)
+        for (const [x, color] of [
+          [-2.2, accent],
+          [0, gold],
+          [2.2, 0x52c1d6]
+        ] as const)
+          lit(() => body('girlBall', x, 19.5, 7, 1.6, 1.6, 1, color))
+        body('girlBall', 0, 19, -8, 13, 15, 8, 0xe2e0da)
+        body('girlDisc', 0, 27, 0.4, 20, 3, 18, accent)
+        // A roomy helmet with its gold sun visor pulled down.
+        head('girlHelmet', hx, hy, hz, hw, hh, hd, white)
+        cover('girlSunVisor', 0xf2b84a)
+        head('girlBall', ...onFace(-0.6, 0.3, 1.33), 3, 1.6, 1, white)
+        head('girlLimb', 14, 62, 2, 1.2, 8, 1.2, 0xc8ccd6, -0.3)
+        lit(() => head('girlBall', 15.2, 66, 2, 2.6, 2.6, 2.6, accent))
+      })
+      break
+    }
+    case 'jiangshi': {
+      const robe = pick(tone, [0x2f4a7a, 0x6a2a3a, 0x2f5a4a, 0x4a3a6a])
+      top = sleeve = lower = robe
+      wideSleeves = true
+      cuff = 0xf2e2b0
+      skirtLength = 15
+      skirtWidth = 20
+      socks = white
+      shoes = black
+      hat = true
+      details.push(() => {
+        body('girlTorso', 0, 25.6, 0.3, 9, 2.4, 8, gold)
+        body('girlTrim', 3, 21, 6.2, 1.2, 9, 1, gold, -0.4)
+        // A Qing official's cap with a red knob, and the talisman that holds her still.
+        head('girlDisc', hx, 54.5, hz - 1, 38, 3, 37, 0x2a2632)
+        head('girlCap', hx, 58, hz - 1, 31, 9, 30, 0x2a2632)
+        head('girlBall', hx, 63, hz - 1, 5, 5, 5, 0xd8434f)
+        cover('girlOfuda', 0xf2d65c)
+        for (const [y, width, height] of [
+          [0.2, 7, 1.1],
+          [0.08, 1.1, 5],
+          [-0.02, 6, 1.1],
+          [-0.13, 1.1, 4]
+        ])
+          lit(() => head('girlTrim', ...onFace(0, y, 1.1), width, height, 0.6, 0xff4a6a))
+      })
+      break
+    }
+    case 'cyborg': {
+      const glow = pick(tone, [0x5ef0e6, 0xff5ca8, 0x9cff5c, 0xffb84a])
+      top = sleeve = lower = 0x2a2f3a
+      skirtLength = 7
+      legs = 0x3a4050
+      socks = undefined
+      shoes = 0xe8ecf2
+      hands = 0xc8ccd6
+      details.push(() => {
+        lit(() => {
+          for (const side of [-1, 1]) body('girlTrim', side * 4, 19, 6.2, 0.8, 11, 0.6, glow)
+          body('girlTorso', 0, 13.6, 0, 16.2, 1, 12.2, glow)
+        })
+        // A wraparound visor with a running row of lights.
+        cover('girlVisor', 0x1c2030)
+        lit(() => {
+          for (let a = -0.75; a < 0.8; a += 0.25)
+            head('girlBall', ...onFace(a, -0.09, 1.11), 2.4, 1.3, 0.8, glow)
+        })
+        for (const side of [-1, 1]) {
+          head('girlBall', side * 17.5, 40, 3, 5, 7, 7, 0xc8ccd6)
+          head('girlLimb', side * 18.5, 48, 2, 1, 10, 1, 0xc8ccd6, side * -0.15)
+          lit(() => head('girlBall', side * 19.3, 53, 2, 2.2, 2.2, 2.2, glow))
+        }
+      })
+      break
+    }
+    case 'steampunk': {
+      const fabric = pick(tone, [0x7a2f3a, 0x3a4a6a, 0x4a3a2a, 0x2f4a3a])
+      top = sleeve = 0xf3e6d0
+      lower = fabric
+      skirtWidth = 25
+      skirtLength = 11
+      socks = 0x3a2f2a
+      shoes = 0x5a3a2a
+      hat = true
+      details.push(() => {
+        body('girlTorso', 0, 17.5, 0, 16.6, 7, 12.6, 0x6a4535)
+        for (const y of [15.5, 18, 20.5]) body('girlTrim', 0, y, 6.9, 4, 0.6, 0.6, gold)
+        body('girlBall', 4, 23, 6.4, 3, 3, 1.2, 0xb8863a)
+        lit(() => body('girlBall', 4, 23, 7, 1.4, 1.4, 0.6, 0xffb84a))
+        // A small top hat, and enormous brass goggles over the eyes.
+        head('girlDisc', -1, 58.5, hz - 2, 32, 2, 31, 0x3a2f2a, 0.15)
+        head('girlLimb', -2, 65, hz - 2, 20, 14, 19, 0x3a2f2a, 0.15)
+        head('girlLimb', -1.4, 60.5, hz - 2, 20.6, 3, 19.6, fabric, 0.15)
+        cover('girlStrap', 0x6a4535)
+        for (const side of ['L', 'R'] as const) {
+          cover(`girlBigRim${side}`, 0xb8863a)
+          lit(() =>
+            cover(`girlBigLens${side}`, pick(tone, [0x6fd0c0, 0xf2a24a, 0x8ab8f0, 0x9be07a]))
+          )
+        }
+        for (const side of [-1, 1])
+          head('girlBall', ...onFace(side * 0.52, 0.02, 1.09), 2.6, 2.6, 1, 0xfffaf0)
+      })
+      break
+    }
+    case 'knight': {
+      const steel = 0xc8ced8
+      const heraldry = pick(tone, [0x3a5ad0, 0xc8384a, 0x2f8a5a, 0x6a4ac8])
+      top = sleeve = 0xb8c0cc
+      lower = heraldry
+      skirtLength = 10
+      legs = socks = shoes = hands = 0x8a92a0
+      hat = true
+      details.push(() => {
+        body('girlLock', 0, 15, 8.3, 11, 12, 2, heraldry, 0, -0.3)
+        lit(() => {
+          body('girlTrim', 0, 16, 9, 1.4, 7, 0.6, neon, 0, -0.3)
+          body('girlTrim', 0, 17, 8.7, 5, 1.4, 0.6, neon, 0, -0.3)
+        })
+        for (const side of [-1, 1]) body('girlBall', side * 9.5, 24.5, 0, 7, 5, 7, steel)
+        // A closed helm with a plume and breathing slits.
+        head('girlCowl', hx, hy, hz, hw, hh, hd, steel)
+        // A mecha pilot's helm: the slits glow, and so does the crest.
+        lit(() => {
+          for (let a = -0.5; a < 0.6; a += 0.25)
+            head('girlTrim', ...onFace(a, 0.02, 1.215), 3.4, 1.1, 0.6, neon)
+        })
+        head('girlTrim', ...onFace(0, 0.24, 1.21), 1.6, 8, 1.6, 0xdfe4ea)
+        head('girlLock', 0, 61.5, -3, 5, 16, 5, heraldry, 0, 0.7)
+      })
+      break
+    }
+    case 'mummy': {
+      const wrap = 0xefe6d0
+      top = sleeve = lower = hands = legs = wrap
+      skirtLength = 9
+      skirtWidth = 21
+      socks = undefined
+      shoes = 0xd8ccb0
+      details.push(() => {
+        for (const [y, tilt] of [
+          [11, 0.12],
+          [15.5, -0.1],
+          [20, 0.08],
+          [23.5, -0.12]
+        ])
+          body('girlTorso', 0, y, 0, 16.6, 1.3, 12.6, 0xd8ccb0, tilt)
+        body('girlTrim', 6, 9, 7, 2, 8, 0.6, wrap, 0.3)
+        // Loose bandages wound over the eyes, one tail fluttering free.
+        head('girlBandage', hx, hy, hz, hw, hh, hd, wrap, 0.08)
+        head('girlBandage', hx, hy + 4.5, hz, hw + 0.6, hh + 0.6, hd + 0.6, 0xe4d9be, -0.1)
+        head('girlTrim', 17.5, 36, 3, 1, 9, 3, wrap, 0.4)
+        // Cryo-sleep wraps, with a status light peeking between the bands.
+        lit(() => head('girlBall', ...onFace(0.35, 0.04, 1.14), 2.6, 1.2, 0.8, neon))
+      })
+      break
+    }
+    case 'pirate': {
+      const coat = pick(tone, [0x7a2f3a, 0x2f3c66, 0x2a2632, 0x2f5a48])
+      top = white
+      sleeve = cuff = white
+      lower = undefined
+      shorts = true
+      socks = undefined
+      shoes = 0x3a2a22
+      hat = true
+      details.push(() => {
+        for (const side of [-1, 1]) body('girlTrim', side * 4.6, 19, 6, 4, 10, 1, coat)
+        body('girlTorso', 0, 14, 0, 16.4, 3, 12.4, 0xc8384a)
+        body('girlTrim', 5, 10.5, 6.6, 2.4, 6, 0.8, 0xc8384a, 0.2)
+        body('girlTorso', 0, 13.8, 0, 15.6, 6, 11.6, 0x2a2632)
+        for (const side of [-1, 1]) put('leg', 'girlLimb', side * 4, 5.6, 0.3, 5.6, 8, 5.8, shoes)
+        // A tricorne with a skull, and an eyepatch where the fringe doesn't reach.
+        head('girlDisc', hx, 55.5, hz - 1, 42, 2.4, 40, 0x2a2632)
+        head('girlCap', hx, 58.5, hz - 1, 31, 8, 30, 0x2a2632)
+        // A space pirate: a lit skull, and a targeting LED on the eyepatch.
+        lit(() => head('girlBall', 0, 58, hz + 14, 4.4, 4, 1.6, neon))
+        cover('girlLensL', 0x1c1a22)
+        lit(() =>
+          head(
+            'girlBall',
+            ...onFace(-personFace.eyeAngle, personFace.eyeY, 1.08),
+            1.8,
+            1.8,
+            0.6,
+            0xff3a4a
+          )
+        )
+        head('girlTrim', ...onFace(-0.05, 0.1, 1.06), 18, 0.9, 0.8, 0x1c1a22, 0.45)
+      })
+      break
+    }
+    case 'fortune': {
+      const robe = pick(tone, [0x6a3a8a, 0x2f4a6a, 0x8a2f4a, 0x2f6a5a])
+      top = sleeve = lower = robe
+      wideSleeves = true
+      skirtLength = 14
+      skirtWidth = 24
+      socks = undefined
+      shoes = gold
+      hairTie = gold
+      details.push(() => {
+        body('girlTorso', 0, 18.6, 0, 17, 3, 12.8, gold)
+        lit(() => hand('girlBall', 11.5, 13, 5, 7, 7, 7, mix(neon, white, 0.5)))
+        // A gauze veil hung with coins under a jewelled circlet.
+        head('girlHairband', hx, hy, hz, hw, hh, hd, gold)
+        lit(() => head('girlBall', ...onFace(0, 0.2, 1.13), 3.4, 3.4, 1.4, neon))
+        cover('girlVeil', mix(robe, white, 0.3))
+        // Nothing hangs in front of the mouth.
+        for (const a of [-0.9, -0.6, -0.3, 0.3, 0.6, 0.9])
+          head('girlBall', ...onFace(a, -0.255, 1.11), 2.4, 2.4, 0.8, gold)
+      })
+      break
+    }
+    case 'gamer': {
+      const glow = pick(tone, [0x5ef0e6, 0xff5ca8, 0x9cff5c, 0xb48ae8])
+      top = sleeve = hands = pick(tone, [0x3a3448, 0xf4c6d0, 0x8ad0c0, 0xf2e2b0])
+      lower = undefined
+      shorts = true
+      shoes = white
+      details.push(() => {
+        body('girlBall', 0, 25, -6.8, 15, 7.5, 8, top)
+        body('girlTrim', 0, 15.5, 6.6, 9, 3.6, 1, mix(top, black, 0.2))
+        for (const side of [-1, 1]) body('girlTrim', side * 2.4, 21.6, 6.9, 0.9, 5, 0.9, white)
+        // A chunky VR headset with a glowing front.
+        cover('girlStrap', 0x3a3448)
+        head('girlTrim', hx, 41.5, 17, 30, 8.5, 8, 0xf3f1ef)
+        head('girlTrim', hx, 41.5, 21.1, 26, 6, 0.4, 0x1c2030)
+        lit(() => head('girlTrim', hx, 41.5, 21.4, 18, 1.2, 0.4, glow))
+      })
+      break
+    }
+    case 'diver': {
+      const fin = pick(tone, [0xf2c55c, 0xe8605a, 0x52c1d6, 0x9be07a])
+      top = sleeve = legs = hands = 0x2a3040
+      lower = undefined
+      shorts = true
+      socks = undefined
+      shoes = fin
+      details.push(() => {
+        lit(() => {
+          body('girlTrim', 0, 19, 6.3, 1.2, 12, 0.8, fin)
+          for (const side of [-1, 1]) body('girlTrim', side * 7.8, 19, 0, 0.8, 12, 6, fin)
+        })
+        for (const side of [-1, 1]) put('leg', 'girlBall', side * 4, 1.4, 5, 7, 2.4, 14, fin)
+        // A diving mask and snorkel.
+        cover('girlStrap', 0x2a3040)
+        cover('girlDiveRim', 0x2a3040)
+        cover('girlDivePane', 0x9fd8ec)
+        head('girlTrim', ...onFace(-0.35, 0.03, 1.12), 6, 1, 0.5, white, 0.35)
+        head('girlLimb', 17.5, 47, 6, 2.4, 18, 2.4, fin)
+        head('girlBall', 17.5, 56, 6, 3, 3, 3, fin)
       })
       break
     }
@@ -599,9 +981,11 @@ export function createPersonParts(variant: number, identity: string, riding = fa
       hat = true
       details.push(() => {
         for (const y of [8, 11.5, 15, 18.5, 22])
-          body('girlTrim', 3.5, y, y < 19 ? 9.3 - (y - 6) * 0.28 : 6.4, 0.8, 1.8, 0.8, 0xe5505f)
+          lit(() =>
+            body('girlTrim', 3.5, y, y < 19 ? 9.3 - (y - 6) * 0.28 : 6.4, 0.8, 1.8, 0.8, 0xe5505f)
+          )
         body('girlCap', 0, 21.5, 6.6, 3, 2.4, 2.4, 0x8e79d6)
-        head('girlHood', hx, hy, hz, 35, 31, 31, 0xf6f5ff)
+        head('girlCowl', hx, hy, hz, 35, 31, 31, 0xf6f5ff)
         for (const [x, y, a] of [
           [11, 56, -0.9],
           [15, 52, -1.2],
@@ -735,11 +1119,11 @@ export function createPersonParts(variant: number, identity: string, riding = fa
   }
 
   // Head: skin, painted face, hair cap with its glossy ring, and face-framing locks.
-  const { width: hw, height: hh, depth: hd } = personHead
   head('girlHead', hx, hy, hz, hw, hh, hd, skin)
   head(`girlFace${eyes}` as PersonShape, hx, hy, hz, hw, hh, hd, 0xffffff)
   head(`girlHair_${bangs}`, hx, hy, hz, hw, hh, hd, hair)
-  head('girlHalo', hx, hy, hz, hw, hh, hd, mix(hair, 0xffffff, 0.45))
+  // The glossy ring is a neon streak dyed into the hair.
+  lit(() => head('girlHalo', hx, hy, hz, hw, hh, hd, mix(neon, 0xffffff, 0.2)))
   for (const side of [-1, 1])
     head('girlLock', side * 15.8, 35.5, hz + 4.5, 6, 16, 5, hair, side * 0.06)
   if (look.ahoge && !hat) head('girlLock', 1.5, 60, hz + 1, 2.6, 9, 2, hair, -0.55)
@@ -861,6 +1245,41 @@ export function createPersonParts(variant: number, identity: string, riding = fa
   }
 
   for (const detail of details) detail()
+
+  // Everyone wears the town's cyber kit: ear modules, a neon waistline, light bands on
+  // the sleeves and glowing soles. Riding limbs are posed apart, so they go without.
+  if (role !== 'cyborg')
+    for (const side of [-1, 1]) {
+      // Thick enough to clear the fullest hair and still meet a cropped cut.
+      head('girlDisc', side * 21.2, 43, hz + 1, 8, 4.2, 8, 0x2a2f3a, side * (Math.PI / 2))
+      lit(() =>
+        head('girlDisc', side * 23.4, 43, hz + 1, 4.8, 0.6, 4.8, neon, side * (Math.PI / 2))
+      )
+      // One antenna, on the right.
+      if (side > 0 && tone % 2) {
+        head('girlLimb', 22.4, 49, hz + 1, 0.9, 9, 0.9, 0x8a92a0, -0.2)
+        lit(() => head('girlBall', 23.3, 53.5, hz + 1, 1.8, 1.8, 1.8, neon))
+      }
+    }
+  lit(() => {
+    if (lower !== undefined || shorts) body('girlTorso', 0, 19.6, 0, 16.8, 0.8, 12.8, neon)
+    for (const side of [-1, 1]) {
+      put('leg', 'girlBall', side * 4, 0.6, 1.2, 6.4, 1.2, 9.4, neon)
+      const arm = wideSleeves ? 8 : 5.4
+      put(
+        'arm',
+        'girlLimb',
+        side * ((wideSleeves ? 10.6 : 9.8) + 0.45),
+        19.6,
+        0.1,
+        arm + 0.5,
+        0.9,
+        arm + 0.5,
+        neon,
+        side * 0.25
+      )
+    }
+  })
   return parts
 }
 
