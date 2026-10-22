@@ -7,6 +7,8 @@ export type MovingShape = PersonPart['shape'] | 'box' | 'wheel' | 'tyre' | 'ligh
 export type MovingPart = Omit<PersonPart, 'shape' | 'motion'> & {
   shape: MovingShape
   motion?: PersonPart['motion'] | 'wheel'
+  // Night gear, hidden while the sun is up.
+  night?: boolean
 }
 
 function part(
@@ -25,7 +27,57 @@ function part(
 }
 
 export function personParts(variant: number, identity: string): MovingPart[] {
-  return createPersonParts(variant, identity)
+  const parts: MovingPart[] = createPersonParts(variant, identity)
+  // After dusk walkers carry a lantern in a hand free of props, or hang it from the belt.
+  const prop = (item: MovingPart, side: number) =>
+    item.motion === 'arm' && Math.sign(item.x) === side && Math.abs(item.x) > 11.4 && item.y < 19
+  const free = [-1, 1].find((candidate) => !parts.some((item) => prop(item, candidate)))
+  const side = free ?? -1
+  // A short pole holds the lantern clear of skirts and hems, a little ahead of long hair.
+  const z = 2
+  const reach = Math.max(
+    0,
+    ...parts
+      .filter(
+        (item) =>
+          // Swinging props sweep through any depth beside the hip.
+          (free === undefined && prop(item, side)) ||
+          (item.motion !== 'arm' &&
+            item.y - item.height / 2 < 13 &&
+            item.y + item.height / 2 > 4 &&
+            item.z - item.depth / 2 < z + 2.8 &&
+            item.z + item.depth / 2 > z - 2.8 &&
+            (item.x === 0 || Math.sign(item.x) === side))
+      )
+      .map((item) => Math.abs(item.x) + item.width / 2)
+  )
+  const hand = free === undefined ? { x: side * 7.5, y: 17 } : { x: side * 11.3, y: 15.9 }
+  const tip = { x: side * Math.max(14, reach + 3.6), y: 18 }
+  const x = tip.x
+  const frame = 0x3a3038
+  const pole = part(
+    'box',
+    (hand.x + tip.x) / 2,
+    (hand.y + tip.y) / 2,
+    1,
+    0.9,
+    Math.hypot(tip.x - hand.x, tip.y - hand.y) + 1,
+    0.9,
+    0x7b5a3a,
+    Math.atan2(hand.x - tip.x, tip.y - hand.y)
+  )
+  for (const item of [
+    pole,
+    part('box', x, 15.6, z, 0.5, 5, 0.5, frame),
+    part('box', x, 12.6, z, 5.6, 1.4, 5.6, frame),
+    part('light', x, 8.9, z, 4.6, 6.2, 4.6, 0xffd27a),
+    part('box', x, 5.1, z, 5.6, 1.4, 5.6, frame)
+  ]) {
+    if (free !== undefined) item.motion = 'arm'
+    item.night = true
+    parts.push(item)
+  }
+  return parts
 }
 
 export const carPaints = [0xe8605a, 0x4f7fe0, 0xf4f0e6, 0x67b98f, 0x9a72d6, 0xf29a4a, 0x52c1d6]
@@ -118,6 +170,12 @@ export function cyclistParts(variant: number, identity: string): MovingPart[] {
   tube(13, 0, 29, 14)
   tube(12, 20, 34, 13, 0xeff0d3)
   parts.push(part('box', 0, 31, -7, 11, 4, 10, 0x333333))
+  // A headlamp on the fork and a red reflector under the saddle.
+  parts.push(
+    part('box', 0, 29, 16.5, 5, 4.4, 3, 0x333333),
+    part('light', 0, 29, 18.2, 4, 3.4, 0.6, 0xfff6d2),
+    part('light', 0, 28.5, -12.6, 3.4, 2.4, 0.6, 0xff5a5a)
+  )
   tube(34, 13, bicycleGrip.y, bicycleGrip.z, 0xeff0d3)
   parts.push(
     part('box', 0, bicycleGrip.y, bicycleGrip.z, 23, 3, 3, 0x333333),

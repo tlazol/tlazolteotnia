@@ -8,6 +8,7 @@ const accentOverrides: Partial<Record<string, PostAccent>> = {
   'dialogflow-actions-builder-simulator-version': 'pink',
   'firebase-contentful-markdown-blog': 'green',
   'firebase-multiple-project-initialize': 'pink',
+  'give-the-ai-precise-instructions': 'blue',
   'glassmorphism-lessons': 'blue',
   'reducing-smartphone-screen-time': 'blue',
   'rpg-attack-logic': 'yellow',

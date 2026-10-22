@@ -14,7 +14,7 @@ import {
 import { createTownResidents } from './town-residents'
 import { buildTownStatic, type TownOccluder } from './town-static'
 import { boardToTownTerrain, type TownView, townToBoard } from './town-view'
-import { containsTownGround, terrainSurfaceHeight } from './town-world'
+import { containsTownGround, terrainSurfaceHeight, townWaterSurface } from './town-world'
 
 // Ray/box slab test along the camera's viewing direction.
 function blocks(box: TownOccluder, origin: Vector3, direction: Vector3) {
@@ -148,7 +148,10 @@ export function createTownScene(articles?: TownArticle[]) {
           width,
           bodyHeight: (headHeight + (riding ? 20 * resident.scale : 0)) / Math.SQRT2,
           footY: (headHeight + (lifted ? residentLiftHeight : 0)) / Math.SQRT2,
-          dropAllowed: !lifted || navigation.canStand(resident.pose),
+          dropAllowed:
+            !lifted ||
+            navigation.canStand(resident.pose) ||
+            townWaterSurface(resident.pose) !== null,
           inView,
           visible:
             inView &&
@@ -182,7 +185,8 @@ export function createTownScene(articles?: TownArticle[]) {
         motion,
         selectedSlug: residents.selectedSlug,
         visibleSlugs: residents.visibleSlugs,
-        dragged: residents.dragged
+        dragged: residents.dragged,
+        night: lighting.night
       })
       materials.uniforms.uTime.value = residents.elapsed
       ambient.update(residents.elapsed, lighting.night)

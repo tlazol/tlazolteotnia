@@ -235,6 +235,19 @@ export function containsTownGround(point: TownPoint) {
   return waterDistance(point.x, point.z) < 0 && terrainSurfaceHeight(point.x, point.z) > waterLevel
 }
 
+// The water surface a dropped resident can swim in: the park pond, the lake or the sea
+// near the coast. Null on land and far out at sea.
+export function townWaterSurface(point: TownPoint) {
+  const { island } = parkPond
+  const px = (point.x - parkPond.x) / parkPond.radiusX
+  const pz = (point.z - parkPond.z) / parkPond.radiusZ
+  const ix = (point.x - parkPond.x - island.dx) / island.radiusX
+  const iz = (point.z - parkPond.z - island.dz) / island.radiusZ
+  if (px * px + pz * pz <= 1) return ix * ix + iz * iz <= 1 ? null : parkPond.surface
+  if (containsTownGround(point) || waterDistance(point.x, point.z) > 1500) return null
+  return waterLevel
+}
+
 function rect(left: number, right: number, top: number, bottom: number): Rect {
   return { left, right, top, bottom }
 }
@@ -358,7 +371,10 @@ export const parkPond = {
   x: park.left + 380,
   z: (park.top + park.bottom) / 2 + 40,
   radiusX: 230,
-  radiusZ: 170
+  radiusZ: 170,
+  surface: 6,
+  // A small wooded island, offset from the center.
+  island: { dx: 40, dz: -20, radiusX: 45, radiusZ: 30 }
 }
 
 function splitWalk(start: number, end: number, z: number, parts: number, lane: number) {

@@ -18,11 +18,13 @@ import {
   MeshToonMaterial,
   NearestFilter,
   Object3D,
+  PlaneGeometry,
   RedFormat,
   ShaderChunk,
   TorusGeometry
 } from 'three'
 import { bicyclePose } from './town-bicycle-pose'
+import { radialTexture } from './town-materials'
 import {
   createPersonFaceTexture,
   createPersonGeometries,
@@ -42,9 +44,16 @@ import { pavementHeight, terrainSurfaceHeight } from './town-world'
 export const residentLiftHeight = 28
 
 export function residentBaseHeight(resident: Resident) {
-  return resident.kind === 'car'
-    ? 1.2
-    : terrainSurfaceHeight(resident.pose.x, resident.pose.z) + pavementHeight + 0.5
+  if (resident.kind === 'car') return 1.2
+  const ground = terrainSurfaceHeight(resident.pose.x, resident.pose.z) + pavementHeight + 0.5
+  if (resident.water === undefined) return ground
+  // Swimmers float with the waterline at their shoulders; cyclists sit higher on the saddle.
+  if (resident.swimming)
+    return (
+      resident.water -
+      (personShoulderHeight + (resident.kind === 'bicycle' ? 14 : 0)) * resident.scale
+    )
+  return Math.max(ground, resident.water)
 }
 
 type Batch = {
@@ -98,16 +107,24 @@ export function createResidentBatches() {
     transparent: true,
     alphaTest: 0.02
   })
+  // After dusk residents are lit by their own lanterns and bicycle lamps.
+  const lamp = { value: 0 }
   for (const material of [personMaterial, skinMaterial, faceMaterial]) {
     material.onBeforeCompile = (shader) => {
+      shader.uniforms.uLamp = lamp
       // Keep the time-of-day fill light uniform so it cannot soften the cel bands.
-      shader.fragmentShader = shader.fragmentShader.replace(
-        '#include <lights_pars_begin>',
-        ShaderChunk.lights_pars_begin.replace(
-          'float hemiDiffuseWeight = 0.5 * dotNL + 0.5;',
-          'float hemiDiffuseWeight = 0.5;'
+      shader.fragmentShader = `uniform float uLamp;\n${shader.fragmentShader}`
+        .replace(
+          '#include <lights_pars_begin>',
+          ShaderChunk.lights_pars_begin.replace(
+            'float hemiDiffuseWeight = 0.5 * dotNL + 0.5;',
+            'float hemiDiffuseWeight = 0.5;'
+          )
         )
-      )
+        .replace(
+          '#include <emissivemap_fragment>',
+          '#include <emissivemap_fragment>\ntotalEmissiveRadiance += diffuseColor.rgb * vec3(1.0, 0.86, 0.7) * uLamp;'
+        )
     }
   }
   // Each face selects its own eyelid row while sharing the same texture and draw call.
@@ -131,6 +148,19 @@ export function createResidentBatches() {
     depthFunc: GreaterDepth,
     depthWrite: false
   })
+
+  // Lamplight on the ground under each article resident, and a cyclist's beam ahead.
+  const glowTexture = radialTexture()
+  const glowGeometry = new PlaneGeometry(1, 1).rotateX(-Math.PI / 2)
+  const glowMaterial = new MeshBasicMaterial({
+    map: glowTexture,
+    transparent: true,
+    opacity: 0,
+    depthWrite: false,
+    blending: AdditiveBlending
+  })
+  let pools: InstancedMesh | null = null
+  let glowItems: { resident: Resident; ahead: number; width: number; depth: number }[] = []
 
   const group = new Group()
   group.name = 'town-residents'
@@ -158,6 +188,12 @@ export function createResidentBatches() {
       }
     }
     batches.length = 0
+    if (pools) {
+      group.remove(pools)
+      pools.dispose()
+      pools = null
+    }
+    glowItems = []
   }
 
   function rebuild(residents: Resident[]) {
@@ -187,6 +223,29 @@ export function createResidentBatches() {
         const bounds = geometries[part.shape].boundingBox
         if (bounds) resident.bounds.union(bounds.clone().applyMatrix4(transform.matrix))
       }
+    }
+    for (const resident of residents) {
+      if (!resident.slug) continue
+      const size = 150 * resident.scale
+      glowItems.push({ resident, ahead: 0, width: size, depth: size })
+      if (resident.kind === 'bicycle')
+        glowItems.push({
+          resident,
+          ahead: 70 * resident.scale,
+          width: 70 * resident.scale,
+          depth: 110 * resident.scale
+        })
+    }
+    if (glowItems.length) {
+      const mesh = new InstancedMesh(glowGeometry, glowMaterial, glowItems.length)
+      mesh.instanceMatrix.setUsage(DynamicDrawUsage)
+      mesh.frustumCulled = false
+      mesh.renderOrder = 2
+      glowItems.forEach(({ ahead }, index) => {
+        mesh.setColorAt(index, color.setHex(ahead ? 0xfff0c8 : 0xffb35c))
+      })
+      pools = mesh
+      group.add(mesh)
     }
     for (const { shape, glow, items } of grouped.values()) {
       const face = shape.startsWith('girlFace')
@@ -228,14 +287,17 @@ export function createResidentBatches() {
     motion,
     selectedSlug,
     visibleSlugs,
-    dragged
+    dragged,
+    night = 0
   }: {
     elapsed: number
     motion: boolean
     selectedSlug: string | null
     visibleSlugs: Set<string> | null
     dragged: Resident | null
+    night?: number
   }) {
+    const dark = night > 0.05
     const bases = new Map<Resident, number>()
     for (const { mesh, selection, items, blink } of batches) {
       selection.count = 0
@@ -249,8 +311,10 @@ export function createResidentBatches() {
         const yaw =
           resident.pose.yaw +
           (activity?.kind === 'look' ? Math.sin(age * 1.5) * 0.65 * envelope : 0)
+        const swimming = resident.swimming && resident.kind === 'walker'
         const cycle =
-          (resident.time ?? elapsed) * (resident.kind === 'walker' ? 5 : 7) + resident.phase
+          (resident.time ?? elapsed) * (resident.kind === 'walker' && !swimming ? 5 : 7) +
+          resident.phase
         const swing = Math.sin(cycle) * Math.sign(part.x)
         let y = part.y
         let localZ = part.z
@@ -259,6 +323,12 @@ export function createResidentBatches() {
         if (part.motion === 'leg' || part.motion === 'arm') {
           const direction = part.motion === 'leg' ? 1 : -1
           let rotation = activity ? 0 : swing * 0.32 * direction
+          // Front crawl: arms windmill out of phase while the legs flutter kick.
+          if (swimming)
+            rotation =
+              part.motion === 'arm'
+                ? -(cycle * 0.7 + (part.x > 0 ? Math.PI : 0))
+                : Math.sin(cycle * 2) * Math.sign(part.x) * 0.45
           if (activity && part.motion === 'arm') {
             if (activity.kind === 'talk') {
               rotation = (part.x > 0 ? -0.65 + beat * 0.3 : -0.15) * envelope
@@ -291,13 +361,17 @@ export function createResidentBatches() {
           base +
             y +
             (resident === dragged ? residentLiftHeight : 0) +
+            (resident.swimming ? Math.sin(cycle * 1.4) * 1.5 * resident.scale : 0) +
             (activity?.kind === 'play' && age % 3 > 2
               ? Math.max(0, Math.sin((age % 3) * Math.PI * 2)) * 9 * resident.scale * envelope
               : 0),
           z - part.x * Math.sin(yaw) + localZ * Math.cos(yaw)
         )
         transform.rotation.set(pitch, yaw, part.angle, 'YXZ')
-        const visible = !resident.slug || !!visibleSlugs?.has(resident.slug)
+        // Night gear stays home in daylight and while swimming.
+        const visible =
+          (!resident.slug || !!visibleSlugs?.has(resident.slug)) &&
+          (!part.night || (dark && !resident.swimming))
         transform.scale.set(
           visible ? part.width : 0,
           visible ? height : 0,
@@ -319,6 +393,29 @@ export function createResidentBatches() {
       selection.instanceMatrix.needsUpdate = true
       if (blink) blink.needsUpdate = true
     }
+    glowMaterial.opacity = night * 0.9
+    lamp.value = night * 0.45
+    if (pools) {
+      const mesh = pools
+      mesh.visible = dark
+      if (dark) {
+        glowItems.forEach(({ resident, ahead, width, depth }, index) => {
+          const { x, z, yaw } = resident.pose
+          const shown = !!resident.slug && !!visibleSlugs?.has(resident.slug)
+          // Swimmers light the water surface; lifted residents leave the light on the ground.
+          const y =
+            resident.water !== undefined
+              ? resident.water + 0.6
+              : terrainSurfaceHeight(x, z) + pavementHeight + 1
+          transform.position.set(x + Math.sin(yaw) * ahead, y, z + Math.cos(yaw) * ahead)
+          transform.rotation.set(0, yaw, 0)
+          transform.scale.set(shown ? width : 0, 1, shown ? depth : 0)
+          transform.updateMatrix()
+          mesh.setMatrixAt(index, transform.matrix)
+        })
+        mesh.instanceMatrix.needsUpdate = true
+      }
+    }
   }
 
   return {
@@ -331,6 +428,8 @@ export function createResidentBatches() {
     dispose() {
       clear()
       for (const geometry of Object.values(geometries)) geometry.dispose()
+      glowGeometry.dispose()
+      glowTexture.dispose()
       gradient.dispose()
       softGradient.dispose()
       faceTexture.dispose()
@@ -341,7 +440,8 @@ export function createResidentBatches() {
         vehicleMaterial,
         lightMaterial,
         neonMaterial,
-        xrayMaterial
+        xrayMaterial,
+        glowMaterial
       ])
         material.dispose()
     }

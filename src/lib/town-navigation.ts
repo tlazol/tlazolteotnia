@@ -106,5 +106,24 @@ export function createTownNavigation(
     }
     return null
   }
-  return { canStand, findPath }
+  // The nearest standable point, searched in widening rings, for swimmers heading ashore.
+  function findShore(from: TownPoint, maxRadius = 2400): TownPoint | null {
+    if (canStand(from)) return from
+    const angles = 48
+    for (let radius = 12; radius <= maxRadius; radius += 12) {
+      for (let index = 0; index < angles; index++) {
+        const angle = (index / angles) * Math.PI * 2
+        const point = { x: from.x + Math.cos(angle) * radius, z: from.z + Math.sin(angle) * radius }
+        if (!canStand(point)) continue
+        // Step a little inland so the walk back starts clear of the waterline.
+        const inland = {
+          x: point.x + Math.cos(angle) * cellSize,
+          z: point.z + Math.sin(angle) * cellSize
+        }
+        return canStand(inland) ? inland : point
+      }
+    }
+    return null
+  }
+  return { canStand, findPath, findShore }
 }

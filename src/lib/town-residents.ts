@@ -5,14 +5,21 @@ import type { createTownNavigation, TownPoint } from './town-navigation'
 import { townPersonStyle } from './town-person'
 import { nearestResidentRoute, type TownArticle } from './town-posts'
 import { avoidTraffic, type TrafficRoute, trafficPose } from './town-traffic'
-import { carLane, townRoads } from './town-world'
+import { carLane, townRoads, townWaterSurface } from './town-world'
+
+// Swimmers paddle ashore at about a walker's pace.
+const swimSpeed = 12
 
 export type Resident = ActiveResident & {
   variant: number
   bounds?: Box3
   slug?: string
   time?: number
-  returning?: { path: TownPoint[]; route: TrafficRoute }
+  // Swim legs carry the water surface height; a missing route means stopping ashore.
+  returning?: { path: (TownPoint & { swim?: number })[]; route?: TrafficRoute }
+  // The water surface below a swimmer, or below a resident dragged over water.
+  water?: number
+  swimming?: boolean
   route: TrafficRoute
   phase: number
   blinkPhase: number
@@ -33,7 +40,12 @@ export function createTownResidents(articles?: TownArticle[]) {
   let selectedSlug: string | null = null
   let followedSlug: string | null = articles?.[0]?.slug ?? null
   let focusedSlug: string | null = null
-  let dragged: { resident: Resident; pose: Resident['pose'] } | null = null
+  let dragged: {
+    resident: Resident
+    pose: Resident['pose']
+    water?: number
+    swimming?: boolean
+  } | null = null
   let visibleSlugs = articles ? new Set(articles.map((article) => article.slug)) : null
   // Cars loop along individual block faces, keeping the island's traffic gentle.
   for (const [roadIndex, road] of townRoads.entries()) {
@@ -121,29 +133,40 @@ export function createTownResidents(articles?: TownArticle[]) {
               x: resident.pose.x - (resident.avoidance?.x ?? 0),
               z: resident.pose.z - (resident.avoidance?.z ?? 0)
             }
-            let remaining = delta * resident.route.speed
+            let remaining = delta
             while (resident.returning.path.length) {
               const next = resident.returning.path[0]
+              const speed = next.swim === undefined ? resident.route.speed : swimSpeed
+              resident.swimming = next.swim !== undefined
+              resident.water = next.swim
               const dx = next.x - resident.pose.x
               const dz = next.z - resident.pose.z
               const distance = Math.hypot(dx, dz)
-              if (distance > remaining) {
+              if (distance > remaining * speed) {
                 if (remaining > 0)
                   resident.pose = {
-                    x: resident.pose.x + (dx * remaining) / distance,
-                    z: resident.pose.z + (dz * remaining) / distance,
+                    x: resident.pose.x + (dx * remaining * speed) / distance,
+                    z: resident.pose.z + (dz * remaining * speed) / distance,
                     yaw: Math.atan2(dx, dz)
                   }
+                remaining = 0
                 break
               }
-              resident.pose = { ...next, yaw: Math.atan2(dx, dz) }
-              remaining -= distance
+              resident.pose = { x: next.x, z: next.z, yaw: Math.atan2(dx, dz) }
+              remaining -= distance / speed
               resident.returning.path.shift()
             }
             if (!resident.returning.path.length) {
-              resident.route = resident.returning.route
-              resident.time = remaining / resident.route.speed
+              const { route } = resident.returning
+              if (route) {
+                resident.route = route
+                resident.time = remaining
+              } else {
+                resident.stationary = true
+              }
               resident.returning = undefined
+              resident.swimming = false
+              resident.water = undefined
             }
           }
         }
@@ -196,7 +219,13 @@ export function createTownResidents(articles?: TownArticle[]) {
       if (!resident) return
       resident.activity = undefined
       followedSlug = null
-      dragged = { resident, pose: { ...resident.pose } }
+      dragged = {
+        resident,
+        pose: { ...resident.pose },
+        water: resident.water,
+        swimming: resident.swimming
+      }
+      resident.swimming = false
     },
     moveResidentDrag(delta: TownPoint) {
       if (!dragged) return
@@ -205,17 +234,30 @@ export function createTownResidents(articles?: TownArticle[]) {
         x: dragged.resident.pose.x + delta.x,
         z: dragged.resident.pose.z + delta.z
       }
+      dragged.resident.water = townWaterSurface(dragged.resident.pose) ?? undefined
     },
     endResidentDrag(navigation: TownNavigation, cancel = false) {
       if (!dragged) return
       const { resident, pose } = dragged
-      if (cancel || !navigation.canStand(resident.pose)) {
+      const water = navigation.canStand(resident.pose) ? null : townWaterSurface(resident.pose)
+      // Residents dropped in water swim to the nearest shore before walking back.
+      const shore = water === null ? null : navigation.findShore(resident.pose)
+      if (cancel || (!navigation.canStand(resident.pose) && !shore)) {
         resident.pose = pose
+        resident.water = dragged.water
+        resident.swimming = dragged.swimming
       } else {
-        const route = nearestResidentRoute(resident.pose, resident.route, navigation.canStand)
-        const path = navigation.findPath(resident.pose, trafficPose(route, 0))
-        resident.returning = path ? { path, route } : undefined
-        resident.stationary = !path
+        const start = shore ?? resident.pose
+        const route = nearestResidentRoute(start, resident.route, navigation.canStand)
+        const path = navigation.findPath(start, trafficPose(route, 0))
+        const swim = shore && water !== null ? [{ ...shore, swim: water }] : []
+        resident.returning =
+          path || swim.length
+            ? { path: [...swim, ...(path ?? [])], route: path ? route : undefined }
+            : undefined
+        resident.stationary = !path && !swim.length
+        resident.swimming = !!swim.length
+        resident.water = water ?? undefined
         resident.avoidance = undefined
         resident.previousPose = undefined
       }

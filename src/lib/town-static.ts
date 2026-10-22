@@ -780,8 +780,11 @@ export function buildTownStatic(materials: TownMaterials) {
         { segments: 7 }
       )
     }
-    b.blob(parkPond.x + 40, 4, parkPond.z - 20, 90, 24, 60, colors.lawn, { detail: 1 })
-    tree(b, parkPond.x + 40, parkPond.z - 20, 'round', rng, 0.6, 10)
+    const { island } = parkPond
+    const ix = parkPond.x + island.dx
+    const iz = parkPond.z + island.dz
+    b.blob(ix, 4, iz, island.radiusX * 2, 24, island.radiusZ * 2, colors.lawn, { detail: 1 })
+    tree(b, ix, iz, 'round', rng, 0.6, 10)
     // Paths.
     const pathZ = park.bottom - 170
     b.plate(

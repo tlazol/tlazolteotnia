@@ -91,7 +91,7 @@ const patternChunk = /* glsl */ `
   }
 `
 
-function radialTexture() {
+export function radialTexture() {
   const size = 64
   const pixels = new Uint8Array(size * size * 4)
   for (let y = 0; y < size; y++) {

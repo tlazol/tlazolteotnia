@@ -3,6 +3,7 @@ import { createTownNavigation } from '../src/lib/town-navigation'
 import { nearestResidentRoute, type TownArticle } from '../src/lib/town-posts'
 import { createTownResidents } from '../src/lib/town-residents'
 import { trafficPose } from '../src/lib/town-traffic'
+import { containsTownGround, parkPond, townWaterSurface, waterLevel } from '../src/lib/town-world'
 
 const article: TownArticle = {
   slug: 'resident',
@@ -103,6 +104,40 @@ describe('resident simulation', () => {
     for (let i = 1; i <= 500 && resident.returning; i++) tick(i * 100)
     expect(resident.returning).toBeUndefined()
     expect(resident.pose.x).toBeCloseTo(trafficPose(resident.route, resident.time ?? 0).x)
+  })
+  it('swims ashore from the sea before walking back to its route', () => {
+    const { simulation, resident, tick } = setup()
+    const town = createTownNavigation([], containsTownGround)
+    const target = { x: -1000, z: 3700 }
+    expect(townWaterSurface(target)).toBe(waterLevel)
+    simulation.beginResidentDrag(article.slug)
+    simulation.moveResidentDrag({ x: target.x - resident.pose.x, z: target.z - resident.pose.z })
+    simulation.endResidentDrag(town)
+    expect(resident.pose).toMatchObject(target)
+    expect(resident.swimming).toBe(true)
+    expect(resident.returning?.path[0].swim).toBe(waterLevel)
+    for (let i = 1; i <= 20000 && resident.swimming; i++) tick(i * 100)
+    expect(resident.swimming).toBe(false)
+    expect(town.canStand(resident.pose)).toBe(true)
+  })
+  it('treats the park pond as water even though its rim blocks walking', () => {
+    expect(townWaterSurface({ x: parkPond.x - 150, z: parkPond.z })).toBe(parkPond.surface)
+    expect(
+      townWaterSurface({ x: parkPond.x + parkPond.island.dx, z: parkPond.z + parkPond.island.dz })
+    ).toBeNull()
+    const town = createTownNavigation(
+      [
+        {
+          left: parkPond.x - 250,
+          right: parkPond.x + 250,
+          top: parkPond.z - 190,
+          bottom: parkPond.z + 190
+        }
+      ],
+      () => true
+    )
+    const shore = town.findShore(parkPond)
+    expect(shore && town.canStand(shore)).toBe(true)
   })
   it('does not advance in reduced motion or jump after a hidden-tab pause', () => {
     const { simulation, resident, tick } = setup()
