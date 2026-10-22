@@ -26,6 +26,7 @@ export function useTownRenderer(
   const previousSize = useRef<SceneSize | null>(null)
   const restoredView = useRef(townSession.view)
   const pendingBubbleFocus = useRef<string | null>(null)
+  const initialActive = useRef<string | null>(null)
   const lastPositions = useRef<ResidentScreenPosition[]>([])
   const latest = useRef({ size, activeSlug, visiblePosts, onInitialActive })
   latest.current = { size, activeSlug, visiblePosts, onInitialActive }
@@ -128,9 +129,9 @@ export function useTownRenderer(
         // update can fail synchronously and dispose the renderer through fail().
         if (!renderer.current) return
         setStatus('ready')
-        latest.current.onInitialActive(
+        initialActive.current =
           latest.current.visiblePosts.find((post) => post.slug === articles[0]?.slug)?.slug ?? null
-        )
+        latest.current.onInitialActive(initialActive.current)
       })
       .catch((error) => {
         if (!cancelled) {
@@ -146,7 +147,10 @@ export function useTownRenderer(
   }, [articles, positionOverlay])
 
   useEffect(() => {
-    pendingBubbleFocus.current = activeSlug
+    // The bubble opened automatically on load should not steal focus.
+    const auto = activeSlug !== null && activeSlug === initialActive.current
+    if (auto) initialActive.current = null
+    pendingBubbleFocus.current = auto ? null : activeSlug
     renderer.current?.select(activeSlug)
     positionOverlay(lastPositions.current)
   }, [activeSlug, positionOverlay, status])
