@@ -151,3 +151,54 @@ it('covers the back of the head with hair or headwear from above', () => {
     for (const geometry of Object.values(geometries)) geometry.dispose()
   }
 }, 15_000)
+
+it('keeps hair inside hats and helms', () => {
+  const geometries = createPersonGeometries()
+  const ray = new Raycaster()
+  const covered = ['witch', 'overalls', 'winter', 'explorer', 'jiangshi', 'pirate', 'knight']
+  const misses: string[] = []
+  try {
+    // Hairstyles follow the costume, so one girl per costume is enough.
+    for (const { variant, identity } of examples) {
+      if (!covered.includes(townPersonStyles[variant].role) || !identity.endsWith('-0')) continue
+      const hair = townPersonAppearance(identity).hairColor
+      const parts = createPersonParts(variant, identity)
+      const scene = meshes(parts, geometries)
+      const isHair = ({ color, shape }: PersonPart) =>
+        color === hair || /^girl(?:Hair_|Halo)/.test(shape)
+      // Crowns, brims and helms; ear modules are discs too, but sit lower.
+      const isHat = ({ shape, y }: PersonPart) =>
+        /^girl(?:Cone|Cap|Cowl|Helmet)/.test(shape) || (shape === 'girlDisc' && y > 45)
+      for (let yaw = 0; yaw < Math.PI * 2; yaw += Math.PI / 6)
+        for (const elevation of [0.35, Math.PI / 4, Math.PI / 3]) {
+          const view = new Vector3(
+            Math.sin(yaw) * Math.cos(elevation),
+            Math.sin(elevation),
+            Math.cos(yaw) * Math.cos(elevation)
+          )
+          for (let x = -20; x <= 20; x += 4)
+            for (let y = 30; y <= 70; y += 4) {
+              const target = new Vector3(x + 0.5, y, 0)
+              ray.set(target.clone().addScaledVector(view, 200), view.clone().negate())
+              const [first, ...rest] = ray.intersectObjects(scene, false)
+              // Locks may fall out of a helm's face opening; only the crown counts.
+              if (!first || first.point.y < 40) continue
+              if (!isHair(parts[scene.findIndex((mesh) => mesh === first.object)])) continue
+              // Hair in front of the hat it should be tucked under has poked through it.
+              const hat = rest.find(
+                (hit) =>
+                  hit.distance - first.distance < 6 &&
+                  isHat(parts[scene.findIndex((mesh) => mesh === hit.object)])
+              )
+              if (hat)
+                misses.push(
+                  `${identity} ${first.object.name} through ${hat.object.name} at ${first.point.toArray().map((v) => v.toFixed(1))}`
+                )
+            }
+        }
+    }
+    expect(misses).toEqual([])
+  } finally {
+    for (const geometry of Object.values(geometries)) geometry.dispose()
+  }
+}, 30_000)

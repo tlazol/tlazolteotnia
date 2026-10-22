@@ -189,6 +189,8 @@ export function createPersonParts(variant: number, identity: string, riding = fa
   let wideSleeves = false
   let hairTie = pick(tone, [0xe85a6c, 0x6b8fe6, 0xf2c55c, 0x9b78d8])
   let hat = false
+  // A closed helm leaves no room for tails or buns.
+  let helm = false
   const details: (() => void)[] = []
 
   switch (role) {
@@ -332,9 +334,12 @@ export function createPersonParts(variant: number, identity: string, riding = fa
         bow('body', 0, 24.2, 6.4, gold, 0.75)
         // Pulled low, so the drooping brim shades the eyes.
         head('girlDisc', hx, 48.5, hz + 1, 52, 2.4, 50, 0x29243a, 0, 0.25)
-        head('girlCone', hx, 63.5, hz - 2, 32, 26, 32, 0x29243a, 0, -0.18)
+        // The crown is wide enough to swallow the hair and its neon ring, and a band
+        // follows the drooping brim so no hair shows between them.
+        head('girlCone', hx, 63.5, hz - 2, 41, 26, 40, 0x29243a, 0, -0.18)
+        head('girlDisc', hx, 52.5, hz + 0.5, 40, 11, 39, 0x29243a, 0, 0.25)
         // A techno-witch: a neon hat band and a staff tipped with a plasma orb.
-        lit(() => head('girlDisc', hx, 53.2, hz - 1.2, 31.6, 3, 31.6, neon, 0, -0.18))
+        lit(() => head('girlDisc', hx, 50.5, hz + 0.5, 40.8, 2.4, 39.8, neon, 0, 0.25))
         hand('girlLimb', 11.5, 12, 3, 1.4, 12, 1.4, 0x5a6070, 0, 0.5)
         lit(() => hand('girlBall', 11.5, 8, 6, 3.4, 3.4, 3.4, neon))
       })
@@ -508,9 +513,9 @@ export function createPersonParts(variant: number, identity: string, riding = fa
         for (const side of [-1, 1]) body('girlTrim', side * 4, 23.5, 3, 1.6, 5, 7, denim)
         // The straw hat sits low enough to shade her eyes.
         head('girlDisc', hx, 49, hz + 1, 54, 2, 52, 0xeed39a, 0, 0.22)
-        head('girlCap', hx, 55.5, hz, 33, 12, 32, 0xeed39a)
+        head('girlCap', hx, 54.5, hz, 39, 15, 37, 0xeed39a)
         // A hydroponics farmer's hat, banded with grow-light.
-        lit(() => head('girlDisc', hx, 52, hz, 32.6, 3.6, 31.6, neon))
+        lit(() => head('girlDisc', hx, 52, hz, 39.4, 3.6, 37.4, neon))
       })
       break
     }
@@ -855,7 +860,7 @@ export function createPersonParts(variant: number, identity: string, riding = fa
       lower = heraldry
       skirtLength = 10
       legs = socks = shoes = hands = 0x8a92a0
-      hat = true
+      hat = helm = true
       details.push(() => {
         body('girlLock', 0, 15, 8.3, 11, 12, 2, heraldry, 0, -0.3)
         lit(() => {
@@ -1229,7 +1234,7 @@ export function createPersonParts(variant: number, identity: string, riding = fa
     head('girlLock', side * 15.8, 35.5, hz + 4.5, 6, 16, 5, hair, side * 0.06)
   if (look.ahoge && !hat) head('girlLock', 1.5, 60, hz + 1, 2.6, 9, 2, hair, -0.55)
 
-  switch (hairstyle) {
+  switch (helm ? 'short' : hairstyle) {
     case 'bob':
       head('girlHairBell', hx, 38.5, hz, 40, 22, 37, hair)
       break
