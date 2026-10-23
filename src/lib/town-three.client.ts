@@ -13,7 +13,7 @@ import {
 } from './town-resident-batches'
 import { createTownResidents } from './town-residents'
 import { buildTownStatic, type TownOccluder } from './town-static'
-import { boardToTownTerrain, type TownView, townToBoard } from './town-view'
+import { boardToTownAt, boardToTownTerrain, type TownView, townToBoard } from './town-view'
 import { containsTownGround, townGroundHeight, townWaterSurface } from './town-world'
 
 // Ray/box slab test along the camera's viewing direction.
@@ -53,7 +53,9 @@ export function createTownScene(articles?: TownArticle[]) {
   const batches = createResidentBatches()
   batches.rebuild(residents.residents)
   scene.add(batches.group)
-  const navigation = createTownNavigation(statics.obstacles, containsTownGround)
+  const navigation = createTownNavigation(statics.obstacles, containsTownGround, statics.roofs)
+  // Higher surfaces are nearer the camera, so the highest roof under the pointer wins.
+  const roofsByHeight = [...statics.roofs].sort((a, b) => b.height - a.height)
   let currentView: TownView = { x: 0, y: 0, zoom: 1 }
   let zoom = 1
   let viewport: SceneSize = { width: 0, height: 0 }
@@ -77,17 +79,39 @@ export function createTownScene(articles?: TownArticle[]) {
     beginResidentDrag(slug: string) {
       residents.beginResidentDrag(slug)
       const pose = residents.dragged?.pose
-      dragGround = pose
-        ? townToBoard(pose.x, pose.z, townGroundHeight(pose.x, pose.z), currentView.rotation)
-        : null
+      const resident = residents.dragged
+      dragGround =
+        pose && resident
+          ? townToBoard(
+              pose.x,
+              pose.z,
+              resident.roof ?? townGroundHeight(pose.x, pose.z),
+              currentView.rotation
+            )
+          : null
     },
     moveResidentDrag(dx: number, dy: number) {
       const pose = residents.dragged?.pose
       if (!pose || !dragGround) return
       dragGround.x += dx / zoom
       dragGround.y += dy / zoom
-      const target = boardToTownTerrain(dragGround.x, dragGround.y, currentView.rotation)
-      residents.moveResidentDrag({ x: target.x - pose.x, z: target.z - pose.z })
+      const terrain = boardToTownTerrain(dragGround.x, dragGround.y, currentView.rotation)
+      const ground = townGroundHeight(terrain.x, terrain.z)
+      let target: { x: number; z: number; roof?: number } = terrain
+      for (const roof of roofsByHeight) {
+        if (roof.height <= ground) break
+        const point = boardToTownAt(dragGround.x, dragGround.y, roof.height, currentView.rotation)
+        if (
+          point.x >= roof.left &&
+          point.x <= roof.right &&
+          point.z >= roof.top &&
+          point.z <= roof.bottom
+        ) {
+          target = { ...point, roof: roof.height }
+          break
+        }
+      }
+      residents.moveResidentDrag({ x: target.x - pose.x, z: target.z - pose.z }, target.roof)
       visibilityTime = Number.NEGATIVE_INFINITY
     },
     endResidentDrag(cancel = false) {
@@ -150,8 +174,9 @@ export function createTownScene(articles?: TownArticle[]) {
           footY: (headHeight + (lifted ? residentLiftHeight : 0)) / Math.SQRT2,
           dropAllowed:
             !lifted ||
-            navigation.canStand(resident.pose) ||
-            townWaterSurface(resident.pose) !== null,
+            (resident.roof === undefined
+              ? navigation.canStand(resident.pose) || townWaterSurface(resident.pose) !== null
+              : navigation.roofAt(resident.pose) === resident.roof),
           inView,
           visible:
             inView &&

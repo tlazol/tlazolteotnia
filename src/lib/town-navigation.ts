@@ -1,10 +1,16 @@
 export type TownPoint = { x: number; z: number }
 export type TownObstacle = { left: number; right: number; top: number; bottom: number }
+// A flat roof's footprint, with the rooftop clutter to keep out of.
+export type TownRoof = TownObstacle & { height: number; clutter: TownObstacle[] }
+
+const inside = (point: TownPoint, box: TownObstacle) =>
+  point.x >= box.left && point.x <= box.right && point.z >= box.top && point.z <= box.bottom
 
 // Use the scene's solid footprints for both dropping and the walk back to a road.
 export function createTownNavigation(
   obstacles: TownObstacle[],
-  containsGround: (point: TownPoint) => boolean
+  containsGround: (point: TownPoint) => boolean,
+  roofs: TownRoof[] = []
 ) {
   const cellSize = 24
   const bucketSize = 96
@@ -32,10 +38,25 @@ export function createTownNavigation(
     const items = buckets.get(
       `${Math.floor(point.x / bucketSize)}:${Math.floor(point.z / bucketSize)}`
     )
-    return !items?.some(
-      (box) =>
-        point.x >= box.left && point.x <= box.right && point.z >= box.top && point.z <= box.bottom
+    return !items?.some((box) => inside(point, box))
+  }
+  // The deck height of the flat roof a resident can be dropped on, or null. Feet
+  // keep clear of the parapet and of the rooftop machinery.
+  function roofAt(point: TownPoint) {
+    const margin = 26
+    const roof = roofs.find((item) => inside(point, item))
+    if (
+      !roof ||
+      !inside(point, {
+        left: roof.left + margin,
+        right: roof.right - margin,
+        top: roof.top + margin,
+        bottom: roof.bottom - margin
+      }) ||
+      roof.clutter.some((box) => inside(point, box))
     )
+      return null
+    return roof.height
   }
   function clearSegment(a: TownPoint, b: TownPoint) {
     const steps = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.z - a.z) / 6))
@@ -125,5 +146,5 @@ export function createTownNavigation(
     }
     return null
   }
-  return { canStand, findPath, findShore }
+  return { canStand, roofAt, findPath, findShore }
 }

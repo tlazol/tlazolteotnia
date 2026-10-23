@@ -38,4 +38,16 @@ describe('walking back to a road', () => {
     const nav = createTownNavigation([{ left: -20, right: 20, top: -300, bottom: 300 }], ground)
     expect(nav.findPath({ x: -140, z: 0 }, { x: 140, z: 0 })).toBeNull()
   })
+
+  it('stands on a flat roof away from its parapet and rooftop clutter', () => {
+    const footprint = { left: 50, right: 250, top: 50, bottom: 250 }
+    const nav = createTownNavigation([footprint], ground, [
+      { ...footprint, height: 300, clutter: [{ left: 180, right: 220, top: 180, bottom: 220 }] }
+    ])
+    expect(nav.canStand({ x: 100, z: 100 })).toBe(false)
+    expect(nav.roofAt({ x: 100, z: 100 })).toBe(300)
+    expect(nav.roofAt({ x: 60, z: 100 })).toBeNull()
+    expect(nav.roofAt({ x: 200, z: 200 })).toBeNull()
+    expect(nav.roofAt({ x: 0, z: 0 })).toBeNull()
+  })
 })

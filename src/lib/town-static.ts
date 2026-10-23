@@ -3,7 +3,7 @@ import type { TownLabel } from './town-atlas'
 import { type BuildingSpec, buildBuilding, palette, signBoard } from './town-buildings'
 import type { TownMaterials } from './town-materials'
 import { createTownBuilder, face, surface } from './town-mesh-builder'
-import type { TownObstacle } from './town-navigation'
+import type { TownObstacle, TownRoof } from './town-navigation'
 import {
   barrel,
   bench,
@@ -183,6 +183,7 @@ export function buildTownStatic(materials: TownMaterials) {
   const b = createTownBuilder(2400, materials.atlas.white)
   const obstacles: TownObstacle[] = []
   const occluders: TownOccluder[] = []
+  const roofs: TownRoof[] = []
   const lamps: TownLampPost[] = []
 
   const solid = (x: number, z: number, halfX: number, halfZ = halfX) =>
@@ -217,7 +218,7 @@ export function buildTownStatic(materials: TownMaterials) {
   }
 
   function placeBuilding(spec: BuildingSpec, x: number, z: number, yaw: number) {
-    let result = { height: 0, door: 0 }
+    let result: ReturnType<typeof buildBuilding> = { height: 0, door: 0, roof: undefined }
     b.frame(x, z, yaw, () => {
       result = buildBuilding(b, spec)
     })
@@ -228,20 +229,41 @@ export function buildTownStatic(materials: TownMaterials) {
       [spec.width / 2, 0],
       [-spec.width / 2, -spec.depth],
       [spec.width / 2, -spec.depth]
-    ].map(([lx, lz]) => ({ x: x + lx * cos + lz * sin, z: z - lx * sin + lz * cos }))
-    const left = Math.min(...corners.map((point) => point.x))
-    const right = Math.max(...corners.map((point) => point.x))
-    const top = Math.min(...corners.map((point) => point.z))
-    const bottom = Math.max(...corners.map((point) => point.z))
+    ]
+    const toWorld = (lx: number, lz: number) => ({
+      x: x + lx * cos + lz * sin,
+      z: z - lx * sin + lz * cos
+    })
+    const bounds = (points: { x: number; z: number }[]) => ({
+      left: Math.min(...points.map((point) => point.x)),
+      right: Math.max(...points.map((point) => point.x)),
+      top: Math.min(...points.map((point) => point.z)),
+      bottom: Math.max(...points.map((point) => point.z))
+    })
+    const { left, right, top, bottom } = bounds(corners.map(([lx, lz]) => toWorld(lx, lz)))
     obstacles.push({ left: left - 14, right: right + 14, top: top - 14, bottom: bottom + 14 })
+    const { roof } = result
     occluders.push({
       minX: left,
       maxX: right,
       minY: 0,
-      maxY: result.height,
+      // A flat roof must not hide the residents standing on it.
+      maxY: roof?.height ?? result.height,
       minZ: top,
       maxZ: bottom
     })
+    if (roof) {
+      const box = (lx: number, lz: number, halfX: number, halfZ: number) =>
+        bounds([toWorld(lx - halfX, lz - halfZ), toWorld(lx + halfX, lz + halfZ)])
+      roofs.push({
+        left,
+        right,
+        top,
+        bottom,
+        height: roof.height,
+        clutter: roof.clutter.map((item) => box(item.x, item.z, item.halfX + 20, item.halfZ + 20))
+      })
+    }
     return { ...result, doorX: x + result.door * cos, doorZ: z - result.door * sin }
   }
 
@@ -1740,6 +1762,7 @@ export function buildTownStatic(materials: TownMaterials) {
     pools,
     obstacles,
     occluders,
+    roofs,
     lamps,
     stats: { vertices: b.vertices, forestTrees },
     dispose() {

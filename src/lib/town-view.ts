@@ -30,9 +30,14 @@ export function boardToTown(x: number, y: number, rotation = 0) {
   }
 }
 
+// The town point at a given height under a screen point.
+export function boardToTownAt(x: number, y: number, height: number, rotation = 0) {
+  return boardToTown(x, y + height * Math.cos(elevation), rotation)
+}
+
 // Find the frontmost terrain under a screen point, including hills above the town.
 export function boardToTownTerrain(x: number, y: number, rotation = 0) {
-  const pointAt = (height: number) => boardToTown(x, y + height * Math.cos(elevation), rotation)
+  const pointAt = (height: number) => boardToTownAt(x, y, height, rotation)
   const aboveGround = (height: number) => {
     const point = pointAt(height)
     return height > townGroundHeight(point.x, point.z)

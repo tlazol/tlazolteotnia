@@ -59,7 +59,16 @@ export const palette = {
   flowers: [0xf2667a, 0xffd25c, 0xf59ad0, 0xffffff, 0xb08cf0]
 } as const
 
-type Context = { b: TownBuilder; rng: () => number; door?: number }
+// A walkable flat roof in building space: the deck height, its size and the
+// footprints of rooftop clutter that residents cannot stand in.
+export type BuildingRoof = {
+  height: number
+  width: number
+  depth: number
+  clutter: { x: number; z: number; halfX: number; halfZ: number }[]
+}
+
+type Context = { b: TownBuilder; rng: () => number; door?: number; roof?: BuildingRoof }
 const pick = <T>(rng: () => number, items: readonly T[]) => items[Math.floor(rng() * items.length)]
 const lit = (rng: () => number) => (rng() < 0.55 ? 0.65 + rng() * 0.5 : 0)
 function darken(hex: number, factor: number) {
@@ -260,16 +269,18 @@ function hipRoof(
 }
 
 function flatRoof(
-  { b, rng }: Context,
+  context: Context,
   width: number,
   depth: number,
   y: number,
   parapet: number,
   clutter = true
 ) {
+  const { b, rng } = context
   b.box(0, y + 1, -depth / 2, width - 6, 2, depth - 6, palette.roofDeck, {
     surface: surface.paving
   })
+  context.roof = { height: y + 2, width, depth, clutter: [] }
   for (const [x, z, w, d] of [
     [0, -3, width, 6],
     [0, -depth + 3, width, 6],
@@ -284,8 +295,16 @@ function flatRoof(
     const z = -depth * (0.3 + rng() * 0.5)
     b.box(x, y + 14, z, 30, 24, 24, palette.metal, { surface: surface.metal })
     b.cylinder(x, y + 26.5, z, 9, 1, 0x6a717a, { segments: 10 })
+    roofClutter(context, x, z, 15, 12)
   }
-  if (rng() < 0.6) b.cylinder(width * 0.3, y + 12, -depth * 0.25, 6, 22, 0x8d949c)
+  if (rng() < 0.6) {
+    b.cylinder(width * 0.3, y + 12, -depth * 0.25, 6, 22, 0x8d949c)
+    roofClutter(context, width * 0.3, -depth * 0.25, 6)
+  }
+}
+
+function roofClutter(context: Context, x: number, z: number, halfX: number, halfZ = halfX) {
+  context.roof?.clutter.push({ x, z, halfX, halfZ })
 }
 
 function chimney({ b }: Context, x: number, z: number, top: number, color: number) {
@@ -384,12 +403,14 @@ function shopProps(
     b.cylinder(0, top + 47, z, 50, 4, 0xf2c94c, { segments: 16 })
     b.blob(0, top + 60, z, 96, 40, 96, 0xe0a456, { detail: 1 })
     b.box(0, top + 10, z, 10, 20, 10, palette.frame)
+    roofClutter(context, 0, z, 52)
   } else if (label === 'ICE CREAM') {
     const z = -depth * 0.45
     b.cone(0, top + 45, z, 22, 70, 0xe4b56a, { segments: 10, rx: Math.PI })
     b.blob(0, top + 88, z, 52, 46, 52, 0xffc6dc, { detail: 1 })
     b.blob(0, top + 116, z, 38, 34, 38, 0xfff3dc, { detail: 1 })
     b.blob(0, top + 138, z, 10, 10, 10, 0xe04452)
+    roofClutter(context, 0, z, 26)
   } else if (label === 'BAKERY') {
     for (const [x, z] of [
       [-30, 30],
@@ -428,6 +449,8 @@ function shopProps(
     b.blob(-width * 0.25, top + 36, -depth * 0.4, 60, 60, 60, 0xe85d5d, { detail: 1 })
     b.box(width * 0.2, top + 30, -depth * 0.5, 50, 50, 50, 0x5b8fe0)
     b.box(width * 0.2, top + 64, -depth * 0.5, 30, 18, 30, 0xf3c94c)
+    roofClutter(context, -width * 0.25, -depth * 0.4, 30)
+    roofClutter(context, width * 0.2, -depth * 0.5, 25)
   } else if (label === 'ARCADE') {
     for (let index = 0; index < 4; index++)
       b.box(0, 132 + index * 12, 4, width - 20, 4, 3, index % 2 ? 0xff5fa2 : 0x55e6ff, {
@@ -436,6 +459,7 @@ function shopProps(
   } else if (label === 'BOOKS') {
     for (const [index, color] of [0x3f62c7, 0xe0567b, 0xf2b84b, 0x3e8f84].entries())
       b.box(0, top + 9 + index * 14, -depth * 0.4, 70 - index * 8, 13, 46, color)
+    roofClutter(context, 0, -depth * 0.4, 35, 23)
   }
 }
 
@@ -604,6 +628,7 @@ function apartment(context: Context, width: number, depth: number, floors: numbe
     surface: surface.metal
   })
   b.cone(tankX, height + 84, -depth / 2, 32, 16, 0x7d9fb0, { segments: 12 })
+  roofClutter(context, tankX, -depth / 2, 32)
   rear(context, width, depth, height, palette.glass)
   return height + 90
 }
@@ -902,6 +927,7 @@ function fireStation(context: Context, width: number, depth: number) {
   // The hose tower.
   b.box(width / 2 - 40, height + 70, -depth + 40, 60, 140, 60, 0xd35d4c, { surface: surface.brick })
   b.hip(width / 2 - 40, height + 140, -depth + 40, 76, 40, 76, 0x4f5468)
+  roofClutter(context, width / 2 - 40, -depth + 40, 30)
   b.frame(-width / 2 + 125, 60, 0, () => {
     b.box(0, 30, 0, 170, 44, 56, 0xd8322f)
     b.box(55, 56, 0, 52, 26, 52, 0xd8322f)
@@ -949,6 +975,7 @@ function hotel(context: Context, width: number, depth: number) {
   flatRoof(context, width, depth, height, palette.trim)
   for (const side of [-1, 1]) b.box(side * 110, height + 40, -depth * 0.3, 6, 80, 6, palette.frame)
   signBoard(context.b, 'HOTEL', 0, height + 64, -depth * 0.3, 52, 0x5b2e52, true)
+  roofClutter(context, 0, -depth * 0.3, 116, 6)
   return height + 100
 }
 
@@ -1130,7 +1157,7 @@ function office(context: Context, width: number, depth: number, floors: number) 
 export function buildBuilding(b: TownBuilder, spec: BuildingSpec) {
   const context: Context = { b, rng: mulberry32(spec.seed) }
   const height = buildingHeight(context, spec)
-  return { height, door: context.door ?? 0 }
+  return { height, door: context.door ?? 0, roof: context.roof }
 }
 
 function buildingHeight(context: Context, spec: BuildingSpec) {

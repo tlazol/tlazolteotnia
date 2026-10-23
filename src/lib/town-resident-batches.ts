@@ -45,6 +45,7 @@ export const residentLiftHeight = 28
 
 export function residentBaseHeight(resident: Resident) {
   if (resident.kind === 'car') return 1.2
+  if (resident.roof !== undefined) return resident.roof + 0.5
   const ground = townGroundHeight(resident.pose.x, resident.pose.z) + pavementHeight + 0.5
   if (resident.water === undefined) return ground
   // Swimmers float with the waterline at their shoulders; cyclists sit higher on the saddle.

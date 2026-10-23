@@ -20,6 +20,8 @@ export type Resident = ActiveResident & {
   // The water surface below a swimmer, or below a resident dragged over water.
   water?: number
   swimming?: boolean
+  // The deck height of the flat roof a resident was dropped on.
+  roof?: number
   route: TrafficRoute
   phase: number
   blinkPhase: number
@@ -45,6 +47,7 @@ export function createTownResidents(articles?: TownArticle[]) {
     pose: Resident['pose']
     water?: number
     swimming?: boolean
+    roof?: number
   } | null = null
   let visibleSlugs = articles ? new Set(articles.map((article) => article.slug)) : null
   // Cars loop along individual block faces, keeping the island's traffic gentle.
@@ -188,8 +191,16 @@ export function createTownResidents(articles?: TownArticle[]) {
       for (const resident of residents) {
         if (!available.includes(resident)) resident.activity = undefined
       }
+      // Rooftop residents only meet and step around others on their own level.
+      const level = (resident: Resident) => resident.roof ?? null
+      const levels = [...new Set(active.map(level))]
       // End activities before deciding which route clocks and poses can move.
-      if (delta > 0) updateTownActivities(available, elapsed)
+      if (delta > 0)
+        for (const height of levels)
+          updateTownActivities(
+            available.filter((resident) => level(resident) === height),
+            elapsed
+          )
       const moving = new Set(
         active.filter(
           (resident) =>
@@ -206,12 +217,14 @@ export function createTownResidents(articles?: TownArticle[]) {
         if (!resident.returning)
           resident.pose = trafficPose(resident.route, resident.time ?? elapsed)
       }
-      avoidTraffic(
-        active,
-        delta,
-        (body) => moving.has(body),
-        (point) => navigation.canStand(point)
-      )
+      for (const height of levels)
+        avoidTraffic(
+          active.filter((resident) => level(resident) === height),
+          delta,
+          (body) => moving.has(body),
+          (point) =>
+            height === null ? navigation.canStand(point) : navigation.roofAt(point) === height
+        )
       for (const resident of active) resident.placed = true
     },
     beginResidentDrag(slug: string) {
@@ -223,30 +236,49 @@ export function createTownResidents(articles?: TownArticle[]) {
         resident,
         pose: { ...resident.pose },
         water: resident.water,
-        swimming: resident.swimming
+        swimming: resident.swimming,
+        roof: resident.roof
       }
       resident.swimming = false
     },
-    moveResidentDrag(delta: TownPoint) {
+    // Over a flat roof, `roof` is the deck height the resident hovers above.
+    moveResidentDrag(delta: TownPoint, roof?: number) {
       if (!dragged) return
       dragged.resident.pose = {
         ...dragged.resident.pose,
         x: dragged.resident.pose.x + delta.x,
         z: dragged.resident.pose.z + delta.z
       }
-      dragged.resident.water = townWaterSurface(dragged.resident.pose) ?? undefined
+      dragged.resident.roof = roof
+      dragged.resident.water =
+        roof === undefined ? (townWaterSurface(dragged.resident.pose) ?? undefined) : undefined
     },
     endResidentDrag(navigation: TownNavigation, cancel = false) {
       if (!dragged) return
       const { resident, pose } = dragged
-      const water = navigation.canStand(resident.pose) ? null : townWaterSurface(resident.pose)
+      const roof = resident.roof
+      const onRoof = roof !== undefined && navigation.roofAt(resident.pose) === roof
+      const water =
+        roof !== undefined || navigation.canStand(resident.pose)
+          ? null
+          : townWaterSurface(resident.pose)
       // Residents dropped in water swim to the nearest shore before walking back.
       const shore = water === null ? null : navigation.findShore(resident.pose)
-      if (cancel || (!navigation.canStand(resident.pose) && !shore)) {
+      if (cancel || (!onRoof && !navigation.canStand(resident.pose) && !shore)) {
         resident.pose = pose
         resident.water = dragged.water
         resident.swimming = dragged.swimming
+        resident.roof = dragged.roof
+      } else if (onRoof) {
+        // Residents left on a roof stay up there until they are carried down again.
+        resident.returning = undefined
+        resident.stationary = true
+        resident.swimming = false
+        resident.water = undefined
+        resident.avoidance = undefined
+        resident.previousPose = undefined
       } else {
+        resident.roof = undefined
         const start = shore ?? resident.pose
         const route = nearestResidentRoute(start, resident.route, navigation.canStand)
         const path = navigation.findPath(start, trafficPose(route, 0))

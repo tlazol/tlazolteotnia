@@ -120,12 +120,12 @@ describe('article residents', () => {
         expect(positions[0].inView).toBe(true)
 
         town.beginResidentDrag(streetResident.slug)
+        const lifted = town.projectResidents(step * 16)[0]
         town.moveResidentDrag(80, -40)
-        const after = town.residentPosition(streetResident.slug)
-        if (!after) throw new Error('Resident missing')
-        const delta = townToBoard(after.x - before.x, after.z - before.z, 0, rotation)
-        expect(delta.x).toBeCloseTo(80)
-        expect(delta.y).toBeCloseTo(-40)
+        // The pointer may carry the resident up onto a flat roof, so compare on screen.
+        const moved = town.projectResidents(step * 16)[0]
+        expect(moved.x - lifted.x).toBeCloseTo(80)
+        expect(Math.abs(moved.y - lifted.y + 40)).toBeLessThan(3)
         town.endResidentDrag(true)
         expect(town.residentPosition(streetResident.slug)).toEqual(before)
       }

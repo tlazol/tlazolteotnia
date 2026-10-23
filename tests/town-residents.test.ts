@@ -120,6 +120,47 @@ describe('resident simulation', () => {
     expect(resident.swimming).toBe(false)
     expect(town.canStand(resident.pose)).toBe(true)
   })
+  it('keeps a resident dropped on a flat roof up there until it is carried down', () => {
+    const { simulation, resident, tick } = setup()
+    const start = { ...resident.pose }
+    const footprint = {
+      left: start.x + 100,
+      right: start.x + 300,
+      top: start.z - 100,
+      bottom: start.z + 100
+    }
+    const town = createTownNavigation([footprint], () => true, [
+      { ...footprint, height: 250, clutter: [] }
+    ])
+    simulation.beginResidentDrag(article.slug)
+    simulation.moveResidentDrag({ x: 200, z: 0 }, 250)
+    simulation.endResidentDrag(town)
+    expect(resident.roof).toBe(250)
+    expect(resident.stationary).toBe(true)
+    expect(resident.returning).toBeUndefined()
+    const onRoof = { ...resident.pose }
+    for (let i = 1; i <= 20; i++) {
+      const { delta } = simulation.advance(i * 100, true)
+      simulation.updatePoses(delta, town)
+    }
+    expect(resident.pose.x).toBeCloseTo(onRoof.x)
+    expect(resident.pose.z).toBeCloseTo(onRoof.z)
+
+    // Missing the standable deck puts the resident back on the roof it came from.
+    simulation.beginResidentDrag(article.slug)
+    simulation.moveResidentDrag({ x: 95, z: 0 }, 250)
+    simulation.endResidentDrag(town)
+    expect(resident.pose).toEqual(onRoof)
+    expect(resident.roof).toBe(250)
+
+    simulation.beginResidentDrag(article.slug)
+    simulation.moveResidentDrag({ x: start.x - 40 - resident.pose.x, z: 0 })
+    simulation.endResidentDrag(town)
+    expect(resident.roof).toBeUndefined()
+    expect(resident.stationary).toBe(false)
+    for (let i = 1; i <= 500 && resident.returning; i++) tick(3000 + i * 100)
+    expect(resident.returning).toBeUndefined()
+  })
   it('treats the park pond as water even though its rim blocks walking', () => {
     expect(townWaterSurface({ x: parkPond.x - 150, z: parkPond.z })).toBe(parkPond.surface)
     expect(
