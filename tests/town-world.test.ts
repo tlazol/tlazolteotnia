@@ -113,7 +113,25 @@ describe('town world', () => {
     for (let x = 3400; x < 5800; x += 40)
       for (let z = -1800; z < 2000; z += 40) {
         const field = fieldAt(x, z)
-        if (field && !field.track) expect(waterDistance(x, z)).toBeLessThan(-400)
+        if (field) expect(waterDistance(x, z)).toBeLessThan(-200)
+      }
+  })
+
+  it('keeps the beach out of farmed plots', () => {
+    // Plot centres away from the farmyard: a farmed plot is cropped right up to its edges.
+    for (let column = 0; column < 4; column++)
+      for (let row = 0; row < 8; row++) {
+        const left = 3520 + column * 560
+        const top = -1760 + row * 480
+        const centre = fieldAt(left + 240, top + 200)
+        if (!centre) continue
+        for (const [x, z] of [
+          [left + 4, top + 4],
+          [left + 476, top + 4],
+          [left + 4, top + 396],
+          [left + 476, top + 396]
+        ])
+          expect(fieldAt(x, z)).not.toBeNull()
       }
   })
 })

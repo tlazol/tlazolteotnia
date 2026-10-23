@@ -100,6 +100,24 @@ const pasture = { column: 1, row: 5 }
 const millField = { column: 1, row: 2 }
 const orchard = { column: 2, row: 1 }
 
+// A whole plot is left fallow when any corner reaches the beach, so sand never cuts into it.
+const beachMargin = -200
+const farmedPlots = new Map<number, boolean>()
+function farmedPlot(column: number, row: number) {
+  if (column < 0 || row < 0 || column >= fieldGrid.columns || row >= fieldGrid.rows) return false
+  const key = row * fieldGrid.columns + column
+  let farmed = farmedPlots.get(key)
+  if (farmed === undefined) {
+    const left = fieldGrid.x + column * (fieldGrid.width + fieldGrid.gap)
+    const top = fieldGrid.z + row * (fieldGrid.depth + fieldGrid.gap)
+    farmed = [left, left + fieldGrid.width].every((x) =>
+      [top, top + fieldGrid.depth].every((z) => waterDistance(x, z) <= beachMargin)
+    )
+    farmedPlots.set(key, farmed)
+  }
+  return farmed
+}
+
 // Fields are coloured into the terrain so that they follow its gentle relief.
 export function fieldAt(x: number, z: number) {
   const column = Math.floor((x - fieldGrid.x) / (fieldGrid.width + fieldGrid.gap))
@@ -107,10 +125,14 @@ export function fieldAt(x: number, z: number) {
   if (column < 0 || row < 0 || column >= fieldGrid.columns || row >= fieldGrid.rows) return null
   const localX = x - fieldGrid.x - column * (fieldGrid.width + fieldGrid.gap)
   const localZ = z - fieldGrid.z - row * (fieldGrid.depth + fieldGrid.gap)
-  if (localX > fieldGrid.width || localZ > fieldGrid.depth) return { track: true, column, row }
+  if (localX > fieldGrid.width || localZ > fieldGrid.depth)
+    // Tracks only run alongside farmed plots instead of trailing across the sand.
+    return farmedPlot(column, row) || farmedPlot(column + 1, row) || farmedPlot(column, row + 1)
+      ? { track: true, column, row }
+      : null
   if (x >= farmyard.left && x <= farmyard.right && z >= farmyard.top && z <= farmyard.bottom)
     return null
-  if (waterDistance(x, z) > -420) return null
+  if (!farmedPlot(column, row)) return null
   return {
     track: false,
     column,
@@ -137,7 +159,7 @@ function terrainColor(x: number, z: number, height: number, normalY: number) {
       return { color: 0x9bd16c, id: surface.grass }
     return { color: field.crop ?? colors.grass, id: surface.crops }
   }
-  if (inSand(x, z))
+  if (!field && inSand(x, z))
     return { color: waterDistance(x, z) > -70 ? colors.wetSand : colors.sand, id: surface.sand }
   if (normalY < 0.5) return { color: colors.rock, id: surface.plain }
   if (normalY < 0.8) return { color: colors.slope, id: surface.grass }
@@ -1406,7 +1428,7 @@ export function buildTownStatic(materials: TownMaterials) {
     b.blob(yardX + 150, 262, 300, 86, 50, 86, 0x8fa4b4, { detail: 1 })
     solid(yardX + 150, 300, 46)
     for (let index = 0; index < 8; index++) {
-      const x = farmyard.left + 640 + rng() * 1200
+      const x = farmyard.left + 640 + rng() * 900
       const z = -1600 + rng() * 300
       b.cylinder(x, 22, z, 22, 40, 0xe9c95b, { rz: Math.PI / 2, ry: rng() * 3, segments: 10 })
     }
@@ -1491,7 +1513,7 @@ export function buildTownStatic(materials: TownMaterials) {
       )
     }
     // Scarecrow.
-    b.frame(fieldGrid.x + 3 * 560 + 240, fieldGrid.z + 3 * 480 + 200, 0, () => {
+    b.frame(fieldGrid.x + 2 * 560 + 240, fieldGrid.z + 3 * 480 + 200, 0, () => {
       b.box(0, 50, 0, 5, 100, 5, palette.wood)
       b.box(0, 78, 0, 70, 5, 5, palette.wood)
       b.box(0, 72, 0, 30, 34, 16, 0x6a8fc9)
