@@ -14,7 +14,7 @@ import {
 import { createTownResidents } from './town-residents'
 import { buildTownStatic, type TownOccluder } from './town-static'
 import { boardToTownTerrain, type TownView, townToBoard } from './town-view'
-import { containsTownGround, terrainSurfaceHeight, townWaterSurface } from './town-world'
+import { containsTownGround, townGroundHeight, townWaterSurface } from './town-world'
 
 // Ray/box slab test along the camera's viewing direction.
 function blocks(box: TownOccluder, origin: Vector3, direction: Vector3) {
@@ -78,7 +78,7 @@ export function createTownScene(articles?: TownArticle[]) {
       residents.beginResidentDrag(slug)
       const pose = residents.dragged?.pose
       dragGround = pose
-        ? townToBoard(pose.x, pose.z, terrainSurfaceHeight(pose.x, pose.z), currentView.rotation)
+        ? townToBoard(pose.x, pose.z, townGroundHeight(pose.x, pose.z), currentView.rotation)
         : null
     },
     moveResidentDrag(dx: number, dy: number) {

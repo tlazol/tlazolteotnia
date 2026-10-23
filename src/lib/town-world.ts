@@ -25,7 +25,12 @@ export const railway = -2250
 export const railEnds = [-4150, 4550] as const
 export const waterLevel = -14
 export const lighthouse = { x: 3400, z: 3620 }
-export const breakwater = { x: 3400, start: quayEdge - 40, end: 3500 }
+export const breakwater = { x: 3400, start: quayEdge - 160, end: 3500 }
+// Timber piers reaching out from the quay. Their decks, the breakwater and the
+// lighthouse plinth stand above the sea, so residents can walk out onto them.
+export const piers = [700, 1900].map((x) => ({ x, width: 96, end: quayEdge + 520 }))
+export const pierDeck = 13
+const lighthousePlinth = { radius: 150, top: 14 }
 
 export function mulberry32(seed: number) {
   let state = seed >>> 0
@@ -231,7 +236,25 @@ export function inSand(x: number, z: number) {
   return terrainHeight(x, z) < 40
 }
 
+// The walkable deck height over the water, or null away from the piers and breakwater.
+function deckHeight(x: number, z: number) {
+  for (const pier of piers)
+    if (Math.abs(x - pier.x) <= pier.width / 2 && z >= quayEdge - 20 && z <= pier.end)
+      return pierDeck
+  if (Math.abs(x - breakwater.x) <= 45 && z >= breakwater.start && z <= breakwater.end)
+    return pierDeck
+  if (Math.hypot(x - lighthouse.x, z - lighthouse.z) <= lighthousePlinth.radius)
+    return lighthousePlinth.top
+  return null
+}
+
+// The surface feet stand on: the terrain, or a deck built out over the water.
+export function townGroundHeight(x: number, z: number) {
+  return Math.max(terrainSurfaceHeight(x, z), deckHeight(x, z) ?? -Infinity)
+}
+
 export function containsTownGround(point: TownPoint) {
+  if (deckHeight(point.x, point.z) !== null) return true
   return waterDistance(point.x, point.z) < 0 && terrainSurfaceHeight(point.x, point.z) > waterLevel
 }
 

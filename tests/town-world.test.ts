@@ -4,15 +4,22 @@ import { createTownNavigation } from '../src/lib/town-navigation'
 import { buildTownStatic, fieldAt } from '../src/lib/town-static'
 import { trafficPose } from '../src/lib/town-traffic'
 import {
+  breakwater,
   carriageway,
   coastDistanceField,
   containsTownGround,
+  lighthouse,
+  pierDeck,
+  piers,
+  quayEdge,
   railEnds,
   railway,
   terrainHeight,
   terrainSurfaceHeight,
   townBlocks,
+  townGroundHeight,
   townRoads,
+  townWaterSurface,
   walkSegments,
   waterDistance
 } from '../src/lib/town-world'
@@ -48,6 +55,23 @@ describe('town world', () => {
         navigation.canStand({ x: (box.minX + box.maxX) / 2, z: (box.minZ + box.maxZ) / 2 })
       ).toBe(false)
     }
+  })
+  it('lets residents walk out along the piers and the breakwater to the lighthouse', () => {
+    const navigation = createTownNavigation(statics.obstacles, containsTownGround)
+    const quay = { x: 2600, z: quayEdge - 60 }
+    const ends = [
+      ...piers.map((pier) => ({ x: pier.x, z: pier.end - 60 })),
+      { x: breakwater.x, z: breakwater.end - 40 },
+      { x: lighthouse.x - 110, z: lighthouse.z }
+    ]
+    for (const end of ends) {
+      expect(navigation.canStand(end)).toBe(true)
+      expect(townWaterSurface(end)).toBeNull()
+      expect(townGroundHeight(end.x, end.z)).toBeGreaterThanOrEqual(pierDeck)
+      expect(navigation.findPath(quay, end)).not.toBeNull()
+    }
+    // Beside a pier is still open water.
+    expect(navigation.canStand({ x: piers[0].x + 80, z: quayEdge + 300 })).toBe(false)
   })
   it('keeps every building clear of the streets and of each other', () => {
     const roads = townRoads.map(({ start, end }) => ({

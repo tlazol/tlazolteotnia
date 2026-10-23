@@ -1,5 +1,5 @@
 import { type SceneView, zoomViewAt } from './scene-math'
-import { terrainSurfaceHeight } from './town-world'
+import { townGroundHeight } from './town-world'
 
 // Missing rotation means the original diagonal view.
 export type TownView = SceneView & { rotation?: number }
@@ -35,7 +35,7 @@ export function boardToTownTerrain(x: number, y: number, rotation = 0) {
   const pointAt = (height: number) => boardToTown(x, y + height * Math.cos(elevation), rotation)
   const aboveGround = (height: number) => {
     const point = pointAt(height)
-    return height > terrainSurfaceHeight(point.x, point.z)
+    return height > townGroundHeight(point.x, point.z)
   }
   // 8192 exceeds the sum of all peak heights; -48 is the seabed.
   for (let top = 8192; top > -48; top -= 16) {

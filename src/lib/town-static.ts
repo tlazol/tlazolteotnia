@@ -38,6 +38,8 @@ import {
   park,
   parkPond,
   pavementHeight,
+  pierDeck,
+  piers,
   platform,
   quayEdge,
   quayEnd,
@@ -1216,15 +1218,19 @@ export function buildTownStatic(materials: TownMaterials) {
     for (let x = left + 160; x < right - 60; x += 420) lamp(x, quayEdge - 44, 0)
     for (let x = left + 360; x < right - 60; x += 840) bench(b, x, quayEdge - 60, 0)
     // Two piers on timber posts.
-    for (const px of [700, 1900]) {
-      const length = 520
-      b.box(px, 10, quayEdge + length / 2, 96, 6, length, palette.wood, { surface: surface.planks })
-      for (let z = quayEdge + 40; z < quayEdge + length; z += 90)
+    for (const { x: px, width, end } of piers) {
+      const length = end - quayEdge
+      b.box(px, pierDeck - 3, quayEdge + length / 2, width, 6, length, palette.wood, {
+        surface: surface.planks
+      })
+      for (let z = quayEdge + 40; z < end; z += 90)
         for (const side of [-1, 1])
           b.cylinder(px + side * 44, -16, z, 6, 56, 0x6b4a36, { segments: 6 })
-      lamps.push(streetLamp(b, px + 40, quayEdge + length - 20, Math.PI / 2))
-      crate(b, px - 26, quayEdge + 120, 24, rng, 13)
+      lamps.push(streetLamp(b, px + 40, end - 20, Math.PI / 2))
+      crate(b, px - 26, quayEdge + 120, 24, rng, pierDeck)
+      solid(px - 26, quayEdge + 120, 18)
       barrel(b, px + 30, quayEdge + 200)
+      solid(px + 30, quayEdge + 200, 13)
     }
     // A harbor crane at the end of the quay.
     b.frame(3210, quayEdge - 50, 0, () => {

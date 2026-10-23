@@ -39,13 +39,13 @@ import {
   type MovingShape,
   personParts
 } from './town-vehicles'
-import { pavementHeight, terrainSurfaceHeight } from './town-world'
+import { pavementHeight, townGroundHeight } from './town-world'
 
 export const residentLiftHeight = 28
 
 export function residentBaseHeight(resident: Resident) {
   if (resident.kind === 'car') return 1.2
-  const ground = terrainSurfaceHeight(resident.pose.x, resident.pose.z) + pavementHeight + 0.5
+  const ground = townGroundHeight(resident.pose.x, resident.pose.z) + pavementHeight + 0.5
   if (resident.water === undefined) return ground
   // Swimmers float with the waterline at their shoulders; cyclists sit higher on the saddle.
   if (resident.swimming)
@@ -406,7 +406,7 @@ export function createResidentBatches() {
           const y =
             resident.water !== undefined
               ? resident.water + 0.6
-              : terrainSurfaceHeight(x, z) + pavementHeight + 1
+              : townGroundHeight(x, z) + pavementHeight + 1
           transform.position.set(x + Math.sin(yaw) * ahead, y, z + Math.cos(yaw) * ahead)
           transform.rotation.set(0, yaw, 0)
           transform.scale.set(shown ? width : 0, 1, shown ? depth : 0)
