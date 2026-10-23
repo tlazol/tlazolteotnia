@@ -409,6 +409,41 @@ function splitWalk(start: number, end: number, z: number, parts: number, lane: n
   }))
 }
 
+// Clear, gently sloping strolls through the woods, hills, farmland and beaches outside town.
+const islandTrails = [
+  [-4942, -2867, -5384, -2653],
+  [-5355, -2068, -5284, -1601],
+  [-5147, -592, -5114, -25],
+  [-5249, 372, -5302, 947],
+  [-5414, 1827, -5008, 2175],
+  [-4105, -3991, -4448, -3724],
+  [-3555, -2496, -4048, -2308],
+  [-3947, 1783, -4247, 2302],
+  [-3231, -1847, -3827, -1798],
+  [-3123, 139, -2684, 532],
+  [-2717, 1298, -3294, 1446],
+  [-2291, 2969, -2597, 3483],
+  [-3429, 3150, -2995, 3460],
+  [-1051, -2692, -1625, -2552],
+  [-783, 3128, -1359, 3261],
+  [-1543, 3400, -2107, 3429],
+  [288, -2682, -267, -2669],
+  [-706, 3215, -295, 3407],
+  [1827, -4098, 1315, -4005],
+  [1055, -3599, 664, -3442],
+  [2690, -4176, 2113, -4106],
+  [3431, -2859, 3048, -2401],
+  [3719, -3908, 4206, -3620],
+  [4220, -2624, 3973, -2083],
+  [4426, -186, 4355, 408],
+  [3263, 1406, 3861, 1449],
+  [3373, 1908, 3948, 2068],
+  [4713, -1779, 5296, -1704],
+  [4760, 85, 5101, 578],
+  [5316, 1045, 4737, 1199],
+  [4943, 1739, 4677, 2188]
+]
+
 // Sidewalk circuits cross the road at the zebra crossings near each junction.
 const crossingInset = 140
 export const walkSegments: WalkSegment[] = [
@@ -429,7 +464,13 @@ export const walkSegments: WalkSegment[] = [
     end: { x: park.right - 140, z: park.bottom - 170 },
     lane: 26,
     cycleLane: 26
-  }
+  },
+  ...islandTrails.map(([startX, startZ, endX, endZ]) => ({
+    start: { x: startX, z: startZ },
+    end: { x: endX, z: endZ },
+    lane: 26,
+    cycleLane: 26
+  }))
 ]
 
 export const crossings = townRoads.flatMap(({ start, end }) => {
