@@ -309,9 +309,18 @@ export function createResidentBatches() {
         // Ease gestures in and out, with different rhythms for each participant.
         const envelope = activity ? Math.min(1, age * 3, (activity.end - elapsed) * 3) : 0
         const beat = Math.sin(age * 5 + resident.phase)
+        // Residents left on a roof dance in place until they are carried down again.
+        const dancing =
+          resident.roof !== undefined &&
+          resident.stationary &&
+          resident !== dragged &&
+          !activity &&
+          resident.kind !== 'car'
+        const step = elapsed * 2.4 + resident.phase
         const yaw =
           resident.pose.yaw +
-          (activity?.kind === 'look' ? Math.sin(age * 1.5) * 0.65 * envelope : 0)
+          (activity?.kind === 'look' ? Math.sin(age * 1.5) * 0.65 * envelope : 0) +
+          (dancing ? Math.sin(step * Math.PI * 0.25) * 0.7 : 0)
         const swimming = resident.swimming && resident.kind === 'walker'
         const cycle =
           (resident.time ?? elapsed) * (resident.kind === 'walker' && !swimming ? 5 : 7) +
@@ -324,6 +333,12 @@ export function createResidentBatches() {
         if (part.motion === 'leg' || part.motion === 'arm') {
           const direction = part.motion === 'leg' ? 1 : -1
           let rotation = activity ? 0 : swing * 0.32 * direction
+          // Arms pump up in turn while the feet tap along to the beat.
+          if (dancing)
+            rotation =
+              part.motion === 'arm'
+                ? -1.5 - Math.sin(step * Math.PI) * Math.sign(part.x) * 0.9
+                : Math.max(0, Math.sin(step * Math.PI) * Math.sign(part.x)) * 0.45
           // Front crawl: arms windmill out of phase while the legs flutter kick.
           if (swimming)
             rotation =
@@ -363,6 +378,7 @@ export function createResidentBatches() {
             y +
             (resident === dragged ? residentLiftHeight : 0) +
             (resident.swimming ? Math.sin(cycle * 1.4) * 1.5 * resident.scale : 0) +
+            (dancing ? Math.abs(Math.sin(step * Math.PI)) * 3 * resident.scale : 0) +
             (activity?.kind === 'play' && age % 3 > 2
               ? Math.max(0, Math.sin((age % 3) * Math.PI * 2)) * 9 * resident.scale * envelope
               : 0),
