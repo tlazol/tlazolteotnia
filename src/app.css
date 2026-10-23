@@ -660,7 +660,7 @@ body {
   background: color-mix(in srgb, var(--post-accent) 9%, var(--panel));
   color: var(--post-accent-soft);
   font-family: var(--font-mono);
-  font-size: 0.72rem;
+  font-size: inherit;
   font-weight: 700;
   letter-spacing: 0.08em;
   white-space: nowrap;

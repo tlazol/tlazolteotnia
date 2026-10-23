@@ -70,14 +70,33 @@ export function createPersonParts(variant: number, identity: string, riding = fa
   const look = townPersonAppearance(identity)
   const traveller = identity === 'give-the-ai-precise-instructions'
   const stocktaker = identity === 'skills-inventory'
-  const role = traveller ? 'traveller' : stocktaker ? 'stocktaker' : style.role
-  const hairstyle = traveller ? 'short' : stocktaker ? 'buns' : style.hair
-  const bangs = traveller ? 'pointy' : stocktaker ? 'shaggy' : style.bangs
-  const eyes = traveller ? 0 : stocktaker ? 4 : style.eyes
-  const hair: number = traveller ? 0x3f7de0 : stocktaker ? 0x2f8f83 : look.hairColor
+  const equestrian = identity === 'understanding-harnesses-again'
+  const role = traveller
+    ? 'traveller'
+    : stocktaker
+      ? 'stocktaker'
+      : equestrian
+        ? 'equestrian'
+        : style.role
+  const hairstyle = traveller ? 'short' : stocktaker ? 'buns' : equestrian ? 'ponytail' : style.hair
+  const bangs = traveller ? 'pointy' : stocktaker ? 'shaggy' : equestrian ? 'side' : style.bangs
+  const eyes = traveller ? 0 : stocktaker ? 4 : equestrian ? 3 : style.eyes
+  const hair: number = traveller
+    ? 0x3f7de0
+    : stocktaker
+      ? 0x2f8f83
+      : equestrian
+        ? 0x8a4a2f
+        : look.hairColor
   const { tone } = look
   const skin: number = look.skin
-  const neon: number = traveller ? 0x6fe8ff : stocktaker ? 0xff5f57 : look.neon
+  const neon: number = traveller
+    ? 0x6fe8ff
+    : stocktaker
+      ? 0xff5f57
+      : equestrian
+        ? 0x7cf0a0
+        : look.neon
   const parts: PersonPart[] = []
   let glowing = false
   // Parts put inside are drawn as neon.
@@ -1071,6 +1090,47 @@ export function createPersonParts(variant: number, identity: string, riding = fa
         // A pencil pushed through one bun.
         head('girlLimb', 11.5, 58.5, hz - 3, 1.8, 20, 1.8, gold, -0.9)
         head('girlBall', 19.3, 64, hz - 3, 2.2, 2.4, 2.2, pink, -0.9)
+      })
+      break
+    }
+    case 'equestrian': {
+      // A rider in a red hunt coat, leading a little AI drone in a bridle and reins.
+      const coat = 0xc8384a
+      const cream = 0xf2ead6
+      const leather = 0x2a2226
+      top = sleeve = coat
+      cuff = white
+      lower = undefined
+      legs = cream
+      socks = undefined
+      shoes = leather
+      hat = true
+      details.push(() => {
+        // Jodhpurs, a white stock at the throat, gold buttons and split coat tails.
+        body('girlTorso', 0, 13.8, 0, 15.6, 6, 11.6, cream)
+        lit(() => body('girlTorso', 0, 16.9, 0, 16.4, 0.8, 12.4, neon))
+        body('girlTrim', 0, 23.5, 6.4, 4, 4.4, 1.2, white)
+        for (const y of [15.5, 19]) body('girlBall', 0, y, 6.6, 1.8, 1.8, 1, gold)
+        for (const side of [-1, 1])
+          body('girlTrim', side * 3.4, 11, -5.6, 6, 10, 1.4, coat, 0, -0.2)
+        // Tall riding boots.
+        for (const side of [-1, 1])
+          put('leg', 'girlLimb', side * 4, 6.2, 0.2, 5.4, 8.6, 5.6, leather)
+        // A velvet riding helmet with a short peak, and amber racing goggles.
+        head('girlCap', hx, 56.5, hz - 0.5, 37.5, 13, 36, leather)
+        head('girlDisc', hx, 52, hz + 15.5, 22, 2, 9, leather, 0, -0.15)
+        head('girlBall', hx, 62.5, hz - 0.5, 4, 2.4, 4, leather)
+        cover('girlStrap', 0x6a4535)
+        lit(() => cover('girlShades', 0xf2b84a))
+        // The drone: a round white body with a glowing eye, harnessed by a bridle.
+        hand('girlBall', 11.3, 19, 15, 9, 8, 8, white)
+        lit(() => hand('girlTrim', 11.3, 19.6, 19, 5, 1.6, 0.4, neon))
+        hand('girlTrim', 11.3, 19, 15, 9.6, 1.2, 8.6, 0x6a4535)
+        hand('girlTrim', 11.3, 19, 15, 1.2, 8.6, 8.6, 0x6a4535)
+        for (const side of [-1, 1]) hand('girlBall', 11.3 + side * 4.8, 19, 15, 1.6, 1.6, 1.6, gold)
+        lit(() => hand('girlLimb', 11.3, 23.8, 14, 0.6, 3, 0.6, neon))
+        // Reins from her hand to the bridle rings.
+        hand('girlLimb', 11.3, 17.4, 7.2, 0.8, 12.2, 0.8, 0x6a4535, 0, 1.33)
       })
       break
     }

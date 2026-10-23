@@ -9,7 +9,8 @@ const examples = [
       identity: `resident-${variant}-${sample}`
     }))
   ),
-  { variant: 0, identity: 'skills-inventory' }
+  { variant: 0, identity: 'skills-inventory' },
+  { variant: 0, identity: 'understanding-harnesses-again' }
 ]
 
 function span(part: MovingPart, axis: 'x' | 'y' | 'z') {
