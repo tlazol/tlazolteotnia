@@ -193,12 +193,6 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
         <div className="board-caption">
           <span className="board-caption__dot" />
           <span>{String(visiblePosts.length).padStart(2, '0')} 記事</span>
-          <span className="town-instruction town-instruction--mouse">
-            {rotateMode ? '横ドラッグで回転' : '人をクリックで記事・ドラッグで移動'}
-          </span>
-          <span className="town-instruction town-instruction--touch">
-            1本指で移動・2本指で回転／ズーム
-          </span>
           {(topic || q) && (
             <Link to="/" search={{}} replace aria-label="絞り込みを解除">
               解除 ×

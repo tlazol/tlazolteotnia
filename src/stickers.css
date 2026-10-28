@@ -784,7 +784,7 @@ body::after {
   box-shadow: 0 4px 20px #0003;
 }
 .town-list-toggle > span {
-  font-size: 22px;
+  display: flex;
 }
 .town-list-toggle > small {
   font: 11px "IBM Plex Mono", monospace;
@@ -928,10 +928,6 @@ body::after {
   pointer-events: auto;
   color: #e8c8ff;
 }
-.town-instruction {
-  margin-left: 10px;
-  font: 11px "Noto Sans JP", sans-serif;
-}
 .board-controls .town-camera-mode {
   width: auto;
   padding: 0 10px;
@@ -941,15 +937,9 @@ body::after {
   background: #e8c8ff;
   color: #17181d;
 }
-.town-instruction--touch {
-  display: none;
-}
 @media (pointer: coarse) {
-  .town-camera-mode, .town-instruction--mouse {
+  .town-camera-mode {
     display: none;
-  }
-  .town-instruction--touch {
-    display: inline;
   }
 }
 @media (max-width: 600px) {
@@ -987,10 +977,6 @@ body::after {
   }
   .town-footer .board-controls {
     margin-left: auto;
-  }
-  .town-instruction {
-    margin-left: 6px;
-    font-size: 10px;
   }
   .town-bubble__title {
     font-size: 23px;

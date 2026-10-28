@@ -47,7 +47,12 @@ export function TownArticleList({
         disabled={loading}
         onClick={onToggle}
       >
-        <span aria-hidden="true">☷</span> 記事一覧 <small>{visiblePosts.length}</small>
+        <span aria-hidden="true">
+          <svg viewBox="0 0 16 14" width="16" height="14" fill="currentColor">
+            <path d="M0 0h7v2H0zM9 0h7v2H9zM0 6h7v2H0zM9 6h7v2H9zM0 12h7v2H0zM9 12h7v2H9z" />
+          </svg>
+        </span>
+        記事一覧 <small>{visiblePosts.length}</small>
       </button>
       <section
         id="town-article-list"
