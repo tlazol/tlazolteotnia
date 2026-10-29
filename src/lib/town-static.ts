@@ -1,6 +1,7 @@
 import { BufferGeometry, Float32BufferAttribute, Group, Mesh, PlaneGeometry } from 'three'
 import type { TownLabel } from './town-atlas'
 import { type BuildingSpec, buildBuilding, palette, signBoard } from './town-buildings'
+import { townHalloween } from './town-halloween'
 import type { TownMaterials } from './town-materials'
 import { createTownBuilder, face, surface } from './town-mesh-builder'
 import type { TownObstacle, TownRoof } from './town-navigation'
@@ -12,8 +13,10 @@ import {
   crate,
   fence,
   flowerBed,
+  gravestone,
   hedge,
   hydrant,
+  jackOLantern,
   mailbox,
   rockCluster,
   streetLamp,
@@ -221,6 +224,12 @@ export function buildTownStatic(materials: TownMaterials) {
     let result: ReturnType<typeof buildBuilding> = { height: 0, door: 0, roof: undefined }
     b.frame(x, z, yaw, () => {
       result = buildBuilding(b, spec)
+      // Carved pumpkins keep watch on the doorstep: a pair at homes, one elsewhere.
+      if (townHalloween && spec.kind !== 'station') {
+        const home = spec.kind === 'house' || spec.kind === 'cottage' || spec.kind === 'townhouse'
+        for (const side of home ? [-1, 1] : [spec.seed % 2 ? 1 : -1])
+          jackOLantern(b, result.door + side * 36, 18, side * -0.3, home ? 0.9 : 1.1)
+      }
     })
     const cos = Math.round(Math.cos(yaw))
     const sin = Math.round(Math.sin(yaw))
@@ -976,6 +985,25 @@ export function buildTownStatic(materials: TownMaterials) {
             )
             plantTree(cx - 190, edge - 120, 'cone', rng, 1.2)
             plantTree(cx + 200, edge - 300, 'cone', rng, 1.3)
+            // The churchyard lawn fills with old graves on Halloween, kept in front of the
+            // church and clear of the path and the pine.
+            if (townHalloween)
+              for (const [depth, offsets] of [
+                [28, [-200, -160, -115, -75, 75, 115, 160, 200]],
+                [84, [160, 200]],
+                [140, [160, 200]]
+              ] as const)
+                for (const offset of offsets) {
+                  const index = depth / 28 + Math.abs(offset) / 5
+                  gravestone(
+                    b,
+                    cx + offset,
+                    edge - depth - 20,
+                    (index % 3) * 0.08 - 0.08,
+                    index % 4 === 0
+                  )
+                  solid(cx + offset, edge - depth - 10, 16, 22)
+                }
           }
         },
         ...houseLots(span * 0.55, rng)
@@ -1281,9 +1309,11 @@ export function buildTownStatic(materials: TownMaterials) {
         rockCluster(b, Math.cos(angle) * 160, Math.sin(angle) * 160, 70, rng, -14)
       }
       b.cylinder(0, 26, 0, 74, 22, 0xe9e3d4, { segments: 12 })
+      // Pumpkin and black bands replace the red and white on Halloween.
+      const bands = townHalloween ? [0x2a2236, 0xf07a1e] : [0xd9473f, 0xfbf8ef]
       for (let index = 0; index < 6; index++) {
         const radius = 48 - index * 2.6
-        b.cylinder(0, 62 + index * 50, 0, radius, 50, index % 2 ? 0xd9473f : 0xfbf8ef, {
+        b.cylinder(0, 62 + index * 50, 0, radius, 50, bands[(index + 1) % 2], {
           top: (radius - 2.6) / radius,
           segments: 14
         })
@@ -1545,8 +1575,14 @@ export function buildTownStatic(materials: TownMaterials) {
       b.box(0, 50, 0, 5, 100, 5, palette.wood)
       b.box(0, 78, 0, 70, 5, 5, palette.wood)
       b.box(0, 72, 0, 30, 34, 16, 0x6a8fc9)
-      b.blob(0, 104, 0, 22, 22, 22, 0xe9c95b)
-      b.cone(0, 120, 0, 22, 16, 0x9b7656)
+      if (townHalloween) {
+        jackOLantern(b, 0, 0, 0, 1.4, 88)
+        b.cone(0, 132, 0, 26, 30, 0x2a2236)
+        b.cylinder(0, 116, 0, 26, 2, 0x2a2236, { segments: 12 })
+      } else {
+        b.blob(0, 104, 0, 22, 22, 22, 0xe9c95b)
+        b.cone(0, 120, 0, 22, 16, 0x9b7656)
+      }
     })
   }
 
@@ -1698,6 +1734,41 @@ export function buildTownStatic(materials: TownMaterials) {
     return planted
   }
 
+  // ── Halloween ──────────────────────────────────────────────────────────────
+  function halloweenDecor() {
+    const rng = mulberry32(1031)
+    // Pumpkin patches take over a few of the crop fields.
+    for (let row = 0; row < fieldGrid.rows; row++)
+      for (let column = 0; column < fieldGrid.columns; column++) {
+        if ((column * 3 + row) % 4 !== 1 || !farmedPlot(column, row)) continue
+        if (
+          (column === pasture.column && row === pasture.row) ||
+          (column === millField.column && row === millField.row) ||
+          (column === orchard.column && row === orchard.row)
+        )
+          continue
+        const left = fieldGrid.x + column * (fieldGrid.width + fieldGrid.gap)
+        const top = fieldGrid.z + row * (fieldGrid.depth + fieldGrid.gap)
+        for (let z = top + 40; z < top + fieldGrid.depth - 20; z += 64)
+          for (let x = left + 40; x < left + fieldGrid.width - 20; x += 70) {
+            const px = x + (rng() - 0.5) * 30
+            const pz = z + (rng() - 0.5) * 24
+            if (!fieldAt(px, pz) || fieldAt(px, pz)?.track) continue
+            const size = 0.9 + rng() * 0.7
+            jackOLantern(b, px, pz, rng() * 6, size, terrainHeight(px, pz), rng() < 0.2)
+            solid(px, pz, 13 * size)
+          }
+      }
+    // A ring of lanterns around the plaza fountain.
+    for (let index = 0; index < 10; index++) {
+      const angle = (index / 10) * Math.PI * 2
+      const x = plazaFountain.x + Math.cos(angle) * 142
+      const z = plazaFountain.z + Math.sin(angle) * 142
+      jackOLantern(b, x, z, Math.PI / 2 - angle, 1.2, pavementHeight)
+      solid(x, z, 16)
+    }
+  }
+
   function chimneyStone(x: number, z: number) {
     b.box(x, 120, z, 26, 60, 26, colors.stone, { surface: surface.stone })
   }
@@ -1709,6 +1780,7 @@ export function buildTownStatic(materials: TownMaterials) {
   harbor()
   beach()
   farm()
+  if (townHalloween) halloweenDecor()
   const forestTrees = wilderness()
   for (const box of occluders)
     obstacles.push({ left: box.minX, right: box.maxX, top: box.minZ, bottom: box.maxZ })

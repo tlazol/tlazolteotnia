@@ -9,6 +9,7 @@ import {
   RGBAFormat
 } from 'three'
 import { createTownAtlas } from './town-atlas'
+import { townHalloween } from './town-halloween'
 import { coastDistanceField, coastTextureBounds } from './town-world'
 
 const noiseChunk = /* glsl */ `
@@ -116,8 +117,9 @@ export function createTownMaterials() {
     uCoastBounds: {
       value: [coastTextureBounds.x, coastTextureBounds.z, coastTextureBounds.size, 0]
     },
-    uShallow: { value: new Color(0x74dcd2) },
-    uDeep: { value: new Color(0x2a7bb6) }
+    // A violet witch's sea on Halloween.
+    uShallow: { value: new Color(townHalloween ? 0x9a78d8 : 0x74dcd2) },
+    uDeep: { value: new Color(townHalloween ? 0x3a2470 : 0x2a7bb6) }
   }
   const atlas = createTownAtlas()
   const town = new MeshLambertMaterial({ vertexColors: true, map: atlas.texture })
@@ -160,9 +162,9 @@ ${shader.fragmentShader}`
         '#include <emissivemap_fragment>',
         /* glsl */ `#include <emissivemap_fragment>
         if (vTownExtra.y > 0.0) {
-          totalEmissiveRadiance += vec3(1.0, 0.62, 0.28) * vTownExtra.y * uNight * 1.5;
+          totalEmissiveRadiance += ${townHalloween ? 'vec3(1.0, 0.5, 0.16)' : 'vec3(1.0, 0.62, 0.28)'} * vTownExtra.y * uNight * 1.5;
         } else if (vTownExtra.y < 0.0) {
-          totalEmissiveRadiance += diffuseColor.rgb * -vTownExtra.y * mix(0.12, 1.5, uNight);
+          totalEmissiveRadiance += diffuseColor.rgb * -vTownExtra.y * mix(${townHalloween ? '0.5' : '0.12'}, 1.5, uNight);
         }`
       )
       .replace(

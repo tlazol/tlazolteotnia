@@ -11,6 +11,7 @@ import {
   Quaternion,
   Vector3
 } from 'three'
+import { halloweenColor } from './town-halloween'
 
 // Procedural surface patterns, evaluated in world space by the town material.
 export const surface = {
@@ -221,7 +222,7 @@ const linear = new Map<number, [number, number, number]>()
 function linearColor(hex: number) {
   let value = linear.get(hex)
   if (!value) {
-    const color = new Color().setHex(hex)
+    const color = new Color().setHex(halloweenColor(hex))
     value = [color.r, color.g, color.b]
     linear.set(hex, value)
   }

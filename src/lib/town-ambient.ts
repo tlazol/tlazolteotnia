@@ -6,13 +6,25 @@ import {
   Group,
   Mesh,
   MeshBasicMaterial,
-  MeshLambertMaterial
+  MeshLambertMaterial,
+  SphereGeometry
 } from 'three'
 import { palette } from './town-buildings'
+import { halloween, townHalloween } from './town-halloween'
 import type { TownMaterials } from './town-materials'
 import { createTownBuilder, face, surface, type TownBuilder } from './town-mesh-builder'
+import { jackOLantern } from './town-props'
 import { plazaFountain, windmillPosition } from './town-static'
-import { lighthouse, quayEdge, railEnds, railway, station, waterLevel } from './town-world'
+import {
+  lighthouse,
+  park,
+  quayEdge,
+  railEnds,
+  railway,
+  station,
+  townBlocks,
+  waterLevel
+} from './town-world'
 
 // Things that move on their own: the train, boats, gulls, the windmill and the
 // lighthouse beam. They are deterministic functions of the scene clock.
@@ -104,14 +116,14 @@ function coach(b: TownBuilder, locomotive: boolean) {
   }
 }
 
-function boat(b: TownBuilder, color: number, sail: boolean) {
+function boat(b: TownBuilder, color: number, sail: boolean, canvas = 0xfbf8ef) {
   b.box(0, 10, -10, 52, 24, 96, color)
   b.cylinder(0, 10, 38, 26, 24, color, { segments: 3 })
   b.box(0, 23, 0, 54, 3, 140, palette.trim)
   b.box(0, 22.5, -4, 44, 1, 110, palette.wood, { surface: surface.planks })
   if (sail) {
     b.cylinder(0, 120, 10, 2.5, 210, palette.trim)
-    b.prism(0, 30, -24, 4, 180, 70, 0xfbf8ef)
+    b.prism(0, 30, -24, 4, 180, 70, canvas)
     b.box(0, 34, -24, 3, 3, 66, palette.trim)
   } else {
     b.box(0, 44, -18, 40, 40, 40, palette.trim)
@@ -140,15 +152,48 @@ export function createTownAmbient(materials: TownMaterials) {
     { x: 2010, z: quayEdge + 330, color: 0x3e8f84, sail: true },
     { x: 2600, z: quayEdge + 260, color: 0xfbf8ef, sail: false }
   ].map((spec, index) => {
-    const mesh = compile(materials, (b) => boat(b, spec.color, spec.sail))
+    const mesh = compile(materials, (b) =>
+      boat(b, spec.color, spec.sail, townHalloween ? 0x3a3240 : undefined)
+    )
     mesh.position.set(spec.x, waterLevel + 2, spec.z)
     mesh.rotation.y = index % 2 ? 0.08 : -0.06
     group.add(mesh)
     return { mesh, phase: index * 1.7 }
   })
-  const sailboat = compile(materials, (b) => boat(b, 0x9a72d6, true))
+  // On Halloween the cruising sailboat is a ghost ship, black-sailed and lantern-lit.
+  const sailboat = compile(materials, (b) => {
+    if (!townHalloween) {
+      boat(b, 0x9a72d6, true)
+      return
+    }
+    boat(b, 0x2f2a38, true, 0x3a3240)
+    jackOLantern(b, 0, 36, 0, 1.3, 24)
+    b.box(15, 214, 10, 26, 16, 1, halloween.bone, { faces: face.px | face.nx | face.pz | face.nz })
+    b.box(0, 40, 60, 8, 10, 8, halloween.candle, { glow: -1.8 })
+  })
   sailboat.scale.setScalar(1.3)
   group.add(sailboat)
+
+  // Jack-o'-lanterns bob on the harbor water.
+  const floating = (
+    townHalloween
+      ? [
+          [300, 160],
+          [1100, 300],
+          [1350, 140],
+          [1560, 420],
+          [2300, 180],
+          [2850, 380],
+          [700, 520],
+          [2150, 560]
+        ]
+      : []
+  ).map(([x, dz], index) => {
+    const mesh = compile(materials, (b) => jackOLantern(b, 0, 0, index * 0.7 + 0.4, 1.6))
+    mesh.position.set(x, waterLevel - 8, quayEdge + dz)
+    group.add(mesh)
+    return { mesh, phase: index * 1.3 }
+  })
 
   const sails = compile(materials, (b) => {
     for (let blade = 0; blade < 4; blade++) {
@@ -171,6 +216,14 @@ export function createTownAmbient(materials: TownMaterials) {
   group.add(sails)
 
   const balloon = compile(materials, (b) => {
+    if (townHalloween) {
+      // A jack-o'-lantern balloon grinning down at the town.
+      jackOLantern(b, 0, 0, 0, 9, 92)
+      b.box(0, 26, 0, 40, 30, 40, 0x9b6a4a, { surface: surface.planks })
+      for (const sx of [-1, 1])
+        for (const sz of [-1, 1]) b.box(sx * 22, 66, sz * 22, 1.5, 72, 1.5, palette.frame)
+      return
+    }
     const rings = [
       [0, 30],
       [24, 70],
@@ -196,12 +249,18 @@ export function createTownAmbient(materials: TownMaterials) {
   })
   group.add(balloon)
 
-  // Gulls glide in loose circles over the harbor, flapping now and then.
-  const gullMaterial = new MeshLambertMaterial({ color: 0xfafafa })
-  const gullWing = new BoxGeometry(34, 2, 12).translate(17, 0, 0)
-  const gullBody = new BoxGeometry(8, 7, 24)
+  // Gulls glide in loose circles over the harbor, flapping now and then. On Halloween
+  // they are bats on broad, scalloped wings.
+  const gullMaterial = new MeshLambertMaterial({ color: townHalloween ? 0x2a2236 : 0xfafafa })
+  const gullWing = townHalloween
+    ? new ConeGeometry(14, 40, 3)
+        .rotateZ(Math.PI / 2)
+        .scale(1, 0.15, 1)
+        .translate(20, 0, 0)
+    : new BoxGeometry(34, 2, 12).translate(17, 0, 0)
+  const gullBody = townHalloween ? new BoxGeometry(9, 8, 16) : new BoxGeometry(8, 7, 24)
   disposables.push(gullMaterial, gullWing, gullBody)
-  const gulls = Array.from({ length: 7 }, (_, index) => {
+  const gulls = Array.from({ length: townHalloween ? 14 : 7 }, (_, index) => {
     const bird = new Group()
     const body = new Mesh(gullBody, gullMaterial)
     const left = new Mesh(gullWing, gullMaterial)
@@ -215,8 +274,8 @@ export function createTownAmbient(materials: TownMaterials) {
       left,
       right,
       phase: index * 0.9,
-      radius: 260 + index * 70,
-      height: 360 + (index % 3) * 60
+      radius: 260 + (index % 7) * 70,
+      height: 360 + (index % 3) * 60 + (index >= 7 ? 120 : 0)
     }
   })
 
@@ -237,7 +296,12 @@ export function createTownAmbient(materials: TownMaterials) {
   beam.visible = false
   group.add(beam)
 
-  const jetMaterial = new MeshLambertMaterial({ color: 0xd8f3ff, transparent: true, opacity: 0.75 })
+  const jetMaterial = new MeshLambertMaterial({
+    color: townHalloween ? 0xb78cff : 0xd8f3ff,
+    emissive: townHalloween ? 0x4a1f8a : 0x000000,
+    transparent: true,
+    opacity: 0.75
+  })
   const jetGeometry = new CylinderGeometry(0.5, 1, 1, 8)
   disposables.push(jetMaterial, jetGeometry)
   const jets = Array.from({ length: 7 }, (_, index) => {
@@ -252,15 +316,75 @@ export function createTownAmbient(materials: TownMaterials) {
     return { jet, index }
   })
 
+  // Little ghosts drift over the park, the plaza and the churchyard, bobbing as they go.
+  const ghostMaterial = new MeshLambertMaterial({
+    color: 0xf6f2ff,
+    emissive: 0x8a7ab8,
+    transparent: true,
+    opacity: 0.82
+  })
+  const ghostEyeMaterial = new MeshBasicMaterial({ color: 0x2a2236 })
+  const ghostHead = new SphereGeometry(18, 14, 10)
+  const ghostSheet = new CylinderGeometry(18, 24, 34, 14, 1, true).translate(0, -17, 0)
+  const ghostHem = new ConeGeometry(5, 10, 5).rotateX(Math.PI)
+  const ghostEye = new SphereGeometry(3.2, 8, 6).scale(1, 1.4, 0.6)
+  disposables.push(ghostMaterial, ghostEyeMaterial, ghostHead, ghostSheet, ghostHem, ghostEye)
+  const churchyard = townBlocks.find((block) => block.kind === 'church') ?? park
+  const ghostSpots = [
+    { x: (park.left + park.right) / 2, z: (park.top + park.bottom) / 2, radius: 320 },
+    { x: plazaFountain.x, z: plazaFountain.z, radius: 240 },
+    {
+      x: (churchyard.left + churchyard.right) / 2,
+      z: (churchyard.top + churchyard.bottom) / 2,
+      radius: 420
+    },
+    { x: windmillPosition.x, z: windmillPosition.z + 300, radius: 360 },
+    { x: 1500, z: quayEdge + 500, radius: 520 }
+  ]
+  const ghosts = townHalloween
+    ? ghostSpots.map((spot, index) => {
+        const ghost = new Group()
+        ghost.add(new Mesh(ghostHead, ghostMaterial), new Mesh(ghostSheet, ghostMaterial))
+        for (let hem = 0; hem < 6; hem++) {
+          const tip = new Mesh(ghostHem, ghostMaterial)
+          const angle = (hem / 6) * Math.PI * 2
+          tip.position.set(Math.cos(angle) * 20, -38, Math.sin(angle) * 20)
+          ghost.add(tip)
+        }
+        for (const side of [-1, 1]) {
+          const eye = new Mesh(ghostEye, ghostEyeMaterial)
+          eye.position.set(side * 6, 3, 16)
+          ghost.add(eye)
+        }
+        ghost.scale.setScalar(1.4)
+        group.add(ghost)
+        return { ghost, spot, phase: index * 1.9 }
+      })
+    : []
+
   return {
     group,
     update(seconds: number, night: number) {
+      for (const { ghost, spot, phase } of ghosts) {
+        const angle = seconds * 0.18 + phase
+        ghost.position.set(
+          spot.x + Math.cos(angle) * spot.radius,
+          170 + Math.sin(seconds * 1.4 + phase) * 24,
+          spot.z + Math.sin(angle) * spot.radius * 0.7
+        )
+        // Facing along the path, with a gentle sway.
+        ghost.rotation.set(0, -angle, Math.sin(seconds * 1.1 + phase) * 0.12)
+      }
       const train = trainPosition(seconds)
       for (const [index, car] of cars.entries()) {
         const x = train.x - train.heading * index * 196
         car.position.set(x, 0, railway)
         car.rotation.y = train.heading > 0 ? 0 : Math.PI
         car.visible = x > railEnds[0] + 60 && x < railEnds[1] - 60
+      }
+      for (const { mesh, phase } of floating) {
+        mesh.position.y = waterLevel - 8 + Math.sin(seconds * 1.5 + phase) * 3
+        mesh.rotation.z = Math.sin(seconds * 1.2 + phase) * 0.1
       }
       for (const { mesh, phase } of moored) {
         mesh.position.y = waterLevel + 2 + Math.sin(seconds * 1.3 + phase) * 2.5

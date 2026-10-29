@@ -1,4 +1,5 @@
 import { bicycleGrip, bicyclePose, bicycleSegment, type CyclingMotion } from './town-bicycle-pose'
+import { halloween, halloweenColor, halloweenNeon, townHalloween } from './town-halloween'
 import { townPersonAppearance, townPersonStyle } from './town-person'
 import { headPoint, type PersonShape, personFace } from './town-person-geometry'
 
@@ -96,7 +97,7 @@ export function createPersonParts(variant: number, identity: string, riding = fa
       ? 0xff5f57
       : equestrian
         ? 0x7cf0a0
-        : look.neon
+        : halloweenNeon(look.neon)
   const parts: PersonPart[] = []
   let glowing = false
   // Parts put inside are drawn as neon.
@@ -1412,6 +1413,47 @@ export function createPersonParts(variant: number, identity: string, riding = fa
 
   for (const detail of details) detail()
 
+  // Halloween costume pieces: something on any uncovered head, and a pumpkin pail for
+  // trick-or-treating in a free left hand.
+  if (townHalloween) {
+    if (!hat && !helm && role !== 'catgirl' && role !== 'bunny')
+      switch (tone) {
+        case 0:
+          // A little witch hat, worn at a jaunty angle.
+          head('girlDisc', 5, 58.5, hz, 26, 1.6, 26, halloween.witch, -0.3)
+          head('girlDisc', 5.6, 60.2, hz, 18, 3, 18, halloween.purple, -0.3)
+          head('girlCone', 7.6, 68, hz - 1, 17, 17, 17, halloween.witch, -0.4)
+          break
+        case 1:
+          // Bat wings on a black headband.
+          head('girlHairband', hx, hy, hz, 35, 31, 31, halloween.witch)
+          for (const side of [-1, 1]) {
+            head('girlEar', side * 12, 58, hz - 1, 12, 9, 2.4, halloween.witch, side * -0.9)
+            head('girlEar', side * 19, 55.5, hz - 1, 9, 7, 2.2, halloween.witch, side * -1.3)
+          }
+          break
+        case 2:
+          // Little devil horns.
+          for (const side of [-1, 1])
+            head('girlCone', side * 9, 61, hz + 3, 8, 14, 8, halloween.blood, side * -0.4)
+          break
+        default:
+          // A pumpkin hair ornament.
+          head('girlBall', 12, 55.5, hz + 4, 10, 8.5, 9, halloween.pumpkin, 0.3)
+          head('girlLimb', 13, 60.5, hz + 4, 1.6, 3.4, 1.6, halloween.stem, 0.3)
+      }
+    if (role !== 'idol' && role !== 'cheer' && role !== 'sporty' && role !== 'stocktaker') {
+      hand('girlLimb', -11.6, 13.8, 0.6, 0.7, 4.6, 0.7, 0x3a3038)
+      hand('girlBall', -11.6, 9.4, 0.6, 9, 7.6, 9, halloween.pumpkin)
+      hand('girlLimb', -11.6, 13.2, 0.6, 1.4, 1.6, 1.4, halloween.stem)
+      lit(() => {
+        for (const side of [-1, 1])
+          hand('girlBall', -11.6 + side * 2, 10.6, 5, 1.6, 1.6, 0.8, halloween.candle)
+        hand('girlTrim', -11.6, 7.8, 4.8, 4.2, 1.1, 0.6, halloween.candle)
+      })
+    }
+  }
+
   // Everyone wears the town's cyber kit: ear modules, a neon waistline, light bands on
   // the sleeves and glowing soles. Riding limbs are posed apart, so they go without.
   if (role !== 'cyborg')
@@ -1446,6 +1488,17 @@ export function createPersonParts(variant: number, identity: string, riding = fa
       )
     }
   })
+  // Outfits take the town's Halloween colors; skin, hair, faces and neon keep their own.
+  if (townHalloween)
+    for (const part of parts)
+      if (
+        !part.glow &&
+        part.color !== skin &&
+        part.color !== hair &&
+        part.shape !== 'girlHead' &&
+        !part.shape.startsWith('girlFace')
+      )
+        part.color = halloweenColor(part.color)
   return parts
 }
 

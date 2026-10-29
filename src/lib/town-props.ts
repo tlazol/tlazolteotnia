@@ -1,17 +1,35 @@
 import { palette } from './town-buildings'
+import { halloween, townHalloween } from './town-halloween'
 import { face, surface, type TownBuilder } from './town-mesh-builder'
 
 export type TreeKind = 'round' | 'cone' | 'palm' | 'blossom' | 'bush' | 'autumn' | 'birch'
 type Random = () => number
 const pick = <T>(rng: Random, items: readonly T[]) => items[Math.floor(rng() * items.length)]
 
-const leaves = {
-  round: [0x5fae5a, 0x6cbc5c, 0x52a057, 0x7cc46a, 0x63b16b],
-  cone: [0x3f8a63, 0x2f7c5c, 0x4b9a6b, 0x367f6a],
-  blossom: [0xf6b8cd, 0xf9cada, 0xee9fbe, 0xfbd8e4],
-  autumn: [0xe8954a, 0xf2b84b, 0xd9673f, 0xeec05a],
-  birch: [0x9fd16e, 0xb4dc78, 0x8cc565]
-} as const
+const leaves = townHalloween
+  ? {
+      // Blazing maples, black pines and witch-purple blossoms.
+      round: [0xe0702e, 0xc8452f, 0xe8902a, 0x9a3a2a, 0xd8602a],
+      cone: [0x2f2a36, 0x3a3240, 0x2a2630, 0x352e3c],
+      blossom: [0x9b6ad0, 0xb48ae0, 0x7a52b0, 0xc08ae8],
+      autumn: [0xe8954a, 0xe07a2a, 0xd9673f, 0xb8402e],
+      birch: [0xe8a838, 0xf0b448, 0xd8902a]
+    }
+  : ({
+      round: [0x5fae5a, 0x6cbc5c, 0x52a057, 0x7cc46a, 0x63b16b],
+      cone: [0x3f8a63, 0x2f7c5c, 0x4b9a6b, 0x367f6a],
+      blossom: [0xf6b8cd, 0xf9cada, 0xee9fbe, 0xfbd8e4],
+      autumn: [0xe8954a, 0xf2b84b, 0xd9673f, 0xeec05a],
+      birch: [0x9fd16e, 0xb4dc78, 0x8cc565]
+    } as const)
+
+// Some broadleaf trees stand bare on Halloween, chosen by place so the layout's
+// random stream is untouched.
+function bare(x: number, z: number) {
+  if (!townHalloween) return false
+  const value = Math.sin(x * 12.9898 + z * 78.233) * 43758.5453
+  return value - Math.floor(value) < 0.18
+}
 
 // Trees are drawn around (x, z) on the ground; `scale` 1 is about 1.6 residents tall.
 // `lift` raises a broadleaf crown above passers-by on narrow sidewalks.
@@ -108,9 +126,17 @@ export function tree(
         return
       }
       const birch = kind === 'birch'
-      b.cylinder(0, 24 + lift / 2, 0, birch ? 5 : 7, 48 + lift, birch ? 0xeeeae0 : 0x7d5a44, {
-        segments: 7
-      })
+      b.cylinder(
+        0,
+        24 + lift / 2,
+        0,
+        birch ? 5 : 7,
+        48 + lift,
+        birch ? 0xeeeae0 : townHalloween ? 0x5a4238 : 0x7d5a44,
+        {
+          segments: 7
+        }
+      )
       if (birch) for (const y of [14, 30]) b.box(0, y, 0, 11, 3, 11, 0x40404a)
       const palette_ =
         kind === 'blossom'
@@ -121,6 +147,46 @@ export function tree(
               ? leaves.birch
               : leaves.round
       const color = pick(rng, palette_)
+      if (!birch && kind !== 'blossom' && bare(x, z)) {
+        // Crooked limbs reaching out of the trunk, each forking once.
+        const bark = 0x4a3a34
+        for (let limb = 0; limb < 5; limb++) {
+          const yaw = limb * 1.3
+          const tilt = 0.55 + (limb % 3) * 0.2
+          const base = 40 + limb * 7 + lift
+          b.frame(
+            0,
+            0,
+            yaw,
+            () => {
+              b.cylinder(Math.sin(tilt) * 18, base + Math.cos(tilt) * 18, 0, 3, 38, bark, {
+                rz: -tilt,
+                segments: 5,
+                top: 0.5,
+                sway: 1
+              })
+              const tip = { x: Math.sin(tilt) * 36, y: base + Math.cos(tilt) * 36 }
+              for (const fork of [-0.5, 0.6])
+                b.cylinder(
+                  tip.x + Math.sin(tilt + fork) * 9,
+                  tip.y + Math.cos(tilt + fork) * 9,
+                  0,
+                  1.6,
+                  20,
+                  bark,
+                  {
+                    rz: -(tilt + fork),
+                    segments: 4,
+                    top: 0.3,
+                    sway: 2
+                  }
+                )
+            },
+            0
+          )
+        }
+        return
+      }
       const crowns: [number, number, number, number][] = [
         [0, 72, 0, 74],
         [-20, 58, 10, 50],
@@ -334,5 +400,60 @@ export function bicycleRack(b: TownBuilder, x: number, z: number, yaw: number, r
       b.box(bx, 20, 0, 3, 3, 26, color)
       b.box(bx, 26, -6, 8, 3, 8, 0x2e2a35)
     }
+  })
+}
+
+// A carved pumpkin on the ground at (x, z); its face looks along +z of `yaw`.
+// Size 1 stands about a third as tall as a resident.
+export function jackOLantern(
+  b: TownBuilder,
+  x: number,
+  z: number,
+  yaw: number,
+  size = 1,
+  y = 0,
+  carved = true
+) {
+  b.frame(
+    x,
+    z,
+    yaw,
+    () => {
+      // Carved shells glow faintly from the candle inside.
+      for (const [dx, width, shade] of [
+        [-6, 16, 0.86],
+        [6, 16, 0.86],
+        [0, 21, 1]
+      ] as const)
+        b.blob(dx, 9, 0, width, 17, 21, halloween.pumpkin, {
+          detail: 1,
+          shade,
+          glow: carved ? -0.3 : 0
+        })
+      b.cylinder(0, 19.5, 0, 1.8, 6, halloween.stem, { segments: 5, rz: 0.25 })
+      if (!carved) return
+      const candle = { glow: -1.8, faces: face.pz }
+      for (const side of [-1, 1])
+        b.box(side * 4.4, 11.5, 8.8, 3.6, 3.6, 2, halloween.candle, { ...candle, rz: Math.PI / 4 })
+      b.box(0, 5.6, 8.6, 9, 2.6, 2, halloween.candle, candle)
+      for (const side of [-1, 1]) b.box(side * 2.4, 7.2, 8.9, 1.8, 1.6, 2, halloween.candle, candle)
+    },
+    y,
+    size
+  )
+}
+
+// A weathered headstone or cross with a low grave mound in front of it.
+export function gravestone(b: TownBuilder, x: number, z: number, yaw: number, cross: boolean) {
+  b.frame(x, z, yaw, () => {
+    if (cross) {
+      b.box(0, 22, 0, 5, 44, 5, halloween.grave, { surface: surface.stone })
+      b.box(0, 32, 0, 22, 5, 5, halloween.grave, { surface: surface.stone })
+    } else {
+      b.box(0, 13, 0, 24, 26, 7, halloween.grave, { surface: surface.stone })
+      b.blob(0, 26, 0, 24, 14, 7, halloween.grave)
+      b.box(0, 17, 3.6, 12, 2, 0.6, 0x5a5466, { faces: face.pz })
+    }
+    b.blob(0, 1, 22, 24, 7, 34, halloween.mound)
   })
 }

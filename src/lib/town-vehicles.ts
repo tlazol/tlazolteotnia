@@ -1,4 +1,5 @@
 import { bicycleCrank, bicycleGrip, bicyclePose } from './town-bicycle-pose'
+import { halloween, townHalloween } from './town-halloween'
 import { createPersonParts, type PersonPart } from './town-person-model'
 
 // Moving models are lists of instanced parts. Vehicles add plain boxes, wheels,
@@ -80,15 +81,18 @@ export function personParts(variant: number, identity: string): MovingPart[] {
   return parts
 }
 
-export const carPaints = [0xe8605a, 0x4f7fe0, 0xf4f0e6, 0x67b98f, 0x9a72d6, 0xf29a4a, 0x52c1d6]
+export const carPaints = townHalloween
+  ? [0xe0602a, 0x6a3fb0, 0x2f2a38, 0x4a2a5a, 0x9a72d6, 0xf29a4a, 0xb8282e]
+  : [0xe8605a, 0x4f7fe0, 0xf4f0e6, 0x67b98f, 0x9a72d6, 0xf29a4a, 0x52c1d6]
 
 // A rounded toy car about 78 units long, facing +z.
 export function carParts(variant: number): MovingPart[] {
   const type = variant % 4
   const taxi = type === 3
-  const paint = taxi ? 0xf6c945 : carPaints[variant % carPaints.length]
-  const roof = taxi ? 0xf6c945 : variant % 3 === 0 ? 0xfbf8ef : paint
-  const glass = 0x7fb3cf
+  const cab = townHalloween ? 0xf08a24 : 0xf6c945
+  const paint = taxi ? cab : carPaints[variant % carPaints.length]
+  const roof = taxi ? cab : variant % 3 === 0 ? (townHalloween ? 0x2f2a38 : 0xfbf8ef) : paint
+  const glass = townHalloween ? 0x5a4a7a : 0x7fb3cf
   const parts = [
     part('box', 0, 6, 0, 36, 4, 70, 0x3c3846),
     part('box', 0, 17, 0, 40, 18, 74, paint),
@@ -124,6 +128,17 @@ export function carParts(variant: number): MovingPart[] {
     )
     if (taxi) parts.push(part('light', 0, 50, -4, 18, 7, 9, 0xfff6d2))
   }
+  if (townHalloween && !taxi && type !== 2 && variant % 3 === 1) {
+    // A pumpkin rides on the roof, grinning ahead.
+    const z = type === 1 ? 8 : -4
+    parts.push(
+      part('box', 0, 52.5, z, 17, 12, 17, halloween.pumpkin),
+      part('box', 0, 60, z, 3, 4, 3, halloween.stem),
+      part('light', -4, 54, z + 8.6, 3.2, 3.2, 0.6, halloween.candle),
+      part('light', 4, 54, z + 8.6, 3.2, 3.2, 0.6, halloween.candle),
+      part('light', 0, 49.5, z + 8.6, 8, 2, 0.6, halloween.candle)
+    )
+  }
   for (const side of [-1, 1]) {
     for (const z of [-24, 24]) {
       const wheel = part('wheel', side * 18, 10, z, 8, 19, 19, 0x2e2a35)
@@ -136,7 +151,11 @@ export function carParts(variant: number): MovingPart[] {
 }
 
 export function cyclistParts(variant: number, identity: string): MovingPart[] {
-  const frame = [0xfa5a6c, 0x527afc, 0xf6d64e, 0x8a72fc, 0xeff0d3][(variant + 2) % 5]
+  const frame = (
+    townHalloween
+      ? [0xf07a1e, 0x7a3fb8, 0x2f2a38, 0x4a2a5a, 0xb8282e]
+      : [0xfa5a6c, 0x527afc, 0xf6d64e, 0x8a72fc, 0xeff0d3]
+  )[(variant + 2) % 5]
   const parts: MovingPart[] = []
   // Slim frame tubes keep daylight visible through both wheels and triangles.
   function tube(y1: number, z1: number, y2: number, z2: number, tint = frame) {

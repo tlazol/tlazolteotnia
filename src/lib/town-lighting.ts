@@ -9,6 +9,7 @@ import {
 } from 'three'
 import type { SceneSize } from './scene-math'
 import { townDaylight } from './town-daylight'
+import { townHalloween } from './town-halloween'
 import type { TownMaterials } from './town-materials'
 import { boardToTown, type TownView } from './town-view'
 
@@ -20,15 +21,43 @@ export function createTownLighting(scene: Scene, materials: TownMaterials, pools
   sun.shadow.bias = -0.0001
   sun.shadow.radius = 2
   scene.add(sun, sun.target, ambient)
-  const warm = new Color(0xffa45c)
-  const sky = new Color(0xdcefff)
-  const duskSky = new Color(0xc9a6d6)
-  const nightSky = new Color(0x8a9ee0)
-  const ground = new Color(0xc9cba8)
-  const duskGround = new Color(0xc98d78)
-  const nightGround = new Color(0x404c70)
-  const sea = new Color(0x2a7bb6)
-  const nightSea = new Color(0x0f1d3c)
+  // Halloween keeps the town in a violet half-light, as if the evening never ended.
+  const tones = townHalloween
+    ? {
+        sun: 0xffe6cc,
+        warm: 0xff8a3c,
+        sky: 0xd9c6f2,
+        duskSky: 0xc58ac9,
+        nightSky: 0x7c62c4,
+        ground: 0xb79a92,
+        duskGround: 0xb8705c,
+        nightGround: 0x3a2c5c,
+        sea: 0x3a2470,
+        nightSea: 0x140a2a,
+        dim: 0.85
+      }
+    : {
+        sun: 0xfff6e6,
+        warm: 0xffa45c,
+        sky: 0xdcefff,
+        duskSky: 0xc9a6d6,
+        nightSky: 0x8a9ee0,
+        ground: 0xc9cba8,
+        duskGround: 0xc98d78,
+        nightGround: 0x404c70,
+        sea: 0x2a7bb6,
+        nightSea: 0x0f1d3c,
+        dim: 1
+      }
+  const warm = new Color(tones.warm)
+  const sky = new Color(tones.sky)
+  const duskSky = new Color(tones.duskSky)
+  const nightSky = new Color(tones.nightSky)
+  const ground = new Color(tones.ground)
+  const duskGround = new Color(tones.duskGround)
+  const nightGround = new Color(tones.nightGround)
+  const sea = new Color(tones.sea)
+  const nightSea = new Color(tones.nightSea)
   const direction = new Vector3()
   const bounds = new Box3()
   const point = new Vector3()
@@ -60,8 +89,8 @@ export function createTownLighting(scene: Scene, materials: TownMaterials, pools
         lightKey = nextLightKey
         if (lightingChanged) {
           direction.set(light.direction.x, light.direction.y, light.direction.z)
-          sun.color.setHex(0xfff6e6).lerp(warm, light.warmth)
-          sun.intensity = light.sun
+          sun.color.setHex(tones.sun).lerp(warm, light.warmth)
+          sun.intensity = light.sun * tones.dim
           sun.castShadow = light.sun > 0
           ambient.color.copy(sky).lerp(duskSky, light.warmth).lerp(nightSky, light.night)
           ambient.groundColor

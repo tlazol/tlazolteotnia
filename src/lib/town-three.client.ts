@@ -2,6 +2,7 @@ import { Color, Scene, Vector3, type WebGLRenderer } from 'three'
 import type { SceneSize } from './scene-math'
 import { createTownAmbient } from './town-ambient'
 import { createTownCamera, updateTownCamera } from './town-camera'
+import { townHalloween } from './town-halloween'
 import { createTownLighting } from './town-lighting'
 import { createTownMaterials } from './town-materials'
 import { createTownNavigation } from './town-navigation'
@@ -42,7 +43,7 @@ function blocks(box: TownOccluder, origin: Vector3, direction: Vector3) {
 export function createTownScene(articles?: TownArticle[]) {
   const camera = createTownCamera()
   const scene = new Scene()
-  scene.background = new Color(0x2a7bb6)
+  scene.background = new Color(townHalloween ? 0x3a2470 : 0x2a7bb6)
   const materials = createTownMaterials()
   const statics = buildTownStatic(materials)
   scene.add(statics.group)
