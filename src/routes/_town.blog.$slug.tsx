@@ -1,14 +1,18 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, notFound } from '@tanstack/react-router'
 import { ArticleContent } from '#/components/article-content'
 import { getPostData } from '#/lib/blog.functions'
 import type { BlogPost as BlogPostData } from '#/lib/blog-post'
+import { isValidSlug } from '#/lib/blog-slug'
 import { requireRouteData } from '#/lib/route-helpers'
 import { getBlogPostOgImageUrl, getBlogPostUrl, siteName } from '#/lib/site'
 
 // Rendered inside the town's post modal by the _town layout.
 export const Route = createFileRoute('/_town/blog/$slug')({
-  loader: async ({ params }) =>
-    requireRouteData(await getPostData({ data: { slug: params.slug } })),
+  loader: async ({ params }) => {
+    // Malformed slugs can never match a post, so treat them as missing too.
+    if (!isValidSlug(params.slug)) throw notFound()
+    return requireRouteData(await getPostData({ data: { slug: params.slug } }))
+  },
   head: ({ loaderData }) => ({ meta: getPostMeta(loaderData?.post) }),
   component: BlogPost,
   errorComponent: BlogPostError

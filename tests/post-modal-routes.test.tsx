@@ -18,7 +18,7 @@ vi.mock('#/lib/blog.functions', () => {
   return {
     getHomeData: async () => ({ posts: [post] }),
     getPostData: async ({ data }: { data: { slug: string } }) => {
-      if (data.slug === 'INVALID') throw new Error('Invalid slug')
+      if (data.slug === 'broken') throw new Error('Failed to load post')
       return data.slug === post.slug ? { post, reactions: [] } : null
     }
   }
@@ -35,7 +35,7 @@ async function renderRoute(url: string) {
 
 describe('post modal routes', () => {
   it('renders loader errors in a closable modal even without an article summary', async () => {
-    const html = await renderRoute('/blog/INVALID')
+    const html = await renderRoute('/blog/broken')
     expect(html).toContain('<dialog')
     expect(html).toContain('記事を読み込めませんでした。')
     expect(html).toContain('aria-label="記事を閉じる"')
@@ -43,6 +43,11 @@ describe('post modal routes', () => {
 
   it('renders the 404 page for missing articles', async () => {
     const html = await renderRoute('/blog/missing')
+    expect(html).toContain('The requested page could not be found.')
+  })
+
+  it('renders the 404 page for malformed slugs', async () => {
+    const html = await renderRoute('/blog/INVALID')
     expect(html).toContain('The requested page could not be found.')
   })
 

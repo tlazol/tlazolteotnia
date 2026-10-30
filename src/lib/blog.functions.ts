@@ -1,6 +1,7 @@
 import { createServerFn } from '@tanstack/react-start'
 import { getRequest, setResponseHeader } from '@tanstack/react-start/server'
 import { loadHomeData, loadPostData } from '#/lib/blog-data.server'
+import { isValidSlug } from '#/lib/blog-slug'
 
 function validateSlug(input: unknown) {
   if (!isSlugInput(input)) throw new Error('Invalid slug')
@@ -13,7 +14,7 @@ function isSlugInput(input: unknown): input is { slug: string } {
     typeof input === 'object' &&
     'slug' in input &&
     typeof input.slug === 'string' &&
-    /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(input.slug)
+    isValidSlug(input.slug)
   )
 }
 
