@@ -1,10 +1,16 @@
-import { Link, useNavigate, useSearch } from '@tanstack/react-router'
+import {
+  Outlet,
+  useLocation,
+  useMatch,
+  useMatchRoute,
+  useNavigate,
+  useRouter
+} from '@tanstack/react-router'
 import { type MouseEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { type BlogPostSummary, sortBlogPostsNewestFirst } from '#/lib/blog-post'
-import { filterBlogPosts } from '#/lib/blog-tags'
-import { shouldOpenPostModal } from '#/lib/post-modal'
+import { shouldClosePostByHistoryBack, shouldOpenPostModal } from '#/lib/post-modal'
 import { fitTown, initialTownView, layoutTownArticles } from '#/lib/town-posts'
-import { townSession, zoomTownAt } from '#/lib/town-view'
+import { zoomTownAt } from '#/lib/town-view'
 import { PostModal } from './post-modal'
 import { SiteHeader } from './site-header'
 import { TownArticleList } from './town-article-list'
@@ -14,19 +20,29 @@ import { useTownInput } from './use-town-input'
 import { useTownRenderer } from './use-town-renderer'
 
 export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
-  const { topic = '', q = '' } = useSearch({ from: '/' })
+  const router = useRouter()
+  const matchRoute = useMatchRoute()
+  // A pending match opens the modal immediately while the post loader runs.
+  const postParams =
+    matchRoute({ to: '/blog/$slug', pending: true, includeSearch: false }) ||
+    matchRoute({ to: '/blog/$slug', includeSearch: false })
+  const openSlug = postParams ? postParams.slug : null
+  const loadedSlug = useMatch({
+    from: '/_town/blog/$slug',
+    shouldThrow: false,
+    select: (match) => match.params.slug
+  })
   const navigate = useNavigate({ from: '/' })
   const sorted = useMemo(() => sortBlogPostsNewestFirst(posts), [posts])
+  const openedPost = openSlug ? sorted.find((post) => post.slug === openSlug) : undefined
   const articles = useMemo(() => layoutTownArticles(sorted), [sorted])
-  const visiblePosts = useMemo(() => filterBlogPosts(sorted, topic, q), [sorted, topic, q])
 
   const [rotateMode, setRotateMode] = useState(false)
   const [activeSlug, setActiveSlug] = useState<string | null>(null)
-  const [selectedPost, setSelectedPost] = useState<BlogPostSummary | null>(null)
   const [listOpen, setListOpen] = useState(false)
   const listToggle = useRef<HTMLButtonElement>(null)
   const listHeading = useRef<HTMLHeadingElement>(null)
-  const scene = useTownRenderer(articles, visiblePosts, activeSlug, setActiveSlug)
+  const scene = useTownRenderer(articles, activeSlug, setActiveSlug, openSlug)
   const {
     status,
     surface,
@@ -43,7 +59,7 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
   const failed = status === 'failed'
   const loading = status === 'loading'
   const listVisible = failed || (ready && listOpen)
-  const activePost = visiblePosts.find((post) => post.slug === activeSlug)
+  const activePost = sorted.find((post) => post.slug === activeSlug)
   function selectResident(slug: string) {
     renderer.current?.follow(slug)
     setActiveSlug((active) => (active === slug ? null : slug))
@@ -63,17 +79,11 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
     listToggle.current?.focus()
   }
   useEffect(() => {
-    renderer.current?.filter(visiblePosts.map((post) => post.slug))
-    setActiveSlug(null)
-    renderer.current?.focus(null)
-    townSession.search = { topic: topic || undefined, q: q || undefined }
-  }, [visiblePosts, topic, q, renderer])
-  useEffect(() => {
     if (listOpen) listHeading.current?.focus()
   }, [listOpen])
   useEffect(() => {
     function handleEscape(event: KeyboardEvent) {
-      if (event.key !== 'Escape' || selectedPost || document.querySelector('dialog[open]')) return
+      if (event.key !== 'Escape' || openSlug || document.querySelector('dialog[open]')) return
       if (listOpen) {
         setListOpen(false)
         listToggle.current?.focus()
@@ -84,12 +94,21 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
     }
     document.addEventListener('keydown', handleEscape)
     return () => document.removeEventListener('keydown', handleEscape)
-  }, [activeSlug, selectedPost, listOpen, buttons])
-  function openPost(event: MouseEvent<HTMLAnchorElement>, post: BlogPostSummary) {
-    if (!shouldOpenPostModal(event)) return
-    event.preventDefault()
-    event.currentTarget.focus({ preventScroll: true })
-    setSelectedPost(post)
+  }, [activeSlug, openSlug, listOpen, buttons])
+  // Posts opened from the town close by going back, so they do not stack history entries.
+  const historyIndex = useLocation({ select: (location) => location.state.__TSR_index })
+  const townHistoryIndex = useRef<number | null>(null)
+  useEffect(() => {
+    if (!openSlug) townHistoryIndex.current = historyIndex
+  }, [openSlug, historyIndex])
+  function openPost(event: MouseEvent<HTMLAnchorElement>) {
+    // Safari does not focus links on click; the modal restores focus to this link.
+    if (shouldOpenPostModal(event)) event.currentTarget.focus({ preventScroll: true })
+  }
+  function closePost() {
+    const index = router.history.location.state.__TSR_index
+    if (shouldClosePostByHistoryBack(townHistoryIndex.current, index)) router.history.back()
+    else void navigate({ to: '/', search: {} })
   }
 
   return (
@@ -115,7 +134,7 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
           </div>
         )}
         {ready &&
-          visiblePosts.map((post) => (
+          sorted.map((post) => (
             <button
               key={post.slug}
               ref={(element) => {
@@ -161,10 +180,8 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
         )}
       </div>
       <TownArticleList
-        visiblePosts={visiblePosts}
+        posts={sorted}
         newestSlug={sorted[0]?.slug}
-        topic={topic}
-        q={q}
         loading={loading}
         ready={ready}
         failed={failed}
@@ -174,30 +191,11 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
         onToggle={() => setListOpen(!listOpen)}
         onClose={closeList}
         openPost={openPost}
-        onSearch={(query) => {
-          void navigate({
-            search: { topic: topic || undefined, q: query || undefined },
-            replace: true
-          })
-        }}
       />
-      {ready && !visiblePosts.length && !listOpen && (
-        <div className="sticker-empty" role="status">
-          <p>該当する記事がありません。</p>
-          <Link to="/" search={{}} replace>
-            すべての記事に戻る
-          </Link>
-        </div>
-      )}
       <footer className="board-footer town-footer">
         <div className="board-caption">
           <span className="board-caption__dot" />
-          <span>{String(visiblePosts.length).padStart(2, '0')} 記事</span>
-          {(topic || q) && (
-            <Link to="/" search={{}} replace aria-label="絞り込みを解除">
-              解除 ×
-            </Link>
-          )}
+          <span>{String(sorted.length).padStart(2, '0')} 記事</span>
         </div>
         {ready && (
           <TownCameraControls
@@ -221,12 +219,22 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
           />
         )}
       </footer>
-      {selectedPost && (
+      {openSlug && (
         <PostModal
-          key={selectedPost.slug}
-          post={selectedPost}
-          onClose={() => setSelectedPost(null)}
-        />
+          key={openSlug}
+          slug={openSlug}
+          title={openedPost?.title ?? '記事'}
+          onClose={closePost}
+          fallbackFocus={() => bubble.current?.querySelector('a') ?? listToggle.current}
+        >
+          {loadedSlug === openSlug ? (
+            <Outlet />
+          ) : (
+            <p className="post-modal__status" role="status">
+              記事を読み込んでいます…
+            </p>
+          )}
+        </PostModal>
       )}
     </main>
   )

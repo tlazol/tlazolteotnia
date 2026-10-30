@@ -1,6 +1,5 @@
 import { createClientOnlyFn } from '@tanstack/react-start'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { BlogPostSummary } from '#/lib/blog-post'
 import type { SceneSize } from '#/lib/scene-math'
 import type { createArticleTown, ResidentScreenPosition } from '#/lib/town-articles.client'
 import { clampTownView, initialTownView, placeTownBubble, type TownArticle } from '#/lib/town-posts'
@@ -10,9 +9,10 @@ const loadRenderer = createClientOnlyFn(() => import('#/lib/town-articles.client
 
 export function useTownRenderer(
   articles: TownArticle[],
-  visiblePosts: BlogPostSummary[],
   activeSlug: string | null,
-  onInitialActive: (slug: string | null) => void
+  onInitialActive: (slug: string | null) => void,
+  // A post opened by URL is the first camera target instead of the newest resident.
+  initialSlug: string | null = null
 ) {
   const [size, setSize] = useState<SceneSize>({ width: 0, height: 0 })
   const [zoom, setZoom] = useState(1)
@@ -27,9 +27,10 @@ export function useTownRenderer(
   const restoredView = useRef(townSession.view)
   const pendingBubbleFocus = useRef<string | null>(null)
   const initialActive = useRef<string | null>(null)
+  const initialArticle = useRef(initialSlug)
   const lastPositions = useRef<ResidentScreenPosition[]>([])
-  const latest = useRef({ size, activeSlug, visiblePosts, onInitialActive })
-  latest.current = { size, activeSlug, visiblePosts, onInitialActive }
+  const latest = useRef({ size, activeSlug, onInitialActive })
+  latest.current = { size, activeSlug, onInitialActive }
   const updateView = useCallback((next: TownView) => {
     const clamped = clampTownView(next, latest.current.size)
     currentView.current = clamped
@@ -105,7 +106,10 @@ export function useTownRenderer(
         }
       : restoredView.current
         ? restoredView.current
-        : initialTownView(size, articles[0])
+        : initialTownView(
+            size,
+            articles.find((article) => article.slug === initialArticle.current) ?? articles[0]
+          )
     previousSize.current = size
     updateView(next)
   }, [size, articles, updateView])
@@ -124,13 +128,13 @@ export function useTownRenderer(
         if (cancelled || !canvas.current) return
         renderer.current = module.createArticleTown(canvas.current, articles, positionOverlay, fail)
         if (restoredView.current) renderer.current.follow(null)
-        renderer.current.filter(latest.current.visiblePosts.map((post) => post.slug))
+        else if (initialArticle.current) renderer.current.follow(initialArticle.current)
         renderer.current.update(currentView.current, latest.current.size)
         // update can fail synchronously and dispose the renderer through fail().
         if (!renderer.current) return
         setStatus('ready')
-        initialActive.current =
-          latest.current.visiblePosts.find((post) => post.slug === articles[0]?.slug)?.slug ?? null
+        const initialTarget = initialArticle.current ?? articles[0]?.slug
+        initialActive.current = articles.find((post) => post.slug === initialTarget)?.slug ?? null
         latest.current.onInitialActive(initialActive.current)
       })
       .catch((error) => {

@@ -7,7 +7,6 @@ type Point = { x: number; y: number }
 // Kept in memory for route navigation; only written by client effects and events.
 export const townSession: {
   view?: TownView
-  search?: { topic?: string; q?: string }
 } = {}
 
 const elevation = Math.PI / 4

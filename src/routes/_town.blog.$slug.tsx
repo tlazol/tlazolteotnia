@@ -1,24 +1,17 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { ArticleContent } from '#/components/article-content'
-import { BackToBoard } from '#/components/back-to-board'
-import { SiteHeader } from '#/components/site-header'
 import { getPostData } from '#/lib/blog.functions'
 import type { BlogPost as BlogPostData } from '#/lib/blog-post'
-import { getPostAccent } from '#/lib/post-accent'
 import { requireRouteData } from '#/lib/route-helpers'
-import {
-  copyrightCurrentYear,
-  getBlogPostOgImageUrl,
-  getBlogPostUrl,
-  getCopyrightText,
-  siteName
-} from '#/lib/site'
+import { getBlogPostOgImageUrl, getBlogPostUrl, siteName } from '#/lib/site'
 
-export const Route = createFileRoute('/blog/$slug')({
+// Rendered inside the town's post modal by the _town layout.
+export const Route = createFileRoute('/_town/blog/$slug')({
   loader: async ({ params }) =>
     requireRouteData(await getPostData({ data: { slug: params.slug } })),
   head: ({ loaderData }) => ({ meta: getPostMeta(loaderData?.post) }),
-  component: BlogPost
+  component: BlogPost,
+  errorComponent: BlogPostError
 })
 
 function getPostMeta(post?: BlogPostData) {
@@ -57,17 +50,13 @@ function getPostMeta(post?: BlogPostData) {
 
 function BlogPost() {
   const { post, reactions } = Route.useLoaderData()
+  return <ArticleContent key={post.slug} post={post} reactions={reactions} />
+}
+
+function BlogPostError() {
   return (
-    <>
-      <SiteHeader />
-      <main className="article-page" data-post-accent={getPostAccent(post.slug)}>
-        <BackToBoard />
-        <ArticleContent key={post.slug} post={post} reactions={reactions} />
-        <footer className="article-footer">
-          <BackToBoard />
-          <small>{getCopyrightText(copyrightCurrentYear)}</small>
-        </footer>
-      </main>
-    </>
+    <p className="post-modal__status" role="alert">
+      記事を読み込めませんでした。時間をおいてもう一度お試しください。
+    </p>
   )
 }

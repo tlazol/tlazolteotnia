@@ -1,56 +1,56 @@
-import { Link } from '@tanstack/react-router'
-import { useEffect, useRef, useState } from 'react'
-import { getPostData } from '#/lib/blog.functions'
-import type { BlogPostSummary } from '#/lib/blog-post'
+import { type ReactNode, useLayoutEffect, useRef } from 'react'
 import { getPostAccent } from '#/lib/post-accent'
-import type { ArticleContent } from './article-content'
 
-export function PostModal({ post, onClose }: { post: BlogPostSummary; onClose: () => void }) {
+export function PostModal({
+  slug,
+  title,
+  onClose,
+  fallbackFocus,
+  children
+}: {
+  slug: string
+  title: string
+  onClose: () => void
+  // Used when nothing had focus before opening, e.g. a post opened by URL.
+  fallbackFocus?: () => HTMLElement | null | undefined
+  children: ReactNode
+}) {
   const dialog = useRef<HTMLDialogElement>(null)
   const closeButton = useRef<HTMLButtonElement>(null)
-  const [loaded, setLoaded] = useState<{
-    data: NonNullable<Awaited<ReturnType<typeof getPostData>>>
-    Content: typeof ArticleContent
-  } | null>(null)
-  const [failed, setFailed] = useState(false)
+  const fallback = useRef(fallbackFocus)
+  fallback.current = fallbackFocus
 
-  useEffect(() => {
+  // Before paint, so the dialog never shows a frame as a non-modal (open attribute) dialog.
+  useLayoutEffect(() => {
     const element = dialog.current
     const previousFocus = document.activeElement
     const previousOverflow = document.body.style.overflow
+    // SSR renders the dialog open so the article is readable before hydration;
+    // reopen it as a modal. The resulting close event is ignored below.
+    if (element?.open) element.close()
     element?.showModal()
     closeButton.current?.focus()
     document.body.style.overflow = 'hidden'
     return () => {
       element?.close()
       document.body.style.overflow = previousOverflow
-      if (previousFocus instanceof HTMLElement) previousFocus.focus({ preventScroll: true })
+      const target =
+        // Strict Mode remounts can record the modal's own close button.
+        previousFocus instanceof HTMLElement &&
+        previousFocus !== document.body &&
+        !element?.contains(previousFocus)
+          ? previousFocus
+          : fallback.current?.()
+      target?.focus({ preventScroll: true })
     }
   }, [])
-
-  useEffect(() => {
-    let cancelled = false
-    setLoaded(null)
-    setFailed(false)
-    Promise.all([getPostData({ data: { slug: post.slug } }), import('./article-content')])
-      .then(([result, { ArticleContent }]) => {
-        if (cancelled) return
-        if (result) setLoaded({ data: result, Content: ArticleContent })
-        setFailed(!result)
-      })
-      .catch(() => {
-        if (!cancelled) setFailed(true)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [post.slug])
 
   return (
     <dialog
       ref={dialog}
       className="post-modal"
-      aria-label={post.title}
+      aria-label={title}
+      open
       onClose={(event) => {
         if (!event.currentTarget.open) onClose()
       }}
@@ -62,11 +62,8 @@ export function PostModal({ post, onClose }: { post: BlogPostSummary; onClose: (
         tabIndex={-1}
         onClick={onClose}
       />
-      <div className="post-modal__panel" data-post-accent={getPostAccent(post.slug)}>
+      <div className="post-modal__panel" data-post-accent={getPostAccent(slug)}>
         <div className="post-modal__toolbar">
-          <Link to="/blog/$slug" params={{ slug: post.slug }}>
-            記事ページを開く ↗
-          </Link>
           <button
             ref={closeButton}
             className="post-modal__close"
@@ -75,24 +72,7 @@ export function PostModal({ post, onClose }: { post: BlogPostSummary; onClose: (
             onClick={onClose}
           />
         </div>
-        <div className="article-page post-modal__article">
-          {loaded ? (
-            <loaded.Content
-              key={loaded.data.post.slug}
-              post={loaded.data.post}
-              reactions={loaded.data.reactions}
-              onTagNavigate={onClose}
-            />
-          ) : failed ? (
-            <p className="post-modal__status" role="alert">
-              記事を読み込めませんでした。上のリンクから記事ページを開いてください。
-            </p>
-          ) : (
-            <p className="post-modal__status" role="status">
-              記事を読み込んでいます…
-            </p>
-          )}
-        </div>
+        <div className="article-page post-modal__article">{children}</div>
       </div>
     </dialog>
   )

@@ -1,13 +1,22 @@
+import { createMemoryHistory, createRouter } from '@tanstack/react-router'
 import { describe, expect, it } from 'vitest'
 import { requireRouteData } from '#/lib/route-helpers'
 import { createCspNonce, createHtmlSecurityHeaders } from '#/lib/security-headers'
 import { getLegacyBlogRedirect } from '#/routes/blog'
+import { routeTree } from '#/routeTree.gen'
 
 describe('TanStack route and server integration primitives', () => {
   it('redirects only the exact legacy blog URL with status 301', () => {
     expect(getLegacyBlogRedirect('/blog')).toMatchObject({ status: 301 })
     expect(getLegacyBlogRedirect('/blog/')).toMatchObject({ status: 301 })
     expect(getLegacyBlogRedirect('/blog/react-router-renewal')).toBeUndefined()
+  })
+
+  it('serves the town and posts from the same layout without changing public URLs', () => {
+    const router = createRouter({ routeTree, history: createMemoryHistory() })
+    expect(router.routesByPath['/'].id).toBe('/_town/')
+    expect(router.routesByPath['/blog/$slug'].id).toBe('/_town/blog/$slug')
+    expect(router.routesById['/_town/blog/$slug'].parentRoute.id).toBe('/_town')
   })
 
   it('creates a different CSP nonce for each request', () => {

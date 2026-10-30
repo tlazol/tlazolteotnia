@@ -1,6 +1,4 @@
-import { Link } from '@tanstack/react-router'
 import type { BlogPost } from '#/lib/blog-post'
-import { shouldOpenPostModal } from '#/lib/post-modal'
 import type { ReactionCount } from '#/lib/reactions'
 import { authorName } from '#/lib/site'
 import { ArticleReactionFooter } from './article-reaction-footer'
@@ -9,12 +7,10 @@ import { MarkdownBody } from './markdown-body'
 
 export function ArticleContent({
   post,
-  reactions,
-  onTagNavigate
+  reactions
 }: {
   post: BlogPost
   reactions: ReactionCount[]
-  onTagNavigate?: () => void
 }) {
   return (
     <article>
@@ -27,17 +23,7 @@ export function ArticleContent({
         <p className="article-description">{post.description}</p>
         <ul className="article-tags" aria-label="タグ">
           {post.tags.map((tag) => (
-            <li key={tag}>
-              <Link
-                to="/"
-                search={{ topic: tag }}
-                onClick={(event) => {
-                  if (shouldOpenPostModal(event)) onTagNavigate?.()
-                }}
-              >
-                #{tag}
-              </Link>
-            </li>
+            <li key={tag}>#{tag}</li>
           ))}
         </ul>
       </header>

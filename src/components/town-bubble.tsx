@@ -13,7 +13,7 @@ export function TownBubble({
   newestSlug?: string
   bubble: Ref<HTMLDivElement>
   onClose: () => void
-  openPost: (event: MouseEvent<HTMLAnchorElement>, post: BlogPostSummary) => void
+  openPost: (event: MouseEvent<HTMLAnchorElement>) => void
 }) {
   return (
     <div ref={bubble} id="town-bubble" className="town-bubble" data-side="above">
@@ -29,7 +29,7 @@ export function TownBubble({
         params={{ slug: post.slug }}
         preload={false}
         aria-haspopup="dialog"
-        onClick={(event) => openPost(event, post)}
+        onClick={openPost}
       >
         <span className="town-bubble__title">{post.title}</span>
         <span className="town-bubble__read">

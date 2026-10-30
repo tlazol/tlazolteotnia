@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { parseBlogPosts, sortBlogPostsNewestFirst } from '../src/lib/blog-post'
-import { filterBlogPosts, filterPostsByTag, getTagFilters } from '../src/lib/blog-tags'
 import { getPostAccent } from '../src/lib/post-accent'
-import { shouldOpenPostModal } from '../src/lib/post-modal'
+import { shouldClosePostByHistoryBack, shouldOpenPostModal } from '../src/lib/post-modal'
 import {
   getAbsoluteUrl,
   getBlogPostOgImageUrl,
@@ -11,51 +10,6 @@ import {
 } from '../src/lib/site'
 
 describe('blog utilities', () => {
-  it('combines tags and normalized search across title, description and tags', () => {
-    const sample = [
-      {
-        slug: 'one',
-        title: 'TypeScript 入門',
-        description: '実践的な型の説明',
-        tags: ['コード'],
-        date: '2026-01-01'
-      }
-    ]
-    expect(filterBlogPosts(sample, 'コード', 'ＴＹＰＥＳＣＲＩＰＴ 型')).toEqual(sample)
-    expect(filterBlogPosts(sample, '', 'コード')).toEqual(sample)
-    expect(filterBlogPosts(sample, '別のタグ', 'typescript')).toEqual([])
-    expect(filterBlogPosts(sample, '', '存在しない')).toEqual([])
-  })
-
-  it('counts tags and sorts them by count and then name', () => {
-    const posts = [
-      { tags: ['Z', 'A'] },
-      { tags: ['Z', 'A'] },
-      { tags: ['Z', 'A'] },
-      { tags: ['B'] },
-      { tags: ['B'] },
-      { tags: ['B'] }
-    ]
-
-    expect(getTagFilters(posts)).toEqual([
-      { name: 'A', count: 3 },
-      { name: 'B', count: 3 },
-      { name: 'Z', count: 3 }
-    ])
-  })
-
-  it('filters using the same All and tag rules on every post list', () => {
-    const posts = [
-      { slug: 'one', tags: ['React'] },
-      { slug: 'two', tags: ['CSS'] }
-    ]
-
-    expect(filterPostsByTag(posts, '')).toBe(posts)
-    const filteredPosts = filterPostsByTag(posts, 'React')
-    expect(filteredPosts.map((post) => post.slug)).toEqual(['one'])
-    expect(filteredPosts).toHaveLength(1)
-  })
-
   it('derives a deterministic accent color from a slug', () => {
     expect(getPostAccent('same')).toBe(getPostAccent('same'))
     expect(getPostAccent('same')).toMatch(/green|blue|pink|yellow|red/)
@@ -63,20 +17,8 @@ describe('blog utilities', () => {
 
   it('does not repeat an accent color between consecutive visible articles', () => {
     const posts = getPublishedPosts()
-    const timelines = [
-      { label: 'all articles', posts },
-      ...Array.from(new Set(posts.flatMap(({ tags }) => tags))).map((name) => ({
-        label: name,
-        posts: filterPostsByTag(posts, name)
-      }))
-    ]
-
-    for (const timeline of timelines) {
-      for (let index = 1; index < timeline.posts.length; index += 1) {
-        expect(getPostAccent(timeline.posts[index].slug), timeline.label).not.toBe(
-          getPostAccent(timeline.posts[index - 1].slug)
-        )
-      }
+    for (let index = 1; index < posts.length; index += 1) {
+      expect(getPostAccent(posts[index].slug)).not.toBe(getPostAccent(posts[index - 1].slug))
     }
   })
 
@@ -102,6 +44,16 @@ describe('blog utilities', () => {
     expect(shouldOpenPostModal({ ...click, ctrlKey: true })).toBe(false)
     expect(shouldOpenPostModal({ ...click, shiftKey: true })).toBe(false)
     expect(shouldOpenPostModal({ ...click, altKey: true })).toBe(false)
+  })
+
+  it('closes posts by going back only when the town is the previous history entry', () => {
+    expect(shouldClosePostByHistoryBack(3, 4)).toBe(true)
+    // Opened by URL: there is no town entry to go back to.
+    expect(shouldClosePostByHistoryBack(null, 0)).toBe(false)
+    // Reached by going back from the town, which is now ahead in history.
+    expect(shouldClosePostByHistoryBack(1, 0)).toBe(false)
+    // Another post was opened from inside the modal.
+    expect(shouldClosePostByHistoryBack(3, 5)).toBe(false)
   })
 })
 

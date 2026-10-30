@@ -9,17 +9,17 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as IndexRouteImport } from './routes/index'
+import { Route as TownRouteImport } from './routes/_town'
 import { Route as AtomDotxmlRouteImport } from './routes/atom[.]xml'
 import { Route as BlogRouteImport } from './routes/blog'
 import { Route as RssDotxmlRouteImport } from './routes/rss[.]xml'
+import { Route as TownIndexRouteImport } from './routes/_town.index'
 import { Route as AppLightsOutRouteImport } from './routes/app.lights-out'
-import { Route as BlogSlugRouteImport } from './routes/blog.$slug'
+import { Route as TownBlogSlugRouteImport } from './routes/_town.blog.$slug'
 import { Route as ApiReactionsSlugRouteImport } from './routes/api.reactions.$slug'
 
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const TownRoute = TownRouteImport.update({
+  id: '/_town',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AtomDotxmlRoute = AtomDotxmlRouteImport.update({
@@ -37,15 +37,20 @@ const RssDotxmlRoute = RssDotxmlRouteImport.update({
   path: '/rss.xml',
   getParentRoute: () => rootRouteImport,
 } as any)
+const TownIndexRoute = TownIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => TownRoute,
+} as any)
 const AppLightsOutRoute = AppLightsOutRouteImport.update({
   id: '/app/lights-out',
   path: '/app/lights-out',
   getParentRoute: () => rootRouteImport,
 } as any)
-const BlogSlugRoute = BlogSlugRouteImport.update({
-  id: '/$slug',
-  path: '/$slug',
-  getParentRoute: () => BlogRoute,
+const TownBlogSlugRoute = TownBlogSlugRouteImport.update({
+  id: '/blog/$slug',
+  path: '/blog/$slug',
+  getParentRoute: () => TownRoute,
 } as any)
 const ApiReactionsSlugRoute = ApiReactionsSlugRouteImport.update({
   id: '/api/reactions/$slug',
@@ -54,31 +59,32 @@ const ApiReactionsSlugRoute = ApiReactionsSlugRouteImport.update({
 } as any)
 
 export interface FileRoutesByFullPath {
-  '/': typeof IndexRoute
+  '/': typeof TownIndexRoute
   '/atom.xml': typeof AtomDotxmlRoute
-  '/blog': typeof BlogRouteWithChildren
+  '/blog': typeof BlogRoute
   '/rss.xml': typeof RssDotxmlRoute
   '/app/lights-out': typeof AppLightsOutRoute
-  '/blog/$slug': typeof BlogSlugRoute
+  '/blog/$slug': typeof TownBlogSlugRoute
   '/api/reactions/$slug': typeof ApiReactionsSlugRoute
 }
 export interface FileRoutesByTo {
-  '/': typeof IndexRoute
   '/atom.xml': typeof AtomDotxmlRoute
-  '/blog': typeof BlogRouteWithChildren
+  '/blog': typeof BlogRoute
   '/rss.xml': typeof RssDotxmlRoute
   '/app/lights-out': typeof AppLightsOutRoute
-  '/blog/$slug': typeof BlogSlugRoute
+  '/': typeof TownIndexRoute
+  '/blog/$slug': typeof TownBlogSlugRoute
   '/api/reactions/$slug': typeof ApiReactionsSlugRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
-  '/': typeof IndexRoute
+  '/_town': typeof TownRouteWithChildren
   '/atom.xml': typeof AtomDotxmlRoute
-  '/blog': typeof BlogRouteWithChildren
+  '/blog': typeof BlogRoute
   '/rss.xml': typeof RssDotxmlRoute
   '/app/lights-out': typeof AppLightsOutRoute
-  '/blog/$slug': typeof BlogSlugRoute
+  '/_town/': typeof TownIndexRoute
+  '/_town/blog/$slug': typeof TownBlogSlugRoute
   '/api/reactions/$slug': typeof ApiReactionsSlugRoute
 }
 export interface FileRouteTypes {
@@ -93,28 +99,29 @@ export interface FileRouteTypes {
     | '/api/reactions/$slug'
   fileRoutesByTo: FileRoutesByTo
   to:
-    | '/'
     | '/atom.xml'
     | '/blog'
     | '/rss.xml'
     | '/app/lights-out'
+    | '/'
     | '/blog/$slug'
     | '/api/reactions/$slug'
   id:
     | '__root__'
-    | '/'
+    | '/_town'
     | '/atom.xml'
     | '/blog'
     | '/rss.xml'
     | '/app/lights-out'
-    | '/blog/$slug'
+    | '/_town/'
+    | '/_town/blog/$slug'
     | '/api/reactions/$slug'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
-  IndexRoute: typeof IndexRoute
+  TownRoute: typeof TownRouteWithChildren
   AtomDotxmlRoute: typeof AtomDotxmlRoute
-  BlogRoute: typeof BlogRouteWithChildren
+  BlogRoute: typeof BlogRoute
   RssDotxmlRoute: typeof RssDotxmlRoute
   AppLightsOutRoute: typeof AppLightsOutRoute
   ApiReactionsSlugRoute: typeof ApiReactionsSlugRoute
@@ -122,11 +129,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/': {
-      id: '/'
-      path: '/'
+    '/_town': {
+      id: '/_town'
+      path: ''
       fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+      preLoaderRoute: typeof TownRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/atom.xml': {
@@ -150,6 +157,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RssDotxmlRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_town/': {
+      id: '/_town/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof TownIndexRouteImport
+      parentRoute: typeof TownRoute
+    }
     '/app/lights-out': {
       id: '/app/lights-out'
       path: '/app/lights-out'
@@ -157,12 +171,12 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppLightsOutRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/blog/$slug': {
-      id: '/blog/$slug'
-      path: '/$slug'
+    '/_town/blog/$slug': {
+      id: '/_town/blog/$slug'
+      path: '/blog/$slug'
       fullPath: '/blog/$slug'
-      preLoaderRoute: typeof BlogSlugRouteImport
-      parentRoute: typeof BlogRoute
+      preLoaderRoute: typeof TownBlogSlugRouteImport
+      parentRoute: typeof TownRoute
     }
     '/api/reactions/$slug': {
       id: '/api/reactions/$slug'
@@ -174,20 +188,22 @@ declare module '@tanstack/react-router' {
   }
 }
 
-interface BlogRouteChildren {
-  BlogSlugRoute: typeof BlogSlugRoute
+interface TownRouteChildren {
+  TownIndexRoute: typeof TownIndexRoute
+  TownBlogSlugRoute: typeof TownBlogSlugRoute
 }
 
-const BlogRouteChildren: BlogRouteChildren = {
-  BlogSlugRoute: BlogSlugRoute,
+const TownRouteChildren: TownRouteChildren = {
+  TownIndexRoute: TownIndexRoute,
+  TownBlogSlugRoute: TownBlogSlugRoute,
 }
 
-const BlogRouteWithChildren = BlogRoute._addFileChildren(BlogRouteChildren)
+const TownRouteWithChildren = TownRoute._addFileChildren(TownRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
-  IndexRoute: IndexRoute,
+  TownRoute: TownRouteWithChildren,
   AtomDotxmlRoute: AtomDotxmlRoute,
-  BlogRoute: BlogRouteWithChildren,
+  BlogRoute: BlogRoute,
   RssDotxmlRoute: RssDotxmlRoute,
   AppLightsOutRoute: AppLightsOutRoute,
   ApiReactionsSlugRoute: ApiReactionsSlugRoute,
