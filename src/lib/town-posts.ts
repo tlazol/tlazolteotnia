@@ -122,7 +122,7 @@ export function clampTownView(view: TownView, size: SceneSize): TownView {
 export function initialTownView(size: SceneSize, article?: TownArticle): TownView {
   const pose = article ? trafficPose(article.route, 0) : { x: 600, z: 200 }
   const point = townToBoard(pose.x, pose.z, 28)
-  const zoom = 1
+  const zoom = 0.5
   return clampTownView(
     {
       x: size.width / 2 - point.x * zoom,
