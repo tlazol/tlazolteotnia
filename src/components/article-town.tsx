@@ -16,6 +16,7 @@ import { SiteHeader } from './site-header'
 import { TownArticleList } from './town-article-list'
 import { TownBubble } from './town-bubble'
 import { TownCameraControls } from './town-camera-controls'
+import { TownLoading } from './town-loading'
 import { useTownInput } from './use-town-input'
 import { useTownRenderer } from './use-town-renderer'
 
@@ -127,12 +128,7 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
         onClickCapture={input.clickCapture}
       >
         <canvas ref={canvas} className="sticker-canvas" aria-hidden="true" tabIndex={-1} />
-        {loading && (
-          <div className="town-loading" role="status">
-            <span className="town-loading__spinner" aria-hidden="true" />
-            <p>街を読み込んでいます…</p>
-          </div>
-        )}
+        <TownLoading status={status} residents={sorted.length} newestTitle={sorted[0]?.title} />
         {ready &&
           sorted.map((post) => (
             <button

@@ -493,40 +493,354 @@ body::after {
 
 /* People belong to the town; only their conversations catch the light. */
 .town-loading {
+  --iris-x: 50%;
+  --iris-y: 50%;
   position: absolute;
+  z-index: 20;
   inset: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 16px;
-  background: #101114;
-  color: #dedee5;
-  font-size: 13px;
+  gap: 8px;
+  padding: 72px 16px 24px;
+  background:
+    radial-gradient(ellipse 60% 45% at 50% 45%, #2b2240 0%, #101114 70%),
+    #101114;
+  color: #f8f0d8;
 }
-/* The panels wait with the town so the spinner stands alone. */
+/* The panels wait with the town so the loading scene stands alone. */
 .town-page.is-loading :is(.site-header, .town-list-toggle, .board-footer) {
   visibility: hidden;
 }
-.town-loading p {
-  margin: 0;
+.town-loading[data-phase="leaving"] {
+  pointer-events: none;
+  mask: radial-gradient(
+    circle at var(--iris-x) var(--iris-y),
+    transparent var(--iris),
+    #000 calc(var(--iris) + 1px)
+  );
+  animation: town-loading-iris 800ms cubic-bezier(0.7, 0, 0.25, 1) forwards;
 }
-.town-loading__spinner {
-  width: 28px;
-  height: 28px;
-  border: 2px solid #ffffff26;
-  border-top-color: #b6dbc9;
-  border-radius: 50%;
-  animation: town-loading-spin 1s linear infinite;
+@property --iris {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
 }
-@keyframes town-loading-spin {
+/* Without @property the mask cannot animate, so the fade still lets the town through. */
+@keyframes town-loading-iris {
+  70% {
+    opacity: 1;
+  }
   to {
-    transform: rotate(360deg);
+    --iris: 150vmax;
+    opacity: 0;
+  }
+}
+.town-loading__stage {
+  width: min(460px, 92vw);
+  max-height: 52dvh;
+  overflow: visible;
+}
+.town-loading__sky circle {
+  fill: #f8f0d8;
+  animation: town-loading-twinkle 2.4s ease-in-out calc(var(--n) * -0.37s) infinite;
+}
+.town-loading__bats {
+  transform: scale(1.8);
+  transform-origin: center;
+  transform-box: fill-box;
+}
+.town-loading__bats path {
+  fill: #050407;
+  stroke: #7a3fb8;
+  stroke-width: 0.6;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: town-loading-bat 0.32s steps(2) infinite, town-loading-drift 6s ease-in-out infinite alternate;
+}
+.town-loading__ground {
+  animation: town-loading-fade 0.3s ease-out both;
+}
+.town-loading__ground .is-top {
+  fill: #2c2538;
+}
+.town-loading__ground .is-road {
+  fill: #3a3247;
+}
+.town-loading__ground .is-side-left {
+  fill: #1d1826;
+}
+.town-loading__ground .is-side-right {
+  fill: #16121d;
+}
+.town-loading__building {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: town-loading-rise 0.55s cubic-bezier(0.3, 1.6, 0.5, 1) calc(0.05s + var(--n) * 0.07s) both;
+}
+.town-loading__building .is-wall-left {
+  fill: #3d3550;
+}
+.town-loading__building .is-wall-right {
+  fill: #2a2439;
+}
+.town-loading__window {
+  fill: #ffb23a;
+  opacity: 0;
+  animation:
+    town-loading-light 0.2s steps(1) calc(0.4s + var(--n) * 0.05s) forwards,
+    town-loading-flicker 3.2s steps(1) calc(2s + var(--n) * 0.7s) infinite;
+}
+.town-loading__lamp line {
+  stroke: #1a1622;
+  stroke-width: 2;
+}
+.town-loading__lamp circle {
+  fill: #fff5d4;
+  filter: drop-shadow(0 0 4px #ffd98a);
+  animation: town-loading-pop 0.35s cubic-bezier(0.3, 1.8, 0.5, 1) calc(0.55s + var(--n) * 0.1s) both;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.town-loading__pumpkin {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: town-loading-pop 0.4s cubic-bezier(0.3, 1.8, 0.5, 1) calc(0.5s + var(--n) * 0.07s) both;
+}
+.town-loading__pumpkin ellipse {
+  fill: #f07a1e;
+  filter: drop-shadow(0 0 3px #ff8a1f);
+}
+.town-loading__pumpkin rect {
+  fill: #5a4a2a;
+}
+.town-loading__walker {
+  animation: town-loading-walk 0.6s cubic-bezier(0.2, 0.8, 0.3, 1) 0.2s both;
+}
+.town-loading__shadow {
+  fill: #00000080;
+}
+.town-loading__body {
+  fill: #08070b;
+  stroke: #e8c8ff;
+  stroke-width: 1.2;
+  animation: town-loading-bob 0.45s ease-in-out infinite alternate;
+}
+.town-loading__question {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation:
+    town-loading-pop 0.4s cubic-bezier(0.3, 1.8, 0.5, 1) 0.75s both,
+    town-loading-float 1.4s ease-in-out 1.15s infinite;
+}
+.town-loading__question rect {
+  fill: #181818;
+  stroke: #f8f0d8;
+  stroke-width: 2;
+}
+.town-loading__question path {
+  fill: #f8f0d8;
+}
+.town-loading__question text {
+  fill: #f8f0d8;
+  font: 400 15px "WDXL Lubrifont JP N", sans-serif;
+  text-anchor: middle;
+}
+.town-loading__new {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: town-loading-pop 0.4s cubic-bezier(0.3, 1.8, 0.5, 1) 0.9s both;
+}
+.town-loading__new rect {
+  fill: url(#town-loading-new);
+  stroke: #fff;
+}
+.town-loading__new text {
+  fill: #362b48;
+  font: 600 8px "IBM Plex Mono", monospace;
+  text-anchor: middle;
+}
+/* A fast load skips the rest of the intro so the newcomer is in place for the reveal. */
+.town-loading:not([data-phase="loading"]) :is(
+    .town-loading__ground,
+    .town-loading__building,
+    .town-loading__lamp circle,
+    .town-loading__pumpkin,
+    .town-loading__walker,
+    .town-loading__new
+  ) {
+  animation: none;
+}
+.town-loading:not([data-phase="loading"]) .town-loading__window {
+  opacity: 1;
+  animation: none;
+}
+.town-loading:not([data-phase="loading"]) .town-loading__body {
+  animation: town-loading-jump 0.4s cubic-bezier(0.3, 0, 0.5, 1);
+}
+.town-loading:not([data-phase="loading"]) .town-loading__question {
+  animation: town-loading-pop 0.3s cubic-bezier(0.3, 1.8, 0.5, 1) both;
+}
+.town-loading:not([data-phase="loading"]) .town-loading__question text {
+  fill: #ffb23a;
+}
+.town-loading__window-box {
+  width: min(360px, 100%);
+  padding: 12px 16px 10px;
+  border: 3px solid #f8f0d8;
+  border-radius: 8px;
+  background: #181818;
+  box-shadow:
+    inset 0 0 0 2px #797568,
+    0 0 0 2px #181818,
+    0 0 0 4px #b8b0a0,
+    4px 6px 0 4px #18181860;
+  animation: town-loading-fade 0.3s ease-out 0.1s both;
+}
+.town-loading__message {
+  min-height: 1.5em;
+  margin: 0;
+  font: 400 19px / 1.5 "WDXL Lubrifont JP N", sans-serif;
+  text-shadow: 1px 1px #000;
+}
+.town-loading__caret {
+  display: inline-block;
+  margin-left: 6px;
+  color: #b8b0a0;
+  font-size: 10px;
+  vertical-align: middle;
+  animation: town-loading-caret 0.8s steps(1) infinite;
+}
+.town-loading__meter {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+.town-loading__segments {
+  display: flex;
+  flex: 1;
+  gap: 3px;
+}
+.town-loading__segments span {
+  flex: 1;
+  height: 8px;
+  background: #2b2b26;
+  transition: background 0.2s;
+}
+.town-loading__segments .is-filled {
+  background: #f8f0d8;
+}
+.town-loading__segments .is-filled:last-child,
+.town-loading[data-phase="loading"] .town-loading__segments .is-filled:has(+ :not(.is-filled)) {
+  background: #ffb23a;
+}
+.town-loading__count {
+  color: #b8b0a0;
+  font: 600 10px "IBM Plex Mono", monospace;
+  font-variant-numeric: tabular-nums;
+}
+.town-loading__hint {
+  margin: 6px 0 0;
+  color: #b8b0a0;
+  font-size: 11px;
+}
+@keyframes town-loading-fade {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+@keyframes town-loading-rise {
+  from {
+    transform: scaleY(0);
+  }
+}
+@keyframes town-loading-pop {
+  from {
+    transform: scale(0);
+  }
+}
+@keyframes town-loading-light {
+  to {
+    opacity: 1;
+  }
+}
+@keyframes town-loading-flicker {
+  0%,
+  100% {
+    fill: #ffb23a;
+  }
+  47% {
+    fill: #3d3550;
+  }
+  52% {
+    fill: #ffd98a;
+  }
+}
+@keyframes town-loading-walk {
+  from {
+    opacity: 0;
+    transform: translate(88px, -44px);
+  }
+  20% {
+    opacity: 1;
+  }
+}
+@keyframes town-loading-jump {
+  40% {
+    transform: translateY(-9px);
+  }
+}
+@keyframes town-loading-bob {
+  to {
+    transform: translateY(-2px);
+  }
+}
+@keyframes town-loading-float {
+  50% {
+    transform: translateY(-3px);
+  }
+}
+@keyframes town-loading-twinkle {
+  50% {
+    opacity: 0.2;
+  }
+}
+@keyframes town-loading-bat {
+  50% {
+    transform: scaleY(-0.6);
+  }
+}
+@keyframes town-loading-drift {
+  to {
+    translate: 40px 12px;
+  }
+}
+@keyframes town-loading-caret {
+  50% {
+    opacity: 0;
+  }
+}
+@media (max-height: 560px) {
+  .town-loading__stage {
+    max-height: 40dvh;
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .town-loading__spinner {
-    animation: none;
+  .town-loading *,
+  .town-loading *::before,
+  .town-loading[data-phase] {
+    animation: none !important;
+  }
+  .town-loading__window {
+    opacity: 1;
+  }
+  .town-loading[data-phase="leaving"] {
+    mask: none;
+    opacity: 0;
+    transition: opacity 0.2s;
   }
 }
 .town-person {
