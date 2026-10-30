@@ -378,6 +378,9 @@ body::after {
   box-shadow: 0 24px 100px #0009;
   scrollbar-color: #77717f transparent;
 }
+.post-modal__panel:focus {
+  outline: none;
+}
 .post-modal__toolbar {
   position: sticky;
   z-index: 2;

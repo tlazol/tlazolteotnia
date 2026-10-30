@@ -16,7 +16,7 @@ export function PostModal({
   children: ReactNode
 }) {
   const dialog = useRef<HTMLDialogElement>(null)
-  const closeButton = useRef<HTMLButtonElement>(null)
+  const panel = useRef<HTMLDivElement>(null)
   const fallback = useRef(fallbackFocus)
   fallback.current = fallbackFocus
 
@@ -29,13 +29,15 @@ export function PostModal({
     // reopen it as a modal. The resulting close event is ignored below.
     if (element?.open) element.close()
     element?.showModal()
-    closeButton.current?.focus()
+    // Focus the scrollable panel, not the close button: a programmatic focus on page load
+    // shows a focus ring, and the panel lets arrow keys scroll the article.
+    panel.current?.focus({ preventScroll: true })
     document.body.style.overflow = 'hidden'
     return () => {
       element?.close()
       document.body.style.overflow = previousOverflow
       const target =
-        // Strict Mode remounts can record the modal's own close button.
+        // Strict Mode remounts can record the modal's own panel.
         previousFocus instanceof HTMLElement &&
         previousFocus !== document.body &&
         !element?.contains(previousFocus)
@@ -62,10 +64,14 @@ export function PostModal({
         tabIndex={-1}
         onClick={onClose}
       />
-      <div className="post-modal__panel" data-post-accent={getPostAccent(slug)}>
+      <div
+        ref={panel}
+        className="post-modal__panel"
+        data-post-accent={getPostAccent(slug)}
+        tabIndex={-1}
+      >
         <div className="post-modal__toolbar">
           <button
-            ref={closeButton}
             className="post-modal__close"
             type="button"
             aria-label="記事を閉じる"
