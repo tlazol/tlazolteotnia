@@ -37,6 +37,14 @@ export async function handlePostReaction(
   request: Request,
   slug: string
 ) {
+  // Require the browser's serialized origin; missing and opaque origins fail closed.
+  if (request.headers.get('Origin') !== new URL(request.url).origin) {
+    return Response.json(
+      { error: 'リアクションを送信できませんでした。' },
+      { status: 403, headers: { 'Cache-Control': 'private, no-store' } }
+    )
+  }
+
   try {
     // Cloudflare supplies this header. Never use cookies or X-Forwarded-For as a fallback.
     // Requests without connection metadata share a bucket, including local development.

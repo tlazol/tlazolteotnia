@@ -88,6 +88,67 @@ function request(cookie?: string) {
 describe('reaction server', () => {
   afterEach(() => vi.restoreAllMocks())
 
+  it.each([
+    undefined,
+    '',
+    'null',
+    'https://attacker.example',
+    'http://example.com',
+    'https://example.com:8443',
+    'https://sub.example.com',
+    'https://example.com.attacker.example',
+    'https://example.com/',
+    'https://user@example.com',
+    'https://example.com https://attacker.example',
+    'https://example.com, https://attacker.example',
+    'not-a-url'
+  ])('rejects unsafe Origin %s before any work', async (origin) => {
+    const db = new FakeD1()
+    const context = makeContext(db)
+    const prepare = vi.spyOn(db, 'prepare')
+    const headers = new Headers({
+      Referer: 'https://example.com/posts/react-router-renewal',
+      'X-Forwarded-Host': 'attacker.example',
+      'X-Forwarded-Proto': 'https'
+    })
+    if (origin !== undefined) headers.set('Origin', origin)
+    const req = new Request('https://example.com/api/reactions/react-router-renewal', {
+      method: 'POST',
+      headers,
+      body: new URLSearchParams({ emoji: '👍' })
+    })
+    const readBody = vi.spyOn(req, 'formData')
+    const response = await handlePostReaction(context, req, 'react-router-renewal')
+    expect(response.status).toBe(403)
+    expect(await response.json()).toEqual({ error: 'リアクションを送信できませんでした。' })
+    expect(response.headers.get('Cache-Control')).toBe('private, no-store')
+    expect(response.headers.get('Set-Cookie')).toBeNull()
+    expect(context.reactionRateLimiter.limit).not.toHaveBeenCalled()
+    expect(readBody).not.toHaveBeenCalled()
+    expect(prepare).not.toHaveBeenCalled()
+    expect(db.votes.size).toBe(0)
+  })
+
+  it.each(['https://0rga.org', 'http://localhost:3000', 'https://preview.workers.dev'])(
+    'accepts same-origin writes from %s',
+    async (origin) => {
+      const db = new FakeD1()
+      const context = makeContext(db)
+      const req = new Request(`${origin}/api/reactions/react-router-renewal`, {
+        method: 'POST',
+        headers: { Origin: origin },
+        body: new URLSearchParams({ emoji: '👍' })
+      })
+      const response = await handlePostReaction(context, req, 'react-router-renewal')
+      expect(response.status).toBe(200)
+      expect(await response.json()).toEqual({
+        reaction: { emoji: '👍', count: 1, reacted: true },
+        created: true
+      })
+      expect(db.votes.size).toBe(1)
+    }
+  )
+
   it('limits cookie-free and rotated-cookie writes across articles by connection IP', async () => {
     const db = new FakeD1()
     const context = makeContext(db)
@@ -105,7 +166,7 @@ describe('reaction server', () => {
 
     const send = (index: number, ip = '192.0.2.1') => {
       const slug = index % 2 ? 'react-router-renewal' : 'react-router-to-tanstack-start'
-      const headers = new Headers({ 'CF-Connecting-IP': ip })
+      const headers = new Headers({ 'CF-Connecting-IP': ip, Origin: 'https://example.com' })
       headers.set('X-Forwarded-For', `198.51.100.${index}`)
       if (index % 2) headers.set('Cookie', `reaction_visitor=${String(index).padStart(43, 'a')}`)
       return handlePostReaction(
@@ -151,7 +212,11 @@ describe('reaction server', () => {
     for (const ip of ['198.51.100.1', '198.51.100.2']) {
       const req = new Request('https://example.com/api/reactions/react-router-renewal', {
         method: 'POST',
-        headers: { 'X-Forwarded-For': ip, Cookie: `reaction_visitor=${ip.padStart(43, 'a')}` },
+        headers: {
+          Origin: 'https://example.com',
+          'X-Forwarded-For': ip,
+          Cookie: `reaction_visitor=${ip.padStart(43, 'a')}`
+        },
         body: 'invalid form body'
       })
       const readBody = vi.spyOn(req, 'formData')
@@ -169,7 +234,10 @@ describe('reaction server', () => {
     const prepare = vi.spyOn(db, 'prepare')
     const response = await handlePostReaction(
       context,
-      new Request('https://example.com/api/reactions/react-router-renewal', { method: 'POST' }),
+      new Request('https://example.com/api/reactions/react-router-renewal', {
+        method: 'POST',
+        headers: { Origin: 'https://example.com' }
+      }),
       'react-router-renewal'
     )
     expect(response.status).toBe(503)
@@ -248,7 +316,11 @@ describe('reaction server', () => {
     form.set('emoji', '👍')
     const postResponse = await handlePostReaction(
       context,
-      new Request('https://example.com', { method: 'POST', body: form }),
+      new Request('https://example.com', {
+        method: 'POST',
+        headers: { Origin: 'https://example.com' },
+        body: form
+      }),
       'react-router-renewal'
     )
     expect(postResponse.status).toBe(200)
@@ -265,7 +337,11 @@ describe('reaction server', () => {
     await expect(
       handlePostReaction(
         context,
-        new Request('https://example.com', { method: 'POST', body: invalid }),
+        new Request('https://example.com', {
+          method: 'POST',
+          headers: { Origin: 'https://example.com' },
+          body: invalid
+        }),
         'react-router-renewal'
       )
     ).rejects.toMatchObject({ status: 400 })
@@ -287,7 +363,11 @@ describe('reaction server', () => {
     form.set('emoji', '👍')
     const writeResult = await handlePostReaction(
       context,
-      new Request('https://example.com', { method: 'POST', body: form }),
+      new Request('https://example.com', {
+        method: 'POST',
+        headers: { Origin: 'https://example.com' },
+        body: form
+      }),
       'react-router-renewal'
     )
     expect(writeResult.status).toBe(503)
