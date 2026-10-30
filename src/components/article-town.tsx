@@ -112,7 +112,7 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
   }
 
   return (
-    <main className="sticker-page town-page">
+    <main className={`sticker-page town-page${loading ? ' is-loading' : ''}`}>
       <h1 className="sr-only">記事のある街</h1>
       <SiteHeader />
       <div

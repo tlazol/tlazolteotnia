@@ -504,6 +504,10 @@ body::after {
   color: #dedee5;
   font-size: 13px;
 }
+/* The panels wait with the town so the spinner stands alone. */
+.town-page.is-loading :is(.site-header, .town-list-toggle, .board-footer) {
+  visibility: hidden;
+}
 .town-loading p {
   margin: 0;
 }
