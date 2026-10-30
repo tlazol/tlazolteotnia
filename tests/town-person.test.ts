@@ -185,7 +185,7 @@ it('keeps hair inside hats and helms', () => {
             for (let y = 30; y <= 70; y += 4) {
               const target = new Vector3(x + 0.5, y, 0)
               ray.set(target.clone().addScaledVector(view, 200), view.clone().negate())
-              const [first, ...rest] = ray.intersectObjects(scene, false)
+              const [first, ...rest] = ray.intersectObjects<(typeof scene)[number]>(scene, false)
               // Locks may fall out of a helm's face opening; only the crown counts.
               if (!first || first.point.y < 40) continue
               if (!isHair(parts[scene.indexOf(first.object)])) continue

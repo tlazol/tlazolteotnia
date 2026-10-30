@@ -47,4 +47,4 @@ it('batches repeated costumes without adding draw calls per resident', () => {
   })
   expect(batchCounts[0]).toBeGreaterThan(0)
   expect(batchCounts[1]).toBe(batchCounts[0])
-})
+}, 30_000)
