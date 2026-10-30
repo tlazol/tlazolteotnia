@@ -10,7 +10,7 @@
   },
   "scripts": {
     "dev": "vite dev --port 3000",
-    "generate-routes": "tsr generate",
+    "generate-routes": "node scripts/router-cli.mjs generate",
     "build": "vite build",
     "preview": "npm run build && vite preview --port 3000",
     "deploy": "npm run check && npm run build && wrangler deploy",
