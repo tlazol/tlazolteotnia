@@ -338,8 +338,11 @@ body::after {
 .game-page {
   background: #101114;
 }
+/* Before hydration the SSR dialog is only `open`, not in the top layer,
+   so it has to stack over the town's loading scene on its own. */
 .post-modal {
   position: fixed;
+  z-index: 100;
   inset: 0;
   width: 100%;
   max-width: none;
@@ -356,6 +359,10 @@ body::after {
   place-items: center;
 }
 .post-modal::backdrop {
+  background: rgb(0 0 0 / 30%);
+}
+/* ::backdrop only exists in the top layer, so dim the town by hand until hydration. */
+.post-modal[open]:not(:modal) {
   background: rgb(0 0 0 / 30%);
 }
 .post-modal__backdrop {
