@@ -188,12 +188,11 @@ it('keeps hair inside hats and helms', () => {
               const [first, ...rest] = ray.intersectObjects(scene, false)
               // Locks may fall out of a helm's face opening; only the crown counts.
               if (!first || first.point.y < 40) continue
-              if (!isHair(parts[scene.findIndex((mesh) => mesh === first.object)])) continue
+              if (!isHair(parts[scene.indexOf(first.object)])) continue
               // Hair in front of the hat it should be tucked under has poked through it.
               const hat = rest.find(
                 (hit) =>
-                  hit.distance - first.distance < 6 &&
-                  isHat(parts[scene.findIndex((mesh) => mesh === hit.object)])
+                  hit.distance - first.distance < 6 && isHat(parts[scene.indexOf(hit.object)])
               )
               if (hat)
                 misses.push(
