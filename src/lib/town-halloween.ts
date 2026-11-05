@@ -1,6 +1,6 @@
 // Halloween dresses the whole town: this one switch recolors the scenery and brings out
 // the pumpkins, graves, bats, ghosts and the residents' costume pieces.
-export const townHalloween = true
+export const townHalloween = false
 
 export const halloween = {
   pumpkin: 0xf07a1e,
