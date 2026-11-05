@@ -1,4 +1,4 @@
-import { PCFShadowMap, WebGLRenderer } from 'three'
+import { NeutralToneMapping, PCFShadowMap, WebGLRenderer } from 'three'
 import type { SceneSize } from './scene-math'
 import type { TownArticle } from './town-posts'
 import { createTownScene } from './town-three.client'
@@ -17,9 +17,17 @@ export function createArticleTown(
   const renderer = new WebGLRenderer({ canvas, antialias: true, alpha: false })
   renderer.shadowMap.enabled = true
   renderer.shadowMap.type = PCFShadowMap
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+  // Neutral tone mapping rolls off bright paving and roofs instead of clipping them.
+  renderer.toneMapping = NeutralToneMapping
+  renderer.toneMappingExposure = 1.08
+  let pixelRatio = Math.min(window.devicePixelRatio, 2)
+  renderer.setPixelRatio(pixelRatio)
   const town = createTownScene(articles)
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
+  let viewport: SceneSize = { width: 0, height: 0 }
+  let lastFrame = 0
+  let frameInterval = 0
+  let frameSamples = 0
   let frame = 0
   let timer: ReturnType<typeof setTimeout> | undefined
   let disposed = false
@@ -39,10 +47,28 @@ export function createArticleTown(
     stop()
     onFailure()
   }
+  // Frames are paced at 30fps; when a device keeps falling well behind, trade
+  // resolution for smoothness, stepping down no further than one pixel per point.
+  function adaptResolution(now: number) {
+    const interval = now - lastFrame
+    lastFrame = now
+    if (interval > 400 || reducedMotion.matches) {
+      frameSamples = 0
+      return
+    }
+    frameInterval = frameSamples ? frameInterval * 0.9 + interval * 0.1 : interval
+    frameSamples++
+    if (frameSamples < 45 || frameInterval < 52 || pixelRatio <= 1) return
+    pixelRatio = Math.max(1, pixelRatio - 0.25)
+    renderer.setPixelRatio(pixelRatio)
+    renderer.setSize(viewport.width, viewport.height, false)
+    frameSamples = 0
+  }
   function render(now: number) {
     frame = 0
     if (disposed || unavailable || document.hidden || !hasSize) return
     try {
+      adaptResolution(now)
       renderer.clear()
       const view = town.render(renderer, now, !reducedMotion.matches)
       onPositions(town.projectResidents(now), view)
@@ -86,6 +112,7 @@ export function createArticleTown(
       if (disposed || unavailable || !size.width || !size.height) return
       try {
         hasSize = true
+        viewport = size
         if (
           canvas.clientWidth !== size.width ||
           canvas.width !== Math.floor(size.width * renderer.getPixelRatio()) ||

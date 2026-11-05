@@ -28,6 +28,7 @@ const mocks = vi.hoisted(() => {
   return { town, renderer }
 })
 vi.mock('three', () => ({
+  NeutralToneMapping: 2,
   PCFShadowMap: 1,
   WebGLRenderer: class {
     constructor() {
@@ -37,14 +38,14 @@ vi.mock('three', () => ({
 }))
 vi.mock('../src/lib/town-three.client', () => ({ createTownScene: () => mocks.town }))
 
-function setup() {
+function setup(devicePixelRatio = 1) {
   const document = Object.assign(new EventTarget(), { hidden: false })
   const media = Object.assign(new EventTarget(), { matches: false })
   const canvas = Object.assign(new EventTarget(), { width: 0, height: 0, clientWidth: 0 })
   const frames = new Map<number, FrameRequestCallback>()
   let id = 0
   vi.stubGlobal('document', document)
-  vi.stubGlobal('window', { devicePixelRatio: 1, matchMedia: () => media })
+  vi.stubGlobal('window', { devicePixelRatio, matchMedia: () => media })
   vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
     frames.set(++id, callback)
     return id
@@ -105,14 +106,14 @@ describe('article town renderer lifecycle', () => {
     const t = setup()
     t.media.matches = true
     t.frame()
-    expect(mocks.town.render).toHaveBeenLastCalledWith(mocks.renderer, 0, false)
+    expect(mocks.town.render).toHaveBeenLastCalledWith(expect.anything(), 0, false)
     expect(vi.getTimerCount()).toBe(1)
     vi.advanceTimersByTime(999)
     expect(t.frames.size).toBe(0)
     vi.advanceTimersByTime(1)
     expect(t.frames.size).toBe(1)
     t.frame(1000)
-    expect(mocks.town.render).toHaveBeenLastCalledWith(mocks.renderer, 1000, false)
+    expect(mocks.town.render).toHaveBeenLastCalledWith(expect.anything(), 1000, false)
     t.town.select('resident')
     expect(t.frames.size).toBe(1)
     t.frame(10)
@@ -157,6 +158,32 @@ describe('article town renderer lifecycle', () => {
     const t = setup()
     expect(t.failure).toHaveBeenCalledOnce()
     expect(t.frames.size).toBe(0)
+    t.town.dispose()
+  })
+  it('lowers the resolution step by step only while frames keep falling behind', () => {
+    const t = setup(3)
+    expect(mocks.renderer.setPixelRatio).toHaveBeenLastCalledWith(2)
+    const run = (frames: number, interval: number) => {
+      for (let index = 0; index < frames; index++) {
+        vi.advanceTimersByTime(1000 / 30)
+        t.frame(now)
+        now += interval
+      }
+    }
+    let now = 0
+    run(80, 40)
+    expect(mocks.renderer.setPixelRatio).toHaveBeenCalledTimes(1)
+    run(10, 80)
+    expect(mocks.renderer.setPixelRatio).toHaveBeenLastCalledWith(1.75)
+    // Each step waits for a fresh run of slow frames before stepping again.
+    run(30, 80)
+    expect(mocks.renderer.setPixelRatio).toHaveBeenLastCalledWith(1.75)
+    expect(mocks.renderer.setSize).toHaveBeenLastCalledWith(800, 600, false)
+    run(400, 80)
+    expect(mocks.renderer.setPixelRatio).toHaveBeenLastCalledWith(1)
+    const calls = mocks.renderer.setPixelRatio.mock.calls.length
+    run(100, 80)
+    expect(mocks.renderer.setPixelRatio).toHaveBeenCalledTimes(calls)
     t.town.dispose()
   })
   it('stops rendering and reports context loss without waking on later input', () => {

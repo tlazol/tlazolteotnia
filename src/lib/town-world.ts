@@ -227,13 +227,17 @@ export function waterDistance(x: number, z: number) {
   return islandDistance(x, z) + shorelineInland(x, z).inland
 }
 
-export function inSand(x: number, z: number) {
+// How far a point lies inside the sand, in world units; positive on the beach.
+export function sandMargin(x: number, z: number, height = terrainHeight(x, z)) {
   const distance = waterDistance(x, z)
   // The lake keeps a narrow shingle rim; the sea gets broad beaches.
   const lakeShore = Math.hypot((x - lake.x) * 0.9, z - lake.z) - lake.radius
   const beachWidth = lakeShore < 500 ? 90 : 520
-  if (distance <= -beachWidth || quayWeight(x, z) >= 0.5) return false
-  return terrainHeight(x, z) < 40
+  return Math.min(distance + beachWidth, (0.5 - quayWeight(x, z)) * 400, 40 - height)
+}
+
+export function inSand(x: number, z: number) {
+  return sandMargin(x, z) > 0
 }
 
 // The walkable deck height over the water, or null away from the piers and breakwater.

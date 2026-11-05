@@ -37,9 +37,9 @@ export function createTownLighting(scene: Scene, materials: TownMaterials, pools
         dim: 0.85
       }
     : {
-        sun: 0xfff6e6,
+        sun: 0xfff0d8,
         warm: 0xffa45c,
-        sky: 0xdcefff,
+        sky: 0xc8e0ff,
         duskSky: 0xc9a6d6,
         nightSky: 0x8a9ee0,
         ground: 0xc9cba8,
@@ -66,10 +66,14 @@ export function createTownLighting(scene: Scene, materials: TownMaterials, pools
   let lightKey = ''
   let viewKey = ''
   let night = 0
+  let warmth = 0
 
   return {
     get night() {
       return night
+    },
+    get warmth() {
+      return warmth
     },
     update(date: Date, view: TownView, size: SceneSize) {
       const nextTimeKey = `${Math.floor(date.getTime() / 1000)}:${date.getTimezoneOffset()}`
@@ -99,6 +103,7 @@ export function createTownLighting(scene: Scene, materials: TownMaterials, pools
             .lerp(nightGround, light.night)
           ambient.intensity = light.ambient
           night = light.night
+          warmth = light.warmth
           materials.uniforms.uNight.value = night
           materials.uniforms.uCloud.value = 0.3 * Math.min(1, light.sun / 2)
           materials.pools.opacity = night * 0.55

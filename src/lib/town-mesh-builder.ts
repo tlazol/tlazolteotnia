@@ -28,7 +28,10 @@ export const surface = {
   stone: 10,
   pond: 11,
   metal: 12,
-  ballast: 13
+  ballast: 13,
+  // Open terrain: grass blended per pixel into sand by the shore map.
+  shore: 14,
+  rock: 15
 } as const
 
 export type PartOptions = {
@@ -43,6 +46,8 @@ export type PartOptions = {
   uv?: readonly [number, number, number, number]
   faces?: number
   flat?: boolean
+  // Per-vertex colours, used by terrain so that neighbouring triangles blend.
+  vertexColors?: readonly number[]
 }
 
 type Template = { position: Float32Array; normal: Float32Array; uv: Float32Array }
@@ -270,6 +275,7 @@ export function createTownBuilder(chunkSize = 2400, whiteUv: readonly [number, n
     target.uv.reserve(count * 2)
     target.extra.reserve(count * 3)
     const [r, g, b] = linearColor(hex)
+    const vertexColors = options.vertexColors?.map(linearColor)
     const shade = options.shade ?? 1
     const uvRect = options.uv
     const surfaceId = options.surface ?? 0
@@ -297,9 +303,10 @@ export function createTownBuilder(chunkSize = 2400, whiteUv: readonly [number, n
       target.normal.data[offset + 2] = tz / length
       target.normal.length += 3
       offset = target.color.length
-      target.color.data[offset] = r * shade
-      target.color.data[offset + 1] = g * shade
-      target.color.data[offset + 2] = b * shade
+      const tint = vertexColors?.[index]
+      target.color.data[offset] = (tint ? tint[0] : r) * shade
+      target.color.data[offset + 1] = (tint ? tint[1] : g) * shade
+      target.color.data[offset + 2] = (tint ? tint[2] : b) * shade
       target.color.length += 3
       offset = target.uv.length
       if (uvRect) {
@@ -641,6 +648,8 @@ export function createTownBuilder(chunkSize = 2400, whiteUv: readonly [number, n
       const normal = ab.cross(ac).normalize()
       const flip = normal.y < 0
       if (flip) normal.negate()
+      const colors = options.vertexColors
+      if (flip && colors) options = { ...options, vertexColors: [colors[0], colors[2], colors[1]] }
       const shape: Template = {
         position: new Float32Array([...a, ...(flip ? [...c, ...b] : [...b, ...c])]),
         normal: new Float32Array([...normal.toArray(), ...normal.toArray(), ...normal.toArray()]),

@@ -1,4 +1,4 @@
-import { InstancedMesh, type Scene, type WebGLRenderer } from 'three'
+import { InstancedMesh, type Scene, type Vector2, type WebGLRenderer } from 'three'
 import { describe, expect, it, vi } from 'vitest'
 import { createTownScene } from '../src/lib/town-three.client'
 import {
@@ -183,7 +183,13 @@ describe('town animation lifecycle', () => {
     let draws = 0
     let positions: number[] = []
     const renderer = {
+      getRenderTarget: () => null,
+      setRenderTarget: () => {},
+      getDrawingBufferSize: (target: Vector2) => target.set(1280, 720),
+      getPixelRatio: () => 1,
+      // Only the town itself counts; the aerial perspective pass draws a screen quad.
       render: (scene: Scene) => {
+        if (!scene.isScene) return
         draws++
         const residents = scene.getObjectByName('town-residents')
         const mesh = residents?.children.find(

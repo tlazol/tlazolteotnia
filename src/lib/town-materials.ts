@@ -1,15 +1,19 @@
 import {
   AdditiveBlending,
+  ClampToEdgeWrapping,
   Color,
   DataTexture,
   LinearFilter,
   MeshBasicMaterial,
   MeshLambertMaterial,
+  type PixelFormat,
   RedFormat,
   RGBAFormat
 } from 'three'
 import { createTownAtlas } from './town-atlas'
-import { townHalloween } from './town-halloween'
+import { contactMap, groundMapBounds, heightRange, shoreMap } from './town-ground-maps'
+import { halloweenColor, townHalloween } from './town-halloween'
+import { shoreColors } from './town-static'
 import { coastDistanceField, coastTextureBounds } from './town-world'
 
 const noiseChunk = /* glsl */ `
@@ -33,7 +37,17 @@ const patternChunk = /* glsl */ `
   float townAlong(vec3 p, vec3 n) {
     return abs(n.x) > 0.5 ? p.z : p.x;
   }
-  vec3 townPattern(float id, vec3 p, vec3 n, vec3 color) {
+  // Meadow mottling at several scales: sunburnt swathes, lush hollows,
+  // clumps and a fine grain, so open ground never reads as a flat fill.
+  vec3 townMeadow(vec2 p, vec3 color, float amount) {
+    float large = townNoise(p / 640.0);
+    float medium = townNoise(p / 170.0 + 3.0);
+    float clump = townNoise(p / 34.0 + 17.0);
+    color = mix(color, color * vec3(1.16, 1.07, 0.72), smoothstep(0.42, 0.85, large) * 0.6 * amount);
+    color = mix(color, color * vec3(0.78, 0.9, 0.82), smoothstep(0.55, 0.15, medium) * 0.55 * amount);
+    return color * (1.0 + amount * (0.1 * clump - 0.07 + 0.04 * townHash(floor(p / 6.0))));
+  }
+  vec3 townPattern(float id, vec3 p, vec3 n, vec3 color, vec4 shore) {
     int kind = int(id + 0.5);
     float k = 1.0;
     if (kind == 1) {
@@ -44,11 +58,9 @@ const patternChunk = /* glsl */ `
     } else if (kind == 2) {
       k = 0.93 + 0.08 * townNoise(p.xz / 120.0) + 0.05 * townHash(floor(p.xz / 4.0));
     } else if (kind == 3) {
-      float large = townNoise(p.xz / 520.0);
-      float medium = townNoise(p.xz / 90.0 + 3.0);
-      color = mix(color, color * vec3(1.18, 1.08, 0.7), smoothstep(0.45, 0.85, large) * 0.55);
-      color = mix(color, color * vec3(0.78, 0.92, 0.84), smoothstep(0.5, 0.2, medium) * 0.5);
-      k = 0.94 + 0.08 * townHash(floor(p.xz / 9.0));
+      // Tended lawns: gentle mottling under broad mowing stripes.
+      color = townMeadow(p.xz, color, 0.55);
+      k = 1.0 + 0.045 * (step(0.5, fract((p.x - p.z) / 96.0)) * 2.0 - 1.0);
     } else if (kind == 4) {
       float course = floor(p.y / 8.0);
       float column = fract((p.x + p.z) / 15.0 + course * 0.5);
@@ -87,6 +99,26 @@ const patternChunk = /* glsl */ `
       k = 0.88 + 0.14 * step(0.5, fract(townAlong(p, n) / 9.0));
     } else if (kind == 13) {
       k = 0.82 + 0.3 * townHash(floor(p.xz / 5.0));
+    } else if (kind == 14) {
+      color = townMeadow(p.xz, color, 1.0);
+      // The shore map's margins are smooth, so the beach edge is a curve rather
+      // than the terrain's triangles; noise frays it into dunes and tide lines.
+      float wobble = (townNoise(p.xz / 150.0) - 0.5) * 0.32 + (townNoise(p.xz / 38.0 + 9.0) - 0.5) * 0.12;
+      // Keep the edge a couple of pixels wide however gently the margin changes.
+      float edge = shore.r + wobble - 0.5;
+      float width = max(fwidth(edge) * 1.5, 0.008);
+      float sandK = smoothstep(-width, width, edge);
+      float wetK = smoothstep(0.44, 0.56, shore.g + wobble * 0.5);
+      vec3 sand = mix(uSand, uWetSand, wetK);
+      sand *= 0.95 + 0.06 * townNoise(p.xz / 70.0) + 0.05 * townHash(floor(p.xz / 3.0));
+      float rim = smoothstep(0.36, 0.5, shore.r + wobble) * (1.0 - sandK);
+      color = mix(color * (1.0 - 0.12 * rim), sand, sandK);
+    } else if (kind == 15) {
+      // Bedded rock: wavering strata with lighter ledges and weathered streaks.
+      float bed = p.y / 16.0 + townNoise(p.xz / 180.0) * 2.5;
+      float ledge = smoothstep(0.75, 0.95, fract(bed));
+      k = (0.88 + 0.12 * townHash(vec2(floor(bed), 3.0))) * (1.0 + 0.1 * ledge);
+      k *= 0.92 + 0.12 * townNoise(vec2(townAlong(p, n) / 14.0, p.y / 70.0));
     }
     return color * k;
   }
@@ -108,9 +140,27 @@ export function radialTexture() {
   return texture
 }
 
+function dataTexture(data: Uint8Array, width: number, height: number, format: PixelFormat) {
+  const texture = new DataTexture(data, width, height, format)
+  texture.magFilter = texture.minFilter = LinearFilter
+  texture.wrapS = texture.wrapT = ClampToEdgeWrapping
+  texture.unpackAlignment = 1
+  texture.needsUpdate = true
+  return texture
+}
+
 export function createTownMaterials() {
+  const shore = shoreMap()
   const uniforms = {
     uTime: { value: 0 },
+    uShore: { value: dataTexture(shore.data, shore.width, shore.height, RGBAFormat) },
+    // Filled in once the static town knows where everything stands.
+    uContact: { value: dataTexture(new Uint8Array(1), 1, 1, RedFormat) },
+    uGroundBounds: {
+      value: [groundMapBounds.x, groundMapBounds.z, groundMapBounds.width, groundMapBounds.depth]
+    },
+    uSand: { value: new Color(halloweenColor(shoreColors.sand)) },
+    uWetSand: { value: new Color(halloweenColor(shoreColors.wetSand)) },
     uNight: { value: 0 },
     uCloud: { value: 0.3 },
     uCoast: { value: null as DataTexture | null },
@@ -127,6 +177,11 @@ export function createTownMaterials() {
     shader.uniforms.uTime = uniforms.uTime
     shader.uniforms.uNight = uniforms.uNight
     shader.uniforms.uCloud = uniforms.uCloud
+    shader.uniforms.uShore = uniforms.uShore
+    shader.uniforms.uContact = uniforms.uContact
+    shader.uniforms.uGroundBounds = uniforms.uGroundBounds
+    shader.uniforms.uSand = uniforms.uSand
+    shader.uniforms.uWetSand = uniforms.uWetSand
     shader.vertexShader = `attribute vec3 townExtra;
 varying vec3 vTownExtra;
 varying vec3 vTownWorld;
@@ -149,6 +204,11 @@ varying vec3 vTownWorld;
 uniform float uTime;
 uniform float uNight;
 uniform float uCloud;
+uniform sampler2D uShore;
+uniform sampler2D uContact;
+uniform vec4 uGroundBounds;
+uniform vec3 uSand;
+uniform vec3 uWetSand;
 ${noiseChunk}
 ${patternChunk}
 ${shader.fragmentShader}`
@@ -156,7 +216,20 @@ ${shader.fragmentShader}`
         '#include <color_fragment>',
         /* glsl */ `#include <color_fragment>
         vec3 townFaceNormal = normalize(cross(dFdx(vTownWorld), dFdy(vTownWorld)));
-        diffuseColor.rgb = townPattern(vTownExtra.x, vTownWorld, townFaceNormal, diffuseColor.rgb);`
+        vec2 townGroundUv = (vTownWorld.xz - uGroundBounds.xy) / uGroundBounds.zw;
+        vec4 townShore = texture2D(uShore, townGroundUv);
+        diffuseColor.rgb = townPattern(vTownExtra.x, vTownWorld, townFaceNormal, diffuseColor.rgb, townShore);
+        // Baked contact shadows: walls darken towards their footing and the
+        // ground darkens around whatever stands on it.
+        float townAbove = vTownWorld.y - mix(${heightRange.min.toFixed(1)}, ${heightRange.max.toFixed(1)}, townShore.b);
+        float townOcclusion = 1.0;
+        if (abs(townFaceNormal.y) < 0.5) {
+          // Terrain is its own ground, so only things standing on it are occluded.
+          if (int(vTownExtra.x + 0.5) < 14) townOcclusion = mix(0.66, 1.0, smoothstep(0.0, 46.0, townAbove));
+        } else if (townAbove < 16.0) {
+          townOcclusion = 1.0 - 0.5 * texture2D(uContact, townGroundUv).r;
+        }
+        diffuseColor.rgb *= townOcclusion;`
       )
       .replace(
         '#include <emissivemap_fragment>',
@@ -222,6 +295,12 @@ ${shader.fragmentShader}`.replace(
   }
   water.customProgramCacheKey = () => 'town-water'
 
+  function setContacts(solids: Parameters<typeof contactMap>[0]) {
+    const map = contactMap(solids)
+    uniforms.uContact.value.dispose()
+    uniforms.uContact.value = dataTexture(map.data, map.width, map.height, RedFormat)
+  }
+
   const glowTexture = radialTexture()
   const pools = new MeshBasicMaterial({
     color: 0xffb35c,
@@ -238,7 +317,10 @@ ${shader.fragmentShader}`.replace(
     town,
     water,
     pools,
+    setContacts,
     dispose() {
+      uniforms.uShore.value.dispose()
+      uniforms.uContact.value.dispose()
       town.dispose()
       water.dispose()
       pools.dispose()

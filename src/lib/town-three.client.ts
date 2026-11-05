@@ -1,6 +1,7 @@
 import { Color, Scene, Vector3, type WebGLRenderer } from 'three'
 import type { SceneSize } from './scene-math'
 import { createTownAmbient } from './town-ambient'
+import { createTownAtmosphere } from './town-atmosphere'
 import { createTownCamera, updateTownCamera } from './town-camera'
 import { townHalloween } from './town-halloween'
 import { createTownLighting } from './town-lighting'
@@ -46,6 +47,7 @@ export function createTownScene(articles?: TownArticle[]) {
   scene.background = new Color(townHalloween ? 0x3a2470 : 0x2a7bb6)
   const materials = createTownMaterials()
   const statics = buildTownStatic(materials)
+  materials.setContacts(statics.contacts)
   scene.add(statics.group)
   const ambient = createTownAmbient(materials)
   scene.add(ambient.group)
@@ -54,6 +56,7 @@ export function createTownScene(articles?: TownArticle[]) {
   const batches = createResidentBatches()
   batches.rebuild(residents.residents)
   scene.add(batches.group)
+  const atmosphere = createTownAtmosphere()
   const navigation = createTownNavigation(statics.obstacles, containsTownGround, statics.roofs)
   // Higher surfaces are nearer the camera, so the highest roof under the pointer wins.
   const roofsByHeight = [...statics.roofs].sort((a, b) => b.height - a.height)
@@ -241,10 +244,11 @@ export function createTownScene(articles?: TownArticle[]) {
           lighting.update(new Date(), currentView, viewport)
         }
       }
-      renderer.render(scene, camera)
+      atmosphere.render(renderer, scene, camera, lighting)
       return currentView
     },
     dispose() {
+      atmosphere.dispose()
       lighting.dispose()
       batches.dispose()
       ambient.dispose()

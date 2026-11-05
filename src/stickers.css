@@ -117,6 +117,20 @@ body::after {
 .is-ready .sticker-canvas {
   display: block;
 }
+/* A soft lens vignette over the town, beneath the residents' hit areas. */
+.town-page .sticker-surface.is-ready::before {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse 120% 100% at 50% 45%,
+    transparent 55%,
+    rgba(12, 18, 40, 0.1) 80%,
+    rgba(12, 18, 40, 0.26) 100%
+  );
+}
 .board-footer {
   position: fixed;
   z-index: 20;

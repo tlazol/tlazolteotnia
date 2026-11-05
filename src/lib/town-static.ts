@@ -1,6 +1,7 @@
 import { BufferGeometry, Float32BufferAttribute, Group, Mesh, PlaneGeometry } from 'three'
 import type { TownLabel } from './town-atlas'
 import { type BuildingSpec, buildBuilding, palette, signBoard } from './town-buildings'
+import type { GroundFootprint } from './town-ground-maps'
 import { townHalloween } from './town-halloween'
 import type { TownMaterials } from './town-materials'
 import { createTownBuilder, face, surface } from './town-mesh-builder'
@@ -150,31 +151,38 @@ function forestDensity(x: number, z: number) {
   return smoothstep(0.38, 0.62, fbm(x / 1500 + 11, z / 1500 - 4, 3))
 }
 
-function terrainColor(x: number, z: number, height: number, normalY: number) {
-  if (height < waterLevel - 2) return { color: colors.seabed, id: surface.sand }
+// Cliffs and farmland keep crisp per-triangle colours; returns null elsewhere.
+function plotColor(x: number, z: number, height: number, normalY: number) {
+  if (height < waterLevel - 2) return null
+  if (normalY < 0.5 && !inSand(x, z)) return { color: colors.rock, id: surface.rock }
   const field = fieldAt(x, z)
-  if (field && height < 30) {
-    if (field.track) return { color: colors.dirt, id: surface.sand }
-    if (
-      (field.column === pasture.column && field.row === pasture.row) ||
-      (field.column === millField.column && field.row === millField.row)
-    )
-      return { color: colors.lawn, id: surface.grass }
-    if (field.column === orchard.column && field.row === orchard.row)
-      return { color: 0x9bd16c, id: surface.grass }
-    return { color: field.crop ?? colors.grass, id: surface.crops }
-  }
-  if (!field && inSand(x, z))
-    return { color: waterDistance(x, z) > -70 ? colors.wetSand : colors.sand, id: surface.sand }
-  if (normalY < 0.5) return { color: colors.rock, id: surface.plain }
-  if (normalY < 0.8) return { color: colors.slope, id: surface.grass }
+  if (!field || height >= 30) return null
+  if (field.track) return { color: colors.dirt, id: surface.sand }
+  if (
+    (field.column === pasture.column && field.row === pasture.row) ||
+    (field.column === millField.column && field.row === millField.row)
+  )
+    return { color: colors.lawn, id: surface.grass }
+  if (field.column === orchard.column && field.row === orchard.row)
+    return { color: 0x9bd16c, id: surface.grass }
+  return { color: field.crop ?? colors.grass, id: surface.crops }
+}
+
+// Open land is coloured per vertex so meadows, forest floor, rock and highland
+// blend smoothly; the beach is drawn over it per pixel by the shore surface.
+function landColor(x: number, z: number, height: number, normalY: number) {
+  // The seabed is drawn as wet sand by the shore surface, which tints it to match.
+  if (height < waterLevel - 2) return colors.seabed
   const forest = forestDensity(x, z) * smoothstep(-200, 200, height - 10 + Math.abs(x) * 0.02)
   const lowland = mixColor(colors.grass, colors.forest, smoothstep(0.25, 0.75, forest))
-  return {
-    color: mixColor(lowland, colors.highland, smoothstep(450, 750, height)),
-    id: surface.grass
-  }
+  const meadow = mixColor(lowland, colors.highland, smoothstep(450, 750, height))
+  const land = mixColor(meadow, colors.slope, smoothstep(0.9, 0.78, normalY))
+  // A soft per-vertex mottle, blended across triangles rather than faceted.
+  return mixColor(land, hash2(x / 13, z / 13) < 0.5 ? 0x5f9a4c : 0xa9d47c, 0.12)
 }
+
+// Sand tones for the shore surface, which blends them in by the shore map.
+export const shoreColors = { sand: colors.sand, wetSand: colors.wetSand }
 
 function mixColor(from: number, to: number, amount: number) {
   const channel = (shift: number) =>
@@ -189,8 +197,21 @@ export function buildTownStatic(materials: TownMaterials) {
   const roofs: TownRoof[] = []
   const lamps: TownLampPost[] = []
 
-  const solid = (x: number, z: number, halfX: number, halfZ = halfX) =>
+  const contacts: { footprint: GroundFootprint; strength: number }[] = []
+  const solid = (x: number, z: number, halfX: number, halfZ = halfX) => {
     obstacles.push({ left: x - halfX, right: x + halfX, top: z - halfZ, bottom: z + halfZ })
+    // Larger props are mostly round, so their square footprint is pulled in.
+    const inset = Math.max(halfX, halfZ) > 50 ? 0.78 : 1
+    contacts.push({
+      footprint: {
+        left: x - halfX * inset,
+        right: x + halfX * inset,
+        top: z - halfZ * inset,
+        bottom: z + halfZ * inset
+      },
+      strength: Math.max(halfX, halfZ) > 50 ? 0.45 : 0.6
+    })
+  }
   const plantTree = (
     x: number,
     z: number,
@@ -306,43 +327,71 @@ export function buildTownStatic(materials: TownMaterials) {
     const { step, x: x0, z: z0, columns, rows } = terrainGrid
     const at = (column: number, row: number) =>
       [x0 + column * step, terrainVertexHeight(column, row), z0 + row * step] as const
+    const height = (column: number, row: number) =>
+      terrainVertexHeight(Math.max(0, Math.min(columns, column)), Math.max(0, Math.min(rows, row)))
+    const vertexColors = new Map<number, number>()
+    const vertexColor = (column: number, row: number) => {
+      const key = row * (columns + 1) + column
+      let color = vertexColors.get(key)
+      if (color === undefined) {
+        const gx = (height(column + 1, row) - height(column - 1, row)) / (2 * step)
+        const gz = (height(column, row + 1) - height(column, row - 1)) / (2 * step)
+        color = landColor(
+          x0 + column * step,
+          z0 + row * step,
+          height(column, row),
+          1 / Math.hypot(1, gx, gz)
+        )
+        vertexColors.set(key, color)
+      }
+      return color
+    }
     for (let row = 0; row < rows; row++) {
       for (let column = 0; column < columns; column++) {
-        const a = at(column, row)
-        const b1 = at(column + 1, row)
-        const c = at(column, row + 1)
-        const d = at(column + 1, row + 1)
+        const corners = [
+          [column, row],
+          [column + 1, row],
+          [column, row + 1],
+          [column + 1, row + 1]
+        ] as const
+        const [a, b1, c, d] = corners.map(([gx, gz]) => at(gx, gz))
         const deepest = Math.max(a[1], b1[1], c[1], d[1])
         if (deepest < -47 && waterDistance(a[0] + step / 2, a[2] + step / 2) > 500) continue
-        const triangles =
+        const triangles: [number, number, number][] =
           (column + row) % 2
             ? [
-                [a, c, b1],
-                [b1, c, d]
+                [0, 2, 1],
+                [1, 2, 3]
               ]
             : [
-                [a, c, d],
-                [a, d, b1]
+                [0, 2, 3],
+                [0, 3, 1]
               ]
-        for (const [p, q, r] of triangles) {
+        const points = [a, b1, c, d]
+        for (const indices of triangles) {
+          const [p, q, r] = indices.map((index) => points[index])
           const cx = (p[0] + q[0] + r[0]) / 3
           const cy = (p[1] + q[1] + r[1]) / 3
           const cz = (p[2] + q[2] + r[2]) / 3
-          const ux = q[0] - p[0]
-          const uy = q[1] - p[1]
-          const uz = q[2] - p[2]
-          const vx = r[0] - p[0]
-          const vy = r[1] - p[1]
-          const vz = r[2] - p[2]
-          const nx = uy * vz - uz * vy
-          const ny = uz * vx - ux * vz
-          const nz = ux * vy - uy * vx
-          const normalY = Math.abs(ny) / Math.hypot(nx, ny, nz)
-          const { color, id } = terrainColor(cx, cz, cy, normalY)
-          b.triangle(p, q, r, color, {
-            surface: id,
-            flat: Math.max(p[1], q[1], r[1]) < 30,
-            shade: 0.97 + hash2(cx / 7, cz / 7) * 0.06
+          const flat = Math.max(p[1], q[1], r[1]) < 30
+          const nx = (q[1] - p[1]) * (r[2] - p[2]) - (q[2] - p[2]) * (r[1] - p[1])
+          const ny = (q[2] - p[2]) * (r[0] - p[0]) - (q[0] - p[0]) * (r[2] - p[2])
+          const nz = (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0])
+          const plot = plotColor(cx, cz, cy, Math.abs(ny) / Math.hypot(nx, ny, nz))
+          if (plot) {
+            b.triangle(p, q, r, plot.color, {
+              surface: plot.id,
+              flat,
+              shade: 0.97 + hash2(cx / 7, cz / 7) * 0.06
+            })
+            continue
+          }
+          b.triangle(p, q, r, 0xffffff, {
+            surface: surface.shore,
+            flat,
+            vertexColors: indices.map((index) =>
+              vertexColor(corners[index][0], corners[index][1])
+            ) as [number, number, number]
           })
         }
       }
@@ -821,7 +870,13 @@ export function buildTownStatic(materials: TownMaterials) {
       surface: surface.pond,
       flat: true
     })
-    solid(parkPond.x, parkPond.z, parkPond.radiusX + 16, parkPond.radiusZ + 16)
+    // The pond is open water, so it blocks walkers without darkening its banks.
+    obstacles.push({
+      left: parkPond.x - parkPond.radiusX - 16,
+      right: parkPond.x + parkPond.radiusX + 16,
+      top: parkPond.z - parkPond.radiusZ - 16,
+      bottom: parkPond.z + parkPond.radiusZ + 16
+    })
     for (let index = 0; index < 7; index++) {
       const angle = rng() * Math.PI * 2
       const radius = 0.4 + rng() * 0.45
@@ -1782,8 +1837,13 @@ export function buildTownStatic(materials: TownMaterials) {
   farm()
   if (townHalloween) halloweenDecor()
   const forestTrees = wilderness()
-  for (const box of occluders)
+  for (const box of occluders) {
     obstacles.push({ left: box.minX, right: box.maxX, top: box.minZ, bottom: box.maxZ })
+    contacts.push({
+      footprint: { left: box.minX, right: box.maxX, top: box.minZ, bottom: box.maxZ },
+      strength: 1
+    })
+  }
 
   const group = new Group()
   group.name = 'town-static'
@@ -1834,6 +1894,7 @@ export function buildTownStatic(materials: TownMaterials) {
     pools,
     obstacles,
     occluders,
+    contacts,
     roofs,
     lamps,
     stats: { vertices: b.vertices, forestTrees },

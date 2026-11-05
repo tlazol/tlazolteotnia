@@ -1,4 +1,4 @@
-import type { WebGLRenderer } from 'three'
+import type { Vector2, WebGLRenderer } from 'three'
 import { describe, expect, it } from 'vitest'
 import { type ActiveResident, updateTownActivities } from '../src/lib/town-activity'
 import { createTownScene } from '../src/lib/town-three.client'
@@ -87,6 +87,8 @@ describe('town activities', () => {
     )
     const renderer = {
       getRenderTarget: () => null,
+      getDrawingBufferSize: (target: Vector2) => target.set(1280, 720),
+      getPixelRatio: () => 1,
       setRenderTarget: () => {},
       clear: () => {},
       render: () => {}

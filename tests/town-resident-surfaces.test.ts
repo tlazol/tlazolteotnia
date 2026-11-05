@@ -1,4 +1,10 @@
-import { InstancedMesh, MeshToonMaterial, type Scene, type WebGLRenderer } from 'three'
+import {
+  InstancedMesh,
+  MeshToonMaterial,
+  type Scene,
+  type Vector2,
+  type WebGLRenderer
+} from 'three'
 import { expect, it } from 'vitest'
 import { townPersonStyles } from '../src/lib/town-person'
 import type { TownArticle } from '../src/lib/town-posts'
@@ -24,6 +30,8 @@ it('batches repeated costumes without adding draw calls per resident', () => {
     let faces = 0
     const renderer = {
       getRenderTarget: () => null,
+      getDrawingBufferSize: (target: Vector2) => target.set(1280, 720),
+      getPixelRatio: () => 1,
       setRenderTarget: () => {},
       clear: () => {},
       render: (scene: Scene) => {

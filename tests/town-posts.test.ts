@@ -4,6 +4,7 @@ import {
   type Material,
   Matrix4,
   Scene,
+  type Vector2,
   Vector3,
   type WebGLRenderer
 } from 'three'
@@ -74,6 +75,8 @@ const size = { width: 1280, height: 720 }
 const view = { x: 200, y: 200, zoom: 1 }
 const renderer = {
   getRenderTarget: () => null,
+  getDrawingBufferSize: (target: Vector2) => target.set(1280, 720),
+  getPixelRatio: () => 1,
   setRenderTarget: () => {},
   clear: () => {},
   render: () => {}
@@ -476,7 +479,7 @@ describe('article residents', () => {
     const town = createTownScene([streetResident, other])
     let rendered: Scene | undefined
     const renderSpy = vi.spyOn(renderer, 'render').mockImplementation((scene) => {
-      rendered = scene as Scene
+      if ((scene as Scene).isScene) rendered = scene as Scene
     })
     // X-ray instances of the selected resident, drawn only where buildings hide it.
     function render(now: number) {
