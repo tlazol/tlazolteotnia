@@ -8,7 +8,7 @@ import {
   type Rgba,
   setPixel
 } from './island-art'
-import { type DecorKind, hash2 } from './island-world'
+import { type DecorKind, hash2, valueNoise } from './island-world'
 
 // ---- Decorations ----------------------------------------------------------
 
@@ -47,140 +47,116 @@ function disc(
   }
 }
 
-type Lump = { x: number; y: number; rx: number; ry: number }
+const shadesOf = (...values: string[]) => values.map((value) => hex(value))
 
-// Paints overlapping lumps (leaf clumps, boulders) lit from the upper left.
-// Each pixel takes the lump bulging nearest the viewer, so clumps read as
-// separate rounded masses with darker undersides.
-function lumps(
+// Branches taper from a load-bearing base to a twig, with light on the left.
+function branch(
   buffer: PixelBuffer,
-  shapes: Lump[],
-  shades: readonly Rgba[],
-  seed: number,
-  options: { grain?: number; base?: number; fade?: number } = {}
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+  width: number
 ) {
-  const { grain = 0.12, base = 0, fade = 0.3 } = options
-  const light = [-0.55, -0.72, 0.42]
-  const length = Math.hypot(light[0], light[1], light[2])
-  const top = Math.min(...shapes.map((s) => s.y - s.ry))
-  const bottom = Math.max(...shapes.map((s) => s.y + s.ry))
-  for (let y = 0; y < buffer.height; y++) {
-    for (let x = 0; x < buffer.width; x++) {
-      let best = -Infinity
-      let normal: [number, number, number] = [0, 0, 1]
-      for (const s of shapes) {
-        const dx = (x + 0.5 - s.x) / s.rx
-        const dy = (y + 0.5 - s.y) / s.ry
-        const d2 = dx * dx + dy * dy
-        if (d2 > 1) continue
-        const nz = Math.sqrt(1 - d2)
-        const depth = s.y + nz * Math.min(s.rx, s.ry) * 0.7
-        if (depth > best) {
-          best = depth
-          normal = [dx, dy, nz]
-        }
-      }
-      if (best === -Infinity) continue
-      let lit = (normal[0] * light[0] + normal[1] * light[1] + normal[2] * light[2]) / length + base
-      lit -= ((y - top) / Math.max(1, bottom - top)) * fade
-      lit += (hash2(x >> 1, y, seed) - 0.5) * grain + ((x + y) % 2 ? 0.04 : -0.04)
-      const index = lit > 0.78 ? 0 : lit > 0.48 ? 1 : lit > 0.16 ? 2 : 3
-      setPixel(buffer, x, y, shades[Math.min(index, shades.length - 1)])
+  const dx = bx - ax
+  const dy = by - ay
+  const length = Math.hypot(dx, dy)
+  const nx = -dy / length
+  const ny = dx / length
+  polygon(
+    buffer,
+    [
+      [ax - nx * width, ay - ny * width],
+      [ax + nx * width, ay + ny * width],
+      [bx + nx * 0.4, by + ny * 0.4],
+      [bx - nx * 0.4, by - ny * 0.4]
+    ],
+    (x, y) => {
+      const grain = Math.sin(y * 0.4 + x * 2.1)
+      return hex(grain > 0.55 ? '#95846a' : grain < -0.6 ? '#4f4b38' : '#736a50')
     }
+  )
+}
+
+// Small leaves grow around twig ends. Uneven density leaves sky visible
+// between branches; there is deliberately no solid canopy underneath.
+function leafSpray(
+  buffer: PixelBuffer,
+  cx: number,
+  cy: number,
+  radius: number,
+  seed: number,
+  dark = false
+) {
+  const palette = dark
+    ? shadesOf('#3d5031', '#4c6038', '#607443', '#7b8d50')
+    : shadesOf('#4a6039', '#637a43', '#829453', '#a6ad6b')
+  for (let i = 0; i < radius * 5; i++) {
+    const angle = hash2(i, seed, 410) * Math.PI * 2
+    const distance = Math.sqrt(hash2(i, seed, 411)) * radius
+    const x = Math.round(cx + Math.cos(angle) * distance)
+    const y = Math.round(cy + Math.sin(angle) * distance * 0.65)
+    const shade = Math.floor(hash2(i, seed, 412) * 4)
+    const lean = hash2(i, seed, 413) < 0.5 ? -1 : 1
+    line(buffer, x, y, x + lean * 2, y - 1, palette[shade])
+    if (i % 3 === 0) setPixel(buffer, x + lean, y + 1, palette[Math.max(0, shade - 1)])
   }
 }
 
-const shadesOf = (...values: string[]) => values.map((value) => hex(value))
-const leafOutline = hex('#1d3a2a')
-
-const treeLooks = [
-  {
-    leaves: shadesOf('#a6e06c', '#6cba50', '#478f45', '#2c6338'),
-    shapes: [
-      { x: 28, y: 24, rx: 17, ry: 15 },
-      { x: 14, y: 33, rx: 12, ry: 10 },
-      { x: 42, y: 33, rx: 12, ry: 10 },
-      { x: 20, y: 15, rx: 11, ry: 9 },
-      { x: 37, y: 14, rx: 10, ry: 9 },
-      { x: 28, y: 42, rx: 15, ry: 8 },
-      { x: 8, y: 25, rx: 7, ry: 7 },
-      { x: 48, y: 25, rx: 7, ry: 7 }
-    ]
-  },
-  {
-    leaves: shadesOf('#9fdb69', '#62b04e', '#3f8744', '#285b36'),
-    shapes: [
-      { x: 28, y: 22, rx: 18, ry: 16 },
-      { x: 13, y: 32, rx: 11, ry: 10 },
-      { x: 43, y: 31, rx: 12, ry: 10 },
-      { x: 27, y: 9, rx: 11, ry: 8 },
-      { x: 28, y: 41, rx: 16, ry: 8 }
-    ]
-  },
-  {
-    leaves: shadesOf('#bde27a', '#82c25a', '#55974a', '#36693d'),
-    shapes: [
-      { x: 28, y: 18, rx: 14, ry: 15 },
-      { x: 17, y: 30, rx: 12, ry: 11 },
-      { x: 40, y: 30, rx: 12, ry: 11 },
-      { x: 28, y: 39, rx: 14, ry: 9 },
-      { x: 28, y: 6, rx: 8, ry: 6 }
-    ]
-  }
-]
-
-// Broadleaf trees, about two and a half residents tall.
 function paintTree(variant: number): SpriteFrame {
-  const buffer = createBuffer(56, 76)
-  const look = treeLooks[variant]
-  const bark = shadesOf('#a8754a', '#875a39', '#66412a', '#4a2e1f')
-  // Trunk with a flared root and a fork that disappears into the canopy.
-  for (let y = 36; y <= 74; y++) {
-    const flare = y > 68 ? Math.round((y - 68) * 0.8) : 0
-    const left = 24 - flare - (y < 46 ? 1 : 0)
-    const right = 31 + flare + (y < 46 ? 1 : 0)
-    for (let x = left; x <= right; x++) {
-      const u = (x - left) / Math.max(1, right - left)
-      const groove = hash2(x, y >> 2, 401) < 0.18 && u > 0.2 && u < 0.8
-      const shade = u < 0.22 ? 0 : u < 0.6 ? 1 : u < 0.85 ? 2 : 3
-      setPixel(buffer, x, y, bark[Math.min(3, shade + (groove ? 1 : 0))])
+  const buffer = createBuffer(68, 88)
+  const seed = 470 + variant * 31
+  const lean = variant === 0 ? -4 : variant === 1 ? 3 : -1
+  const forkX = 34 + lean
+  // Unequal, angled limbs rather than a straight pole supporting green balls.
+  branch(buffer, 34, 86, forkX, 52, 3.4)
+  branch(buffer, forkX, 56, forkX + 3, 29, 2.1)
+  const tips: Array<[number, number]> = [
+    [12, 40],
+    [8, 29],
+    [19, 20],
+    [26, 10],
+    [39, 12],
+    [48, 21],
+    [58, 28],
+    [55, 42],
+    [41, 35],
+    [28, 32]
+  ]
+  tips.forEach(([tx, ty], i) => {
+    const x = tx + Math.round((hash2(i, seed, 420) - 0.5) * 7)
+    const y =
+      ty +
+      Math.round((hash2(i, seed, 421) - 0.5) * 9) +
+      (variant === 2 ? Math.round(Math.abs(tx - 34) * 0.35) : 0)
+    const joinY = 52 - (i % 4) * 5
+    const elbowX = forkX + (x - forkX) * 0.52
+    const elbowY = joinY + (y - joinY) * 0.52 + 4
+    branch(buffer, forkX, joinY, elbowX, elbowY, 1.6)
+    branch(buffer, elbowX, elbowY, x, y, 1)
+    if (i % 2 === 0) leafSpray(buffer, elbowX + 2, elbowY - 2, 5, seed + 90 + i, true)
+    for (let j = 0; j < 3; j++) {
+      const tipX = x + (j - 1) * 5
+      const tipY = y - 4 - hash2(i, j, seed) * 5
+      branch(buffer, x, y + 2, tipX, tipY, 0.5)
+      leafSpray(buffer, tipX, tipY, 5 + hash2(i, j, seed + 1) * 3, seed + i * 3 + j, i > 6)
     }
-  }
-  for (const [sx, dir] of [
-    [25, -1],
-    [30, 1]
-  ]) {
-    for (let i = 0; i < 9; i++) {
-      const x = sx + dir * Math.round(i * 0.8)
-      setPixel(buffer, x, 40 - i, bark[dir < 0 ? 0 : 2])
-      setPixel(buffer, x + dir, 40 - i, bark[dir < 0 ? 1 : 3])
-    }
-  }
-  const canopy = createBuffer(56, 76)
-  lumps(canopy, look.shapes, look.leaves, 470 + variant)
-  blit(buffer, canopy, 0, 0)
+  })
+  // Short roots disappear into the soil instead of forming a triangular pedestal.
+  branch(buffer, 34, 81, 27, 86, 1.4)
+  branch(buffer, 35, 82, 40, 86, 1.2)
   if (variant === 1) {
-    // Fruit tree: apples on the sunny side of the clumps.
     for (const [x, y] of [
-      [15, 22],
-      [24, 13],
-      [36, 19],
-      [43, 30],
-      [30, 33],
-      [12, 34],
-      [21, 41],
-      [37, 41]
+      [16, 29],
+      [38, 17],
+      [49, 33],
+      [28, 36]
     ]) {
-      if (!alphaAt(buffer, x, y)) continue
-      setPixel(buffer, x, y, hex('#e0503f'))
-      setPixel(buffer, x + 1, y, hex('#b83a36'))
-      setPixel(buffer, x, y + 1, hex('#b83a36'))
-      setPixel(buffer, x + 1, y + 1, hex('#8e2b2e'))
-      setPixel(buffer, x, y - 1, hex('#ff9a7a'))
+      setPixel(buffer, x, y, hex('#aa6546'))
+      setPixel(buffer, x, y + 1, hex('#75422f'))
     }
   }
-  outline(buffer, leafOutline)
-  return { buffer: padded(buffer, 3), shadow: 'huge', sway: 2 }
+  return { buffer: padded(buffer, 3), shadow: 'huge', sway: 1 }
 }
 
 // Palms lean out over the sand, about three residents tall.
@@ -203,7 +179,13 @@ function paintPalm(variant: number): SpriteFrame {
       setPixel(buffer, x, y, bark[Math.min(3, shade + (ring ? 1 : 0))])
     }
   }
-  const leaf = shadesOf('#a8e46e', '#6ec556', '#46a04a', '#2d7440')
+  for (let y = crown.y + 6; y < base.y; y += 5) {
+    const t = (base.y - y) / (base.y - crown.y)
+    const x = Math.round(base.x + (crown.x - base.x) * t * t)
+    line(buffer, x - 1, y, x + 1, y + 1, bark[3])
+    setPixel(buffer, x - 2, y - 1, bark[0])
+  }
+  const leaf = shadesOf('#afc57e', '#809e54', '#537b43', '#34573a')
   // Fronds fan out from the crown and droop; leaflets hang from each spine.
   const fronds: Array<[number, number, number]> = [
     [-178, 28, 0.55],
@@ -221,7 +203,7 @@ function paintPalm(variant: number): SpriteFrame {
   for (const [degrees, length, droop] of fronds) {
     const angle = ((degrees + lean * 4) * Math.PI) / 180
     const back = Math.sin(angle) > 0.3
-    const steps = length * 2
+    const steps = length
     for (let i = 0; i <= steps; i++) {
       const t = i / steps
       const d = length * t
@@ -232,7 +214,7 @@ function paintPalm(variant: number): SpriteFrame {
       const ty = Math.sin(angle) * 0.55 + droop * t * 1.8
       const tl = Math.hypot(tx, ty)
       const leaflet = Math.round(
-        (Math.sin(Math.PI * Math.min(1, t * 1.15)) * 6 + 1) * (1 - t * 0.35)
+        (Math.sin(Math.PI * Math.min(1, t * 1.15)) * 7 + 1) * (1 - t * 0.35)
       )
       for (const side of [-1, 1]) {
         let nx = (-ty / tl) * side
@@ -248,7 +230,6 @@ function paintPalm(variant: number): SpriteFrame {
         }
       }
       setPixel(buffer, Math.round(x), Math.round(y), leaf[back ? 2 : t < 0.15 ? 2 : 0])
-      setPixel(buffer, Math.round(x), Math.round(y) + 1, leaf[back ? 3 : 1])
     }
   }
   // Coconuts tucked under the crown.
@@ -261,114 +242,54 @@ function paintPalm(variant: number): SpriteFrame {
       hex(x + y < crown.x + dx + crown.y + dy ? '#9a6a3c' : '#6b4426')
     )
   }
-  outline(buffer, leafOutline)
+
   return { buffer, shadow: 'large', sway: 3 }
 }
 
-const bushLooks = [
-  shadesOf('#a2dc6c', '#63b551', '#428f47', '#2b6638'),
-  shadesOf('#9bd667', '#5aa94e', '#3b8545', '#275d35')
-]
-
-// Bushes come up to a resident's chest.
 function paintBush(variant: number): SpriteFrame {
-  const buffer = createBuffer(34, 24)
-  lumps(
-    buffer,
-    [
-      { x: 9, y: 15, rx: 8, ry: 7 },
-      { x: 25, y: 15, rx: 8, ry: 7 },
-      { x: 17, y: 10, rx: 9.5, ry: 8 },
-      { x: 17, y: 18, rx: 11, ry: 5 }
-    ],
-    bushLooks[variant],
-    520 + variant,
-    { fade: 0.25 }
-  )
-  const dots: Array<[number, number]> = [
-    [8, 11],
-    [15, 6],
-    [21, 9],
-    [26, 13],
-    [12, 16],
-    [19, 15],
-    [28, 18],
-    [6, 18]
-  ]
-  for (const [x, y] of dots) {
-    if (!alphaAt(buffer, x, y)) continue
-    if (variant === 1) {
-      setPixel(buffer, x, y, hex('#d9415a'))
-      setPixel(buffer, x + 1, y, hex('#a82f48'))
-      setPixel(buffer, x, y - 1, hex('#ff9fae'))
-    } else {
-      setPixel(buffer, x, y, hex('#fff6e0'))
-      setPixel(buffer, x - 1, y, hex('#fff6e0'))
-      setPixel(buffer, x + 1, y, hex('#fff6e0'))
-      setPixel(buffer, x, y - 1, hex('#fff6e0'))
-      setPixel(buffer, x, y + 1, hex('#f1d76a'))
-    }
+  const buffer = createBuffer(34, 25)
+  for (let i = 0; i < 7; i++) {
+    const x = 5 + i * 4
+    const y = 6 + hash2(i, variant, 520) * 11
+    branch(buffer, 17, 24, x, y, 0.7)
+    leafSpray(buffer, x, y, 4.5, 530 + i + variant * 10, i > 4)
+    if (variant === 1 && i % 2 === 0) setPixel(buffer, x, Math.round(y), hex('#9d4e48'))
   }
-  outline(buffer, leafOutline)
-  return { buffer, shadow: 'medium' }
+  return { buffer, shadow: 'medium', sway: 1 }
 }
 
-const stone = shadesOf('#e2dfe9', '#b9b4c8', '#8f89a6', '#676183')
-
-// Boulders about as tall as a resident's shoulder.
-function paintRock(variant: number): SpriteFrame {
-  const buffer = createBuffer(36, 28)
-  if (variant === 1) {
-    lumps(
-      buffer,
-      [
-        { x: 14, y: 14, rx: 12, ry: 11 },
-        { x: 26, y: 20, rx: 8.5, ry: 6.5 },
-        { x: 8, y: 21, rx: 6, ry: 5 }
-      ],
-      stone,
-      610,
-      { grain: 0.1, fade: 0.2 }
-    )
-    // A cap of moss on the big stone.
-    for (let x = 6; x <= 20; x++) {
-      let top = 0
-      while (top < buffer.height && !alphaAt(buffer, x, top)) top++
-      const depth = 1 + Math.round(Math.sin(((x - 6) / 14) * Math.PI) * 2.5 + hash2(x, 0, 611))
-      for (let y = 0; y < depth; y++) {
-        const color = y === 0 ? '#a6dc6e' : y < depth - 1 ? '#6fb553' : '#4c8f45'
-        setPixel(buffer, x, top + y, hex(color))
-      }
-    }
-  } else {
-    lumps(
-      buffer,
-      [
-        { x: 17, y: 15, rx: 15, ry: 11 },
-        { x: 11, y: 11, rx: 8, ry: 7 },
-        { x: 25, y: 19, rx: 9, ry: 6 }
-      ],
-      stone,
-      612,
-      { grain: 0.1, fade: 0.2 }
-    )
-    // A crack running down the face.
-    for (const [x, y] of [
-      [19, 9],
-      [19, 10],
-      [20, 11],
-      [20, 12],
-      [21, 13],
-      [20, 14]
-    ]) {
-      setPixel(buffer, x, y, stone[3])
-      setPixel(buffer, x - 1, y, stone[1])
+// Fractured faces share edges, not overlapping ellipses.
+function rockFaces(buffer: PixelBuffer, variant: number, wet = false) {
+  const peak: [number, number] = variant ? [12, 3] : [17, 6]
+  const left: [number, number] = [4, 13]
+  const ridge: [number, number] = variant ? [20, 12] : [22, 14]
+  const right: [number, number] = [31, 11 + variant * 4]
+  const base: [number, number] = [27, 25]
+  const tones = wet ? [124, 140, 137] : [157, 162, 149]
+  const face = (points: Array<[number, number]>, light: number) =>
+    polygon(buffer, points, (x, y) => {
+      const grain = (hash2(x, y, 620 + variant) - 0.5) * 16
+      const strata = Math.sin(y * 0.9 + x * 0.24) > 0.85 ? -12 : 0
+      const shade = light + grain + strata - (wet ? y * 0.8 : 0)
+      return [tones[0] + shade, tones[1] + shade, tones[2] + shade, 255]
+    })
+  face([left, peak, [25, 5 + variant * 3], right, ridge], 28)
+  face([left, ridge, [16, 25], [3, 22]], -6)
+  face([ridge, right, [34, 22], base, [16, 25]], -40)
+  line(buffer, peak[0], peak[1] + 1, ridge[0], ridge[1], hex('#bec1ad'))
+  line(buffer, 10, 15, 13, 18, hex('#505b50'))
+  line(buffer, 13, 18, 11, 23, hex('#505b50'))
+  for (let y = 15; y < 25; y++) {
+    for (let x = 4; x < 29; x++) {
+      if (alphaAt(buffer, x, y) && valueNoise(x / 4, y / 3, 630 + variant) > 0.65)
+        setPixel(buffer, x, y, hex(hash2(x, y, 632) < 0.4 ? '#8e9870' : '#657456'))
     }
   }
-  // Rest the stones flat on the ground.
-  for (let y = 26; y < buffer.height; y++)
-    for (let x = 0; x < buffer.width; x++) setPixel(buffer, x, y, [0, 0, 0, 0])
-  outline(buffer, hex('#3a3450'))
+}
+
+function paintRock(variant: number): SpriteFrame {
+  const buffer = createBuffer(36, 28)
+  rockFaces(buffer, variant)
   return { buffer, shadow: 'medium' }
 }
 
@@ -406,7 +327,7 @@ function paintFlowers(variant: number): SpriteFrame {
 
 // ---- Drawing helpers --------------------------------------------------------
 
-const ink = hex('#2b2236')
+const ink = hex('#444638')
 
 // Adds empty columns on both sides so a swaying sprite is not cut off.
 function padded(buffer: PixelBuffer, columns: number) {
@@ -509,7 +430,7 @@ function paintCampfire(): SpriteFrame {
     flame(buffer, 13, 20, 16, 5, f)
     for (const a of ring)
       if (Math.sin(a) >= 0) stone(buffer, 13 + Math.cos(a) * 9, 21 + Math.sin(a) * 3.4)
-    outline(buffer, hex('#3a2230'))
+
     return buffer
   })
   return { buffer: frames[0], frames: frames.slice(1), shadow: null }
@@ -526,42 +447,47 @@ function paintTorch(): SpriteFrame {
     rect(buffer, 4, 11, 6, 1, hex('#9a6238'))
     rect(buffer, 4, 12, 6, 2, hex('#5f3d26'))
     flame(buffer, 7, 10, 9, 3, f)
-    outline(buffer, hex('#3a2230'))
+
     return buffer
   })
   return { buffer: frames[0], frames: frames.slice(1), shadow: 'small' }
 }
 
-// A lean-to of sticks and palm leaves with a sleeping mat inside.
+// Palm-leaf lean-to with an open side and a roof resting on lashed poles.
 function paintShelter(): SpriteFrame {
-  const buffer = createBuffer(46, 38)
-  const leaves = shadesOf('#c3cf62', '#9bb850', '#77993f', '#d0b85c', '#a9933f')
-  const apex = { x: 23, y: 6 }
-  for (let y = apex.y; y <= 34; y++) {
-    const half = 1 + ((y - apex.y) / 28) * 20
-    for (let x = Math.round(apex.x - half); x <= Math.round(apex.x + half); x++) {
-      const inside = y >= 15 && Math.abs(x - apex.x) <= ((y - 15) / 19) * 9 + 1
-      if (inside) {
-        const mat = y >= 31 && Math.abs(x - apex.x) <= 6
-        setPixel(buffer, x, y, hex(mat ? (y === 33 ? '#b8894a' : '#e6c877') : '#2e2434'))
-        continue
-      }
-      const right = x > apex.x
-      const strip = Math.floor((x + (right ? -1 : 1) * y * 0.6) / 3)
-      const band = Math.floor((y - apex.y) / 7)
-      let color = leaves[Math.floor(hash2(strip, band, 701) * leaves.length)]
-      if ((y - apex.y) % 7 === 6) color = hex(right ? '#4f6b30' : '#5f8236')
-      else if (right && hash2(x, y, 702) < 0.5) color = hex('#6a8a3a')
-      setPixel(buffer, x, y, color)
+  const buffer = createBuffer(48, 40)
+  polygon(
+    buffer,
+    [
+      [7, 31],
+      [29, 25],
+      [43, 33],
+      [21, 38]
+    ],
+    () => hex('#82734e')
+  )
+  line(buffer, 27, 8, 28, 34, hex('#665b40'), 2)
+  line(buffer, 9, 11, 7, 34, hex('#b29a6c'), 2)
+  polygon(
+    buffer,
+    [
+      [9, 9],
+      [28, 5],
+      [45, 29],
+      [23, 34]
+    ],
+    (x, y) => {
+      const rib = (x + Math.floor(y * 0.65)) % 4
+      const row = Math.floor(y / 6)
+      const tone = hash2(x >> 1, row, 710) * 22 - (y % 6 === 5 ? 25 : 0)
+      return [117 + tone + rib * 4, 120 + tone, 72 + tone, 255]
     }
-  }
-  const stick = shadesOf('#c79a62', '#8a6238')
-  line(buffer, 23, 14, 13, 34, stick[0])
-  line(buffer, 23, 14, 33, 34, stick[1])
-  line(buffer, 18, 1, 26, 10, stick[0], 2)
-  line(buffer, 28, 1, 20, 10, stick[1], 2)
-  outline(buffer, ink)
-  return { buffer, shadow: 'huge' }
+  )
+  line(buffer, 9, 9, 28, 5, hex('#c0a77a'))
+  line(buffer, 23, 34, 45, 29, hex('#645c3c'), 2)
+  line(buffer, 9, 10, 23, 34, hex('#a79568'))
+  for (let y = 8; y < 12; y++) line(buffer, 8, y, 11, y, hex('#dfd1a6'))
+  return { buffer, shadow: 'large' }
 }
 
 function paintChest(): SpriteFrame {
@@ -582,7 +508,7 @@ function paintChest(): SpriteFrame {
   for (const x of [7, 8, 10, 11, 15]) setPixel(buffer, x, 8, hex('#ffe680'))
   rect(buffer, 9, 8, 2, 3, hex('#ffe680'))
   rect(buffer, 9, 10, 2, 1, hex('#c9962b'))
-  outline(buffer, ink)
+
   return { buffer, shadow: 'small' }
 }
 
@@ -600,7 +526,7 @@ function paintDriftwood(variant: number): SpriteFrame {
   rect(buffer, 3, 8, 1, 4, wood[3])
   if (variant === 0) line(buffer, 18, 6, 22, 2, (k) => wood[k + 1], 2)
   else line(buffer, 11, 7, 8, 3, (k) => wood[k + 1], 2)
-  outline(buffer, hex('#4a3d36'))
+
   return { buffer, shadow: null }
 }
 
@@ -633,10 +559,10 @@ function paintSos(): SpriteFrame {
 const cream = hex('#fff7e3')
 const creamShade = hex('#d9cdb8')
 const brights = [
-  ['#f25a52', '#c53a45'],
-  ['#2fbcc6', '#1f8f9e'],
-  ['#ffc83d', '#e09a25'],
-  ['#ff8fb4', '#d8577f']
+  ['#ba7764', '#86544c'],
+  ['#79a4a0', '#4e7675'],
+  ['#c3aa72', '#96804f'],
+  ['#c19591', '#926964']
 ].map(([light, dark]) => [hex(light), hex(dark)] as const)
 
 // A striped parasol over a sun lounger.
@@ -659,7 +585,7 @@ function paintParasol(variant: number): SpriteFrame {
   const cx = 21.5
   for (let y = 3; y <= 16; y++) {
     const t = Math.min(1, (y - 3) / 12)
-    const half = 20 * Math.sqrt(1 - (1 - t) ** 2)
+    const half = 2 + 18 * t ** 0.8
     for (let x = Math.floor(cx - half); x <= Math.ceil(cx + half); x++) {
       const u = (x + 0.5 - cx) / half
       if (Math.abs(u) > 1) continue
@@ -667,12 +593,12 @@ function paintParasol(variant: number): SpriteFrame {
       const striped = Math.floor(along) % 2 === 0
       // The rim is scalloped: each panel dips a pixel lower in its middle.
       if (y === 16 && Math.abs((along % 1) - 0.5) > 0.3) continue
-      const shaded = u > 0.4 || y >= 15
+      const shaded = u > 0.4 || y >= 15 || along % 1 < 0.12
       setPixel(buffer, x, y, striped ? (shaded ? colorShade : color) : shaded ? creamShade : cream)
     }
   }
   rect(buffer, 21, 1, 2, 2, colorShade)
-  outline(buffer, ink)
+
   return { buffer, shadow: 'large' }
 }
 
@@ -703,70 +629,141 @@ function paintHammock(variant: number): SpriteFrame {
     if (x % 3 === 0) setPixel(buffer, x, top + depth, creamShade)
   }
   disc(buffer, 14, 12, 3, 2, (_x, y) => (y < 12 ? cream : creamShade))
-  outline(buffer, ink)
+
   return { buffer, shadow: null }
 }
 
-// A thatched cottage on stilts; on a deck over the lagoon it is a water villa.
+// Three-quarter view: the front, shaded side, roof planes and veranda
+// have a common vanishing direction, with supports visibly carrying the floor.
 function paintBungalow(variant: number): SpriteFrame {
-  const buffer = createBuffer(50, 60)
-  const thatch = shadesOf('#f6dc8c', '#e0bb63', '#bd9345', '#8f6a30')
-  const [curtain, curtainShade] = brights[variant ? 0 : 1]
-  // Walls.
-  for (let y = 29; y <= 50; y++) {
-    for (let x = 7; x <= 42; x++) {
-      const seam = (x - 7) % 5 === 4
-      setPixel(buffer, x, y, hex(y <= 31 ? '#8a5a36' : seam ? '#b07a45' : '#dba568'))
-    }
+  const buffer = createBuffer(64, 68)
+  const timber = (x: number, y: number, shade = 0): Rgba => {
+    const plank = Math.floor(x / 4)
+    const grain = Math.sin(x * 2.1 + Math.sin(y * 0.22)) * 6
+    const joint = x % 4 === 0 ? -25 : 0
+    const light = shade + grain + joint + hash2(plank, variant, 731) * 12
+    return [161 + light, 139 + light, 105 + light, 255]
   }
-  // Door with a curtain drawn to one side.
-  rect(buffer, 20, 35, 10, 16, thatch[0])
-  rect(buffer, 21, 36, 8, 15, hex('#3f2a2e'))
-  for (let y = 36; y <= 50; y++) {
-    const width = y < 44 ? 4 : 3
-    for (let x = 0; x < width; x++)
-      setPixel(buffer, 21 + x, y, x === width - 1 || x === 1 ? curtainShade : curtain)
+  // Raised foundation, diagonal bracing and floor seen from above.
+  for (const [x, y] of [
+    [8, 58],
+    [38, 61],
+    [55, 54]
+  ]) {
+    rect(buffer, x, y, 2, 7, hex('#59503e'))
+    setPixel(buffer, x, y + 6, hex('#3e4639'))
   }
-  // Windows with flower boxes.
-  for (const x of [10, 33]) {
-    rect(buffer, x - 1, 35, 9, 9, thatch[0])
-    rect(buffer, x, 36, 7, 7, hex('#bdf3ee'))
-    rect(buffer, x, 36, 7, 1, hex('#8fdcdc'))
-    rect(buffer, x + 3, 36, 1, 7, thatch[0])
-    setPixel(buffer, x + 1, 38, hex('#ffffff'))
-    setPixel(buffer, x + 2, 37, hex('#ffffff'))
-    rect(buffer, x - 1, 44, 9, 2, hex('#8a5a36'))
-    for (let i = 0; i < 9; i += 2) {
-      setPixel(buffer, x - 1 + i, 43, hex(i % 4 ? '#ff8fb4' : '#f25a52'))
-      setPixel(buffer, x + i, 43, hex('#5aac46'))
-    }
+  line(buffer, 10, 64, 36, 59, hex('#89775a'))
+  line(buffer, 40, 64, 54, 55, hex('#75694f'))
+  polygon(
+    buffer,
+    [
+      [4, 53],
+      [25, 46],
+      [60, 51],
+      [39, 61],
+      [4, 58]
+    ],
+    (x, y) => timber(x, y, y % 3 === 0 ? -15 : 10)
+  )
+  polygon(
+    buffer,
+    [
+      [8, 29],
+      [40, 34],
+      [40, 55],
+      [8, 51]
+    ],
+    (x, y) => timber(x, y, y < 36 ? -25 : 0)
+  )
+  polygon(
+    buffer,
+    [
+      [40, 34],
+      [56, 26],
+      [56, 48],
+      [40, 55]
+    ],
+    (x, y) => timber(x, y, -35)
+  )
+  // Recessed doorway and separate shutters with hinges.
+  polygon(
+    buffer,
+    [
+      [21, 36],
+      [31, 37],
+      [31, 54],
+      [21, 53]
+    ],
+    () => hex('#343d32')
+  )
+  line(buffer, 20, 35, 20, 53, hex('#c5b28c'))
+  line(buffer, 20, 35, 32, 37, hex('#b19e78'))
+  for (let x = 23; x < 29; x++) line(buffer, x, 38, x, 52, hex(x % 2 ? '#796650' : '#99815e'))
+  setPixel(buffer, 27, 46, hex('#c1b487'))
+  polygon(
+    buffer,
+    [
+      [11, 37],
+      [17, 38],
+      [17, 44],
+      [11, 43]
+    ],
+    () => hex('#486267')
+  )
+  line(buffer, 11, 37, 15, 38, hex('#b4c4b6'))
+  line(buffer, 14, 38, 14, 43, hex('#a59575'))
+  line(buffer, 10, 44, 18, 45, hex('#bfac89'))
+  polygon(
+    buffer,
+    [
+      [45, 36],
+      [52, 32],
+      [52, 39],
+      [45, 43]
+    ],
+    () => hex('#303f3f')
+  )
+  line(buffer, 49, 35, 49, 40, hex('#887b5e'))
+  // Roof ridge runs back into the scene; long straw falls down each slope.
+  const thatch = (x: number, y: number, dark: boolean): Rgba => {
+    const strand = hash2(Math.floor(x + y * 0.35), Math.floor(y / 9), 735)
+    const seam = y % 8 === 7 ? -18 : 0
+    const tone = strand * 31 + seam - (dark ? 36 : 0)
+    return [151 + tone, 134 + tone, 94 + tone, 255]
   }
-  // Porch boards and stilts.
-  rect(buffer, 4, 51, 42, 2, hex('#e3ae70'))
-  rect(buffer, 4, 53, 42, 1, hex('#a87240'))
-  for (const x of [6, 24, 42]) rect(buffer, x, 54, 2, 5, hex('#5c3a25'))
-  // Roof: layered thatch, lit from the left.
-  for (let y = 4; y <= 28; y++) {
-    const t = (y - 4) / 24
-    const left = Math.round(16 - t * 15)
-    const right = Math.round(33 + t * 15)
-    for (let x = left; x <= right; x++) {
-      const u = (x - left) / (right - left)
-      const base = u < 0.35 ? 0 : u < 0.72 ? 1 : 2
-      const band = Math.floor((y - 4) / 5)
-      const row = (y - 4) % 5
-      let shade = base
-      if (row === 4 && hash2(x, band, 731) < 0.85) shade = base + 1
-      else if (row === 3 && hash2(x, band, 732) < 0.3) shade = base + 1
-      else if (hash2(x >> 1, y, 733) < 0.16) shade = Math.max(0, base - 1)
-      setPixel(buffer, x, y, thatch[Math.min(3, shade)])
-    }
+  polygon(
+    buffer,
+    [
+      [3, 30],
+      [19, 8],
+      [39, 4],
+      [43, 35]
+    ],
+    (x, y) => thatch(x, y, false)
+  )
+  polygon(
+    buffer,
+    [
+      [39, 4],
+      [61, 27],
+      [43, 35]
+    ],
+    (x, y) => thatch(x, y, true)
+  )
+  line(buffer, 19, 8, 39, 4, hex('#c5b489'), 2)
+  line(buffer, 3, 31, 43, 36, hex('#645940'), 2)
+  line(buffer, 43, 36, 61, 28, hex('#4e4935'), 2)
+  // Thin veranda posts and open railing leave the facade visible.
+  for (const x of [6, 37]) {
+    line(buffer, x, 34 + Math.round(x * 0.12), x, 58 + Math.round(x * 0.08), hex('#8c7958'))
   }
-  rect(buffer, 15, 2, 20, 2, thatch[2])
-  rect(buffer, 15, 4, 20, 1, thatch[3])
-  rect(buffer, 15, 2, 8, 1, thatch[1])
-  outline(buffer, ink)
-  return { buffer, shadow: null }
+  line(buffer, 6, 50, 17, 52, hex('#b2a07a'))
+  line(buffer, 32, 54, 38, 55, hex('#b2a07a'))
+  for (let x = 8; x < 18; x += 3) line(buffer, x, 51, x, 57, hex('#7b6c50'))
+  line(buffer, 20, 57, 31, 59, hex('#c0ab86'), 2)
+  line(buffer, 19, 60, 30, 62, hex('#8c7958'), 2)
+  return { buffer, shadow: 'huge' }
 }
 
 function paintSurfboard(variant: number): SpriteFrame {
@@ -787,7 +784,7 @@ function paintSurfboard(variant: number): SpriteFrame {
       setPixel(buffer, x, y, striped ? stripe : u > 0.45 ? shade : board)
     }
   }
-  outline(buffer, ink)
+
   rect(buffer, 3, 29, 10, 1, hex('#e5d19e'))
   rect(buffer, 2, 30, 12, 1, hex('#d8bf8a'))
   return { buffer, shadow: 'small' }
@@ -869,59 +866,57 @@ function paintWreck(): SpriteFrame {
   line(buffer, 35, 37, 28, 5, (k) => wood[k * 2], 2)
   line(buffer, 13, 17, 44, 11, (k) => wood[k + 1], 2)
   line(buffer, 28, 5, 8, 27, hex('#5f4a3a'))
-  outline(buffer, ink)
+
   surf(buffer, 56, 1)
   return { buffer, shadow: null }
 }
 
-const reefStone = shadesOf('#b4b0c6', '#8a86a0', '#636079', '#454259')
-
 function paintSeaRock(variant: number): SpriteFrame {
   const buffer = createBuffer(36, 30)
-  lumps(
-    buffer,
-    variant === 0
-      ? [
-          { x: 18, y: 14, rx: 11, ry: 10 },
-          { x: 9, y: 19, rx: 7, ry: 6 },
-          { x: 27, y: 19, rx: 7, ry: 5 }
-        ]
-      : [
-          { x: 15, y: 11, rx: 7, ry: 10 },
-          { x: 24, y: 17, rx: 8, ry: 7 },
-          { x: 9, y: 20, rx: 6, ry: 4 }
-        ],
-    reefStone,
-    760 + variant,
-    { grain: 0.1, fade: 0.25 }
-  )
-  for (let y = 24; y < buffer.height; y++)
-    for (let x = 0; x < buffer.width; x++) setPixel(buffer, x, y, [0, 0, 0, 0])
-  outline(buffer, hex('#2f2c42'))
+  rockFaces(buffer, variant, true)
   surf(buffer, 24, 2 + variant)
   return { buffer, shadow: null }
 }
 
 function paintBoat(variant: number): SpriteFrame {
-  const buffer = createBuffer(40, 24)
-  const [trim] = brights[variant ? 0 : 1]
-  const cx = 20
-  for (let x = 4; x < 36; x++) {
-    const u = (x + 0.5 - cx) / 16
-    const rim = 10 + 6 * Math.sqrt(Math.max(0, 1 - u * u))
-    for (let y = 10; y <= Math.round(rim) + 5; y++) {
-      const below = y - Math.round(rim)
-      setPixel(buffer, x, y, below >= 5 ? creamShade : below >= 2 && below <= 3 ? trim : cream)
+  const buffer = createBuffer(44, 26)
+  const [trim, trimShade] = brights[variant ? 0 : 1]
+  // A pointed bow, flat transom and tapered hull instead of a bathtub ellipse.
+  polygon(
+    buffer,
+    [
+      [2, 10],
+      [13, 3],
+      [37, 8],
+      [41, 14],
+      [33, 23],
+      [11, 19]
+    ],
+    (x, y) => {
+      if (y > 17) return hex('#6c6250')
+      return y > 13 ? trimShade : x > 34 ? trim : hex('#b1a184')
     }
-  }
-  disc(buffer, cx, 10, 16, 6, (x, y) => {
-    const d = ((x + 0.5 - cx) / 16) ** 2 + ((y + 0.5 - 10) / 6) ** 2
-    if (d > 0.62) return hex(y < 10 ? '#f1c98a' : '#e3ae70')
-    if (Math.abs(x - 13) <= 1 || Math.abs(x - 26) <= 1) return hex('#cb9159')
-    return hex(y < 9 ? '#6f4a30' : '#8a5a36')
-  })
-  outline(buffer, ink)
-  for (let x = 6; x < 34; x++) if (hash2(x, variant, 771) < 0.55) setPixel(buffer, x, 22, white)
+  )
+  polygon(
+    buffer,
+    [
+      [5, 10],
+      [14, 5],
+      [35, 9],
+      [37, 13],
+      [30, 18],
+      [13, 15]
+    ],
+    (x, y) => hex((y + Math.floor(x * 0.16)) % 3 === 0 ? '#605441' : '#8e7958')
+  )
+  line(buffer, 2, 10, 13, 3, hex('#d0bea0'))
+  line(buffer, 13, 3, 37, 8, hex('#b5a284'))
+  line(buffer, 2, 11, 11, 19, hex('#b6a381'))
+  line(buffer, 11, 19, 33, 23, hex('#a09071'))
+  line(buffer, 15, 7, 12, 15, hex('#ba9d6c'), 2)
+  line(buffer, 29, 9, 26, 17, hex('#ba9d6c'), 2)
+  line(buffer, 21, 10, 38, 22, hex('#b6a07c'))
+  line(buffer, 35, 20, 39, 23, hex('#b6a07c'), 2)
   return { buffer, shadow: null, bob: 1 }
 }
 
@@ -936,7 +931,7 @@ function paintFloat(variant: number): SpriteFrame {
     const low = dy > 1.2
     return striped ? (low ? colorShade : color) : low ? creamShade : cream
   })
-  outline(buffer, ink)
+
   return { buffer, shadow: null, bob: 1 }
 }
 
@@ -980,7 +975,10 @@ export const shadowSizes = {
 export function paintShadow(size: ShadowSize) {
   const [width, height] = shadowSizes[size]
   const buffer = createBuffer(width, height)
-  disc(buffer, width / 2, height / 2, width / 2, height / 2, () => [10, 50, 60, 70])
+  disc(buffer, width / 2, height / 2, width / 2, height / 2, (x, y) => {
+    const distance = ((x - width / 2) / (width / 2)) ** 2 + ((y - height / 2) / (height / 2)) ** 2
+    return [22, 35, 28, Math.round(88 * (1 - distance * 0.8))]
+  })
   return buffer
 }
 

@@ -82,35 +82,35 @@ export function blit(
 // ---- Palette --------------------------------------------------------------
 
 export const islandPalette = {
-  deep: '#1763ad',
-  swell: '#1b6fb9',
-  ocean: '#1c82c6',
-  mid: '#22a3d3',
-  shallow: '#3fc6d8',
-  lagoon: '#74e0d4',
-  pale: '#b3f1de',
+  deep: '#245e77',
+  swell: '#2c6980',
+  ocean: '#307c91',
+  mid: '#4496a2',
+  shallow: '#6aafb0',
+  lagoon: '#9ac8be',
+  pale: '#c5d9c5',
   reef: '#1f8f9e',
-  foam: '#ffffff',
+  foam: '#e9eee0',
   sand: '#f5e8c0',
   sandLight: '#fff8e1',
   sandDark: '#e5d19e',
   sandWet: '#d8bf8a',
   face: '#c8a86b',
   faceDark: '#a6854e',
-  grass: '#5dbd4b',
-  grassLight: '#79cf58',
-  grassPale: '#9be072',
-  grassDark: '#4aa843',
-  grassEdge: '#37893c',
-  grassDeep: '#296b35',
+  grass: '#769451',
+  grassLight: '#8da660',
+  grassPale: '#afbc79',
+  grassDark: '#657f48',
+  grassEdge: '#506d3d',
+  grassDeep: '#3b5431',
   path: '#dcbf8f',
   pathLight: '#ecd6aa',
   pathDark: '#c4a172',
   pathEdge: '#aa8558',
-  deck: '#cb9159',
-  deckLight: '#e3ae70',
-  deckDark: '#a87240',
-  deckEdge: '#7f5331',
+  deck: '#ad8a61',
+  deckLight: '#cbb08a',
+  deckDark: '#8b6f4d',
+  deckEdge: '#665139',
   post: '#5c3a25',
   outline: '#2b2236'
 } as const
@@ -232,14 +232,21 @@ export function paintTerrain(
         else if (at(x, y - 1) !== GRASS) color = c.grassPale
         else color = grassPixel(px, py)
       } else if (kind === DECK) {
-        const row = Math.floor(py / 4)
+        const row = Math.floor(py / 5)
+        const boardX = (((px + (row % 2 ? 9 : 0)) % 22) + 22) % 22
+        const boardY = ((py % 5) + 5) % 5
+        const grain = Math.sin(px * 0.32 + valueNoise(px / 12, row, 75) * 5 + boardY * 1.8)
         if (at(x, y + 1) !== DECK || at(x - 1, y) !== DECK || at(x + 1, y) !== DECK)
           color = c.deckEdge
         else if (at(x, y - 1) !== DECK) color = c.deckLight
-        else if (((py % 4) + 4) % 4 === 3) color = c.deckDark
-        else if ((((px + (row % 2 ? 9 : 0)) % 18) + 18) % 18 === 0) color = c.deckDark
-        else if (((py % 4) + 4) % 4 === 0 && hash2(px >> 2, row, 71) < 0.55) color = c.deckLight
-        else color = hash2(px >> 3, row, 73) < 0.25 ? c.deckLight : c.deck
+        else if ((at(x - 2, y) !== DECK || at(x + 2, y) !== DECK) && ((py % 16) + 16) % 16 < 3)
+          color = c.post
+        else if (boardY === 4 || boardX === 0) color = c.deckEdge
+        else if ((boardX === 2 || boardX === 20) && boardY === 1) color = c.post
+        else if (boardY === 0) color = c.deckLight
+        else if (grain > 0.9) color = c.deckDark
+        else if (grain < -0.8 || hash2(Math.floor(px / 22), row, 73) < 0.18) color = c.deckLight
+        else color = c.deck
       } else {
         const speck = hash2(px, py, 51)
         if (at(x, y + 1) !== PATH || at(x - 1, y) !== PATH || at(x + 1, y) !== PATH)
@@ -277,30 +284,37 @@ function sandPixel(px: number, py: number): Rgba {
       if (ly === 2 && lx >= -1 && lx <= 2) return shell.dark
     } else if (ly === 0 && (lx === 0 || lx === 1 || lx === 4)) return c.sandDark
   }
-  const ripple = valueNoise(px / 14, py / 5, 43) + ((px + py) % 2 ? 0.03 : -0.03)
+  const ripple = Math.sin(py * 0.52 + valueNoise(px / 24, py / 14, 43) * 7)
+  const dune = valueNoise(px / 38, py / 23, 44)
   const speck = hash2(px, py, 41)
   if (speck < 0.02) return c.sandDark
-  if (ripple > 0.7) return c.sandLight
-  if (ripple < 0.24) return c.sandDark
-  return c.sand
+  if (speck > 0.985) return c.sandLight
+  const relief = ripple * 3 + (dune - 0.5) * 15 + (speck - 0.5) * 6
+  return [c.sand[0] + relief, c.sand[1] + relief, c.sand[2] + relief, 255]
 }
 
-// Meadow texture: soft light and dark patches with scattered tufts.
+// Meadow: layered blades, dry tips and low moss between irregular tufts.
 function grassPixel(px: number, py: number): Rgba {
-  const cx = Math.floor(px / 7)
-  const cy = Math.floor(py / 6)
-  if (hash2(cx, cy, 33) < 0.3) {
-    const ox = cx * 7 + 1 + Math.floor(hash2(cx, cy, 34) * 4)
-    const oy = cy * 6 + 1 + Math.floor(hash2(cx, cy, 35) * 3)
-    const lx = px - ox
-    const ly = py - oy
-    const light = hash2(cx, cy, 36) < 0.2
-    if ((ly === 0 && (lx === 0 || lx === 2)) || (ly === 1 && lx === 1))
-      return light ? c.grassPale : c.grassDark
+  const cx = Math.floor(px / 8)
+  const cy = Math.floor(py / 7)
+  const ox = cx * 8 + 2 + Math.floor(hash2(cx, cy, 34) * 3)
+  const oy = cy * 7 + 2 + Math.floor(hash2(cx, cy, 35) * 3)
+  const lx = px - ox
+  const ly = py - oy
+  const tuft = hash2(cx, cy, 33)
+  if (tuft < 0.44 && valueNoise(px / 30, py / 25, 32) > 0.3) {
+    if ((lx === -1 && ly === -2) || (lx === 2 && ly === -1))
+      return tuft < 0.14 ? c.pathLight : c.grassLight
+    if ((lx === 0 && ly >= -2 && ly <= 0) || (lx === 1 && ly === 0)) return c.grassDark
+    if (lx === 0 && ly === -3) return c.grassPale
+    if (ly === 1 && lx >= -1 && lx <= 2) return c.grassEdge
   }
-  const tone = valueNoise(px / 10, py / 10, 37) + ((px + py) % 2 ? 0.035 : -0.035)
-  if (tone > 0.66) return c.grassLight
-  if (tone < 0.3) return c.grassDark
+  const tone = valueNoise(px / 21, py / 17, 37) * 0.7 + valueNoise(px / 5, py / 4, 38) * 0.3
+  const grain = hash2(px, py, 39)
+  if (grain < 0.025) return c.grassDark
+  if (grain > 0.98) return c.grassLight
+  if (tone > 0.62) return c.grassLight
+  if (tone < 0.36) return c.grassDark
   return c.grass
 }
 

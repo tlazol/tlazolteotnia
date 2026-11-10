@@ -248,11 +248,11 @@ void main() {
   float dd = dist + drift + dither * 5.0;
 
   vec3 col = ${vec3Of(islandPalette.deep)};
-  if (dd < 86.0) col = ${vec3Of(islandPalette.ocean)};
-  if (dd < 62.0) col = ${vec3Of(islandPalette.mid)};
-  if (dd < 40.0) col = ${vec3Of(islandPalette.shallow)};
-  if (dd < 22.0) col = ${vec3Of(islandPalette.lagoon)};
-  if (dd < 8.0) col = ${vec3Of(islandPalette.pale)};
+  col = mix(col, ${vec3Of(islandPalette.ocean)}, 1.0 - smoothstep(60.0, 110.0, dd));
+  col = mix(col, ${vec3Of(islandPalette.mid)}, 1.0 - smoothstep(38.0, 76.0, dd));
+  col = mix(col, ${vec3Of(islandPalette.shallow)}, 1.0 - smoothstep(20.0, 52.0, dd));
+  col = mix(col, ${vec3Of(islandPalette.lagoon)}, 1.0 - smoothstep(8.0, 30.0, dd));
+  col = mix(col, ${vec3Of(islandPalette.pale)}, 1.0 - smoothstep(0.0, 12.0, dd));
   vec3 foam = ${vec3Of(islandPalette.foam)};
 
   // Long swells far out, slowly drifting.
@@ -296,7 +296,7 @@ void main() {
   if (abs(dist - front - 5.0) < 0.6 && grain < phase * 0.55) col = mix(col, foam, 0.55);
   float wash = 1.6 + 2.6 * smoothstep(0.8, 1.0, phase) + 2.2 * (1.0 - smoothstep(0.0, 0.25, phase));
   wash += sin(uTime * 1.3 + along * 12.0) * 0.6;
-  if (dist < wash + dither * 1.2) col = foam;
+  if (dist < wash + dither * 1.2) col = mix(col, foam, 0.48 + grain * 0.3);
 
   // Glints of sun.
   vec2 g = floor(p / 26.0);
