@@ -170,11 +170,11 @@ export function designResidents(posts: Array<{ slug: string; date: string }>) {
 
 // ---- Sprites --------------------------------------------------------------
 
-export const RESIDENT_FRAME = { width: 20, height: 28 } as const
-// Residents are drawn smaller than their art so they sit lighter on the tiles.
-export const RESIDENT_SCALE = 0.8
+// Tiny two-head-tall residents drawn at 1:1 so every pixel stays crisp.
+export const RESIDENT_FRAME = { width: 18, height: 19 } as const
+export const RESIDENT_SCALE = 1
 // Rows below the shoes in each frame; the sprite scales around this foot line.
-export const RESIDENT_FOOT_PAD = 3
+export const RESIDENT_FOOT_PAD = 2
 export type Facing = 'down' | 'up' | 'side'
 export const facings: Facing[] = ['down', 'up', 'side']
 // Columns: idle, left step, right step.
@@ -190,7 +190,6 @@ function shade(color: string, amount: number): Rgba {
 type Painter = {
   px: (x: number, y: number, color: Rgba) => void
   rect: (x: number, y: number, w: number, h: number, color: Rgba) => void
-  has: (x: number, y: number) => boolean
 }
 
 function painter(buffer: PixelBuffer, ox: number, oy: number): Painter {
@@ -199,18 +198,13 @@ function painter(buffer: PixelBuffer, ox: number, oy: number): Painter {
     rect: (x, y, w, h, color) => {
       for (let j = 0; j < h; j++)
         for (let i = 0; i < w; i++) setPixel(buffer, ox + x + i, oy + y + j, color)
-    },
-    has: (x, y) => {
-      const bx = ox + x
-      const by = oy + y
-      if (bx < 0 || by < 0 || bx >= buffer.width || by >= buffer.height) return false
-      return buffer.data[(by * buffer.width + bx) * 4 + 3] > 0
     }
   }
 }
 
-// Frame layout (20×28): head rows 5–15, torso 15–20, legs 21–23, shoes 24.
-const HEAD = { cx: 10, cy: 10, rx: 6.4, ry: 5.6 }
+// Art layout (16×17, inset by one pixel for the outline): headwear rows 0–3,
+// head rows 3–11, body 12–14, shoes 15. Side frames face right.
+const HEAD = { cx: 8, cy: 7.5, rx: 5.2, ry: 4.6 }
 const inHead = (x: number, y: number) =>
   ((x + 0.5 - HEAD.cx) / HEAD.rx) ** 2 + ((y + 0.5 - HEAD.cy) / HEAD.ry) ** 2 <= 1
 
@@ -220,99 +214,97 @@ function paintBody(p: Painter, d: ResidentDesign, facing: Facing, step: number, 
   const topDark = shade(d.top, -0.25)
   const bottom = hex(d.bottom)
   const bottomDark = shade(d.bottom, -0.25)
+  const accent = hex(d.accent)
   const shoe = hex(d.outfit === 'riding' ? '#2b2236' : '#5a3b32')
-  const sock = d.outfit === 'riding' ? hex('#2b2236') : skin
-  const y0 = 15 - bob
+  const sock = d.outfit === 'riding' ? shoe : skin
   const side = facing === 'side'
-  // Legs and shoes stay planted; the torso bobs.
-  const legs = side ? [8, 11] : [8, 11]
-  legs.forEach((lx, i) => {
-    const lifted = step !== 0 && step - 1 === i ? 1 : 0
-    const offset = side && step ? (i === 0 ? -1 : 1) * (step === 1 ? 1 : -1) : 0
-    const x = lx + offset
-    p.rect(x, 21 - lifted, 2, 3, sock)
-    p.rect(x, 24 - lifted, 2, 1, shoe)
-    if (side) p.px(x + 2, 24 - lifted, shoe)
+  const front = facing === 'down'
+  const y0 = 12 - bob
+  const left = side ? 6 : 5
+  const width = side ? 4 : 6
+  const right = left + width - 1
+
+  // Feet stay planted; a step lifts one of them.
+  const feet = side ? [6, 8] : [5, 9]
+  feet.forEach((fx, i) => {
+    const lifted = step !== 0 && step - 1 === i
+    const x = side && step ? fx + (i === 0 ? -1 : 1) * (step === 1 ? 1 : -1) : fx
+    if (lifted) p.rect(x, 14, 2, 1, shoe)
+    else {
+      p.rect(x, 14, 2, 1, sock)
+      p.rect(x, 15, 2, 1, shoe)
+    }
   })
-  const width = side ? 6 : 8
-  const left = side ? 7 : 6
-  const long = d.outfit === 'coat' || d.outfit === 'kimono' || d.outfit === 'riding'
+
+  // Torso: a little three-row bean.
   const skirt = d.outfit === 'dress' || d.outfit === 'skirt' || d.outfit === 'sailor'
-  // Lower body.
+  const long = d.outfit === 'coat' || d.outfit === 'kimono' || d.outfit === 'riding'
+  const body = d.outfit === 'sailor' ? hex('#f4f0e6') : top
+  p.rect(left, y0, width, 3, body)
+  p.rect(right, y0, 1, 3, d.outfit === 'sailor' ? hex('#d9d2c4') : topDark)
   if (skirt) {
     const color = d.outfit === 'dress' ? top : bottom
-    const dark = d.outfit === 'dress' ? topDark : bottomDark
-    p.rect(left - 1, y0 + 4, width + 2, 3, color)
-    p.rect(left - 1, y0 + 6, width + 2, 1, dark)
-  } else if (d.outfit === 'kimono') {
-    p.rect(left, y0 + 4, width, 5 + bob, top)
-    p.rect(left + width - 1, y0 + 4, 1, 5 + bob, topDark)
-  } else if (long) {
-    p.rect(left, y0 + 4, width, 2, d.outfit === 'riding' ? bottom : top)
-    if (d.outfit === 'riding') p.rect(left, y0 + 6, width, 1, bottomDark)
-  } else {
-    p.rect(left, y0 + 4, width, 3 + bob, bottom)
-    p.rect(left + width - 1, y0 + 4, 1, 3 + bob, bottomDark)
+    p.rect(left - 1, y0 + 2, width + 2, 1, color)
+    p.px(right + 1, y0 + 2, d.outfit === 'dress' ? topDark : bottomDark)
+  } else if (!long) {
+    p.rect(left, y0 + 2, width, 1, bottom)
+    p.px(right, y0 + 2, bottomDark)
   }
-  // Torso.
-  p.rect(left, y0, width, 5, d.outfit === 'sailor' ? hex('#f4f0e6') : top)
-  p.rect(left + width - 1, y0, 1, 5, d.outfit === 'sailor' ? hex('#d9d2c4') : topDark)
-  if (d.outfit === 'overalls') {
-    p.rect(left, y0 + 2, width, 3, bottom)
-    p.px(left + 1, y0, bottom)
-    p.px(left + 1, y0 + 1, bottom)
-    if (!side) {
-      p.px(left + width - 2, y0, bottom)
-      p.px(left + width - 2, y0 + 1, bottom)
-    }
-    p.rect(left, y0 + 4, width, 3 + bob, bottom)
+  switch (d.outfit) {
+    case 'overalls':
+      p.rect(left, y0 + 1, width, 2, bottom)
+      p.px(left + 1, y0, bottom)
+      if (!side) p.px(right - 1, y0, bottom)
+      break
+    case 'sailor':
+      p.rect(left, y0, width, 1, top)
+      if (front) p.rect(7, y0 + 1, 2, 1, accent)
+      if (facing === 'up') p.rect(left, y0 + 1, width, 1, top)
+      break
+    case 'kimono':
+      p.rect(left, y0 + 1, width, 1, accent)
+      if (front) p.px(7, y0, topDark)
+      break
+    case 'apron':
+      if (front) p.rect(6, y0 + 1, 4, 2, bottom)
+      else if (side) p.rect(right - 1, y0 + 1, 2, 2, bottom)
+      break
+    case 'coat':
+      if (front) p.px(7, y0 + 1, accent)
+      break
+    case 'hoodie':
+      if (front) p.rect(6, y0 + 2, 4, 1, topDark)
+      break
+    case 'riding':
+      p.rect(left, y0 + 1, width, 1, hex('#2b2236'))
+      p.rect(left, y0 + 2, width, 1, bottom)
+      break
   }
-  if (d.outfit === 'sailor' && facing !== 'up') {
-    p.rect(left, y0, width, 1, top)
-    if (!side) {
-      p.px(left + 3, y0 + 1, hex(d.accent))
-      p.px(left + 4, y0 + 1, hex(d.accent))
-      p.px(left + 3, y0 + 2, hex(d.accent))
-    }
-  }
-  if (d.outfit === 'sailor' && facing === 'up') p.rect(left, y0, width, 2, top)
-  if (d.outfit === 'kimono') p.rect(left, y0 + 3, width, 1, hex(d.accent))
-  if (d.outfit === 'apron' && facing !== 'up') {
-    p.rect(left + 1, y0 + 1, width - 2, 6, bottom)
-    if (!side) p.px(left + 3, y0 + 4, bottomDark)
-  }
-  if (d.outfit === 'coat' && !side && facing === 'down') {
-    p.px(left + 3, y0 + 2, hex(d.accent))
-    p.px(left + 3, y0 + 4, hex(d.accent))
-  }
-  if (d.outfit === 'hoodie' && facing !== 'down') p.rect(left + 1, y0, width - 2, 2, topDark)
-  if (d.outfit === 'hoodie' && facing === 'down') p.rect(left + 2, y0 + 3, width - 4, 1, topDark)
-  if (d.outfit === 'riding') p.rect(left, y0 + 3, width, 1, hex('#2b2236'))
-  // Arms swing opposite the legs.
+
+  // Stubby arms swing opposite the feet.
   const swing = step === 1 ? 1 : step === 2 ? -1 : 0
   if (side) {
-    p.rect(9 + swing, y0 + 1, 2, 3, topDark)
-    p.rect(9 + swing, y0 + 4, 2, 1, skin)
+    p.px(7 + swing, y0, topDark)
+    p.px(7 + swing, y0 + 1, skin)
   } else {
-    p.rect(left - 1, y0 + 1, 1, 3 + swing, top)
-    p.px(left - 1, y0 + 4 + swing, skin)
-    p.rect(left + width, y0 + 1, 1, 3 - swing, topDark)
-    p.px(left + width, y0 + 4 - swing, skin)
+    p.px(left - 1, y0, top)
+    p.px(left - 1, y0 + 1 + Math.max(0, swing), skin)
+    p.px(right + 1, y0, topDark)
+    p.px(right + 1, y0 + 1 + Math.max(0, -swing), skin)
   }
+
   if (d.backpack) {
     const pack = hex('#c0743c')
     const packDark = hex('#8f5230')
     if (facing === 'up') {
-      p.rect(left + 1, y0, width - 2, 5, pack)
-      p.rect(left + 1, y0 + 4, width - 2, 1, packDark)
+      p.rect(6, y0, 4, 3, pack)
+      p.rect(6, y0 + 2, 4, 1, packDark)
     } else if (side) {
-      p.rect(left - 2, y0, 3, 5, pack)
-      p.rect(left - 2, y0 + 4, 3, 1, packDark)
+      p.rect(left - 2, y0, 2, 3, pack)
+      p.px(left - 2, y0 + 2, packDark)
     } else {
       p.px(left + 1, y0, packDark)
-      p.px(left + width - 2, y0, packDark)
-      p.px(left + 1, y0 + 1, packDark)
-      p.px(left + width - 2, y0 + 1, packDark)
+      p.px(right - 1, y0, packDark)
     }
   }
 }
@@ -326,128 +318,105 @@ function paintHead(p: Painter, d: ResidentDesign, facing: Facing, bob: number) {
   const side = facing === 'side'
   const back = facing === 'up'
   const hood = d.accessory === 'hood'
-  const hairColor = hood ? hex(d.top) : hair
-  const hairShade = hood ? shade(d.top, -0.25) : hairDark
+  const main = hood ? hex(d.top) : hair
+  const dark = hood ? shade(d.top, -0.25) : hairDark
+  const behind = (x: number, y: number, w: number, h: number) => p.rect(x, y + dy, w, h, dark)
 
-  // Hair behind the head.
-  const behind = (x: number, y: number, w: number, h: number) => p.rect(x, y + dy, w, h, hairShade)
+  // Hair that hangs behind the head.
   if (!hood) {
-    if (d.hair === 'long') {
-      if (back) behind(4, 9, 12, 9)
-      else if (side) behind(4, 9, 6, 9)
-      else {
-        behind(3, 9, 2, 9)
-        behind(15, 9, 2, 9)
-      }
-    }
-    if (d.hair === 'twintails') {
-      if (side) behind(2, 9, 3, 8)
-      else {
-        behind(1, 9, 3, 8)
-        behind(16, 9, 3, 8)
-      }
-    }
-    if (d.hair === 'ponytail') {
-      if (back) behind(8, 12, 4, 8)
-      else if (side) behind(2, 7, 3, 9)
-    }
-    if (d.hair === 'braid' && (back || side)) behind(back ? 9 : 4, 13, 2, 8)
-    if (d.hair === 'bob') {
-      if (side) behind(4, 9, 6, 6)
-      else {
-        behind(3, 9, 2, 6)
-        behind(15, 9, 2, 6)
-      }
+    switch (d.hair) {
+      case 'long':
+        if (back) behind(3, 7, 10, 7)
+        else if (side) behind(3, 7, 4, 7)
+        else {
+          behind(2, 7, 2, 7)
+          behind(12, 7, 2, 7)
+        }
+        break
+      case 'twintails':
+        if (side) behind(1, 6, 2, 5)
+        else {
+          behind(0, 6, 2, 5)
+          behind(14, 6, 2, 5)
+        }
+        break
+      case 'ponytail':
+        if (back) behind(7, 10, 2, 4)
+        else if (side) behind(1, 5, 2, 5)
+        break
+      case 'braid':
+        if (back) behind(7, 10, 2, 5)
+        else if (side) behind(3, 10, 2, 4)
+        break
+      case 'bob':
+        if (side) behind(3, 7, 4, 4)
+        else {
+          behind(2, 6, 2, 5)
+          behind(12, 6, 2, 5)
+        }
+        break
     }
   }
 
   // Head and face.
-  for (let y = 4; y <= 16; y++)
-    for (let x = 3; x <= 16; x++) if (inHead(x, y)) p.px(x, y + dy, skin)
+  for (let y = 2; y <= 12; y++)
+    for (let x = 2; x <= 13; x++) if (inHead(x, y)) p.px(x, y + dy, skin)
   const fringe = (x: number) => {
     switch (d.hair) {
       case 'spiky':
-        return 8 + ((x * 3) % 4 === 0 ? 1 : 0)
+        return 6 + ((x * 3) % 4 === 0 ? 1 : 0)
       case 'short':
-        return 7 + (x % 3 === 0 ? 1 : 0)
+        return 5 + (x % 3 === 0 ? 1 : 0)
       case 'bob':
       case 'buns':
-        return 8
+        return 6
       default:
-        return 7 + (x % 4 === 1 ? 1 : 0)
+        return 6 + (x % 4 === 1 ? 1 : 0)
     }
   }
-  for (let y = 3; y <= 16; y++) {
-    for (let x = 2; x <= 17; x++) {
+  for (let y = 2; y <= 12; y++) {
+    for (let x = 2; x <= 13; x++) {
       if (!inHead(x, y)) continue
       let covered: boolean
       if (back) covered = true
-      else if (side) covered = y < fringe(x) || x < 10 || (x < 12 && y < 10)
-      else covered = y < fringe(x) || x <= 4 || x >= 15 || ((x === 5 || x === 14) && y < 12)
-      if (hood) covered = covered || (!side && !back ? y < 8 || x <= 4 || x >= 15 : covered)
+      else if (side) covered = y < fringe(x) || x < 7 || (x < 9 && y < 8)
+      else covered = y < fringe(x) || x <= 3 || x >= 12 || ((x === 4 || x === 11) && y < 9)
+      if (hood && !back && !side) covered = covered || y < 6 || x <= 4 || x >= 11
       if (!covered) continue
-      p.px(
-        x,
-        y + dy,
-        y <= 6 && x <= 9 && !back
-          ? hairColor
-          : hairColor === hair
-            ? x >= 13 || y >= 13
-              ? hairDark
-              : hair
-            : x >= 13
-              ? hairShade
-              : hairColor
-      )
+      p.px(x, y + dy, x >= 11 || y >= 10 ? dark : main)
     }
   }
   if (!hood) {
     // A shine on the hair for volume.
-    if (!back) {
-      p.px(7, 5 + dy, hairLight)
-      p.px(8, 5 + dy, hairLight)
-    } else {
-      p.px(8, 6 + dy, hairLight)
-      p.px(9, 6 + dy, hairLight)
-    }
+    if (back) p.rect(7, 4 + dy, 2, 1, hairLight)
+    else p.rect(5, 4 + dy, 2, 1, hairLight)
     if (d.hair === 'spiky') {
-      for (const x of [5, 8, 11, 14]) p.px(x, 3 + dy, hair)
-      p.px(17, 8 + dy, hair)
-      p.px(2, 8 + dy, hair)
+      for (const x of [5, 8, 10]) p.px(x, 2 + dy, hair)
+      p.px(2, 6 + dy, hair)
+      p.px(13, 6 + dy, hair)
     }
-    if (d.hair === 'buns') {
-      for (const cx of side ? [8] : [4, 15]) {
-        p.rect(cx - 1, 3 + dy, 3, 3, hair)
-        p.px(cx + 1, 5 + dy, hairDark)
+    if (d.hair === 'buns')
+      for (const x of side ? [5] : [3, 11]) {
+        p.rect(x, 1 + dy, 2, 2, hair)
+        p.px(x + 1, 2 + dy, hairDark)
       }
-    }
     if (d.hair === 'braid' && facing === 'down') {
-      p.rect(14, 13 + dy, 2, 5, hairDark)
-      p.px(14, 18 + dy, hex(d.accent))
+      p.rect(11, 10 + dy, 1, 4, hairDark)
+      p.px(11, 14 + dy, hex(d.accent))
     }
-    if (d.hair === 'ponytail' && facing === 'down') p.rect(9, 3 + dy, 2, 1, hex(d.accent))
+    if (d.hair === 'ponytail' && facing === 'down') p.rect(7, 2 + dy, 2, 1, hex(d.accent))
   }
 
-  // Eyes, blush and mouth.
+  // Dot eyes and rosy cheeks.
   const eye = hex('#2b2236')
-  const shine = hex('#ffffff')
   const blush = hex('#f29a9a')
   if (facing === 'down') {
-    for (const x of [7, 12]) {
-      p.px(x, 10 + dy, eye)
-      p.px(x, 11 + dy, eye)
-      p.px(x, 10 + dy, x === 7 ? eye : eye)
-    }
-    p.px(7, 10 + dy, shine)
-    p.px(12, 10 + dy, shine)
-    p.px(6, 12 + dy, blush)
-    p.px(13, 12 + dy, blush)
-    p.px(9, 13 + dy, hex('#c4645e'))
+    for (const x of [5, 10]) p.rect(x, 8 + dy, 1, 2, eye)
+    p.px(4, 10 + dy, blush)
+    p.px(11, 10 + dy, blush)
   } else if (side) {
-    p.px(13, 10 + dy, shine)
-    p.px(13, 11 + dy, eye)
-    p.px(14, 11 + dy, eye)
-    p.px(14, 12 + dy, blush)
+    p.rect(10, 8 + dy, 1, 2, eye)
+    p.px(11, 10 + dy, blush)
   }
   paintAccessory(p, d, facing, dy)
 }
@@ -461,120 +430,121 @@ function paintAccessory(p: Painter, d: ResidentDesign, facing: Facing, dy: numbe
     p.rect(x, y + dy, w, h, color)
   switch (d.accessory) {
     case 'cap':
-      r(4, 3, 12, 3, accent)
-      r(4, 5, 12, 1, accentDark)
-      if (front) r(5, 6, 10, 1, accentDark)
-      if (side) r(14, 5, 4, 1, accentDark)
+      r(5, 2, 6, 1, accent)
+      r(4, 3, 8, 2, accent)
+      if (front) r(4, 5, 8, 1, accentDark)
+      if (side) r(10, 5, 4, 1, accentDark)
       break
     case 'strawHat': {
       const straw = hex('#f1d27a')
-      const strawDark = hex('#c9a24f')
-      r(1, 5, 18, 2, straw)
-      r(1, 6, 18, 1, strawDark)
-      r(5, 2, 10, 3, straw)
-      r(5, 4, 10, 1, hex(d.accent))
+      r(5, 1, 6, 3, straw)
+      r(5, 3, 6, 1, accent)
+      r(2, 4, 12, 1, straw)
+      r(2, 5, 12, 1, hex('#c9a24f'))
       break
     }
     case 'beret':
-      r(4, 3, 11, 2, accent)
-      r(3, 4, 12, 1, accentDark)
-      p.px(9, 2 + dy, accentDark)
+      r(4, 2, 8, 2, accent)
+      r(3, 3, 9, 1, accentDark)
+      r(8, 1, 1, 1, accentDark)
       break
     case 'ribbon':
-      r(side ? 6 : 12, 3, 2, 2, accent)
-      r(side ? 9 : 15, 3, 2, 2, accent)
-      p.px(side ? 8 : 14, 4 + dy, accentDark)
+      r(side ? 4 : 10, 2, 2, 2, accent)
+      r(side ? 7 : 13, 2, 2, 2, accent)
+      r(side ? 6 : 12, 3, 1, 1, accentDark)
       break
-    case 'flower':
-      p.px(side ? 6 : 14, 4 + dy, hex('#fff6e8'))
-      p.px(side ? 5 : 13, 5 + dy, hex('#fff6e8'))
-      p.px(side ? 7 : 15, 5 + dy, hex('#fff6e8'))
-      p.px(side ? 6 : 14, 6 + dy, hex('#fff6e8'))
-      p.px(side ? 6 : 14, 5 + dy, hex('#ffcf3f'))
+    case 'flower': {
+      const petal = hex('#fff6e8')
+      const fx = side ? 5 : 11
+      r(fx, 2, 1, 1, petal)
+      r(fx - 1, 3, 1, 1, petal)
+      r(fx + 1, 3, 1, 1, petal)
+      r(fx, 4, 1, 1, petal)
+      r(fx, 3, 1, 1, hex('#ffcf3f'))
       break
-    case 'catEars':
-      for (const x of side ? [7] : [4, 14]) {
-        r(x, 2, 2, 2, hex(d.hairColor))
-        p.px(x + (x < 10 ? 0 : 1), 1 + dy, hex(d.hairColor))
-        if (!side && facing !== 'up') p.px(x + (x < 10 ? 1 : 0), 3 + dy, hex('#f6a5b8'))
+    }
+    case 'catEars': {
+      const fur = hex(d.hairColor)
+      for (const x of side ? [5] : [3, 11]) {
+        r(x, 2, 2, 2, fur)
+        r(x + (x < 8 ? 0 : 1), 1, 1, 1, fur)
+        if (front) r(x + (x < 8 ? 1 : 0), 3, 1, 1, hex('#f6a5b8'))
       }
       break
+    }
     case 'witchHat': {
       const hat = hex('#3d3357')
-      r(2, 5, 16, 2, hat)
-      r(5, 3, 10, 2, hat)
-      r(7, 1, 6, 2, hat)
-      r(9, 0, 3, 1, hat)
-      r(5, 4, 10, 1, accent)
+      r(2, 5, 12, 1, hat)
+      r(4, 3, 8, 2, hat)
+      r(4, 4, 8, 1, accent)
+      r(5, 2, 6, 1, hat)
+      r(6, 1, 4, 1, hat)
+      r(8, 0, 3, 1, hat)
       break
     }
     case 'crown': {
       const gold = hex('#f2c94c')
-      r(6, 3, 8, 2, gold)
-      for (const x of [6, 9, 13]) p.px(x, 2 + dy, gold)
-      p.px(10, 3 + dy, hex('#e0574f'))
+      r(5, 2, 6, 2, gold)
+      for (const x of [5, 7, 8, 10]) r(x, 1, 1, 1, gold)
+      r(7, 3, 2, 1, hex('#e0574f'))
       break
     }
-    case 'headphones': {
-      const band = hex('#4a4458')
-      r(4, 3, 12, 1, band)
-      if (!side) {
-        r(2, 8, 2, 4, accent)
-        r(16, 8, 2, 4, accent)
-      } else r(8, 8, 3, 4, accent)
-      break
-    }
-    case 'goggles':
-      r(3, 6, 14, 1, hex('#4a4458'))
-      if (front) {
-        r(5, 5, 4, 3, accent)
-        r(11, 5, 4, 3, accent)
-        p.px(6, 6 + dy, hex('#ffffff'))
-        p.px(12, 6 + dy, hex('#ffffff'))
-      } else if (side) r(12, 5, 4, 3, accent)
-      break
-    case 'glasses':
-      if (front) {
-        const frame = hex('#4a4458')
-        r(5, 9, 4, 1, frame)
-        r(10, 9, 5, 1, frame)
-        p.px(5, 10 + dy, frame)
-        p.px(8, 10 + dy, frame)
-        p.px(11, 10 + dy, frame)
-        p.px(14, 10 + dy, frame)
-        r(5, 12, 4, 1, frame)
-        r(11, 12, 4, 1, frame)
-      } else if (side) {
-        r(12, 9, 4, 1, hex('#4a4458'))
-        p.px(15, 10 + dy, hex('#4a4458'))
+    case 'headphones':
+      r(4, 2, 8, 1, hex('#4a4458'))
+      if (side) r(7, 6, 2, 3, accent)
+      else {
+        r(2, 6, 2, 3, accent)
+        r(12, 6, 2, 3, accent)
       }
       break
+    case 'goggles':
+      r(3, 5, 10, 1, hex('#4a4458'))
+      if (front) {
+        r(5, 4, 2, 2, accent)
+        r(9, 4, 2, 2, accent)
+        r(5, 4, 1, 1, hex('#ffffff'))
+        r(9, 4, 1, 1, hex('#ffffff'))
+      } else if (side) r(10, 4, 2, 2, accent)
+      break
+    case 'glasses': {
+      const frame = hex('#4a4458')
+      if (front)
+        for (const x of [4, 9]) {
+          r(x, 7, 3, 1, frame)
+          r(x, 10, 3, 1, frame)
+          r(x, 8, 1, 2, frame)
+          r(x + 2, 8, 1, 2, frame)
+        }
+      else if (side) {
+        r(9, 7, 3, 1, frame)
+        r(9, 10, 3, 1, frame)
+        r(11, 8, 1, 2, frame)
+      }
+      break
+    }
     case 'beanie':
-      r(4, 2, 12, 5, accent)
-      r(4, 6, 12, 1, accentDark)
-      p.px(9, 1 + dy, hex('#f4f0e6'))
-      p.px(10, 1 + dy, hex('#f4f0e6'))
+      r(4, 2, 8, 3, accent)
+      r(3, 5, 10, 1, accentDark)
+      r(7, 1, 2, 1, hex('#f4f0e6'))
       break
     case 'hood':
-      r(4, 3, 12, 2, hex(d.top))
+      r(5, 2, 6, 1, hex(d.top))
       break
     case 'sprout': {
       const leaf = hex('#6cc04f')
-      p.px(10, 3 + dy, hex('#3f8a3d'))
-      p.px(10, 2 + dy, hex('#3f8a3d'))
-      r(8, 1, 2, 1, leaf)
-      r(11, 1, 2, 1, leaf)
+      r(8, 1, 1, 2, hex('#3f8a3d'))
+      r(6, 0, 2, 1, leaf)
+      r(9, 0, 2, 1, leaf)
       break
     }
     case 'helmet': {
       const shell = hex('#2b2236')
-      r(4, 3, 12, 4, shell)
-      r(5, 2, 10, 1, shell)
-      p.px(7, 3 + dy, hex('#5a4f75'))
-      p.px(8, 3 + dy, hex('#5a4f75'))
-      if (front) r(5, 7, 10, 1, shell)
-      if (side) r(14, 6, 4, 1, shell)
-      r(9, 2, 2, 1, accent)
+      r(5, 2, 6, 1, shell)
+      r(4, 3, 8, 3, shell)
+      r(6, 3, 2, 1, hex('#5a4f75'))
+      r(8, 2, 1, 1, accent)
+      if (front) r(4, 6, 8, 1, shell)
+      if (side) r(10, 5, 4, 1, shell)
       break
     }
     case 'none':
@@ -589,7 +559,7 @@ export function paintResidentSheet(design: ResidentDesign) {
   facings.forEach((facing, row) => {
     for (let frame = 0; frame < RESIDENT_FRAMES; frame++) {
       const cell = createBuffer(width, height)
-      const p = painter(cell, 0, 0)
+      const p = painter(cell, 1, 1)
       const bob = frame === 0 ? 0 : 1
       paintBody(p, design, facing, frame, bob)
       paintHead(p, design, facing, bob)
