@@ -64,7 +64,9 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
   const [panTool, setPanTool] = useState(false)
   const [spaceHeld, setSpaceHeld] = useState(false)
   const [dragging, setDragging] = useState(false)
-  const [activeSlug, setActiveSlug] = useState<string | null>(null)
+  const [activeSlug, setActiveSlug] = useState<string | null>(() =>
+    openSlug ? null : (newestSlug ?? null)
+  )
   const [listOpen, setListOpen] = useState(false)
   const [cursor, setCursor] = useState<CursorInfo>(null)
   const [coarse, setCoarse] = useState(false)
