@@ -96,6 +96,8 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
       const top = position.y - boxHeight + 2
       const inView = left + boxWidth > 0 && top + boxHeight > 0 && left < width && top < height
       if (button) {
+        button.dataset.swimming = String(position.swimming)
+        button.dataset.dragging = String(position.dragging)
         button.style.width = `${boxWidth}px`
         button.style.height = `${boxHeight}px`
         button.style.transform = `translate(${left}px, ${top}px)`
@@ -167,6 +169,13 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
       tap: () => {
         if (latest.current.mode === 'view') setActiveSlug(null)
       },
+      residentStart: (slug, point) =>
+        sceneRef.current.renderer.current?.beginResidentDrag(slug, point),
+      residentMove: (point) => {
+        setActiveSlug(null)
+        sceneRef.current.renderer.current?.moveResidentDrag(point)
+      },
+      residentEnd: (cancel) => sceneRef.current.renderer.current?.endResidentDrag(cancel),
       setDragging
     })
   )
@@ -246,6 +255,7 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
       if (openSlug || document.querySelector('dialog[open]') || isTyping(event.target)) return
       const { mode: currentMode } = latest.current
       if (event.key === 'Escape') {
+        input.cancel()
         if (listOpen) {
           setListOpen(false)
           listToggle.current?.focus()
@@ -396,6 +406,12 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
         onPointerUp={input.pointerUp}
         onPointerCancel={input.pointerCancel}
         onPointerLeave={input.pointerLeave}
+        onClickCapture={(event) => {
+          if (input.consumeResidentClick()) {
+            event.preventDefault()
+            event.stopPropagation()
+          }
+        }}
         onContextMenu={(event) => {
           if (editing) event.preventDefault()
         }}
@@ -424,6 +440,8 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
               }}
               className={`island-resident${post.slug === newestSlug ? ' is-new' : ''}`}
               type="button"
+              data-resident={post.slug}
+              title="クリックで話しかける・ドラッグで移動"
               aria-label={`${post.title}（住人に話しかける）`}
               aria-expanded={activeSlug === post.slug}
               aria-controls={activeSlug === post.slug ? 'town-bubble' : undefined}

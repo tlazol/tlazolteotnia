@@ -16,10 +16,16 @@ import {
   tilesAlong
 } from '../src/lib/island-edit'
 import {
+  canResidentEnter,
   createResidents,
   designResidents,
+  dropResident,
+  footOf,
   paintResidentSheet,
-  settleResidents
+  residentIsSwimming,
+  residentOccupies,
+  settleResidents,
+  stepResidents
 } from '../src/lib/island-residents'
 import { decorVariants } from '../src/lib/island-sprites'
 import {
@@ -352,11 +358,180 @@ describe('island residents', () => {
     expect(sheet.data.some((value, i) => i % 4 === 3 && value > 0)).toBe(true)
   })
 
-  it('moves residents off tiles that became sea', () => {
+  it('lets residents swim when their ground becomes sea', () => {
     const world = createDefaultIsland()
     const residents = createResidents(['a'], [{ x: 40, y: 30 }])
     world.ground[30 * world.columns + 40] = WATER
-    expect(settleResidents(world, residents)).toEqual(['a'])
-    expect(isWalkable(world, residents[0].tile.x, residents[0].tile.y)).toBe(true)
+    expect(settleResidents(world, residents)).toEqual([])
+    expect(residentIsSwimming(world, residents[0])).toBe(true)
+  })
+
+  it('assigns three walking speeds that stay stable when residents are reordered', () => {
+    const slugs = posts.map((post) => post.slug)
+    const residents = createResidents(slugs, [{ x: 0, y: 0 }])
+    expect([...new Set(residents.map((resident) => resident.speed))].sort((a, b) => a - b)).toEqual(
+      [14, 21, 28]
+    )
+    const reordered = createResidents([...slugs].reverse(), [{ x: 0, y: 0 }])
+    for (const resident of residents)
+      expect(reordered.find((other) => other.slug === resident.slug)?.speed).toBe(resident.speed)
+  })
+
+  it('moves at each walking speed and slows down in water', () => {
+    const world = createIsland(20, 1)
+    for (const ground of [GRASS, WATER]) {
+      world.ground.fill(ground)
+      for (const speed of [14, 21, 28]) {
+        const residents = createResidents(['walker'], [{ x: 0, y: 0 }])
+        const resident = residents[0]
+        resident.speed = speed
+        resident.target = { x: 1, y: 0 }
+        const start = resident.x
+        stepResidents(world, residents, 0.1, () => false)
+        expect(resident.x - start).toBeCloseTo(speed * (ground === WATER ? 0.65 : 1) * 0.1)
+      }
+    }
+  })
+
+  it('chooses fresh activities on creation and animates stationary residents in place', () => {
+    const world = createIsland(20, 1)
+    world.ground.fill(GRASS)
+    const activities = ['walk', 'idle', 'dance', 'jump']
+    const rolls = [0.1, 0.5, 0.01, 0.9]
+    for (const [index, action] of activities.entries()) {
+      const residents = createResidents(['performer'], [{ x: 0, y: 0 }], () => rolls[index])
+      const resident = residents[0]
+      expect(resident.action).toBe(action)
+      resident.actionClock = 0
+      resident.wait = 0
+      const start = { x: resident.x, y: resident.y }
+      stepResidents(world, residents, 0.2, () => false)
+      if (action === 'walk') {
+        expect(resident.x).toBeGreaterThan(start.x)
+      } else {
+        expect({ x: resident.x, y: resident.y }).toEqual(start)
+        expect(resident.target).toBeNull()
+        if (action === 'idle') expect(resident.offsetY).toBe(0)
+        else expect(resident.offsetY).toBeLessThan(0)
+        if (action === 'dance') expect(resident.tilt).not.toBe(0)
+      }
+      const clock = resident.actionClock
+      stepResidents(world, residents, 1, () => true)
+      expect(resident.actionClock).toBe(clock)
+      expect(resident.offsetY).toBe(0)
+      expect(resident.tilt).toBe(0)
+    }
+  })
+
+  it('changes activities after a timeout but finishes a reserved step first', () => {
+    const world = createIsland(20, 1)
+    world.ground.fill(GRASS)
+    const residents = createResidents(['performer'], [{ x: 0, y: 0 }], () => 0.1)
+    const resident = residents[0]
+    resident.target = { x: 1, y: 0 }
+    resident.actionRemaining = 0
+    stepResidents(world, residents, 0.1, () => false)
+    expect(resident.action).toBe('walk')
+    expect(resident.target).toEqual({ x: 1, y: 0 })
+    for (let i = 0; i < 30 && resident.target; i++)
+      stepResidents(world, residents, 0.1, () => false)
+    expect(resident.tile).toEqual({ x: 1, y: 0 })
+    stepResidents(world, residents, 0.1, () => false)
+    expect(resident.action).not.toBe('walk')
+    expect(resident.actionRemaining).toBeGreaterThan(0)
+    expect(resident.target).toBeNull()
+    expect(resident.route).toEqual([])
+  })
+
+  it('travels well beyond home, swims across water and returns to land', () => {
+    const world = createIsland(24, 1)
+    world.ground.fill(GRASS)
+    world.ground.fill(WATER, 4, 9)
+    const residents = createResidents(['traveller'], [{ x: 0, y: 0 }])
+    residents[0].action = 'walk'
+    residents[0].actionRemaining = 1000
+    let farthest = 0
+    let swam = false
+    let landed = false
+    for (let i = 0; i < 1800; i++) {
+      stepResidents(world, residents, 0.1, () => false)
+      const resident = residents[0]
+      farthest = Math.max(farthest, resident.tile.x)
+      if (residentIsSwimming(world, resident)) swam = true
+      if (swam && resident.tile.x >= 9 && !residentIsSwimming(world, resident)) landed = true
+      expect(canResidentEnter(world, resident.tile.x, resident.tile.y)).toBe(true)
+    }
+    expect(farthest).toBeGreaterThan(16)
+    expect(swam).toBe(true)
+    expect(landed).toBe(true)
+  })
+
+  it('routes around solid objects and reserves steps without overlapping residents', () => {
+    const world = createIsland(20, 12)
+    world.ground.fill(GRASS)
+    for (let y = 0; y < 10; y++) world.decor[y * world.columns + 5] = decorCode('tree')
+    const residents = createResidents(
+      ['a', 'b', 'c'],
+      [
+        { x: 1, y: 1 },
+        { x: 2, y: 1 },
+        { x: 3, y: 1 }
+      ]
+    )
+    for (const resident of residents) {
+      resident.action = 'walk'
+      resident.actionRemaining = 1000
+    }
+    let crossed = false
+    for (let i = 0; i < 1800; i++) {
+      stepResidents(world, residents, 0.1, () => false)
+      for (const resident of residents) {
+        expect(canResidentEnter(world, resident.tile.x, resident.tile.y)).toBe(true)
+        if (resident.tile.x > 5) crossed = true
+        for (const other of residents) {
+          if (other === resident) continue
+          expect(residentOccupies(other, resident.tile.x, resident.tile.y)).toBe(false)
+          if (resident.target)
+            expect(residentOccupies(other, resident.target.x, resident.target.y)).toBe(false)
+        }
+      }
+    }
+    expect(crossed).toBe(true)
+  })
+
+  it('pauses even mid-step while a resident is held or selected', () => {
+    const world = createIsland(20, 1)
+    world.ground.fill(GRASS)
+    const residents = createResidents(['a'], [{ x: 0, y: 0 }])
+    residents[0].action = 'walk'
+    residents[0].wait = 0
+    stepResidents(world, residents, 0.1, () => false)
+    const before = { ...residents[0] }
+    stepResidents(world, residents, 1, () => true)
+    expect(residents[0].x).toBe(before.x)
+    expect(residents[0].target).toEqual(before.target)
+  })
+
+  it('drops onto land or water, rejects obstacles, occupied tiles and outside the map', () => {
+    const world = createIsland(20, 2)
+    world.ground[1] = GRASS
+    world.decor[2] = decorCode('searock')
+    const residents = createResidents(
+      ['a', 'b'],
+      [
+        { x: 0, y: 0 },
+        { x: 3, y: 0 }
+      ]
+    )
+    const resident = residents[0]
+    expect(dropResident(world, residents, resident, footOf({ x: 1, y: 0 }))).toBe(true)
+    expect(residentIsSwimming(world, resident)).toBe(false)
+    expect(dropResident(world, residents, resident, footOf({ x: 7, y: 0 }))).toBe(true)
+    expect(residentIsSwimming(world, resident)).toBe(true)
+    for (const x of [-1, 2, 3, 20])
+      expect(dropResident(world, residents, resident, footOf({ x, y: 0 }))).toBe(false)
+    expect(resident.tile).toEqual({ x: 7, y: 0 })
+    expect(resident.target).toBeNull()
+    expect(resident.route).toEqual([])
   })
 })

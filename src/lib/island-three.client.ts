@@ -39,6 +39,7 @@ import {
 } from './island-art'
 import { type IslandView, WORLD_HEIGHT, WORLD_WIDTH } from './island-camera'
 import {
+  dropResident,
   facings,
   paintResidentSheet,
   RESIDENT_FOOT_PAD,
@@ -47,6 +48,7 @@ import {
   RESIDENT_SCALE,
   type Resident,
   type ResidentDesign,
+  residentIsSwimming,
   residentOccupies,
   settleResidents,
   stepResidents
@@ -73,6 +75,8 @@ export type ResidentScreen = {
   y: number
   width: number
   height: number
+  swimming: boolean
+  dragging: boolean
 }
 export type CursorTile = { x: number; y: number; allowed: boolean }
 export type IslandCursor = { tiles: CursorTile[]; soft: boolean; center: { x: number; y: number } }
@@ -429,7 +433,7 @@ function ringBuffer() {
 // Stencil marks: decorations stamp 1 where they are drawn, residents stamp 0,
 // so a resident's silhouette shows only where a tree or rock hides them.
 const BEHIND_DECOR = 1
-const stampStencil = (material: Material, ref: number) => {
+const stampStencil = <T extends Material>(material: T, ref: number): T => {
   material.stencilWrite = true
   material.stencilRef = ref
   material.stencilFunc = AlwaysStencilFunc
@@ -703,7 +707,9 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
       ? paintResidentSheet(design)
       : createBuffer(RESIDENT_FRAME.width * RESIDENT_FRAMES, RESIDENT_FRAME.height * 3)
     const texture = track(textureFrom(buffer))
-    texture.repeat.set(1 / RESIDENT_FRAMES, 1 / facings.length)
+    const swimTexture = track(textureFrom(design ? paintResidentSheet(design, true) : buffer))
+    for (const map of [texture, swimTexture])
+      map.repeat.set(1 / RESIDENT_FRAMES, 1 / facings.length)
     const mesh = new Mesh(
       residentGeometry,
       track(stampStencil(new MeshBasicMaterial({ map: texture, alphaTest: 0.5 }), 0))
@@ -728,7 +734,7 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
     silhouette.renderOrder = 5
     mesh.add(silhouette)
     scene.add(mesh)
-    return { mesh, texture }
+    return { mesh, texture, swimTexture, silhouette }
   })
   const residentShadows = new SpriteLayer(
     scene,
@@ -897,6 +903,8 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
   let view: IslandView = { x: WORLD_WIDTH / 2, y: WORLD_HEIGHT / 2, zoom: 2 }
   let size: SceneSize = { width: 0, height: 0 }
   let origin = { left: 0, top: 0 }
+  let dragged: { resident: Resident; original: Resident; offset: { x: number; y: number } } | null =
+    null
   let selected: string | null = null
   let focused: string | null = null
   let editing = false
@@ -923,21 +931,28 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
 
   function project(): ResidentScreen[] {
     return residents.map((resident) => {
-      const x = Math.round(resident.x)
-      const y = Math.round(resident.y)
+      const x = Math.round(resident.x + resident.offsetX)
+      const y = Math.round(resident.y + resident.offsetY)
       return {
         slug: resident.slug,
         x: (x - origin.left) * view.zoom,
         y: (y - origin.top) * view.zoom,
         width: residentWidth * view.zoom,
-        height: residentHeight * view.zoom
+        height: residentHeight * view.zoom,
+        swimming: residentIsSwimming(world, resident) && dragged?.resident !== resident,
+        dragging: dragged?.resident === resident
       }
     })
   }
 
   function placeResidents() {
     residents.forEach((resident, i) => {
-      const { mesh, texture } = residentMeshes[i]
+      const { mesh, texture: walkTexture, swimTexture, silhouette } = residentMeshes[i]
+      const swimming = residentIsSwimming(world, resident) && dragged?.resident !== resident
+      const texture = swimming ? swimTexture : walkTexture
+      mesh.material.map = texture
+      silhouette.material.uniforms.map.value = texture
+      silhouette.material.uniforms.uvTransform.value = texture.matrix
       const row = facings.indexOf(resident.facing)
       texture.offset.set(resident.frame / RESIDENT_FRAMES, 1 - (row + 1) / facings.length)
       texture.updateMatrix()
@@ -946,12 +961,23 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
       // Keep the shoes where the full-size art put them and shrink upward.
       const sole = footY + 1 - RESIDENT_FOOT_PAD
       mesh.position.set(
-        footX,
-        -(sole - residentHeight / 2 + RESIDENT_FOOT_PAD * RESIDENT_SCALE),
+        footX + Math.round(resident.offsetX),
+        -(
+          sole +
+          Math.round(resident.offsetY) -
+          residentHeight / 2 +
+          RESIDENT_FOOT_PAD * RESIDENT_SCALE
+        ),
         spriteZ(footY)
       )
       mesh.scale.x = resident.flip ? -1 : 1
-      residentShadows.set(i, footX, footY + 2, Z.shadow)
+      mesh.rotation.z = resident.tilt
+      if (swimming) residentShadows.remove(i)
+      else residentShadows.set(i, footX, footY + 2, Z.shadow)
+      if (dragged?.resident === resident) {
+        mesh.position.y += 5
+        mesh.position.z = Z.cursor + 1
+      }
       for (const [ring, slug] of [
         [selectedRing, selected],
         [focusRing, focused !== selected ? focused : null]
@@ -987,7 +1013,12 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
       const still = reducedMotion.matches
       if (!still) {
         time += dt
-        stepResidents(world, residents, dt, (slug) => slug === selected)
+        stepResidents(
+          world,
+          residents,
+          dt,
+          (slug) => slug === selected || slug === dragged?.resident.slug
+        )
       }
       waterMaterial.uniforms.uTime.value = time
       clock.value = time
@@ -1106,6 +1137,31 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
     },
     focus(slug: string | null) {
       focused = slug
+      wake()
+    },
+    beginResidentDrag(slug: string, point: { x: number; y: number }) {
+      const resident = residents.find((r) => r.slug === slug)
+      if (!resident) return
+      dragged = {
+        resident,
+        original: { ...resident },
+        offset: { x: resident.x - point.x, y: resident.y - point.y }
+      }
+      wake()
+    },
+    moveResidentDrag(point: { x: number; y: number }) {
+      if (!dragged) return
+      dragged.resident.x = point.x + dragged.offset.x
+      dragged.resident.y = point.y + dragged.offset.y
+      wake()
+    },
+    endResidentDrag(cancel: boolean) {
+      if (!dragged) return
+      const { resident, original } = dragged
+      const point = { x: resident.x, y: resident.y }
+      Object.assign(resident, original)
+      if (!cancel) dropResident(world, residents, resident, point)
+      dragged = null
       wake()
     },
     occupied(x: number, y: number) {

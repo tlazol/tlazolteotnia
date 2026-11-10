@@ -37,11 +37,15 @@ export type IslandInputBindings = {
   strokeEnd: (cancel: boolean) => void
   tap: (point: Point) => void
   setDragging: (dragging: boolean) => void
+  residentStart?: (slug: string, point: Point) => void
+  residentMove?: (point: Point) => void
+  residentEnd?: (cancel: boolean) => void
 }
 
 type Gesture =
   | { kind: 'none' }
   | { kind: 'pan'; start: Point; view: IslandView; moved: boolean; id: number }
+  | { kind: 'resident'; start: Point; moved: boolean; id: number }
   | { kind: 'stroke'; id: number }
   | { kind: 'pinch'; distance: number; mid: Point; view: IslandView }
 
@@ -51,6 +55,7 @@ export function createIslandInput(bind: IslandInputBindings) {
   const pointers = new Map<number, Point>()
   let gesture: Gesture = { kind: 'none' }
   let wheelDelta = 0
+  let suppressClick = false
 
   function local(event: { clientX: number; clientY: number }): Point {
     const rect = bind.surface()?.getBoundingClientRect()
@@ -67,6 +72,10 @@ export function createIslandInput(bind: IslandInputBindings) {
   }
   function end(cancel = false) {
     if (gesture.kind === 'stroke') bind.strokeEnd(cancel)
+    if (gesture.kind === 'resident') {
+      suppressClick = gesture.moved
+      bind.residentEnd?.(cancel || !gesture.moved)
+    }
     if (gesture.kind !== 'none') bind.setDragging(false)
     gesture = { kind: 'none' }
   }
@@ -75,20 +84,35 @@ export function createIslandInput(bind: IslandInputBindings) {
     pointerDown(event: PointerLike) {
       if (!bind.ready()) return
       const target = event.target as Element | null
-      // Residents, the bubble and toolbars handle their own clicks.
-      if (target?.closest('button, a, [data-island-ui]')) return
+      const resident = target?.closest<HTMLElement>('[data-resident]')
+      if (!resident && target?.closest('button, a, [data-island-ui]')) return
+      suppressClick = false
       const point = local(event)
       pointers.set(event.pointerId, point)
-      bind.surface()?.setPointerCapture?.(event.pointerId)
+      ;(resident ?? bind.surface())?.setPointerCapture?.(event.pointerId)
       if (pointers.size === 2) {
         // A second finger turns a just-started edit into a camera gesture.
-        if (gesture.kind === 'stroke') bind.strokeEnd(true)
+        end(true)
         bind.hover(null)
         gesture = pinchState()
         bind.setDragging(true)
         return
       }
       if (pointers.size > 2) return
+      if (
+        resident &&
+        !bind.editing() &&
+        !bind.panning() &&
+        event.button === 0 &&
+        bind.residentStart
+      ) {
+        gesture = { kind: 'resident', start: point, moved: false, id: event.pointerId }
+        bind.residentStart(
+          resident.dataset.resident ?? '',
+          screenToWorld(bind.view(), bind.size(), point)
+        )
+        return
+      }
       const camera = event.button === 1 || event.button === 2 || bind.panning() || !bind.editing()
       if (!camera && event.button === 0) {
         gesture = { kind: 'stroke', id: event.pointerId }
@@ -108,6 +132,14 @@ export function createIslandInput(bind: IslandInputBindings) {
         const zoom = nearestZoom(gesture.view.zoom * (distance / gesture.distance))
         const zoomed = zoomViewAt(gesture.view, bind.size(), zoom, gesture.mid)
         bind.setView(panView(zoomed, bind.size(), mid.x - gesture.mid.x, mid.y - gesture.mid.y))
+        return
+      }
+      if (gesture.kind === 'resident' && gesture.id === event.pointerId) {
+        if (!gesture.moved && Math.hypot(point.x - gesture.start.x, point.y - gesture.start.y) < 4)
+          return
+        if (!gesture.moved) bind.setDragging(true)
+        gesture.moved = true
+        bind.residentMove?.(screenToWorld(bind.view(), bind.size(), point))
         return
       }
       if (gesture.kind === 'pan' && gesture.id === event.pointerId) {
@@ -139,6 +171,8 @@ export function createIslandInput(bind: IslandInputBindings) {
         }
         return
       }
+      if (gesture.kind === 'resident' && gesture.moved)
+        bind.residentMove?.(screenToWorld(bind.view(), bind.size(), point))
       if (gesture.kind === 'pan' && !gesture.moved && event.type === 'pointerup') bind.tap(point)
       end()
       if (event.pointerType !== 'touch' && bind.editing()) bind.hover(point)
@@ -146,7 +180,8 @@ export function createIslandInput(bind: IslandInputBindings) {
     pointerCancel(event: PointerLike) {
       pointers.delete(event.pointerId)
       // A cancelled touch (e.g. the browser took over) undoes the partial stroke.
-      if (pointers.size === 0) end(true)
+      end(true)
+      pointers.clear()
     },
     pointerLeave(event: PointerLike) {
       if (event.pointerType !== 'touch' && gesture.kind === 'none') bind.hover(null)
@@ -154,6 +189,7 @@ export function createIslandInput(bind: IslandInputBindings) {
     wheel(event: WheelEvent) {
       if (!bind.ready()) return
       event.preventDefault()
+      if (gesture.kind === 'resident') return
       const scale = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? 400 : 1
       wheelDelta += event.deltaY * scale
       const threshold = event.ctrlKey ? 24 : 60
@@ -163,6 +199,11 @@ export function createIslandInput(bind: IslandInputBindings) {
       const view = bind.view()
       const zoom = stepZoom(view.zoom, direction)
       if (zoom !== view.zoom) bind.setView(zoomViewAt(view, bind.size(), zoom, local(event)))
+    },
+    consumeResidentClick() {
+      const suppressed = suppressClick
+      suppressClick = false
+      return suppressed
     },
     cancel() {
       pointers.clear()

@@ -1,5 +1,16 @@
 import { createBuffer, hex, outline, type PixelBuffer, type Rgba, setPixel } from './island-art'
-import { hash2, type IslandWorld, isWalkable, nearestWalkable, TILE_SIZE } from './island-world'
+import {
+  decorAt,
+  decorBlocksWalking,
+  groundAt,
+  hash2,
+  type IslandWorld,
+  inBounds,
+  isWalkable,
+  nearestWalkable,
+  TILE_SIZE,
+  WATER
+} from './island-world'
 import { hashSlug } from './scene-math'
 
 // ---- Design ---------------------------------------------------------------
@@ -553,7 +564,7 @@ function paintAccessory(p: Painter, d: ResidentDesign, facing: Facing, dy: numbe
 }
 
 // One sheet per resident: rows are facings (down, up, side), columns are frames.
-export function paintResidentSheet(design: ResidentDesign) {
+export function paintResidentSheet(design: ResidentDesign, swimming = false) {
   const { width, height } = RESIDENT_FRAME
   const sheet = createBuffer(width * RESIDENT_FRAMES, height * facings.length)
   facings.forEach((facing, row) => {
@@ -563,7 +574,22 @@ export function paintResidentSheet(design: ResidentDesign) {
       const bob = frame === 0 ? 0 : 1
       paintBody(p, design, facing, frame, bob)
       paintHead(p, design, facing, bob)
+      if (swimming) {
+        // Submerge the body; the head bobs above paddling hands.
+        cell.data.fill(0)
+        const waterPainter = painter(cell, 1, 4)
+        paintHead(waterPainter, design, facing, bob)
+        for (let y = 15; y < height; y++) cell.data.fill(0, y * width * 4, (y + 1) * width * 4)
+        p.rect(frame === 1 ? 1 : 2, 13, 2, 1, hex(design.skin))
+        p.rect(frame === 2 ? 13 : 12, 13, 2, 1, hex(design.skin))
+      }
       outline(cell, hex('#2b2236'))
+      if (swimming) {
+        p.rect(3, 15, 10, 1, hex('#b5f4f5'))
+        p.px(frame === 1 ? 0 : 1, 14, hex('#ffffff'))
+        p.px(frame === 2 ? 15 : 14, 14, hex('#ffffff'))
+        p.rect(frame === 1 ? 5 : 7, 16, 4, 1, hex('#67cbdc'))
+      }
       for (let y = 0; y < height; y++)
         for (let x = 0; x < width; x++) {
           const i = (y * width + x) * 4
@@ -587,6 +613,7 @@ export type Resident = {
   home: { x: number; y: number }
   tile: { x: number; y: number }
   target: { x: number; y: number } | null
+  route: Array<{ x: number; y: number }>
   // Foot position in art pixels.
   x: number
   y: number
@@ -595,15 +622,39 @@ export type Resident = {
   frame: number
   wait: number
   walkClock: number
+  speed: number
+  action: 'walk' | 'idle' | 'dance' | 'jump'
+  actionClock: number
+  actionRemaining: number
+  offsetX: number
+  offsetY: number
+  tilt: number
   seed: number
 }
+
+const COMMON_ACTIONS = ['walk', 'idle', 'jump'] as const
+
+function chooseAction(random: () => number, current?: Resident['action']): Resident['action'] {
+  const roll = random()
+  // Dancing is a rare treat: 2% on arrival and on each eligible activity change.
+  if (current !== 'dance' && roll < 0.02) return 'dance'
+  const choices = COMMON_ACTIONS.filter((action) => action !== current)
+  const commonRoll = current === 'dance' ? roll : (roll - 0.02) / 0.98
+  return choices[Math.min(choices.length - 1, Math.floor(commonRoll * choices.length))]
+}
+// Slow stroll, regular walk and brisk walk, in art pixels per second.
+const WALK_SPEEDS = [14, 21, 28] as const
 
 export const footOf = (tile: { x: number; y: number }) => ({
   x: tile.x * TILE_SIZE + TILE_SIZE / 2,
   y: tile.y * TILE_SIZE + TILE_SIZE - 3
 })
 
-export function createResidents(slugs: string[], homes: Array<{ x: number; y: number }>) {
+export function createResidents(
+  slugs: string[],
+  homes: Array<{ x: number; y: number }>,
+  random = Math.random
+) {
   return slugs.map<Resident>((slug, i) => {
     const home = homes[i] ?? homes[0] ?? { x: 0, y: 0 }
     const foot = footOf(home)
@@ -612,19 +663,24 @@ export function createResidents(slugs: string[], homes: Array<{ x: number; y: nu
       home: { ...home },
       tile: { ...home },
       target: null,
+      route: [],
       ...foot,
       facing: 'down',
       flip: false,
       frame: 0,
-      wait: 1 + hash2(i, 3, 5) * 4,
+      wait: hash2(i, 3, 5) * 2,
       walkClock: 0,
+      speed: WALK_SPEEDS[hashSlug(`walk:${slug}`) % WALK_SPEEDS.length],
+      action: chooseAction(random),
+      actionClock: random() * 2,
+      actionRemaining: 6 + random() * 14,
+      offsetX: 0,
+      offsetY: 0,
+      tilt: 0,
       seed: hashSlug(slug)
     }
   })
 }
-
-const WANDER = 3
-const SPEED = 14 // art pixels per second
 
 export function residentOccupies(resident: Resident, x: number, y: number) {
   return (
@@ -633,13 +689,86 @@ export function residentOccupies(resident: Resident, x: number, y: number) {
   )
 }
 
-// Moves any resident left in the sea or under a tree to the nearest free ground.
+export function canResidentEnter(world: IslandWorld, x: number, y: number) {
+  return inBounds(world, x, y) && !decorBlocksWalking(decorAt(world, x, y))
+}
+
+export function residentIsSwimming(world: IslandWorld, resident: Pick<Resident, 'x' | 'y'>) {
+  return (
+    groundAt(world, Math.floor(resident.x / TILE_SIZE), Math.floor(resident.y / TILE_SIZE)) ===
+    WATER
+  )
+}
+
+export function dropResident(
+  world: IslandWorld,
+  residents: Resident[],
+  resident: Resident,
+  point: { x: number; y: number }
+) {
+  const tile = { x: Math.floor(point.x / TILE_SIZE), y: Math.floor(point.y / TILE_SIZE) }
+  if (
+    !canResidentEnter(world, tile.x, tile.y) ||
+    residents.some((other) => other !== resident && residentOccupies(other, tile.x, tile.y))
+  )
+    return false
+  Object.assign(resident, footOf(tile), { tile, target: null, route: [], frame: 0, wait: 0.6 })
+  return true
+}
+
+// A journey crosses the island, routing around trees, rocks and other residents.
+function planJourney(world: IslandWorld, residents: Resident[], resident: Resident) {
+  const start = resident.tile.y * world.columns + resident.tile.x
+  const previous = new Int32Array(world.ground.length).fill(-1)
+  const blocked = new Set<number>()
+  for (const other of residents) {
+    if (other === resident) continue
+    blocked.add(other.tile.y * world.columns + other.tile.x)
+    if (other.target) blocked.add(other.target.y * world.columns + other.target.x)
+  }
+  const queue = [start]
+  const destinations: number[] = []
+  previous[start] = start
+  for (let head = 0; head < queue.length; head++) {
+    const index = queue[head]
+    const x = index % world.columns
+    const y = Math.floor(index / world.columns)
+    if (isWalkable(world, x, y) && Math.hypot(x - resident.tile.x, y - resident.tile.y) >= 8)
+      destinations.push(index)
+    for (const [dx, dy] of [
+      [1, 0],
+      [0, 1],
+      [-1, 0],
+      [0, -1]
+    ]) {
+      const nx = x + dx
+      const ny = y + dy
+      const next = ny * world.columns + nx
+      if (!canResidentEnter(world, nx, ny) || previous[next] !== -1 || blocked.has(next)) continue
+      previous[next] = index
+      queue.push(next)
+    }
+  }
+  const choices = destinations.length ? destinations : queue.slice(1)
+  if (!choices.length) return []
+  const roll = hash2(resident.seed & 0xffff, performanceSeed(resident), 3)
+  let end = choices[Math.floor(roll * choices.length)]
+  const route = []
+  while (end !== start) {
+    route.push({ x: end % world.columns, y: Math.floor(end / world.columns) })
+    end = previous[end]
+  }
+  return route.reverse()
+}
+
+// Terrain edits only displace residents trapped under solid decoration.
 export function settleResidents(world: IslandWorld, residents: Resident[]) {
   const moved: string[] = []
   for (const resident of residents) {
+    resident.route = []
     const blocked =
-      !isWalkable(world, resident.tile.x, resident.tile.y) ||
-      (resident.target && !isWalkable(world, resident.target.x, resident.target.y))
+      !canResidentEnter(world, resident.tile.x, resident.tile.y) ||
+      (resident.target && !canResidentEnter(world, resident.target.x, resident.target.y))
     if (!blocked) continue
     const spot = nearestWalkable(world, resident.tile.x, resident.tile.y, (x, y) =>
       residents.some((other) => other !== resident && residentOccupies(other, x, y))
@@ -665,37 +794,67 @@ export function stepResidents(
   paused: (slug: string) => boolean
 ) {
   for (const resident of residents) {
+    resident.offsetX = 0
+    resident.offsetY = 0
+    resident.tilt = 0
+    if (paused(resident.slug)) {
+      resident.frame = 0
+      continue
+    }
+    resident.actionRemaining -= dt
+    // Finish the current tile before changing activities so reservations stay valid.
+    if (resident.actionRemaining <= 0 && !resident.target) {
+      resident.action = chooseAction(Math.random, resident.action)
+      resident.actionClock = 0
+      resident.actionRemaining = 6 + Math.random() * 14
+      resident.route = []
+      resident.facing = 'down'
+      resident.flip = false
+    }
+    if (resident.action !== 'walk' && !resident.target) {
+      resident.actionClock += dt
+      const beat = resident.actionClock * Math.PI * 2
+      resident.frame = 0
+      if (resident.action === 'dance') {
+        resident.offsetX = Math.sin(beat * 1.2) * 2
+        resident.offsetY = -Math.abs(Math.sin(beat * 1.2)) * 2
+        resident.tilt = Math.sin(beat * 1.2) * 0.16
+        resident.frame = Math.floor(resident.actionClock / 0.22) % 2 ? 1 : 2
+        resident.facing = 'down'
+      } else if (resident.action === 'jump') {
+        // A short hop followed by a grounded pause.
+        const hop = (resident.actionClock % 1.4) / 0.7
+        resident.offsetY = hop < 1 ? -Math.sin(hop * Math.PI) * 9 : 0
+        resident.frame = hop < 1 ? 1 : 0
+      }
+      continue
+    }
     if (!resident.target) {
       resident.frame = 0
-      if (paused(resident.slug)) continue
       resident.wait -= dt
       if (resident.wait > 0) continue
-      const roll = hash2(resident.seed & 0xffff, Math.floor(performanceSeed(resident)), 3)
-      const directions = [
-        [1, 0],
-        [-1, 0],
-        [0, 1],
-        [0, -1]
-      ] as const
-      const [dx, dy] = directions[Math.floor(roll * 4)]
-      const next = { x: resident.tile.x + dx, y: resident.tile.y + dy }
-      resident.wait = 1.2 + hash2(next.x, next.y, resident.seed & 0xff) * 4
+      if (!resident.route.length) resident.route = planJourney(world, residents, resident)
+      const next = resident.route.shift()
       if (
-        Math.abs(next.x - resident.home.x) > WANDER ||
-        Math.abs(next.y - resident.home.y) > WANDER ||
-        !isWalkable(world, next.x, next.y) ||
+        !next ||
+        !canResidentEnter(world, next.x, next.y) ||
         residents.some((other) => other !== resident && residentOccupies(other, next.x, next.y))
-      )
+      ) {
+        resident.route = []
+        resident.wait = 0.3 + hash2(resident.seed, performanceSeed(resident), 9) * 0.7
         continue
+      }
+      const dx = next.x - resident.tile.x
+      const dy = next.y - resident.tile.y
       resident.target = next
       resident.facing = dy < 0 ? 'up' : dy > 0 ? 'down' : 'side'
       resident.flip = dx < 0
-      continue
     }
     const goal = footOf(resident.target)
     const distance = Math.hypot(goal.x - resident.x, goal.y - resident.y)
-    const move = SPEED * dt
-    resident.walkClock += dt
+    const speed = resident.speed * (residentIsSwimming(world, resident) ? 0.65 : 1)
+    const move = speed * dt
+    resident.walkClock += dt * (speed / 21)
     resident.frame = Math.floor(resident.walkClock / 0.18) % 2 ? 1 : 2
     if (distance <= move) {
       resident.x = goal.x
@@ -703,7 +862,8 @@ export function stepResidents(
       resident.tile = resident.target
       resident.target = null
       resident.frame = 0
-      if (resident.facing === 'up') resident.facing = 'down'
+      if (!resident.route.length)
+        resident.wait = 0.5 + hash2(resident.seed, performanceSeed(resident), 7) * 1.5
     } else {
       resident.x += ((goal.x - resident.x) / distance) * move
       resident.y += ((goal.y - resident.y) / distance) * move

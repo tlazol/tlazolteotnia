@@ -862,9 +862,14 @@ body::after {
   padding: 0;
   border: 0;
   background: transparent;
-  cursor: pointer;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
   visibility: hidden;
   -webkit-tap-highlight-color: transparent;
+}
+.island-surface.is-dragging .island-resident {
+  cursor: grabbing;
 }
 .island-page.is-editing .island-resident {
   pointer-events: none;
