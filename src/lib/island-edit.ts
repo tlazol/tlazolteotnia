@@ -3,6 +3,8 @@ import {
   decorAt,
   decorBlocksWalking,
   decorCode,
+  decorFits,
+  decorInfo,
   decorKindOf,
   decorNames,
   type Ground,
@@ -68,7 +70,14 @@ export function planTileEdit(
         return { edit: null, reason: `もう${groundNames[options.ground]}です`, soft: true }
       return edit({ ground: options.ground })
     case 'decor': {
-      if (ground === WATER) return { edit: null, reason: '海の上には置けません' }
+      if (!decorFits(options.decor, ground))
+        return {
+          edit: null,
+          reason:
+            decorInfo[options.decor].on === 'water'
+              ? `${decorNames[options.decor]}は海に浮かべてください`
+              : '海の上には置けません'
+        }
       const existing = decorKindOf(decor)
       if (existing === options.decor)
         return { edit: null, reason: `もう${decorNames[existing]}があります`, soft: true }

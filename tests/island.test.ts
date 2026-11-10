@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { createBuffer, paintTerrain, terrainClass } from '../src/lib/island-art'
+import {
+  createBuffer,
+  createShoreField,
+  paintTerrain,
+  SHORE_CELL,
+  SHORE_RANGE,
+  terrainClass,
+  updateShoreField
+} from '../src/lib/island-art'
 import { clampView, stepZoom, tileAt, WORLD_WIDTH, zoomViewAt } from '../src/lib/island-camera'
 import {
   createIslandHistory,
@@ -13,11 +21,16 @@ import {
   paintResidentSheet,
   settleResidents
 } from '../src/lib/island-residents'
+import { decorVariants } from '../src/lib/island-sprites'
 import {
   createDefaultIsland,
   createIsland,
+  DECK,
+  decorAt,
   decorCode,
+  decorKinds,
   GRASS,
+  groundAt,
   ISLAND_SAVE_VERSION,
   ISLAND_STORAGE_KEY,
   isWalkable,
@@ -48,6 +61,32 @@ describe('island world', () => {
     expect(a.ground.includes(SAND)).toBe(true)
     expect(a.ground.includes(PATH)).toBe(true)
     expect(a.decor.some((code) => code === decorCode('palm'))).toBe(true)
+  })
+
+  it('starts with a castaway shore and a resort: wreck, camp, pier and cottages', () => {
+    const world = createDefaultIsland()
+    for (const kind of ['wreck', 'sos', 'campfire', 'shelter', 'bungalow', 'parasol'] as const)
+      expect(world.decor.includes(decorCode(kind))).toBe(true)
+    expect(world.ground.includes(DECK)).toBe(true)
+    // Cottages stand on the pier's platforms, the wreck out at sea.
+    world.decor.forEach((code, index) => {
+      const ground = world.ground[index]
+      if (code === decorCode('bungalow')) expect(ground).toBe(DECK)
+      if (code === decorCode('wreck')) expect(ground).toBe(WATER)
+    })
+  })
+
+  it('keeps floating decorations on the sea and drops ones left on the wrong ground', () => {
+    const world = createIsland()
+    world.ground[10 * world.columns + 10] = SAND
+    world.decor[10 * world.columns + 10] = decorCode('boat')
+    world.decor[10 * world.columns + 11] = decorCode('boat')
+    world.decor[10 * world.columns + 12] = decorCode('palm')
+    const restored = parseIsland(serializeIsland(world))
+    if (!restored) throw new Error('save rejected')
+    expect(decorAt(restored, 10, 10)).toBe(0)
+    expect(decorAt(restored, 11, 10)).toBe(decorCode('boat'))
+    expect(decorAt(restored, 12, 10)).toBe(0)
   })
 
   it('round-trips saves and rejects broken, foreign or outdated data', () => {
@@ -139,6 +178,22 @@ describe('island editing', () => {
     ).toHaveLength(1)
   })
 
+  it('floats sea decorations only on water and builds piers over it', () => {
+    const world = createIsland()
+    expect(
+      planBrush(world, 10, 10, options({ tool: 'decor', decor: 'wreck' }), free).edits
+    ).toEqual([{ index: 10 * world.columns + 10, ground: WATER, decor: decorCode('wreck') }])
+    expect(planBrush(world, 10, 10, options({ ground: DECK }), free).edits[0].ground).toBe(DECK)
+    world.ground[10 * world.columns + 10] = DECK
+    expect(planBrush(world, 10, 10, options({ tool: 'decor', decor: 'wreck' }), free).reason).toBe(
+      '難破船は海に浮かべてください'
+    )
+    expect(
+      planBrush(world, 10, 10, options({ tool: 'decor', decor: 'bungalow' }), free).edits
+    ).toHaveLength(1)
+    expect(isWalkable(world, 10, 10)).toBe(true)
+  })
+
   it('uses the big brush for land but places decorations one at a time', () => {
     const world = createIsland()
     expect(planBrush(world, 10, 10, options({ brush: 3 }), free).edits).toHaveLength(9)
@@ -194,6 +249,57 @@ describe('island rendering helpers', () => {
     const buffer = createBuffer(48, 48)
     paintTerrain(world, buffer, 144, 144, 48, 48)
     expect(buffer.data.some((value, i) => i % 4 === 3 && value > 0)).toBe(true)
+  })
+
+  it('keeps deck boards square to their tiles without growing a beach around them', () => {
+    const world = createIsland()
+    world.ground[10 * world.columns + 10] = DECK
+    for (const [px, py] of [
+      [160, 160],
+      [175, 175],
+      [168, 168]
+    ])
+      expect(terrainClass(world, px, py)).toBe(DECK)
+    for (let py = 144; py < 192; py++)
+      for (let px = 144; px < 192; px++)
+        if (groundAt(world, px >> 4, py >> 4) !== DECK)
+          expect(terrainClass(world, px, py)).toBe(WATER)
+  })
+
+  it('measures the distance to the shore exactly, treating piers as open water', () => {
+    const world = createIsland()
+    world.ground[10 * world.columns + 10] = GRASS
+    world.ground[20 * world.columns + 30] = DECK
+    const field = createShoreField(world)
+    updateShoreField(world, field)
+    const at = (px: number, py: number) =>
+      (field.distance[Math.floor(py / SHORE_CELL) * field.width + Math.floor(px / SHORE_CELL)] /
+        255) *
+      SHORE_RANGE *
+      SHORE_CELL
+    expect(at(168, 168)).toBe(0)
+    expect(at(168 + 40, 168)).toBeGreaterThan(30)
+    expect(at(168 + 40, 168)).toBeLessThan(40)
+    expect(at(30 * 16 + 8, 20 * 16 + 8)).toBe(SHORE_RANGE * SHORE_CELL)
+    // Removing the land and updating only that corner clears the whole field.
+    world.ground[10 * world.columns + 10] = WATER
+    updateShoreField(world, field, 70, 70, 100, 100)
+    expect(at(168, 168)).toBe(SHORE_RANGE * SHORE_CELL)
+  })
+
+  it('paints a sprite for every decoration, with animation frames of one size', () => {
+    for (const kind of decorKinds) {
+      expect(decorVariants[kind].length).toBeGreaterThan(0)
+      for (const frame of decorVariants[kind] as Array<
+        (typeof decorVariants)['campfire'][number]
+      >) {
+        expect(frame.buffer.data.some((value, i) => i % 4 === 3 && value > 0)).toBe(true)
+        for (const extra of frame.frames ?? []) {
+          expect(extra.width).toBe(frame.buffer.width)
+          expect(extra.height).toBe(frame.buffer.height)
+        }
+      }
+    }
   })
 
   it('zooms in steps around a fixed point and clamps the view near the map', () => {

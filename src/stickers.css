@@ -800,7 +800,7 @@ body::after {
   --paper: #fff7e3;
   --paper-shade: #f1e2bf;
   --pick: #ffd45c;
-  --sea: #3b6db0;
+  --sea: #1763ad;
   background: var(--sea);
 }
 .island-surface.is-ready {
@@ -845,8 +845,8 @@ body::after {
 .island-loading__art {
   animation: island-bob 1.2s steps(2) infinite;
 }
-.island-loading__sand { fill: #ead08f; }
-.island-loading__grass { fill: #69bb4c; }
+.island-loading__sand { fill: #f5e8c0; }
+.island-loading__grass { fill: #5dbd4b; }
 .island-loading__trunk { fill: #9a6c41; }
 .island-loading__leaf { fill: #4caa4c; }
 .island-loading__wave { fill: #eafcff; }
@@ -991,6 +991,7 @@ body::after {
   max-width: calc(100vw - 24px);
   translate: -50% 0;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 8px;
   padding: 10px;
   border: 3px solid var(--ink);
@@ -1089,16 +1090,62 @@ body::after {
   background-size: 6px 6px;
 }
 .island-swatch.is-grass {
-  background-color: #69bb4c;
-  background-image: linear-gradient(45deg, #57a845 25%, transparent 25%);
+  background-color: #5dbd4b;
+  background-image: linear-gradient(45deg, #4aa843 25%, transparent 25%);
 }
 .island-swatch.is-sand {
-  background-color: #ead08f;
-  background-image: linear-gradient(45deg, #d4b373 25%, transparent 25%);
+  background-color: #f5e8c0;
+  background-image: linear-gradient(45deg, #e5d19e 25%, transparent 25%);
 }
 .island-swatch.is-path {
-  background-color: #d2a978;
-  background-image: linear-gradient(45deg, #b48659 25%, transparent 25%);
+  background-color: #dcbf8f;
+  background-image: linear-gradient(45deg, #c4a172 25%, transparent 25%);
+}
+.island-swatch.is-deck {
+  background-color: #cb9159;
+  background-image: linear-gradient(#a87240 0 2px, transparent 2px);
+  background-size: 100% 5px;
+}
+/* The decoration palette: groups of picture tiles, scrolling sideways when
+   they do not fit. */
+.island-palette {
+  display: flex;
+  gap: 10px;
+  max-width: 100%;
+  padding-bottom: 2px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.island-chips--decor {
+  flex: none;
+  flex-wrap: nowrap;
+  gap: 3px;
+}
+.island-chips--decor legend {
+  padding: 0 0 3px 1px;
+  color: #6d6178;
+  font: 700 10px "Noto Sans JP", sans-serif;
+  letter-spacing: 0.08em;
+}
+.island-chips--decor button {
+  display: grid;
+  justify-items: center;
+  gap: 1px;
+  width: 54px;
+  height: 54px;
+  padding: 3px 0 2px;
+  font-size: 9px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.island-chips--decor button span {
+  max-width: 50px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.island-chips--decor .island-thumb {
+  width: 32px;
+  height: 32px;
 }
 .island-thumb {
   width: 24px;
@@ -1218,6 +1265,12 @@ body::after {
     height: 32px;
     padding: 0 7px 0 5px;
     font-size: 11px;
+  }
+  .island-chips--decor button {
+    width: 50px;
+    height: 52px;
+    padding: 3px 0 2px;
+    font-size: 9px;
   }
 }
 /* Two fingers already move the map on touch screens. */

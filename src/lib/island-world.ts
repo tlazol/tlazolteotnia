@@ -6,32 +6,60 @@ export const ISLAND_ROWS = 60
 export const TILE_SIZE = 16
 // A ring of open sea around the map keeps every shoreline drawable.
 export const EDIT_MARGIN = 2
-export const ISLAND_SAVE_VERSION = 1
+export const ISLAND_SAVE_VERSION = 2
 export const ISLAND_STORAGE_KEY = 'tlazolteotnia:island'
 
 export const WATER = 0
 export const SAND = 1
 export const GRASS = 2
 export const PATH = 3
-export type Ground = typeof WATER | typeof SAND | typeof GRASS | typeof PATH
+// Wooden boards on stilts: laid over the sea they make piers and platforms.
+export const DECK = 4
+export type Ground = typeof WATER | typeof SAND | typeof GRASS | typeof PATH | typeof DECK
 export type LandGround = Exclude<Ground, typeof WATER>
-export const landGrounds: LandGround[] = [GRASS, SAND, PATH]
+export const landGrounds: LandGround[] = [GRASS, SAND, PATH, DECK]
 export const groundNames: Record<Ground, string> = {
   [WATER]: '海',
   [SAND]: '砂浜',
   [GRASS]: '草地',
-  [PATH]: '小道'
+  [PATH]: '小道',
+  [DECK]: '桟橋'
 }
 
-export const decorKinds = ['tree', 'palm', 'bush', 'rock', 'flowers'] as const
-export type DecorKind = (typeof decorKinds)[number]
-export const decorNames: Record<DecorKind, string> = {
-  tree: '木',
-  palm: 'ヤシ',
-  bush: '茂み',
-  rock: '岩',
-  flowers: '花'
-}
+// Decorations stand on land or float on the sea; flat ones can be walked over.
+// New kinds go at the end: saves store a kind as its position in this list.
+export const decorInfo = {
+  tree: { name: '木', on: 'land', blocks: true },
+  palm: { name: 'ヤシ', on: 'land', blocks: true },
+  bush: { name: '茂み', on: 'land', blocks: true },
+  rock: { name: '岩', on: 'land', blocks: true },
+  flowers: { name: '花', on: 'land', blocks: false },
+  campfire: { name: '焚き火', on: 'land', blocks: true },
+  shelter: { name: '葉っぱの小屋', on: 'land', blocks: true },
+  chest: { name: '宝箱', on: 'land', blocks: true },
+  driftwood: { name: '流木', on: 'land', blocks: true },
+  sos: { name: 'SOS', on: 'land', blocks: false },
+  parasol: { name: 'パラソル', on: 'land', blocks: true },
+  hammock: { name: 'ハンモック', on: 'land', blocks: true },
+  torch: { name: 'たいまつ', on: 'land', blocks: true },
+  bungalow: { name: 'コテージ', on: 'land', blocks: true },
+  surfboard: { name: 'サーフボード', on: 'land', blocks: true },
+  wreck: { name: '難破船', on: 'water', blocks: true },
+  searock: { name: '岩礁', on: 'water', blocks: true },
+  boat: { name: '小舟', on: 'water', blocks: true },
+  float: { name: '浮き輪', on: 'water', blocks: true }
+} as const satisfies Record<string, { name: string; on: 'land' | 'water'; blocks: boolean }>
+export type DecorKind = keyof typeof decorInfo
+export const decorKinds = Object.keys(decorInfo) as DecorKind[]
+export const decorNames = Object.fromEntries(
+  decorKinds.map((kind) => [kind, decorInfo[kind].name])
+) as Record<DecorKind, string>
+export const decorGroups: Array<{ name: string; kinds: DecorKind[] }> = [
+  { name: '自然', kinds: ['palm', 'tree', 'bush', 'rock', 'flowers'] },
+  { name: '無人島', kinds: ['campfire', 'shelter', 'sos', 'chest', 'driftwood'] },
+  { name: 'リゾート', kinds: ['bungalow', 'parasol', 'hammock', 'torch', 'surfboard'] },
+  { name: '海', kinds: ['wreck', 'searock', 'boat', 'float'] }
+]
 // Stored decoration codes: 0 is empty, otherwise the index in decorKinds plus one.
 export function decorCode(kind: DecorKind) {
   return decorKinds.indexOf(kind) + 1
@@ -40,7 +68,12 @@ export function decorKindOf(code: number): DecorKind | null {
   return decorKinds[code - 1] ?? null
 }
 export function decorBlocksWalking(code: number) {
-  return code !== 0 && decorKindOf(code) !== 'flowers'
+  const kind = decorKindOf(code)
+  return kind !== null && decorInfo[kind].blocks
+}
+// Whether a decoration may sit on this kind of ground.
+export function decorFits(kind: DecorKind, ground: Ground) {
+  return (decorInfo[kind].on === 'water') === (ground === WATER)
 }
 
 export type IslandWorld = {
@@ -112,15 +145,17 @@ export function valueNoise(x: number, y: number, seed = 0) {
 
 export const ISLAND_CENTER = { x: 40, y: 30 }
 
-// The starting island: a lobed main island with a plaza, paths, a forest,
-// beaches with palms, and two islets offshore.
+// The starting island. The west is a castaway's shore — jungle, a wreck on the
+// reef, a camp and an SOS in the sand — and the south-east a resort: a lagoon
+// ringed by sandbars with a pier and cottages over the water.
 export function createDefaultIsland(): IslandWorld {
   const world = createIsland()
   const { columns, rows } = world
   const set = (x: number, y: number, ground: Ground) => {
     if (isEditableTile(world, x, y)) world.ground[y * columns + x] = ground
   }
-  const blob = (cx: number, cy: number, rx: number, ry: number, seed: number) => {
+  // grassy 0 leaves the blob all sand; 1 covers it in grass up to a beach rim.
+  const blob = (cx: number, cy: number, rx: number, ry: number, seed: number, grassy = 1) => {
     for (let y = 0; y < rows; y++) {
       for (let x = 0; x < columns; x++) {
         const dx = (x + 0.5 - cx) / rx
@@ -133,27 +168,39 @@ export function createDefaultIsland(): IslandWorld {
           0.05 * Math.sin(5 * angle + 0.4 + seed * 3) +
           (valueNoise(x / 3, y / 3, 11 + seed) - 0.5) * 0.12
         const r = Math.hypot(dx, dy)
-        if (r < edge) set(x, y, r < edge - 0.2 - valueNoise(x / 2, y / 2, 5) * 0.12 ? GRASS : SAND)
+        if (r >= edge) continue
+        const rim = 0.24 + valueNoise(x / 2, y / 2, 5) * 0.12 + (1 - grassy) * 9
+        if (r < edge - rim) set(x, y, GRASS)
+        else if (!isLand(world, x, y)) set(x, y, SAND)
       }
     }
   }
-  blob(40, 30, 15, 10, 0)
-  // A sandy cape to the west and a grassy hill to the north-east.
-  blob(27, 34, 4.5, 3.2, 1)
-  blob(50, 24, 5.5, 4, 2)
-  // A small lagoon bites into the south-east coast.
-  for (let y = 0; y < rows; y++) {
-    for (let x = 0; x < columns; x++) {
-      const d = Math.hypot((x + 0.5 - 50) / 3.2, (y + 0.5 - 37) / 2.4)
-      if (d < 1) world.ground[y * columns + x] = WATER
-      else if (d < 1.5 && isLand(world, x, y)) world.ground[y * columns + x] = SAND
+  const carve = (cx: number, cy: number, rx: number, ry: number, beach = 1.35) => {
+    for (let y = 0; y < rows; y++) {
+      for (let x = 0; x < columns; x++) {
+        const d = Math.hypot((x + 0.5 - cx) / rx, (y + 0.5 - cy) / ry)
+        const wobble = 1 + (valueNoise(x / 2.5, y / 2.5, 71) - 0.5) * 0.3
+        if (d < wobble) world.ground[y * columns + x] = WATER
+        else if (d < wobble * beach && isLand(world, x, y)) world.ground[y * columns + x] = SAND
+      }
     }
   }
-  blob(61, 17, 3, 2.3, 3)
-  blob(22, 44, 2.4, 1.7, 4)
-  blob(58, 43, 1.8, 1.4, 5)
+  blob(37, 28, 16, 10.5, 0)
+  // The castaway's cape to the west and a jungle headland to the north-east.
+  blob(23.5, 33, 6, 3.8, 1, 0.55)
+  blob(51, 21.5, 6.5, 4.6, 2)
+  // Sandbars curl round the lagoon, leaving a gap to the open sea.
+  blob(58, 31, 3.6, 4.6, 6, 0.5)
+  blob(60.5, 38.5, 2.3, 5, 7, 0)
+  blob(47, 45.5, 8.5, 2.1, 8, 0)
+  blob(38.5, 41.5, 3.6, 3.4, 9, 0)
+  carve(50.5, 38.5, 7.6, 4.6)
+  // Islets: a lone palm, a rocky outcrop and a picnic spot.
+  blob(17, 46.5, 2.3, 1.7, 4, 0)
+  blob(65, 13.5, 2.8, 2.1, 3, 0.7)
+  blob(69, 47, 2, 1.6, 5, 0)
 
-  // Plaza and paths from it to the beaches.
+  // Plaza and trails from it to the beaches.
   for (let y = -1; y <= 1; y++) for (let x = -1; x <= 1; x++) set(40 + x, 30 + y, PATH)
   const path = (from: [number, number], to: [number, number], wobble: number) => {
     const steps = Math.max(Math.abs(to[0] - from[0]), Math.abs(to[1] - from[1])) * 2
@@ -165,53 +212,133 @@ export function createDefaultIsland(): IslandWorld {
       const horizontal = Math.abs(to[0] - from[0]) > Math.abs(to[1] - from[1])
       const px = Math.round(horizontal ? x : x + bend)
       const py = Math.round(horizontal ? y + bend : y)
-      if (isLand(world, px, py)) set(px, py, PATH)
+      if (groundAt(world, px, py) === GRASS) set(px, py, PATH)
     }
   }
-  path([39, 30], [28, 33], 1.2)
-  path([40, 31], [41, 39], 0.8)
-  path([41, 29], [50, 23], 0.8)
-  path([40, 29], [38, 22], 0.6)
+  path([39, 30], [27, 32], 1.2)
+  path([41, 31], [47, 34], 0.6)
+  path([41, 29], [50, 22], 0.8)
+  path([40, 29], [37, 20], 0.6)
 
-  // Decorations follow the ground: a forest in the north-west, palms on the beaches.
-  // Trees and palms spread far wider than their tile, so they keep their distance.
+  // The pier: out from the lagoon's beach, with a platform for each cottage.
+  const deck = (x0: number, y0: number, x1: number, y1: number) => {
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) set(x, y, DECK)
+  }
+  deck(50, 34, 50, 41)
+  deck(45, 37, 47, 39)
+  deck(48, 39, 49, 39)
+  deck(53, 37, 55, 39)
+  deck(51, 39, 52, 39)
+  deck(49, 41, 51, 42)
+
+  const put = (x: number, y: number, kind: DecorKind) => {
+    if (isEditableTile(world, x, y) && decorFits(kind, groundAt(world, x, y)))
+      world.decor[y * columns + x] = decorCode(kind)
+  }
+  // Set pieces first, so the greenery grows around them.
+  const pieces: Array<[number, number, DecorKind]> = [
+    // Castaway shore.
+    [12, 29, 'wreck'],
+    [21, 35, 'sos'],
+    [24, 32, 'shelter'],
+    [26, 34, 'campfire'],
+    [22, 32, 'chest'],
+    [19, 33, 'driftwood'],
+    [25, 35, 'driftwood'],
+    // Plaza.
+    [38, 28, 'torch'],
+    [42, 28, 'torch'],
+    [38, 32, 'torch'],
+    [42, 32, 'torch'],
+    // Resort.
+    [46, 38, 'bungalow'],
+    [54, 38, 'bungalow'],
+    [49, 33, 'torch'],
+    [51, 33, 'torch'],
+    [44, 35, 'parasol'],
+    [43, 36, 'parasol'],
+    [56, 34, 'parasol'],
+    [58, 36, 'hammock'],
+    [47, 33, 'surfboard'],
+    [46, 34, 'surfboard'],
+    [48, 42, 'boat'],
+    [52, 36, 'float'],
+    [55, 41, 'float'],
+    [44, 45, 'parasol'],
+    [50, 46, 'hammock'],
+    [69, 47, 'parasol'],
+    [17, 46, 'palm'],
+    [64, 44, 'boat'],
+    [31, 40, 'boat']
+  ]
+  // Nothing grows over a set piece: plants keep off it and the rows in front.
+  const reserved = new Uint8Array(columns * rows)
+  for (const [x, y, kind] of pieces) {
+    put(x, y, kind)
+    for (let dy = -1; dy <= 3; dy++)
+      for (let dx = -2; dx <= 2; dx++)
+        if (inBounds(world, x + dx, y + dy)) reserved[(y + dy) * columns + x + dx] = 1
+  }
+
+  // Decorations follow the ground: jungle inland, palms along the beaches,
+  // rocks on the wild north coast and in the sea off it.
   const tall = [decorCode('tree'), decorCode('palm')]
+  const wide = [decorCode('bungalow'), decorCode('shelter'), decorCode('hammock')]
   const crowded = (x: number, y: number, reach: number) => {
-    for (let dy = -reach; dy <= 0; dy++)
+    for (let dy = -reach; dy <= reach; dy++) {
+      for (let dx = -reach; dx <= reach; dx++) {
+        const code = decorAt(world, x + dx, y + dy)
+        if (wide.includes(code) && dy >= -1) return true
+        if ((dy < 0 || (dy === 0 && dx < 0)) && tall.includes(code)) return true
+        if (code && !tall.includes(code) && Math.abs(dx) <= 1 && Math.abs(dy) <= 1) return true
+      }
+    }
+    return false
+  }
+  const near = (x: number, y: number, reach: number, test: (ground: Ground) => boolean) => {
+    for (let dy = -reach; dy <= reach; dy++)
       for (let dx = -reach; dx <= reach; dx++)
-        if ((dy < 0 || dx < 0) && tall.includes(decorAt(world, x + dx, y + dy))) return true
+        if (test(groundAt(world, x + dx, y + dy))) return true
     return false
   }
   for (let y = 0; y < rows; y++) {
     for (let x = 0; x < columns; x++) {
+      if (!isEditableTile(world, x, y) || decorAt(world, x, y)) continue
       const ground = groundAt(world, x, y)
-      if (ground === WATER || ground === PATH) continue
-      if (Math.abs(x - 40) <= 2 && Math.abs(y - 30) <= 2) continue
-      const nearPath = [-1, 0, 1].some((dy) =>
-        [-1, 0, 1].some((dx) => groundAt(world, x + dx, y + dy) === PATH)
-      )
+      if (ground === PATH || ground === DECK) continue
       const roll = hash2(x, y, 101)
-      const forest = valueNoise(x / 5, y / 4, 23)
       let kind: DecorKind | null = null
-      if (ground === GRASS) {
-        if (forest > 0.68 && !nearPath) kind = roll < 0.38 ? 'tree' : roll < 0.44 ? 'bush' : null
-        else if (roll < 0.03 && !nearPath) kind = 'tree'
-        else if (roll < 0.06) kind = 'bush'
-        else if (roll < 0.15) kind = valueNoise(x / 3, y / 3, 41) > 0.5 ? 'flowers' : null
-        else if (roll < 0.156) kind = 'rock'
+      if (ground === WATER) {
+        // Reef rocks keep to the north and west, away from the lagoon.
+        const wild = y < 22 || x < 20
+        if (
+          wild &&
+          roll < 0.07 &&
+          near(x, y, 2, (g) => g !== WATER) &&
+          !near(x, y, 1, (g) => g !== WATER)
+        )
+          kind = 'searock'
       } else {
-        const coast = [
-          [1, 0],
-          [-1, 0],
-          [0, 1],
-          [0, -1]
-        ].some(([dx, dy]) => !isLand(world, x + dx, y + dy))
-        if (roll < (coast ? 0.06 : 0.1)) kind = 'palm'
-        else if (roll >= 0.1 && roll < 0.106) kind = 'rock'
+        if (Math.abs(x - 40) <= 2 && Math.abs(y - 30) <= 2) continue
+        const nearPath = near(x, y, 1, (g) => g === PATH || g === DECK)
+        const jungle = valueNoise(x / 5, y / 4, 23) + (x < 35 || y < 25 ? 0.2 : 0)
+        if (ground === GRASS) {
+          if (jungle > 0.56 && !nearPath) kind = roll < 0.42 ? 'tree' : roll < 0.56 ? 'bush' : null
+          else if (roll < 0.03 && !nearPath) kind = 'tree'
+          else if (roll < 0.07) kind = 'bush'
+          else if (roll < 0.17) kind = valueNoise(x / 3, y / 3, 41) > 0.45 ? 'flowers' : null
+          else if (roll < 0.178) kind = 'rock'
+        } else {
+          const north = y < 24
+          if (roll < 0.1 && !nearPath) kind = 'palm'
+          else if (roll >= 0.1 && roll < (north ? 0.16 : 0.108)) kind = 'rock'
+        }
+        if (kind === 'tree' && crowded(x, y, jungle > 0.56 ? 1 : 2))
+          kind = roll < 0.12 ? 'bush' : null
+        if (kind === 'palm' && crowded(x, y, 3)) kind = null
+        if (kind && kind !== 'tree' && kind !== 'palm' && crowded(x, y, 1)) kind = null
       }
-      if (kind === 'tree' && crowded(x, y, forest > 0.68 ? 2 : 3)) kind = roll < 0.1 ? 'bush' : null
-      if (kind === 'palm' && crowded(x, y, 3)) kind = null
-      if (kind) world.decor[y * columns + x] = decorCode(kind)
+      if (kind && !(reserved[y * columns + x] && kind !== 'flowers')) put(x, y, kind)
     }
   }
   return world
@@ -285,7 +412,7 @@ export function parseIsland(raw: string | null | undefined): IslandWorld | null 
   )
     return null
   const length = ISLAND_COLUMNS * ISLAND_ROWS
-  const ground = decodeRuns(save.ground, length, PATH)
+  const ground = decodeRuns(save.ground, length, DECK)
   const decor = decodeRuns(save.decor, length, decorKinds.length)
   if (!ground || !decor) return null
   const world: IslandWorld = { columns: ISLAND_COLUMNS, rows: ISLAND_ROWS, ground, decor }
@@ -293,7 +420,8 @@ export function parseIsland(raw: string | null | undefined): IslandWorld | null 
     for (let x = 0; x < world.columns; x++) {
       const index = y * world.columns + x
       if (!isEditableTile(world, x, y)) world.ground[index] = WATER
-      if (world.ground[index] === WATER) world.decor[index] = 0
+      const kind = decorKindOf(world.decor[index])
+      if (kind && !decorFits(kind, world.ground[index] as Ground)) world.decor[index] = 0
     }
   }
   return world

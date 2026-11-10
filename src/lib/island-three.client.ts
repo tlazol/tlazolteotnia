@@ -12,6 +12,7 @@ import {
   Mesh,
   MeshBasicMaterial,
   NearestFilter,
+  NoColorSpace,
   OrthographicCamera,
   PlaneGeometry,
   RedFormat,
@@ -26,19 +27,14 @@ import {
 import {
   createBuffer,
   createShoreField,
-  decorVariantIndex,
-  decorVariants,
   hex,
   islandPalette,
   outline,
   type PixelBuffer,
-  paintShadow,
   paintTerrain,
   SHORE_CELL,
   SHORE_RANGE,
-  type ShadowSize,
   setPixel,
-  shadowSizes,
   updateShoreField
 } from './island-art'
 import { type IslandView, WORLD_HEIGHT, WORLD_WIDTH } from './island-camera'
@@ -55,7 +51,19 @@ import {
   settleResidents,
   stepResidents
 } from './island-residents'
-import { decorKindOf, EDIT_MARGIN, type IslandWorld, TILE_SIZE } from './island-world'
+import {
+  decorVariantIndex,
+  decorVariants,
+  GULL_FRAME,
+  paintFishSchool,
+  paintGull,
+  paintShadow,
+  paintTurtle,
+  type ShadowSize,
+  type SpriteFrame,
+  shadowSizes
+} from './island-sprites'
+import { decorKindOf, EDIT_MARGIN, hash2, type IslandWorld, TILE_SIZE } from './island-world'
 import type { SceneSize } from './scene-math'
 
 export type ResidentScreen = {
@@ -70,7 +78,18 @@ export type CursorTile = { x: number; y: number; allowed: boolean }
 export type IslandCursor = { tiles: CursorTile[]; soft: boolean; center: { x: number; y: number } }
 
 const CHUNK = 256
-const Z = { water: -10, terrain: 0, grid: 0.3, shadow: 0.5, ring: 0.6, sprite: 1, cursor: 5 }
+const Z = {
+  water: -10,
+  swimmer: -5,
+  terrain: 0,
+  grid: 0.3,
+  shadow: 0.5,
+  flat: 0.55,
+  ring: 0.6,
+  sprite: 1,
+  cursor: 5,
+  sky: 20
+}
 const spriteZ = (footY: number) => Z.sprite + footY / 4000
 
 function textureFrom(buffer: PixelBuffer) {
@@ -183,33 +202,76 @@ const vec3Of = (value: string) => {
   return `vec3(${(r / 255).toFixed(3)}, ${(g / 255).toFixed(3)}, ${(b / 255).toFixed(3)})`
 }
 
+const noiseGlsl = /* glsl */ `
+float hash(vec2 p) {
+  p = fract(p * vec2(123.34, 456.21));
+  p += dot(p, p + 45.32);
+  return fract(p.x * p.y);
+}
+float vnoise(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(
+    mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x),
+    mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x),
+    f.y
+  );
+}
+// Ordered dither threshold in [0, 1) on a 4×4 pixel grid.
+float bayer2(vec2 a) {
+  a = floor(a);
+  return fract(a.x / 2.0 + a.y * a.y * 0.75);
+}
+float bayer4(vec2 a) {
+  return bayer2(0.5 * a) * 0.25 + bayer2(a);
+}
+`
+
+// The sea: depth bands dithered into each other from pale lagoon to deep blue,
+// reef patches and moving light on the shallows, surf rolling onto the shore.
 const waterFragment = /* glsl */ `
 uniform sampler2D uShore;
 uniform vec2 uWorld;
 uniform float uRange;
 uniform float uTime;
 varying vec2 vWorld;
-
-float hash(vec2 p) {
-  p = fract(p * vec2(123.34, 456.21));
-  p += dot(p, p + 45.32);
-  return fract(p.x * p.y);
-}
-
+${noiseGlsl}
 void main() {
   vec2 p = floor(vWorld);
   vec2 uv = (p + 0.5) / uWorld;
   float d = 1.0;
   if (uv.x > 0.0 && uv.y > 0.0 && uv.x < 1.0 && uv.y < 1.0) d = texture2D(uShore, uv).r;
   float dist = d * uRange;
-  float checker = mod(p.x + p.y, 2.0);
-  float dd = dist + (checker - 0.5) * 2.5;
+  float dither = bayer4(p) - 0.5;
+  float drift = (vnoise(p / 26.0 + 3.7) - 0.5) * 22.0 * smoothstep(6.0, 50.0, dist);
+  float dd = dist + drift + dither * 5.0;
+
   vec3 col = ${vec3Of(islandPalette.deep)};
-  if (dd < 44.0) col = ${vec3Of(islandPalette.mid)};
-  if (dd < 22.0) col = ${vec3Of(islandPalette.shallow)};
-  if (dd < 9.0) col = ${vec3Of(islandPalette.lagoon)};
+  if (dd < 86.0) col = ${vec3Of(islandPalette.ocean)};
+  if (dd < 62.0) col = ${vec3Of(islandPalette.mid)};
+  if (dd < 40.0) col = ${vec3Of(islandPalette.shallow)};
+  if (dd < 22.0) col = ${vec3Of(islandPalette.lagoon)};
+  if (dd < 8.0) col = ${vec3Of(islandPalette.pale)};
   vec3 foam = ${vec3Of(islandPalette.foam)};
-  vec3 wave = ${vec3Of(islandPalette.wave)};
+
+  // Long swells far out, slowly drifting.
+  if (dd >= 86.0) {
+    float swell = vnoise(vec2(p.x / 90.0 + uTime * 0.015, p.y / 34.0 - uTime * 0.01));
+    if (swell + dither * 0.25 > 0.6) col = ${vec3Of(islandPalette.swell)};
+  }
+
+  // Reef and seagrass showing through the shallows.
+  float reef = vnoise(p / 21.0 + 11.3) * 0.72 + vnoise(p / 7.0) * 0.28 + dither * 0.05;
+  if (dd > 12.0 && dd < 74.0 && reef > 0.63) col = mix(col, ${vec3Of(islandPalette.reef)}, reef > 0.7 ? 0.5 : 0.28);
+
+  // Light rippling over the sandy bottom.
+  float tick = floor(uTime * 6.0) / 6.0;
+  vec2 q = p / 10.0;
+  float net = abs(
+    vnoise(q + vec2(tick * 0.32, tick * 0.21)) - vnoise(q * 1.6 - vec2(tick * 0.27, -tick * 0.24) + 4.0)
+  );
+  if (dd < 44.0 && dist > 4.0 && net < 0.028) col = mix(col, foam, 0.36 * (1.0 - dd / 56.0));
 
   // Short wave dashes drifting in open water.
   vec2 size = vec2(22.0, 11.0);
@@ -220,27 +282,84 @@ void main() {
   float start = 3.0 + floor(h * 9.0) + sway;
   float len = 3.0 + floor(hash(cell + 7.0) * 3.0);
   bool visible = fract(uTime * 0.18 + h) < 0.72;
-  if (h > 0.7 && visible && dd > 12.0 && local.y == 5.0 && local.x >= start && local.x < start + len) col = wave;
-  if (h > 0.7 && visible && dd > 12.0 && local.y == 6.0 && (local.x == start - 1.0 || local.x == start + len)) col = mix(col, wave, 0.55);
+  if (h > 0.68 && visible && dd > 30.0) {
+    if (local.y == 5.0 && local.x >= start && local.x < start + len) col = mix(col, foam, 0.5);
+    if (local.y == 6.0 && (local.x == start - 1.0 || local.x == start + len)) col = mix(col, foam, 0.28);
+  }
 
-  // Foam hugging the shore, breathing in and out.
-  float edge = 2.5 + 1.2 * sin(uTime * 1.4 + (p.x + p.y * 0.7) * 0.11);
-  if (dist < edge + (checker - 0.5) * 0.8) col = foam;
-  // A ripple that leaves the coast and fades as it travels.
-  float phase = fract(uTime * 0.2);
-  float ring = 4.0 + phase * 11.0;
-  if (abs(dist - ring) < 0.75 && hash(p + floor(uTime * 3.0)) > phase * 1.15) col = mix(col, foam, 0.75);
+  // Surf: a line of foam rolls in, breaks on the shore and slides back.
+  float along = vnoise(p / 44.0 + 1.9);
+  float phase = fract(uTime * 0.14 + along * 1.3);
+  float front = mix(26.0, 1.0, phase * phase * (3.0 - 2.0 * phase));
+  float grain = hash(p + floor(uTime * 5.0));
+  if (abs(dist - front) < 0.9 && grain < 0.25 + phase * 0.9) col = mix(col, foam, 0.9);
+  if (abs(dist - front - 5.0) < 0.6 && grain < phase * 0.55) col = mix(col, foam, 0.55);
+  float wash = 1.6 + 2.6 * smoothstep(0.8, 1.0, phase) + 2.2 * (1.0 - smoothstep(0.0, 0.25, phase));
+  wash += sin(uTime * 1.3 + along * 12.0) * 0.6;
+  if (dist < wash + dither * 1.2) col = foam;
 
-  // Occasional glints far from land.
+  // Glints of sun.
   vec2 g = floor(p / 26.0);
   float gh = hash(g + 3.1);
   vec2 gp = g * 26.0 + floor(vec2(hash(g + 1.7), hash(g + 9.2)) * 20.0) + 3.0;
   float blink = fract(uTime * 0.35 + gh * 5.0);
-  if (dd > 30.0 && gh > 0.55 && blink < 0.12) {
-    vec2 q = abs(p - gp);
-    if ((q.x == 0.0 && q.y <= 1.0) || (q.y == 0.0 && q.x <= 1.0)) col = vec3(1.0);
+  if (dist > 12.0 && gh > 0.5 && blink < 0.14) {
+    vec2 k = abs(p - gp);
+    if ((k.x == 0.0 && k.y <= 1.0) || (k.y == 0.0 && k.x <= 1.0)) col = vec3(1.0);
   }
   gl_FragColor = vec4(col, 1.0);
+}
+`
+
+// Cloud shadows sliding over land and sea alike.
+const cloudFragment = /* glsl */ `
+uniform float uTime;
+varying vec2 vWorld;
+${noiseGlsl}
+void main() {
+  vec2 p = floor(vWorld / 2.0) * 2.0;
+  vec2 q = p / 210.0 + vec2(uTime * 0.011, uTime * 0.004);
+  float n = vnoise(q) * 0.62 + vnoise(q * 2.4 + 3.1) * 0.28 + vnoise(q * 5.5 + 8.0) * 0.1;
+  float edge = n + (bayer4(p / 2.0) - 0.5) * 0.035;
+  if (edge < 0.6) discard;
+  gl_FragColor = vec4(0.1, 0.22, 0.55, edge < 0.63 ? 0.06 : 0.11);
+}
+`
+
+// Decoration sprites: cut-out pixels that can lean with the wind row by row
+// (so the art stays on the pixel grid) or bob on the water.
+const spriteVertex = /* glsl */ `
+varying vec2 vUv;
+varying float vPhase;
+void main() {
+  vUv = uv;
+  #ifdef USE_INSTANCING
+  mat4 placed = modelMatrix * instanceMatrix;
+  #else
+  mat4 placed = modelMatrix;
+  #endif
+  vPhase = placed[3].x * 0.021 + placed[3].y * 0.013;
+  gl_Position = projectionMatrix * viewMatrix * placed * vec4(position, 1.0);
+}
+`
+
+const spriteFragment = /* glsl */ `
+uniform sampler2D map;
+uniform vec2 uSize;
+uniform float uTime;
+uniform float uSway;
+uniform float uBob;
+varying vec2 vUv;
+varying float vPhase;
+void main() {
+  float gust = sin(uTime * 1.1 + vPhase) + 0.45 * sin(uTime * 2.7 + vPhase * 1.9);
+  float lean = floor(gust * uSway * vUv.y * vUv.y * 0.7 + 0.5);
+  float bob = floor(sin(uTime * 1.7 + vPhase * 37.0) * uBob + 0.5);
+  vec2 uv = vUv + vec2(lean / uSize.x, bob / uSize.y);
+  if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) discard;
+  vec4 texel = texture2D(map, uv);
+  if (texel.a < 0.5) discard;
+  gl_FragColor = vec4(texel.rgb, 1.0);
 }
 `
 
@@ -389,6 +508,23 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
   )
   water.position.set(WORLD_WIDTH / 2, -WORLD_HEIGHT / 2, Z.water)
   scene.add(water)
+  const clock = { value: 0 }
+  const clouds = new Mesh(
+    water.geometry,
+    track(
+      new ShaderMaterial({
+        vertexShader: waterVertex,
+        fragmentShader: cloudFragment,
+        uniforms: { uTime: clock },
+        transparent: true,
+        depthTest: false,
+        depthWrite: false
+      })
+    )
+  )
+  clouds.position.set(WORLD_WIDTH / 2, -WORLD_HEIGHT / 2, Z.sky)
+  clouds.renderOrder = 20
+  scene.add(clouds)
 
   // Terrain, painted into canvas chunks so an edit repaints only nearby pixels.
   const chunkGeometry = track(new PlaneGeometry(CHUNK, CHUNK))
@@ -455,15 +591,33 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
   grid.visible = false
   scene.add(grid)
 
-  // Sprites share one material per texture; transparency is cut out (alphaTest)
-  // so depth orders overlapping sprites by their feet.
-  const spriteMaterial = (buffer: PixelBuffer) =>
-    track(
-      stampStencil(
-        new MeshBasicMaterial({ map: track(textureFrom(buffer)), alphaTest: 0.5 }),
-        BEHIND_DECOR
-      )
+  // Sprites share one material per texture; transparency is cut out so depth
+  // orders overlapping sprites by their feet.
+  const rawTexture = (buffer: PixelBuffer) => {
+    const texture = track(textureFrom(buffer))
+    texture.colorSpace = NoColorSpace
+    return texture
+  }
+  const animated: Array<{ material: ShaderMaterial; textures: Texture[] }> = []
+  const spriteMaterial = (frame: SpriteFrame) => {
+    const textures = [frame.buffer, ...(frame.frames ?? [])].map(rawTexture)
+    const material = track(
+      new ShaderMaterial({
+        vertexShader: spriteVertex,
+        fragmentShader: spriteFragment,
+        uniforms: {
+          map: { value: textures[0] },
+          uSize: { value: [frame.buffer.width, frame.buffer.height] },
+          uTime: clock,
+          uSway: { value: frame.sway ?? 0 },
+          uBob: { value: frame.bob ?? 0 }
+        }
+      })
     )
+    if (textures.length > 1) animated.push({ material, textures })
+    // Flat things never hide a resident, so they leave no stencil mark.
+    return frame.flat ? material : stampStencil(material, BEHIND_DECOR)
+  }
   const shadowLayers = Object.fromEntries(
     (Object.keys(shadowSizes) as ShadowSize[]).map((size) => {
       const buffer = paintShadow(size)
@@ -487,17 +641,24 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
     })
   ) as Record<ShadowSize, SpriteLayer>
 
-  const decorLayers = new Map<string, { layer: SpriteLayer; shadow: ShadowSize }>()
+  const decorLayers = new Map<
+    string,
+    { layer: SpriteLayer; shadow: ShadowSize | null; flat: boolean }
+  >()
   for (const [kind, frames] of Object.entries(decorVariants)) {
-    frames.forEach((frame, variant) => {
+    frames.forEach((frame: SpriteFrame, variant) => {
       const layer = new SpriteLayer(
         scene,
         track(new PlaneGeometry(frame.buffer.width, frame.buffer.height)),
-        spriteMaterial(frame.buffer),
+        spriteMaterial(frame),
         frame.buffer.width,
         frame.buffer.height
       )
-      decorLayers.set(`${kind}:${variant}`, { layer, shadow: frame.shadow })
+      decorLayers.set(`${kind}:${variant}`, {
+        layer,
+        shadow: frame.shadow,
+        flat: frame.flat === true
+      })
     })
   }
   const placedDecor = new Map<number, string>()
@@ -511,7 +672,7 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
     if (previous) {
       const entry = decorLayers.get(previous)
       entry?.layer.remove(index)
-      if (entry) shadowLayers[entry.shadow].remove(index)
+      if (entry?.shadow) shadowLayers[entry.shadow].remove(index)
       placedDecor.delete(index)
     }
     if (!key) return
@@ -521,8 +682,13 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
     const footY = y * TILE_SIZE + TILE_SIZE - 2
     // Sorted by the tile's middle: residents beside the trunk stand in front of
     // it, residents on the tiles behind it pass under the canopy.
-    entry.layer.set(index, footX, footY + 1, spriteZ(y * TILE_SIZE + TILE_SIZE / 2))
-    shadowLayers[entry.shadow].set(index, footX, footY + 2, Z.shadow)
+    entry.layer.set(
+      index,
+      footX,
+      footY + 1,
+      entry.flat ? Z.flat : spriteZ(y * TILE_SIZE + TILE_SIZE / 2)
+    )
+    if (entry.shadow) shadowLayers[entry.shadow].set(index, footX, footY + 2, Z.shadow)
     placedDecor.set(index, key)
   }
   for (let index = 0; index < world.decor.length; index++) syncDecor(index)
@@ -591,6 +757,119 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
   }
   const selectedRing = makeRing('#ffe66b')
   const focusRing = makeRing('#ffffff')
+
+  // Wildlife: gulls crossing overhead with their shadows, fish and turtles
+  // circling in the shallows. None of it is saved or editable.
+  const fieldDistance = (x: number, y: number) => {
+    const cx = Math.floor(x / SHORE_CELL)
+    const cy = Math.floor(y / SHORE_CELL)
+    if (cx < 0 || cy < 0 || cx >= field.width || cy >= field.height) return SHORE_RANGE * SHORE_CELL
+    return (field.distance[cy * field.width + cx] / 255) * SHORE_RANGE * SHORE_CELL
+  }
+  const gullTexture = track(textureFrom(paintGull()))
+  gullTexture.repeat.set(0.5, 1)
+  const gullGeometry = track(new PlaneGeometry(GULL_FRAME.width, GULL_FRAME.height))
+  const gullMaterial = track(
+    new MeshBasicMaterial({ map: gullTexture, alphaTest: 0.5, depthTest: false, depthWrite: false })
+  )
+  const gullShadowMaterial = track(
+    new MeshBasicMaterial({
+      map: track(textureFrom(paintShadow('small'))),
+      transparent: true,
+      depthTest: false,
+      depthWrite: false
+    })
+  )
+  const gullShadowGeometry = track(new PlaneGeometry(...shadowSizes.small))
+  const gulls = [0, 1, 2].map((i) => {
+    const mesh = new Mesh(gullGeometry, gullMaterial)
+    mesh.renderOrder = 22
+    const shadow = new Mesh(gullShadowGeometry, gullShadowMaterial)
+    shadow.renderOrder = 19
+    scene.add(mesh, shadow)
+    const direction = i % 2 ? -1 : 1
+    return {
+      mesh,
+      shadow,
+      direction,
+      x: WORLD_WIDTH * (0.2 + i * 0.3),
+      y: WORLD_HEIGHT * (0.25 + hash2(i, 5, 801) * 0.5),
+      speed: 20 + i * 5,
+      lap: 0
+    }
+  })
+  const swimmers: Array<{
+    mesh: Mesh
+    x: number
+    y: number
+    radius: number
+    speed: number
+    phase: number
+  }> = []
+  const addSwimmers = (
+    buffer: PixelBuffer,
+    count: number,
+    color: string,
+    opacity: number,
+    seed: number
+  ) => {
+    const geometry = track(new PlaneGeometry(buffer.width, buffer.height))
+    const material = track(
+      new MeshBasicMaterial({
+        map: track(textureFrom(buffer)),
+        transparent: true,
+        depthWrite: false,
+        opacity,
+        color: new Color(color)
+      })
+    )
+    for (let i = 0, found = 0; i < 400 && found < count; i++) {
+      const x = hash2(i, seed, 811) * WORLD_WIDTH
+      const y = hash2(i, seed, 812) * WORLD_HEIGHT
+      const depth = fieldDistance(x, y)
+      if (depth < 26 || depth > 70) continue
+      if (swimmers.some((other) => Math.hypot(other.x - x, other.y - y) < 150)) continue
+      const mesh = new Mesh(geometry, material)
+      scene.add(mesh)
+      swimmers.push({
+        mesh,
+        x,
+        y,
+        radius: 12 + hash2(i, seed, 813) * 12,
+        speed: (0.18 + hash2(i, seed, 814) * 0.2) * (i % 2 ? 1 : -1),
+        phase: hash2(i, seed, 815) * 6.283
+      })
+      found++
+    }
+  }
+  addSwimmers(paintFishSchool(), 7, '#0d4f7a', 0.5, 1)
+  addSwimmers(paintTurtle(), 2, '#d8ffe0', 0.85, 2)
+  function placeWildlife(dt: number) {
+    for (const gull of gulls) {
+      gull.x += gull.direction * gull.speed * dt
+      if (gull.x < -160 || gull.x > WORLD_WIDTH + 160) {
+        gull.lap++
+        gull.x = gull.direction > 0 ? -150 : WORLD_WIDTH + 150
+        gull.y = WORLD_HEIGHT * (0.15 + hash2(gull.lap, gull.speed, 802) * 0.7)
+      }
+      const x = Math.round(gull.x)
+      const y = Math.round(
+        gull.y + Math.sin(time * 0.5 + gull.speed) * 14 - gull.x * 0.12 * gull.direction
+      )
+      gull.mesh.position.set(x, -y, Z.sky)
+      gull.mesh.scale.x = gull.direction
+      gull.shadow.position.set(x + 8, -(y + 34), Z.sky)
+    }
+    gullTexture.offset.x = Math.floor(time * 3.2) % 4 === 0 ? 0.5 : 0
+    for (const swimmer of swimmers) {
+      const angle = swimmer.phase + time * swimmer.speed
+      const x = Math.round(swimmer.x + Math.cos(angle) * swimmer.radius * 1.6)
+      const y = Math.round(swimmer.y + Math.sin(angle) * swimmer.radius)
+      swimmer.mesh.visible = fieldDistance(x, y) > 9
+      swimmer.mesh.position.set(x, -y, Z.swimmer)
+      swimmer.mesh.scale.x = Math.sin(angle) * swimmer.speed > 0 ? -1 : 1
+    }
+  }
 
   // Cursor.
   const cursorLayers = [false, true].map((blocked) => {
@@ -711,6 +990,11 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
         stepResidents(world, residents, dt, (slug) => slug === selected)
       }
       waterMaterial.uniforms.uTime.value = time
+      clock.value = time
+      const tick = Math.floor(time * 7)
+      for (const { material, textures } of animated)
+        material.uniforms.map.value = textures[tick % textures.length]
+      placeWildlife(still ? 0 : dt)
       placeResidents()
       renderer.render(scene, camera)
       onFrame(project())
@@ -769,9 +1053,10 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
           (minX - 1) * TILE_SIZE,
           (minY - 1) * TILE_SIZE,
           (maxX + 2) * TILE_SIZE,
-          (maxY + 2) * TILE_SIZE + 4
+          (maxY + 2) * TILE_SIZE + 8
         )
         const cells = TILE_SIZE / SHORE_CELL
+        // A whole-island change (reset, undoing one) only needs one pass.
         updateShoreField(
           world,
           field,
