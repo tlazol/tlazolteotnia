@@ -1168,7 +1168,7 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
           (maxY + 2) * TILE_SIZE + 8
         )
         const cells = TILE_SIZE / SHORE_CELL
-        // A whole-island change (reset, undoing one) only needs one pass.
+        // A whole-island change (reset) only needs one pass.
         updateShoreField(
           world,
           field,

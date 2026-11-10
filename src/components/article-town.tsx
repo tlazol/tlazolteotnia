@@ -31,8 +31,6 @@ import { placeTownBubble, TownBubble } from './town-bubble'
 import { TownLoading } from './town-loading'
 import { type CursorInfo, useIsland } from './use-island'
 
-type Mode = 'view' | 'edit'
-
 const isTyping = (target: EventTarget | null) =>
   target instanceof HTMLElement &&
   (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))
@@ -55,7 +53,8 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
   const newestSlug = sorted[0]?.slug
   const openedPost = openSlug ? sorted.find((post) => post.slug === openSlug) : undefined
 
-  const [mode, setMode] = useState<Mode>('view')
+  const [editorOpen, setEditorOpen] = useState(false)
+  const editorToggle = useRef<HTMLButtonElement>(null)
   const [options, setOptions] = useState<EditOptions>({
     tool: 'land',
     ground: GRASS,
@@ -79,12 +78,12 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
   const latestPositions = useRef<ResidentScreen[]>([])
   const pendingBubbleFocus = useRef<string | null>(null)
 
-  const latest = useRef({ mode, options, panTool, spaceHeld, activeSlug })
-  latest.current = { mode, options, panTool, spaceHeld, activeSlug }
+  const latest = useRef({ editorOpen, options, panTool, spaceHeld, activeSlug })
+  latest.current = { editorOpen, options, panTool, spaceHeld, activeSlug }
 
   const positionOverlay = useCallback((positions: ResidentScreen[]) => {
     latestPositions.current = positions
-    const { activeSlug: active, mode: currentMode } = latest.current
+    const { activeSlug: active, editorOpen: currentEditorOpen } = latest.current
     const surfaceElement = scene.surface.current
     const width = surfaceElement?.clientWidth ?? 0
     const height = surfaceElement?.clientHeight ?? 0
@@ -101,7 +100,7 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
         button.style.width = `${boxWidth}px`
         button.style.height = `${boxHeight}px`
         button.style.transform = `translate(${left}px, ${top}px)`
-        const visible = inView && currentMode === 'view'
+        const visible = inView && !currentEditorOpen
         button.style.visibility = visible ? 'visible' : 'hidden'
         button.tabIndex = visible ? 0 : -1
       }
@@ -131,7 +130,7 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
   const ready = status === 'ready'
   const failed = status === 'failed'
   const loading = status === 'loading'
-  const editing = mode === 'edit' && ready
+  const editing = editorOpen && ready
   const listVisible = failed || (ready && listOpen)
   const activePost = sorted.find((post) => post.slug === activeSlug)
 
@@ -159,7 +158,7 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
       size: () => scene.sizeRef.current,
       setView: (next) => sceneRef.current.setView(next),
       ready: () => sceneRef.current.status === 'ready',
-      editing: () => latest.current.mode === 'edit',
+      editing: () => latest.current.editorOpen,
       panning: () => latest.current.panTool || latest.current.spaceHeld,
       hover: (point) => showCursor(sceneRef.current.preview(point, latest.current.options)),
       strokeStart: (point) =>
@@ -167,7 +166,7 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
       strokeMove: (point) => showCursor(sceneRef.current.edits.move(point, latest.current.options)),
       strokeEnd: (cancel) => sceneRef.current.edits.end(cancel),
       tap: () => {
-        if (latest.current.mode === 'view') setActiveSlug(null)
+        if (!latest.current.editorOpen) setActiveSlug(null)
       },
       residentStart: (slug, point) =>
         sceneRef.current.renderer.current?.beginResidentDrag(slug, point),
@@ -233,10 +232,13 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
     setActiveSlug(null)
     if (slug) buttons.current.get(slug)?.focus({ preventScroll: true })
   }
-  function switchMode(next: Mode) {
-    setMode(next)
+  function toggleEditor(open: boolean) {
+    input.cancel()
+    setEditorOpen(open)
     setPanTool(false)
-    if (next === 'edit') setActiveSlug(null)
+    setSpaceHeld(false)
+    if (open) setActiveSlug(null)
+    else editorToggle.current?.focus({ preventScroll: true })
   }
   function zoomBy(direction: 1 | -1) {
     const next = stepZoom(view.current.zoom, direction)
@@ -253,29 +255,18 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
   useEffect(() => {
     function keydown(event: KeyboardEvent) {
       if (openSlug || document.querySelector('dialog[open]') || isTyping(event.target)) return
-      const { mode: currentMode } = latest.current
+      const { editorOpen: currentEditorOpen } = latest.current
       if (event.key === 'Escape') {
         input.cancel()
         if (listOpen) {
           setListOpen(false)
           listToggle.current?.focus()
         } else if (activeSlug) closeBubble()
-        else if (currentMode === 'edit') switchMode('view')
+        else if (currentEditorOpen) toggleEditor(false)
         return
       }
-      if (currentMode !== 'edit' || !ready) return
+      if (!currentEditorOpen || !ready) return
       const mod = event.metaKey || event.ctrlKey
-      if (mod && event.key.toLowerCase() === 'z') {
-        event.preventDefault()
-        if (event.shiftKey) edits.redo()
-        else edits.undo()
-        return
-      }
-      if (mod && event.key.toLowerCase() === 'y') {
-        event.preventDefault()
-        edits.redo()
-        return
-      }
       if (mod || event.altKey) return
       const tool = toolShortcuts[event.key]
       if (tool) {
@@ -397,7 +388,7 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
         aria-roledescription="島の地図"
         aria-label={
           editing
-            ? `島の編集。矢印キーで編集位置を動かし、Enterで${options.tool === 'land' ? '土地を足します' : '選んだツールを使います'}。`
+            ? `島の編集。矢印キーで編集位置を動かし、Enterで${options.tool === 'land' ? '土地を足す・塗り替えます' : '選んだツールを使います'}。`
             : '島の地図。矢印キーで移動、+ と − で拡大縮小、0 で最初の位置に戻ります。'
         }
         onKeyDown={surfaceKeyDown}
@@ -504,27 +495,25 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
           onOptions={setOptions}
           panTool={panTool}
           onPanTool={setPanTool}
-          canUndo={scene.canUndo}
-          canRedo={scene.canRedo}
-          onUndo={edits.undo}
-          onRedo={edits.redo}
           onReset={edits.reset}
           status={status_}
           statusTone={statusTone}
         />
       )}
       <footer className="board-footer town-footer island-footer">
-        <fieldset className="island-mode" disabled={!ready}>
-          <legend className="sr-only">モード</legend>
-          <button type="button" aria-pressed={mode === 'view'} onClick={() => switchMode('view')}>
-            <PixelIcon name="eye" />
-            <span>見る</span>
-          </button>
-          <button type="button" aria-pressed={mode === 'edit'} onClick={() => switchMode('edit')}>
+        <div className="island-editor-toggle">
+          <button
+            ref={editorToggle}
+            type="button"
+            disabled={!ready}
+            aria-expanded={editing}
+            aria-controls="island-toolbar"
+            onClick={() => toggleEditor(!editorOpen)}
+          >
             <PixelIcon name="build" />
-            <span>島をつくる</span>
+            <span>{editing ? '作るのを終える' : '島をつくる'}</span>
           </button>
-        </fieldset>
+        </div>
         {ready && (
           <fieldset className="board-controls island-camera" aria-label="表示の操作">
             <button type="button" aria-label="縮小" title="縮小（−）" onClick={() => zoomBy(-1)}>

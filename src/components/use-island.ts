@@ -9,13 +9,7 @@ import {
   tileAt,
   viewOn
 } from '#/lib/island-camera'
-import {
-  createIslandHistory,
-  type EditOptions,
-  type IslandHistory,
-  planBrush,
-  tilesAlong
-} from '#/lib/island-edit'
+import { createIslandStroke, type EditOptions, planBrush, tilesAlong } from '#/lib/island-edit'
 import {
   createResidents,
   designResidents,
@@ -65,7 +59,7 @@ export function useIsland({
   const canvas = useRef<HTMLCanvasElement>(null)
   const renderer = useRef<IslandRenderer | null>(null)
   const world = useRef<IslandWorld | null>(null)
-  const history = useRef<IslandHistory>(createIslandHistory())
+  const stroke = useRef(createIslandStroke())
   const residents = useRef<Resident[]>([])
   const view = useRef<IslandView>({ x: 0, y: 0, zoom: 2 })
   const sizeRef = useRef(size)
@@ -121,7 +115,7 @@ export function useIsland({
     setStatus('loading')
     const { world: loaded } = loadIsland(storage())
     world.current = loaded
-    history.current = createIslandHistory()
+    stroke.current = createIslandStroke()
     const currentPosts = latestPosts.current
     const slugs = currentPosts.map((post) => post.slug)
     residents.current = createResidents(slugs, layoutResidentHomes(slugs.length))
@@ -201,7 +195,7 @@ export function useIsland({
       let soft = false
       for (const step of path) {
         const plan = planBrush(current, step.x, step.y, options, occupied)
-        const changed = history.current.apply(current, plan.edits)
+        const changed = stroke.current.apply(current, plan.edits)
         renderer.current?.updateTiles(changed)
         if (plan.reason && !plan.soft) reason = plan.reason
         else if (plan.reason && !reason) {
@@ -218,7 +212,7 @@ export function useIsland({
 
   const edits = {
     begin(point: { x: number; y: number }, options: EditOptions) {
-      history.current.begin()
+      stroke.current.begin()
       lastStrokeTile.current = null
       return strokeTo(point, options)
     },
@@ -228,8 +222,8 @@ export function useIsland({
       lastStrokeTile.current = null
       settledTile.current = null
       if (!world.current) return
-      if (cancel) renderer.current?.updateTiles(history.current.cancel(world.current))
-      else if (history.current.commit()) {
+      if (cancel) renderer.current?.updateTiles(stroke.current.cancel(world.current))
+      else if (stroke.current.commit()) {
         settledTile.current = tile
         persist()
       }
@@ -238,31 +232,23 @@ export function useIsland({
     applyAt(tile: { x: number; y: number }, options: EditOptions) {
       const current = world.current
       if (!current) return null
-      history.current.begin()
+      stroke.current.begin()
       const plan = planBrush(current, tile.x, tile.y, options, occupied)
-      renderer.current?.updateTiles(history.current.apply(current, plan.edits))
-      if (history.current.commit()) persist()
+      renderer.current?.updateTiles(stroke.current.apply(current, plan.edits))
+      if (stroke.current.commit()) persist()
       return plan
-    },
-    undo() {
-      if (!world.current) return
-      const changed = history.current.undo(world.current)
-      if (changed) {
-        renderer.current?.updateTiles(changed)
-        persist()
-      }
-    },
-    redo() {
-      if (!world.current) return
-      const changed = history.current.redo(world.current)
-      if (changed) {
-        renderer.current?.updateTiles(changed)
-        persist()
-      }
     },
     reset() {
       if (!world.current) return
-      const changed = history.current.replace(world.current, createDefaultIsland())
+      const target = createDefaultIsland()
+      const current = world.current
+      const changed = Array.from(current.ground.keys()).filter(
+        (index) =>
+          current.ground[index] !== target.ground[index] ||
+          current.decor[index] !== target.decor[index]
+      )
+      current.ground.set(target.ground)
+      current.decor.set(target.decor)
       renderer.current?.updateTiles(changed)
       persist()
     }
@@ -282,9 +268,7 @@ export function useIsland({
     setView,
     homeView,
     preview,
-    edits,
-    canUndo: history.current.canUndo,
-    canRedo: history.current.canRedo
+    edits
   }
 }
 export type IslandScene = ReturnType<typeof useIsland>

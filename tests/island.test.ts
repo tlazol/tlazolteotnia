@@ -9,12 +9,7 @@ import {
   updateShoreField
 } from '../src/lib/island-art'
 import { clampView, stepZoom, tileAt, WORLD_WIDTH, zoomViewAt } from '../src/lib/island-camera'
-import {
-  createIslandHistory,
-  type EditOptions,
-  planBrush,
-  tilesAlong
-} from '../src/lib/island-edit'
+import { createIslandStroke, type EditOptions, planBrush, tilesAlong } from '../src/lib/island-edit'
 import {
   canResidentEnter,
   createResidents,
@@ -159,7 +154,7 @@ describe('island world', () => {
 })
 
 describe('island editing', () => {
-  it('adds land only to the sea and removes it only where nobody stands', () => {
+  it('adds land and removes it only where nobody stands', () => {
     const world = createIsland()
     expect(planBrush(world, 10, 10, options(), free).edits).toHaveLength(1)
     world.ground[10 * world.columns + 10] = GRASS
@@ -179,11 +174,8 @@ describe('island editing', () => {
     expect(planBrush(world, 0, 0, options(), free).reason).toBe('編集できる範囲の外です')
   })
 
-  it('explains why ground and decorations cannot be placed', () => {
+  it('explains why decorations cannot be placed', () => {
     const world = createIsland()
-    expect(planBrush(world, 10, 10, options({ tool: 'ground' }), free).reason).toMatch(
-      /海は塗れません/
-    )
     expect(planBrush(world, 10, 10, options({ tool: 'decor' }), free).reason).toBe(
       '海の上には置けません'
     )
@@ -235,31 +227,35 @@ describe('island editing', () => {
       expect(Math.abs(path[i].x - path[i - 1].x) + Math.abs(path[i].y - path[i - 1].y)).toBe(1)
   })
 
-  it('undoes and redoes whole strokes, and cancels unfinished ones', () => {
+  it('overwrites land while preserving decorations and clearing sea decorations', () => {
     const world = createIsland()
-    const history = createIslandHistory()
-    const start = serializeIsland(world)
-    history.begin()
-    for (const x of [10, 11, 12])
-      history.apply(world, planBrush(world, x, 10, options(), free).edits)
-    history.commit()
+    const index = 10 * world.columns + 10
+    world.ground[index] = GRASS
+    world.decor[index] = decorCode('tree')
+    expect(planBrush(world, 10, 10, options({ ground: SAND }), free).edits).toEqual([
+      { index, ground: SAND, decor: decorCode('tree') }
+    ])
+    world.ground[index] = WATER
+    world.decor[index] = decorCode('searock')
+    expect(planBrush(world, 10, 10, options(), free).edits).toEqual([
+      { index, ground: GRASS, decor: 0 }
+    ])
+  })
+
+  it('cancels only the unfinished gesture, including repeated edits to a tile', () => {
+    const world = createIsland()
+    const stroke = createIslandStroke()
+    stroke.begin()
+    stroke.apply(world, planBrush(world, 10, 10, options(), free).edits)
+    expect(stroke.commit()).toBe(true)
     const drawn = serializeIsland(world)
-    expect(drawn).not.toBe(start)
-    history.undo(world)
-    expect(serializeIsland(world)).toBe(start)
-    history.redo(world)
+    stroke.begin()
+    for (const ground of [SAND, DECK] as const)
+      stroke.apply(world, planBrush(world, 10, 10, options({ ground }), free).edits)
+    stroke.apply(world, planBrush(world, 20, 20, options(), free).edits)
+    stroke.cancel(world)
     expect(serializeIsland(world)).toBe(drawn)
-    expect(history.canRedo).toBe(false)
-
-    history.begin()
-    history.apply(world, planBrush(world, 20, 20, options(), free).edits)
-    history.cancel(world)
-    expect(serializeIsland(world)).toBe(drawn)
-
-    history.replace(world, createDefaultIsland())
-    expect(serializeIsland(world)).toBe(serializeIsland(createDefaultIsland()))
-    history.undo(world)
-    expect(serializeIsland(world)).toBe(drawn)
+    expect(stroke.commit()).toBe(false)
   })
 })
 

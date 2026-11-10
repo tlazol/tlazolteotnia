@@ -922,13 +922,13 @@ body::after {
   line-height: 1.75;
 }
 
-/* Footer: mode switch on the left, camera on the right. */
+/* Footer: editor toggle on the left, camera on the right. */
 .island-footer {
   padding: 16px 20px;
   padding-bottom: max(16px, env(safe-area-inset-bottom));
   background: none;
 }
-.island-mode,
+.island-editor-toggle,
 .island-camera {
   display: flex;
   align-items: center;
@@ -941,7 +941,7 @@ body::after {
   background: var(--paper);
   box-shadow: 0 4px 0 #2b223666;
 }
-.island-mode button,
+.island-editor-toggle button,
 .island-camera button {
   display: flex;
   align-items: center;
@@ -967,17 +967,18 @@ body::after {
   font: 600 11px "IBM Plex Mono", monospace;
   text-align: center;
 }
-.island-mode button[aria-pressed="true"] {
+.island-editor-toggle button[aria-expanded="true"] {
   border-color: var(--ink);
   background: var(--pick);
 }
-:is(.island-mode, .island-camera, .island-toolbar) button:hover:not(:disabled) {
+:is(.island-editor-toggle, .island-camera, .island-toolbar) button:hover:not(:disabled) {
   background: var(--paper-shade);
 }
-:is(.island-mode, .island-toolbar) button[aria-pressed="true"]:hover {
+.island-editor-toggle button[aria-expanded="true"]:hover,
+.island-toolbar button[aria-pressed="true"]:hover {
   background: #ffe48f;
 }
-:is(.island-mode, .island-camera, .island-toolbar) button:focus-visible {
+:is(.island-editor-toggle, .island-camera, .island-toolbar) button:focus-visible {
   outline: 3px solid var(--sea);
   outline-offset: 1px;
 }
@@ -1020,7 +1021,7 @@ body::after {
   justify-content: space-between;
 }
 .island-tools,
-.island-history {
+.island-actions {
   display: flex;
   gap: 4px;
   min-width: 0;
@@ -1028,11 +1029,11 @@ body::after {
   padding: 0;
   border: 0;
 }
-.island-history {
+.island-actions {
   padding-left: 8px;
   border-left: 2px dashed #2b223640;
 }
-.island-mode,
+.island-editor-toggle,
 .island-camera {
   min-width: 0;
 }
@@ -1227,7 +1228,7 @@ body::after {
   .island-footer {
     padding: 10px 10px max(10px, env(safe-area-inset-bottom));
   }
-  .island-mode button {
+  .island-editor-toggle button {
     padding: 0 8px;
     font-size: 12px;
   }
@@ -1252,7 +1253,7 @@ body::after {
     gap: 2px;
   }
   .island-tools,
-  .island-history {
+  .island-actions {
     gap: 1px;
   }
   .island-tool {
@@ -1260,7 +1261,7 @@ body::after {
     padding: 5px 0 4px;
     font-size: 10px;
   }
-  .island-history {
+  .island-actions {
     padding-left: 2px;
   }
   .island-toolbar__options {

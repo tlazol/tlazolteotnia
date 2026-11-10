@@ -18,9 +18,8 @@ import { type IconName, PixelIcon } from './island-icons'
 const tools: Array<{ tool: IslandTool; icon: IconName; short: string; key: string }> = [
   { tool: 'land', icon: 'land', short: '土地', key: '1' },
   { tool: 'erase', icon: 'erase', short: '削る', key: '2' },
-  { tool: 'ground', icon: 'ground', short: '地面', key: '3' },
-  { tool: 'decor', icon: 'decor', short: '装飾', key: '4' },
-  { tool: 'remove', icon: 'remove', short: '撤去', key: '5' }
+  { tool: 'decor', icon: 'decor', short: '装飾', key: '3' },
+  { tool: 'remove', icon: 'remove', short: '撤去', key: '4' }
 ]
 export const toolShortcuts = Object.fromEntries(tools.map(({ key, tool }) => [key, tool]))
 
@@ -60,10 +59,6 @@ export function IslandToolbar({
   onOptions,
   panTool,
   onPanTool,
-  canUndo,
-  canRedo,
-  onUndo,
-  onRedo,
   onReset,
   status,
   statusTone
@@ -72,10 +67,6 @@ export function IslandToolbar({
   onOptions: (options: EditOptions) => void
   panTool: boolean
   onPanTool: (value: boolean) => void
-  canUndo: boolean
-  canRedo: boolean
-  onUndo: () => void
-  onRedo: () => void
   onReset: () => void
   status: string
   statusTone: 'hint' | 'blocked' | 'saved'
@@ -87,17 +78,20 @@ export function IslandToolbar({
     const timer = setTimeout(() => setConfirmReset(false), 4000)
     return () => clearTimeout(timer)
   }, [confirmReset])
-  const showGround = options.tool === 'land' || options.tool === 'ground'
+  const showGround = options.tool === 'land'
   const showBrush = options.tool !== 'decor' && options.tool !== 'remove'
 
   return (
-    <section className="island-toolbar" aria-label="島の編集ツール" data-island-ui>
+    <section
+      id="island-toolbar"
+      className="island-toolbar"
+      aria-label="島の編集ツール"
+      data-island-ui
+    >
       <div className="island-toolbar__options">
         {showGround && (
           <fieldset className="island-chips">
-            <legend className="sr-only">
-              {options.tool === 'land' ? '足す土地の種類' : '塗る地面の種類'}
-            </legend>
+            <legend className="sr-only">土地の種類</legend>
             {landGrounds.map((ground) => (
               <button
                 key={ground}
@@ -191,35 +185,13 @@ export function IslandToolbar({
             <span>移動</span>
           </button>
         </fieldset>
-        <fieldset className="island-history">
-          <legend className="sr-only">履歴</legend>
-          <button
-            type="button"
-            className="island-tool"
-            disabled={!canUndo}
-            aria-label="元に戻す（Ctrl+Z）"
-            title="元に戻す（Ctrl+Z）"
-            onClick={onUndo}
-          >
-            <PixelIcon name="undo" />
-            <span>戻す</span>
-          </button>
-          <button
-            type="button"
-            className="island-tool"
-            disabled={!canRedo}
-            aria-label="やり直す（Ctrl+Shift+Z）"
-            title="やり直す（Ctrl+Shift+Z）"
-            onClick={onRedo}
-          >
-            <PixelIcon name="redo" />
-            <span>進む</span>
-          </button>
+        <fieldset className="island-actions">
+          <legend className="sr-only">島の初期化</legend>
           <button
             type="button"
             className={`island-tool island-tool--reset${confirmReset ? ' is-confirming' : ''}`}
             aria-label={confirmReset ? '本当に最初の島に戻す（もう一度押す）' : '最初の島に戻す'}
-            title="最初の島に戻す（戻すで取り消せます）"
+            title="最初の島に戻す"
             onClick={() => {
               if (!confirmReset) {
                 setConfirmReset(true)
