@@ -138,7 +138,7 @@ export function IslandToolbar({
           </div>
         )}
         {options.tool === 'remove' && (
-          <p className="island-toolbar__note">木や岩、コテージや船などに触れると片付けます</p>
+          <p className="island-toolbar__note">木や岩、たいまつなどに触れると片付けます</p>
         )}
         {showBrush && (
           <fieldset className="island-chips island-chips--brush">

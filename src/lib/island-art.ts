@@ -303,11 +303,28 @@ function grassPixel(px: number, py: number): Rgba {
   const ly = py - oy
   const tuft = hash2(cx, cy, 33)
   if (tuft < 0.44 && valueNoise(px / 30, py / 25, 32) > 0.3) {
-    if ((lx === -1 && ly === -2) || (lx === 2 && ly === -1))
-      return tuft < 0.14 ? c.pathLight : c.grassLight
-    if ((lx === 0 && ly >= -2 && ly <= 0) || (lx === 1 && ly === 0)) return c.grassDark
-    if (lx === 0 && ly === -3) return c.grassPale
-    if (ly === 1 && lx >= -1 && lx <= 2) return c.grassEdge
+    const shape = Math.floor(hash2(cx, cy, 36) * 3)
+    if (shape === 0) {
+      // One tall blade with a dry tip beside it.
+      if ((lx === -1 && ly === -2) || (lx === 2 && ly === -1))
+        return tuft < 0.14 ? c.pathLight : c.grassLight
+      if ((lx === 0 && ly >= -2 && ly <= 0) || (lx === 1 && ly === 0)) return c.grassDark
+      if (lx === 0 && ly === -3) return c.grassPale
+      if (ly === 1 && lx >= -1 && lx <= 2) return c.grassEdge
+    } else if (shape === 1) {
+      // Three blades fanning out.
+      if (Math.abs(lx) === 2 && ly === -2) return c.grassPale
+      if (Math.abs(lx) === 1 && ly === -1) return c.grassLight
+      if (lx === 0 && ly >= -3 && ly <= 0) return ly === -3 ? c.grassLight : c.grassDark
+      if (ly === 0 && Math.abs(lx) === 1) return c.grassDark
+      if (ly === 1 && Math.abs(lx) <= 2) return c.grassEdge
+    } else {
+      // Low clover, now and then in bloom.
+      if (ly === -1 && (lx === 0 || lx === 2))
+        return tuft < 0.1 && lx === 0 ? shell.white : c.grassPale
+      if (ly === 0 && lx >= -1 && lx <= 2) return lx % 2 ? c.grassLight : c.grassPale
+      if (ly === 1 && lx >= -1 && lx <= 3) return c.grassEdge
+    }
   }
   const tone = valueNoise(px / 21, py / 17, 37) * 0.7 + valueNoise(px / 5, py / 4, 38) * 0.3
   const grain = hash2(px, py, 39)

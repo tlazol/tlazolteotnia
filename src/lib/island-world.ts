@@ -6,7 +6,7 @@ export const ISLAND_ROWS = 60
 export const TILE_SIZE = 16
 // A ring of open sea around the map keeps every shoreline drawable.
 export const EDIT_MARGIN = 2
-export const ISLAND_SAVE_VERSION = 2
+export const ISLAND_SAVE_VERSION = 3
 export const ISLAND_STORAGE_KEY = 'tlazolteotnia:island'
 
 export const WATER = 0
@@ -34,20 +34,9 @@ export const decorInfo = {
   bush: { name: '茂み', on: 'land', blocks: true },
   rock: { name: '岩', on: 'land', blocks: true },
   flowers: { name: '花', on: 'land', blocks: false },
-  campfire: { name: '焚き火', on: 'land', blocks: true },
-  shelter: { name: '葉っぱの小屋', on: 'land', blocks: true },
-  chest: { name: '宝箱', on: 'land', blocks: true },
   driftwood: { name: '流木', on: 'land', blocks: true },
-  sos: { name: 'SOS', on: 'land', blocks: false },
-  parasol: { name: 'パラソル', on: 'land', blocks: true },
-  hammock: { name: 'ハンモック', on: 'land', blocks: true },
   torch: { name: 'たいまつ', on: 'land', blocks: true },
-  bungalow: { name: 'コテージ', on: 'land', blocks: true },
-  surfboard: { name: 'サーフボード', on: 'land', blocks: true },
-  wreck: { name: '難破船', on: 'water', blocks: true },
-  searock: { name: '岩礁', on: 'water', blocks: true },
-  boat: { name: '小舟', on: 'water', blocks: true },
-  float: { name: '浮き輪', on: 'water', blocks: true }
+  searock: { name: '岩礁', on: 'water', blocks: true }
 } as const satisfies Record<string, { name: string; on: 'land' | 'water'; blocks: boolean }>
 export type DecorKind = keyof typeof decorInfo
 export const decorKinds = Object.keys(decorInfo) as DecorKind[]
@@ -55,10 +44,9 @@ export const decorNames = Object.fromEntries(
   decorKinds.map((kind) => [kind, decorInfo[kind].name])
 ) as Record<DecorKind, string>
 export const decorGroups: Array<{ name: string; kinds: DecorKind[] }> = [
-  { name: '自然', kinds: ['palm', 'tree', 'bush', 'rock', 'flowers'] },
-  { name: '無人島', kinds: ['campfire', 'shelter', 'sos', 'chest', 'driftwood'] },
-  { name: 'リゾート', kinds: ['bungalow', 'parasol', 'hammock', 'torch', 'surfboard'] },
-  { name: '海', kinds: ['wreck', 'searock', 'boat', 'float'] }
+  { name: '自然', kinds: ['palm', 'tree', 'bush', 'rock', 'flowers', 'driftwood'] },
+  { name: 'あかり', kinds: ['torch'] },
+  { name: '海', kinds: ['searock'] }
 ]
 // Stored decoration codes: 0 is empty, otherwise the index in decorKinds plus one.
 export function decorCode(kind: DecorKind) {
@@ -145,9 +133,8 @@ export function valueNoise(x: number, y: number, seed = 0) {
 
 export const ISLAND_CENTER = { x: 40, y: 30 }
 
-// The starting island. The west is a castaway's shore — jungle, a wreck on the
-// reef, a camp and an SOS in the sand — and the south-east a resort: a lagoon
-// ringed by sandbars with a pier and cottages over the water.
+// The starting island: jungle to the west and north, and in the south-east a
+// lagoon ringed by sandbars, with a pier running out over the water.
 export function createDefaultIsland(): IslandWorld {
   const world = createIsland()
   const { columns, rows } = world
@@ -220,7 +207,7 @@ export function createDefaultIsland(): IslandWorld {
   path([41, 29], [50, 22], 0.8)
   path([40, 29], [37, 20], 0.6)
 
-  // The pier: out from the lagoon's beach, with a platform for each cottage.
+  // The pier: out from the lagoon's beach, with a platform on either side.
   const deck = (x0: number, y0: number, x1: number, y1: number) => {
     for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) set(x, y, DECK)
   }
@@ -237,12 +224,7 @@ export function createDefaultIsland(): IslandWorld {
   }
   // Set pieces first, so the greenery grows around them.
   const pieces: Array<[number, number, DecorKind]> = [
-    // Castaway shore.
-    [12, 29, 'wreck'],
-    [21, 35, 'sos'],
-    [24, 32, 'shelter'],
-    [26, 34, 'campfire'],
-    [22, 32, 'chest'],
+    // Washed up on the western cape.
     [19, 33, 'driftwood'],
     [25, 35, 'driftwood'],
     // Plaza.
@@ -250,26 +232,10 @@ export function createDefaultIsland(): IslandWorld {
     [42, 28, 'torch'],
     [38, 32, 'torch'],
     [42, 32, 'torch'],
-    // Resort.
-    [46, 38, 'bungalow'],
-    [54, 38, 'bungalow'],
+    // The head of the pier.
     [49, 33, 'torch'],
     [51, 33, 'torch'],
-    [44, 35, 'parasol'],
-    [43, 36, 'parasol'],
-    [56, 34, 'parasol'],
-    [58, 36, 'hammock'],
-    [47, 33, 'surfboard'],
-    [46, 34, 'surfboard'],
-    [48, 42, 'boat'],
-    [52, 36, 'float'],
-    [55, 41, 'float'],
-    [44, 45, 'parasol'],
-    [50, 46, 'hammock'],
-    [69, 47, 'parasol'],
-    [17, 46, 'palm'],
-    [64, 44, 'boat'],
-    [31, 40, 'boat']
+    [17, 46, 'palm']
   ]
   // Nothing grows over a set piece: plants keep off it and the rows in front.
   const reserved = new Uint8Array(columns * rows)
@@ -283,12 +249,10 @@ export function createDefaultIsland(): IslandWorld {
   // Decorations follow the ground: jungle inland, palms along the beaches,
   // rocks on the wild north coast and in the sea off it.
   const tall = [decorCode('tree'), decorCode('palm')]
-  const wide = [decorCode('bungalow'), decorCode('shelter'), decorCode('hammock')]
   const crowded = (x: number, y: number, reach: number) => {
     for (let dy = -reach; dy <= reach; dy++) {
       for (let dx = -reach; dx <= reach; dx++) {
         const code = decorAt(world, x + dx, y + dy)
-        if (wide.includes(code) && dy >= -1) return true
         if ((dy < 0 || (dy === 0 && dx < 0)) && tall.includes(code)) return true
         if (code && !tall.includes(code) && Math.abs(dx) <= 1 && Math.abs(dy) <= 1) return true
       }
@@ -393,6 +357,10 @@ export function serializeIsland(world: IslandWorld): string {
   return JSON.stringify(save)
 }
 
+// Version 2 saves had man-made decorations between the natural ones. Indexed by
+// the old code: the kinds that remain map to their new code, the rest to none.
+const VERSION_2_DECOR = [0, 1, 2, 3, 4, 5, 0, 0, 0, 6, 0, 0, 0, 7, 0, 0, 0, 8, 0, 0]
+
 // Anything unexpected — other versions, other sizes, broken runs — is rejected
 // so the caller falls back to the default island instead of a half-built one.
 export function parseIsland(raw: string | null | undefined): IslandWorld | null {
@@ -405,16 +373,22 @@ export function parseIsland(raw: string | null | undefined): IslandWorld | null 
   }
   if (typeof data !== 'object' || data === null) return null
   const save = data as Partial<IslandSave>
+  const outdated = (save.version as number) === 2
   if (
-    save.version !== ISLAND_SAVE_VERSION ||
+    (save.version !== ISLAND_SAVE_VERSION && !outdated) ||
     save.columns !== ISLAND_COLUMNS ||
     save.rows !== ISLAND_ROWS
   )
     return null
   const length = ISLAND_COLUMNS * ISLAND_ROWS
   const ground = decodeRuns(save.ground, length, DECK)
-  const decor = decodeRuns(save.decor, length, decorKinds.length)
+  const decor = decodeRuns(
+    save.decor,
+    length,
+    outdated ? VERSION_2_DECOR.length - 1 : decorKinds.length
+  )
   if (!ground || !decor) return null
+  if (outdated) for (let i = 0; i < length; i++) decor[i] = VERSION_2_DECOR[decor[i]]
   const world: IslandWorld = { columns: ISLAND_COLUMNS, rows: ISLAND_ROWS, ground, decor }
   for (let y = 0; y < world.rows; y++) {
     for (let x = 0; x < world.columns; x++) {

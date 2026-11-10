@@ -63,30 +63,48 @@ describe('island world', () => {
     expect(a.decor.some((code) => code === decorCode('palm'))).toBe(true)
   })
 
-  it('starts with a castaway shore and a resort: wreck, camp, pier and cottages', () => {
+  it('starts with torches and a pier, and nothing else man-made', () => {
     const world = createDefaultIsland()
-    for (const kind of ['wreck', 'sos', 'campfire', 'shelter', 'bungalow', 'parasol'] as const)
+    for (const kind of ['tree', 'palm', 'bush', 'rock', 'flowers', 'driftwood', 'torch'] as const)
       expect(world.decor.includes(decorCode(kind))).toBe(true)
     expect(world.ground.includes(DECK)).toBe(true)
-    // Cottages stand on the pier's platforms, the wreck out at sea.
     world.decor.forEach((code, index) => {
-      const ground = world.ground[index]
-      if (code === decorCode('bungalow')) expect(ground).toBe(DECK)
-      if (code === decorCode('wreck')) expect(ground).toBe(WATER)
+      if (code === decorCode('searock')) expect(world.ground[index]).toBe(WATER)
     })
   })
 
-  it('keeps floating decorations on the sea and drops ones left on the wrong ground', () => {
+  it('keeps sea rocks on the sea and drops decorations left on the wrong ground', () => {
     const world = createIsland()
     world.ground[10 * world.columns + 10] = SAND
-    world.decor[10 * world.columns + 10] = decorCode('boat')
-    world.decor[10 * world.columns + 11] = decorCode('boat')
+    world.decor[10 * world.columns + 10] = decorCode('searock')
+    world.decor[10 * world.columns + 11] = decorCode('searock')
     world.decor[10 * world.columns + 12] = decorCode('palm')
     const restored = parseIsland(serializeIsland(world))
     if (!restored) throw new Error('save rejected')
     expect(decorAt(restored, 10, 10)).toBe(0)
-    expect(decorAt(restored, 11, 10)).toBe(decorCode('boat'))
+    expect(decorAt(restored, 11, 10)).toBe(decorCode('searock'))
     expect(decorAt(restored, 12, 10)).toBe(0)
+  })
+
+  it('reads version 2 saves, dropping the man-made decorations they had', () => {
+    const world = createIsland()
+    const row = 10 * world.columns
+    world.ground.fill(SAND, row + 10, row + 14)
+    const save = JSON.parse(serializeIsland(world))
+    // Old codes: 9 driftwood, 13 torch, 14 cottage, 17 sea rock, 18 boat.
+    const decor = new Array(world.decor.length).fill('0')
+    decor[row + 10] = '9'
+    decor[row + 11] = 'd'
+    decor[row + 12] = 'e'
+    decor[row + 20] = 'h'
+    decor[row + 21] = 'i'
+    const restored = parseIsland(JSON.stringify({ ...save, version: 2, decor: decor.join('.') }))
+    if (!restored) throw new Error('save rejected')
+    expect(decorAt(restored, 10, 10)).toBe(decorCode('driftwood'))
+    expect(decorAt(restored, 11, 10)).toBe(decorCode('torch'))
+    expect(decorAt(restored, 12, 10)).toBe(0)
+    expect(decorAt(restored, 20, 10)).toBe(decorCode('searock'))
+    expect(decorAt(restored, 21, 10)).toBe(0)
   })
 
   it('round-trips saves and rejects broken, foreign or outdated data', () => {
@@ -181,15 +199,15 @@ describe('island editing', () => {
   it('floats sea decorations only on water and builds piers over it', () => {
     const world = createIsland()
     expect(
-      planBrush(world, 10, 10, options({ tool: 'decor', decor: 'wreck' }), free).edits
-    ).toEqual([{ index: 10 * world.columns + 10, ground: WATER, decor: decorCode('wreck') }])
+      planBrush(world, 10, 10, options({ tool: 'decor', decor: 'searock' }), free).edits
+    ).toEqual([{ index: 10 * world.columns + 10, ground: WATER, decor: decorCode('searock') }])
     expect(planBrush(world, 10, 10, options({ ground: DECK }), free).edits[0].ground).toBe(DECK)
     world.ground[10 * world.columns + 10] = DECK
-    expect(planBrush(world, 10, 10, options({ tool: 'decor', decor: 'wreck' }), free).reason).toBe(
-      '難破船は海に浮かべてください'
-    )
     expect(
-      planBrush(world, 10, 10, options({ tool: 'decor', decor: 'bungalow' }), free).edits
+      planBrush(world, 10, 10, options({ tool: 'decor', decor: 'searock' }), free).reason
+    ).toBe('岩礁は海に浮かべてください')
+    expect(
+      planBrush(world, 10, 10, options({ tool: 'decor', decor: 'torch' }), free).edits
     ).toHaveLength(1)
     expect(isWalkable(world, 10, 10)).toBe(true)
   })
@@ -289,10 +307,9 @@ describe('island rendering helpers', () => {
 
   it('paints a sprite for every decoration, with animation frames of one size', () => {
     for (const kind of decorKinds) {
-      expect(decorVariants[kind].length).toBeGreaterThan(0)
-      for (const frame of decorVariants[kind] as Array<
-        (typeof decorVariants)['campfire'][number]
-      >) {
+      // Only the torch is man-made enough to come in a single design.
+      expect(decorVariants[kind].length).toBeGreaterThan(kind === 'torch' ? 0 : 3)
+      for (const frame of decorVariants[kind] as Array<(typeof decorVariants)['torch'][number]>) {
         expect(frame.buffer.data.some((value, i) => i % 4 === 3 && value > 0)).toBe(true)
         for (const extra of frame.frames ?? []) {
           expect(extra.width).toBe(frame.buffer.width)
