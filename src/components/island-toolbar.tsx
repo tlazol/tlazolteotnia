@@ -58,28 +58,15 @@ export function IslandToolbar({
   options,
   onOptions,
   panTool,
-  onPanTool,
-  onReset,
-  status,
-  statusTone
+  onPanTool
 }: {
   options: EditOptions
   onOptions: (options: EditOptions) => void
   panTool: boolean
   onPanTool: (value: boolean) => void
-  onReset: () => void
-  status: string
-  statusTone: 'hint' | 'blocked' | 'saved'
 }) {
   const thumbnails = useDecorThumbnails()
-  const [confirmReset, setConfirmReset] = useState(false)
-  useEffect(() => {
-    if (!confirmReset) return
-    const timer = setTimeout(() => setConfirmReset(false), 4000)
-    return () => clearTimeout(timer)
-  }, [confirmReset])
   const showGround = options.tool === 'land'
-  const showBrush = options.tool !== 'decor' && options.tool !== 'remove'
 
   return (
     <section
@@ -134,24 +121,6 @@ export function IslandToolbar({
         {options.tool === 'remove' && (
           <p className="island-toolbar__note">木や岩、たいまつなどに触れると片付けます</p>
         )}
-        {showBrush && (
-          <fieldset className="island-chips island-chips--brush">
-            <legend className="sr-only">ブラシの大きさ</legend>
-            {([1, 3] as const).map((brush) => (
-              <button
-                key={brush}
-                type="button"
-                aria-pressed={options.brush === brush}
-                aria-label={brush === 1 ? 'ブラシ 小（1マス）' : 'ブラシ 大（3×3マス）'}
-                title="ブラシの大きさ（B）"
-                onClick={() => onOptions({ ...options, brush })}
-              >
-                <span className={`island-brush is-${brush}`} aria-hidden="true" />
-                {brush === 1 ? '小' : '大'}
-              </button>
-            ))}
-          </fieldset>
-        )}
       </div>
       <div className="island-toolbar__main">
         <fieldset className="island-tools">
@@ -185,30 +154,7 @@ export function IslandToolbar({
             <span>移動</span>
           </button>
         </fieldset>
-        <fieldset className="island-actions">
-          <legend className="sr-only">島の初期化</legend>
-          <button
-            type="button"
-            className={`island-tool island-tool--reset${confirmReset ? ' is-confirming' : ''}`}
-            aria-label={confirmReset ? '本当に最初の島に戻す（もう一度押す）' : '最初の島に戻す'}
-            title="最初の島に戻す"
-            onClick={() => {
-              if (!confirmReset) {
-                setConfirmReset(true)
-                return
-              }
-              setConfirmReset(false)
-              onReset()
-            }}
-          >
-            <PixelIcon name="reset" />
-            <span>{confirmReset ? '本当に？' : '初期化'}</span>
-          </button>
-        </fieldset>
       </div>
-      <p className={`island-toolbar__status is-${statusTone}`} role="status" aria-live="polite">
-        {status}
-      </p>
     </section>
   )
 }

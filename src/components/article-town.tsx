@@ -68,7 +68,6 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
   const [listOpen, setListOpen] = useState(false)
   const [cursor, setCursor] = useState<CursorInfo>(null)
   const [coarse, setCoarse] = useState(false)
-  const [savedNotice, setSavedNotice] = useState(false)
   const listToggle = useRef<HTMLButtonElement>(null)
   const listHeading = useRef<HTMLHeadingElement>(null)
   const bubble = useRef<HTMLDivElement>(null)
@@ -215,14 +214,6 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
     return () => observer.disconnect()
   }, [activeSlug, positionOverlay, status])
 
-  // A short "saved" notice after each change.
-  useEffect(() => {
-    if (!scene.revision) return
-    setSavedNotice(true)
-    const timer = setTimeout(() => setSavedNotice(false), 1600)
-    return () => clearTimeout(timer)
-  }, [scene.revision])
-
   function selectResident(slug: string, viaKeyboard = false) {
     pendingBubbleFocus.current = viaKeyboard ? slug : null
     setActiveSlug((active) => (active === slug ? null : slug))
@@ -272,8 +263,6 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
       if (tool) {
         setPanTool(false)
         setOptions((current) => ({ ...current, tool }))
-      } else if (event.key.toLowerCase() === 'b') {
-        setOptions((current) => ({ ...current, brush: current.brush === 1 ? 3 : 1 }))
       } else if (event.key === ' ' && !(event.target instanceof HTMLButtonElement)) {
         event.preventDefault()
         setSpaceHeld(true)
@@ -366,12 +355,7 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
     else void navigate({ to: '/', search: {} })
   }
 
-  const hint = coarse
-    ? '1本指でなぞって編集 · 2本指で移動・拡大縮小'
-    : 'ドラッグで続けて編集 · 右ドラッグ／Space＋ドラッグで移動 · ホイールで拡大縮小'
   const blockedReason = cursor?.reason && !cursor.soft ? cursor.reason : null
-  const status_ = blockedReason ?? (savedNotice ? '保存しました' : hint)
-  const statusTone = blockedReason ? 'blocked' : savedNotice ? 'saved' : 'hint'
 
   return (
     <main
@@ -495,9 +479,6 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
           onOptions={setOptions}
           panTool={panTool}
           onPanTool={setPanTool}
-          onReset={edits.reset}
-          status={status_}
-          statusTone={statusTone}
         />
       )}
       <footer className="board-footer town-footer island-footer">
