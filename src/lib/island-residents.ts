@@ -37,7 +37,7 @@ export const accessories = [
   'crown',
   'headphones',
   'goggles',
-  'glasses',
+  'visor',
   'beanie',
   'hood',
   'sprout',
@@ -110,7 +110,7 @@ const designOverrides: Record<string, Partial<ResidentDesign>> = {
   },
   'skills-inventory': {
     hair: 'buns',
-    accessory: 'glasses',
+    accessory: 'visor',
     outfit: 'apron',
     hairColor: '#4a5a9c',
     top: '#f2c84b',
@@ -517,20 +517,23 @@ function paintAccessory(p: Painter, d: ResidentDesign, facing: Facing, dy: numbe
         r(9, 4, 1, 1, hex('#ffffff'))
       } else if (side) r(10, 4, 2, 2, accent)
       break
-    case 'glasses': {
-      const frame = hex('#4a4458')
-      if (front)
-        for (const x of [4, 9]) {
-          r(x, 7, 3, 1, frame)
-          r(x, 10, 3, 1, frame)
-          r(x, 8, 1, 2, frame)
-          r(x + 2, 8, 1, 2, frame)
-        }
-      else if (side) {
-        r(9, 7, 3, 1, frame)
-        r(9, 10, 3, 1, frame)
-        r(11, 8, 1, 2, frame)
-      }
+    case 'visor': {
+      // A one-piece cyber visor: a glowing band across both eyes.
+      const frame = hex('#2b2236')
+      const glow = hex('#63f3ff')
+      const glowDeep = hex('#1fa9d6')
+      if (front) {
+        r(3, 8, 10, 2, frame)
+        r(4, 8, 8, 1, glow)
+        r(4, 9, 8, 1, glowDeep)
+        r(5, 8, 2, 1, hex('#ffffff'))
+        r(10, 9, 1, 1, glow)
+      } else if (side) {
+        r(7, 8, 6, 2, frame)
+        r(9, 8, 4, 1, glow)
+        r(9, 9, 4, 1, glowDeep)
+        r(10, 8, 1, 1, hex('#ffffff'))
+      } else r(3, 8, 10, 1, frame)
       break
     }
     case 'beanie':
