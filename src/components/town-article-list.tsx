@@ -53,7 +53,7 @@ export function TownArticleList({
       >
         <div className="town-list__heading">
           <div>
-            <span className="town-list__eyebrow">NOTES FROM THE TOWN</span>
+            <span className="town-list__eyebrow">NOTES FROM THE ISLAND</span>
             <h2 ref={listHeading} id="town-list-heading" tabIndex={-1}>
               記事一覧 <small>{posts.length}</small>
             </h2>
@@ -66,7 +66,7 @@ export function TownArticleList({
         </div>
         {failed && (
           <p role="status" className="town-list__status">
-            街を表示できないため、記事一覧を表示しています。
+            島を表示できないため、記事一覧を表示しています。
           </p>
         )}
         <div className="town-list__posts">

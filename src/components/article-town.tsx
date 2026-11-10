@@ -6,19 +6,36 @@ import {
   useNavigate,
   useRouter
 } from '@tanstack/react-router'
-import { type MouseEvent, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  type MouseEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState
+} from 'react'
 import { type BlogPostSummary, sortBlogPostsNewestFirst } from '#/lib/blog-post'
+import { panView, stepZoom, tileAt, zoomViewAt } from '#/lib/island-camera'
+import type { EditOptions } from '#/lib/island-edit'
+import { createIslandInput } from '#/lib/island-input'
+import type { ResidentScreen } from '#/lib/island-three.client'
+import { GRASS, ISLAND_COLUMNS, ISLAND_ROWS } from '#/lib/island-world'
 import { shouldClosePostByHistoryBack, shouldOpenPostModal } from '#/lib/post-modal'
-import { fitTown, initialTownView, layoutTownArticles } from '#/lib/town-posts'
-import { zoomTownAt } from '#/lib/town-view'
+import { PixelIcon } from './island-icons'
+import { IslandToolbar, toolShortcuts } from './island-toolbar'
 import { PostModal } from './post-modal'
 import { SiteHeader } from './site-header'
 import { TownArticleList } from './town-article-list'
-import { TownBubble } from './town-bubble'
-import { TownCameraControls } from './town-camera-controls'
+import { placeTownBubble, TownBubble } from './town-bubble'
 import { TownLoading } from './town-loading'
-import { useTownInput } from './use-town-input'
-import { useTownRenderer } from './use-town-renderer'
+import { type CursorInfo, useIsland } from './use-island'
+
+type Mode = 'view' | 'edit'
+
+const isTyping = (target: EventTarget | null) =>
+  target instanceof HTMLElement &&
+  (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))
 
 export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
   const router = useRouter()
@@ -35,68 +52,304 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
   })
   const navigate = useNavigate({ from: '/' })
   const sorted = useMemo(() => sortBlogPostsNewestFirst(posts), [posts])
+  const newestSlug = sorted[0]?.slug
   const openedPost = openSlug ? sorted.find((post) => post.slug === openSlug) : undefined
-  const articles = useMemo(() => layoutTownArticles(sorted), [sorted])
 
-  const [rotateMode, setRotateMode] = useState(false)
+  const [mode, setMode] = useState<Mode>('view')
+  const [options, setOptions] = useState<EditOptions>({
+    tool: 'land',
+    ground: GRASS,
+    decor: 'tree',
+    brush: 1
+  })
+  const [panTool, setPanTool] = useState(false)
+  const [spaceHeld, setSpaceHeld] = useState(false)
+  const [dragging, setDragging] = useState(false)
   const [activeSlug, setActiveSlug] = useState<string | null>(null)
   const [listOpen, setListOpen] = useState(false)
+  const [cursor, setCursor] = useState<CursorInfo>(null)
+  const [coarse, setCoarse] = useState(false)
+  const [savedNotice, setSavedNotice] = useState(false)
   const listToggle = useRef<HTMLButtonElement>(null)
   const listHeading = useRef<HTMLHeadingElement>(null)
-  const scene = useTownRenderer(articles, activeSlug, setActiveSlug, openSlug)
-  const {
-    status,
-    surface,
-    canvas,
-    bubble,
-    buttons,
-    renderer,
-    size,
-    zoom,
-    currentView,
-    updateView
-  } = scene
+  const bubble = useRef<HTMLDivElement>(null)
+  const tooltip = useRef<HTMLDivElement>(null)
+  const buttons = useRef(new Map<string, HTMLButtonElement>())
+  const keyboardTile = useRef<{ x: number; y: number } | null>(null)
+  const latestPositions = useRef<ResidentScreen[]>([])
+  const pendingBubbleFocus = useRef<string | null>(null)
+
+  const latest = useRef({ mode, options, panTool, spaceHeld, activeSlug })
+  latest.current = { mode, options, panTool, spaceHeld, activeSlug }
+
+  const positionOverlay = useCallback((positions: ResidentScreen[]) => {
+    latestPositions.current = positions
+    const { activeSlug: active, mode: currentMode } = latest.current
+    const surfaceElement = scene.surface.current
+    const width = surfaceElement?.clientWidth ?? 0
+    const height = surfaceElement?.clientHeight ?? 0
+    for (const position of positions) {
+      const button = buttons.current.get(position.slug)
+      const boxWidth = Math.max(36, position.width * 0.8)
+      const boxHeight = Math.max(44, position.height)
+      const left = position.x - boxWidth / 2
+      const top = position.y - boxHeight + 2
+      const inView = left + boxWidth > 0 && top + boxHeight > 0 && left < width && top < height
+      if (button) {
+        button.style.width = `${boxWidth}px`
+        button.style.height = `${boxHeight}px`
+        button.style.transform = `translate(${left}px, ${top}px)`
+        const visible = inView && currentMode === 'view'
+        button.style.visibility = visible ? 'visible' : 'hidden'
+        button.tabIndex = visible ? 0 : -1
+      }
+      if (position.slug === active && bubble.current) {
+        const element = bubble.current
+        const placement = placeTownBubble(
+          { x: position.x, y: position.y - position.height - 4, bottom: position.y + 6 },
+          { width: element.offsetWidth, height: element.offsetHeight },
+          { width, height }
+        )
+        element.style.left = `${placement.left}px`
+        element.style.top = `${placement.top}px`
+        element.style.setProperty('--tail-x', `${placement.tail}px`)
+        element.dataset.side = placement.above ? 'above' : 'below'
+        element.style.visibility = inView ? 'visible' : 'hidden'
+        if (inView && pendingBubbleFocus.current === position.slug) {
+          const link = element.querySelector('a')
+          link?.focus({ preventScroll: true })
+          if (document.activeElement === link) pendingBubbleFocus.current = null
+        }
+      }
+    }
+  }, [])
+
+  const scene = useIsland({ posts: sorted, initialSlug: openSlug, onPositions: positionOverlay })
+  const { status, size, zoom, surface, canvas, renderer, view, setView, homeView, edits } = scene
   const ready = status === 'ready'
   const failed = status === 'failed'
   const loading = status === 'loading'
+  const editing = mode === 'edit' && ready
   const listVisible = failed || (ready && listOpen)
   const activePost = sorted.find((post) => post.slug === activeSlug)
-  function selectResident(slug: string) {
-    renderer.current?.follow(slug)
+
+  useEffect(() => {
+    const query = window.matchMedia('(pointer: coarse)')
+    const update = () => setCoarse(query.matches)
+    update()
+    query.addEventListener('change', update)
+    return () => query.removeEventListener('change', update)
+  }, [])
+
+  const showCursor = useCallback((info: CursorInfo) => {
+    setCursor((previous) =>
+      previous?.reason === info?.reason && previous?.soft === info?.soft ? previous : info
+    )
+    if (tooltip.current && info) {
+      tooltip.current.style.transform = `translate(${info.x + 16}px, ${info.y + 18}px)`
+    }
+  }, [])
+
+  const [input] = useState(() =>
+    createIslandInput({
+      surface: () => scene.surface.current,
+      view: () => scene.view.current,
+      size: () => scene.sizeRef.current,
+      setView: (next) => sceneRef.current.setView(next),
+      ready: () => sceneRef.current.status === 'ready',
+      editing: () => latest.current.mode === 'edit',
+      panning: () => latest.current.panTool || latest.current.spaceHeld,
+      hover: (point) => showCursor(sceneRef.current.preview(point, latest.current.options)),
+      strokeStart: (point) =>
+        showCursor(sceneRef.current.edits.begin(point, latest.current.options)),
+      strokeMove: (point) => showCursor(sceneRef.current.edits.move(point, latest.current.options)),
+      strokeEnd: (cancel) => sceneRef.current.edits.end(cancel),
+      tap: () => {
+        if (latest.current.mode === 'view') setActiveSlug(null)
+      },
+      setDragging
+    })
+  )
+  const sceneRef = useRef(scene)
+  sceneRef.current = scene
+
+  useEffect(() => {
+    const element = surface.current
+    if (!element || !ready) return
+    element.addEventListener('wheel', input.wheel, { passive: false })
+    window.addEventListener('blur', input.cancel)
+    return () => {
+      element.removeEventListener('wheel', input.wheel)
+      window.removeEventListener('blur', input.cancel)
+      input.cancel()
+    }
+  }, [ready, surface, input])
+
+  useEffect(() => {
+    renderer.current?.setEditing(editing)
+    // Show or hide the residents' hit areas right away, not on the next frame.
+    positionOverlay(latestPositions.current)
+    if (!editing) {
+      setCursor(null)
+      keyboardTile.current = null
+    }
+  }, [editing, renderer, status, positionOverlay])
+
+  useEffect(() => {
+    renderer.current?.select(activeSlug)
+    positionOverlay(latestPositions.current)
+  }, [activeSlug, renderer, status, positionOverlay])
+
+  useEffect(() => {
+    if (!bubble.current) return
+    const observer = new ResizeObserver(() => positionOverlay(latestPositions.current))
+    observer.observe(bubble.current)
+    return () => observer.disconnect()
+  }, [activeSlug, positionOverlay, status])
+
+  // A short "saved" notice after each change.
+  useEffect(() => {
+    if (!scene.revision) return
+    setSavedNotice(true)
+    const timer = setTimeout(() => setSavedNotice(false), 1600)
+    return () => clearTimeout(timer)
+  }, [scene.revision])
+
+  function selectResident(slug: string, viaKeyboard = false) {
+    pendingBubbleFocus.current = viaKeyboard ? slug : null
     setActiveSlug((active) => (active === slug ? null : slug))
   }
-  const { input, dragging, draggedSlug } = useTownInput(
-    scene,
-    rotateMode,
-    setActiveSlug,
-    selectResident
-  )
   function closeBubble() {
+    const slug = activeSlug
     setActiveSlug(null)
-    if (activeSlug) buttons.current.get(activeSlug)?.focus({ preventScroll: true })
+    if (slug) buttons.current.get(slug)?.focus({ preventScroll: true })
   }
-  function closeList() {
-    setListOpen(false)
-    listToggle.current?.focus()
+  function switchMode(next: Mode) {
+    setMode(next)
+    setPanTool(false)
+    if (next === 'edit') setActiveSlug(null)
   }
+  function zoomBy(direction: 1 | -1) {
+    const next = stepZoom(view.current.zoom, direction)
+    setView(zoomViewAt(view.current, size, next, { x: size.width / 2, y: size.height / 2 }))
+  }
+  function goHome() {
+    setView(homeView(newestSlug))
+  }
+
   useEffect(() => {
     if (listOpen) listHeading.current?.focus()
   }, [listOpen])
+
   useEffect(() => {
-    function handleEscape(event: KeyboardEvent) {
-      if (event.key !== 'Escape' || openSlug || document.querySelector('dialog[open]')) return
-      if (listOpen) {
-        setListOpen(false)
-        listToggle.current?.focus()
-      } else if (activeSlug) {
-        setActiveSlug(null)
-        buttons.current.get(activeSlug)?.focus({ preventScroll: true })
+    function keydown(event: KeyboardEvent) {
+      if (openSlug || document.querySelector('dialog[open]') || isTyping(event.target)) return
+      const { mode: currentMode } = latest.current
+      if (event.key === 'Escape') {
+        if (listOpen) {
+          setListOpen(false)
+          listToggle.current?.focus()
+        } else if (activeSlug) closeBubble()
+        else if (currentMode === 'edit') switchMode('view')
+        return
+      }
+      if (currentMode !== 'edit' || !ready) return
+      const mod = event.metaKey || event.ctrlKey
+      if (mod && event.key.toLowerCase() === 'z') {
+        event.preventDefault()
+        if (event.shiftKey) edits.redo()
+        else edits.undo()
+        return
+      }
+      if (mod && event.key.toLowerCase() === 'y') {
+        event.preventDefault()
+        edits.redo()
+        return
+      }
+      if (mod || event.altKey) return
+      const tool = toolShortcuts[event.key]
+      if (tool) {
+        setPanTool(false)
+        setOptions((current) => ({ ...current, tool }))
+      } else if (event.key.toLowerCase() === 'b') {
+        setOptions((current) => ({ ...current, brush: current.brush === 1 ? 3 : 1 }))
+      } else if (event.key === ' ' && !(event.target instanceof HTMLButtonElement)) {
+        event.preventDefault()
+        setSpaceHeld(true)
       }
     }
-    document.addEventListener('keydown', handleEscape)
-    return () => document.removeEventListener('keydown', handleEscape)
-  }, [activeSlug, openSlug, listOpen, buttons])
-  // Posts opened from the town close by going back, so they do not stack history entries.
+    function keyup(event: KeyboardEvent) {
+      if (event.key === ' ') setSpaceHeld(false)
+    }
+    document.addEventListener('keydown', keydown)
+    document.addEventListener('keyup', keyup)
+    return () => {
+      document.removeEventListener('keydown', keydown)
+      document.removeEventListener('keyup', keyup)
+    }
+  })
+
+  // Arrow keys move the map, or the edit cursor while editing; Enter applies the tool.
+  function surfaceKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
+    if (event.target !== event.currentTarget || !ready) return
+    const arrows: Record<string, [number, number]> = {
+      ArrowLeft: [-1, 0],
+      ArrowRight: [1, 0],
+      ArrowUp: [0, -1],
+      ArrowDown: [0, 1]
+    }
+    const arrow = arrows[event.key]
+    if (event.key === '+' || event.key === '=') {
+      event.preventDefault()
+      zoomBy(1)
+    } else if (event.key === '-' || event.key === '_') {
+      event.preventDefault()
+      zoomBy(-1)
+    } else if (event.key === 'Home' || event.key === '0') {
+      event.preventDefault()
+      goHome()
+    } else if (arrow && !editing) {
+      event.preventDefault()
+      setView(panView(view.current, size, -arrow[0] * 64, -arrow[1] * 64))
+    } else if (arrow && editing) {
+      event.preventDefault()
+      const center =
+        keyboardTile.current ??
+        tileAt(view.current, size, { x: size.width / 2, y: size.height / 2 })
+      const next = keyboardTile.current
+        ? {
+            x: Math.max(0, Math.min(ISLAND_COLUMNS - 1, center.x + arrow[0])),
+            y: Math.max(0, Math.min(ISLAND_ROWS - 1, center.y + arrow[1]))
+          }
+        : center
+      keyboardTile.current = next
+      updateKeyboardCursor(next)
+    } else if (editing && (event.key === 'Enter' || event.key === ' ')) {
+      event.preventDefault()
+      const tile =
+        keyboardTile.current ??
+        tileAt(view.current, size, { x: size.width / 2, y: size.height / 2 })
+      keyboardTile.current = tile
+      edits.applyAt(tile, options)
+      updateKeyboardCursor(tile)
+    }
+  }
+  function updateKeyboardCursor(tile: { x: number; y: number }) {
+    // Keep the keyboard cursor on screen.
+    const v = view.current
+    const px = (tile.x + 0.5) * 16
+    const py = (tile.y + 0.5) * 16
+    const halfW = size.width / 2 / v.zoom - 48
+    const halfH = size.height / 2 / v.zoom - 80
+    if (Math.abs(px - v.x) > halfW || Math.abs(py - v.y) > halfH) setView({ ...v, x: px, y: py })
+    const screen = {
+      x: (px - view.current.x) * view.current.zoom + size.width / 2,
+      y: (py - view.current.y) * view.current.zoom + size.height / 2
+    }
+    showCursor(scene.preview(screen, options))
+  }
+
+  // Posts opened from the island close by going back, so they do not stack history entries.
   const historyIndex = useLocation({ select: (location) => location.state.__TSR_index })
   const townHistoryIndex = useRef<number | null>(null)
   useEffect(() => {
@@ -112,23 +365,55 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
     else void navigate({ to: '/', search: {} })
   }
 
+  const hint = coarse
+    ? '1本指でなぞって編集 · 2本指で移動・拡大縮小'
+    : 'ドラッグで続けて編集 · 右ドラッグ／Space＋ドラッグで移動 · ホイールで拡大縮小'
+  const blockedReason = cursor?.reason && !cursor.soft ? cursor.reason : null
+  const status_ = blockedReason ?? (savedNotice ? '保存しました' : hint)
+  const statusTone = blockedReason ? 'blocked' : savedNotice ? 'saved' : 'hint'
+
   return (
-    <main className={`sticker-page town-page${loading ? ' is-loading' : ''}`}>
-      <h1 className="sr-only">記事のある街</h1>
+    <main
+      className={`sticker-page town-page island-page${loading ? ' is-loading' : ''}${editing ? ' is-editing' : ''}`}
+    >
+      <h1 className="sr-only">記事の住人がいる島</h1>
       <SiteHeader />
       <div
         ref={surface}
-        data-camera-mode={rotateMode ? 'rotate' : 'pan'}
-        className={`sticker-surface${ready ? ' is-ready' : ''}${dragging ? ' is-dragging' : ''}`}
+        className={`sticker-surface island-surface${ready ? ' is-ready' : ''}${dragging ? ' is-dragging' : ''}${panTool || spaceHeld ? ' is-pan-tool' : ''}`}
+        data-tool={editing ? options.tool : undefined}
+        tabIndex={ready ? 0 : -1}
+        role="application"
+        aria-roledescription="島の地図"
+        aria-label={
+          editing
+            ? `島の編集。矢印キーで編集位置を動かし、Enterで${options.tool === 'land' ? '土地を足します' : '選んだツールを使います'}。`
+            : '島の地図。矢印キーで移動、+ と − で拡大縮小、0 で最初の位置に戻ります。'
+        }
+        onKeyDown={surfaceKeyDown}
         onPointerDown={input.pointerDown}
         onPointerMove={input.pointerMove}
         onPointerUp={input.pointerUp}
-        onPointerCancel={input.pointerUp}
-        onLostPointerCapture={input.lostPointerCapture}
-        onClickCapture={input.clickCapture}
+        onPointerCancel={input.pointerCancel}
+        onPointerLeave={input.pointerLeave}
+        onContextMenu={(event) => {
+          if (editing) event.preventDefault()
+        }}
+        onBlur={() => {
+          if (keyboardTile.current) {
+            keyboardTile.current = null
+            renderer.current?.setCursor(null)
+            setCursor(null)
+          }
+        }}
       >
-        <canvas ref={canvas} className="sticker-canvas" aria-hidden="true" tabIndex={-1} />
-        <TownLoading status={status} residents={sorted.length} newestTitle={sorted[0]?.title} />
+        <canvas
+          ref={canvas}
+          className="sticker-canvas island-canvas"
+          aria-hidden="true"
+          tabIndex={-1}
+        />
+        <TownLoading status={status} />
         {ready &&
           sorted.map((post) => (
             <button
@@ -137,18 +422,14 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
                 if (element) buttons.current.set(post.slug, element)
                 else buttons.current.delete(post.slug)
               }}
-              className={`town-person${post.slug === sorted[0]?.slug ? ' is-new' : ''}${post.slug === draggedSlug ? ' is-lifted' : ''}`}
+              className={`island-resident${post.slug === newestSlug ? ' is-new' : ''}`}
               type="button"
-              data-slug={post.slug}
-              aria-label={`${post.title} の住人に話しかける`}
+              aria-label={`${post.title}（住人に話しかける）`}
               aria-expanded={activeSlug === post.slug}
               aria-controls={activeSlug === post.slug ? 'town-bubble' : undefined}
-              onClick={() => selectResident(post.slug)}
-              onPointerEnter={() => {
-                input.enterResident(post.slug)
-              }}
+              onClick={(event) => selectResident(post.slug, event.detail === 0)}
+              onPointerEnter={() => renderer.current?.focus(post.slug)}
               onPointerLeave={(event) => {
-                input.leaveResident(post.slug)
                 if (!event.currentTarget.matches(':focus-visible')) renderer.current?.focus(null)
               }}
               onFocus={(event) => {
@@ -157,27 +438,35 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
               }}
               onBlur={() => renderer.current?.focus(null)}
             >
-              <span className="town-person__ring" aria-hidden="true" />
-              {post.slug === sorted[0]?.slug && (
-                <span className="town-person__new" aria-hidden="true">
-                  New
+              {post.slug === newestSlug && (
+                <span className="island-resident__new" aria-hidden="true">
+                  NEW
                 </span>
               )}
             </button>
           ))}
-        {ready && activePost && (
+        {ready && activePost && !editing && (
           <TownBubble
             post={activePost}
-            newestSlug={sorted[0]?.slug}
+            newestSlug={newestSlug}
             bubble={bubble}
             onClose={closeBubble}
             openPost={openPost}
           />
         )}
+        {editing && !coarse && (
+          <div
+            ref={tooltip}
+            className={`island-tooltip${blockedReason ? ' is-visible' : ''}`}
+            aria-hidden="true"
+          >
+            {blockedReason}
+          </div>
+        )}
       </div>
       <TownArticleList
         posts={sorted}
-        newestSlug={sorted[0]?.slug}
+        newestSlug={newestSlug}
         loading={loading}
         ready={ready}
         failed={failed}
@@ -185,34 +474,57 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
         listToggle={listToggle}
         listHeading={listHeading}
         onToggle={() => setListOpen(!listOpen)}
-        onClose={closeList}
+        onClose={() => {
+          setListOpen(false)
+          listToggle.current?.focus()
+        }}
         openPost={openPost}
       />
-      <footer className="board-footer town-footer">
-        <div className="board-caption">
-          <span className="board-caption__dot" />
-          <span>{String(sorted.length).padStart(2, '0')} 記事</span>
-        </div>
+      {editing && (
+        <IslandToolbar
+          options={options}
+          onOptions={setOptions}
+          panTool={panTool}
+          onPanTool={setPanTool}
+          canUndo={scene.canUndo}
+          canRedo={scene.canRedo}
+          onUndo={edits.undo}
+          onRedo={edits.redo}
+          onReset={edits.reset}
+          status={status_}
+          statusTone={statusTone}
+        />
+      )}
+      <footer className="board-footer town-footer island-footer">
+        <fieldset className="island-mode" disabled={!ready}>
+          <legend className="sr-only">モード</legend>
+          <button type="button" aria-pressed={mode === 'view'} onClick={() => switchMode('view')}>
+            <PixelIcon name="eye" />
+            <span>見る</span>
+          </button>
+          <button type="button" aria-pressed={mode === 'edit'} onClick={() => switchMode('edit')}>
+            <PixelIcon name="build" />
+            <span>島をつくる</span>
+          </button>
+        </fieldset>
         {ready && (
-          <TownCameraControls
-            rotateMode={rotateMode}
-            zoom={zoom}
-            onToggleRotate={() => setRotateMode(!rotateMode)}
-            onZoom={(factor) => {
-              renderer.current?.follow(null)
-              updateView(
-                zoomTownAt(currentView.current, factor, { x: size.width / 2, y: size.height / 2 })
-              )
-            }}
-            onFit={() => {
-              renderer.current?.follow(null)
-              updateView(fitTown(size, currentView.current.rotation))
-            }}
-            onReset={() => {
-              renderer.current?.follow(articles[0]?.slug ?? null)
-              updateView(initialTownView(size, articles[0]))
-            }}
-          />
+          <fieldset className="board-controls island-camera" aria-label="表示の操作">
+            <button type="button" aria-label="縮小" title="縮小（−）" onClick={() => zoomBy(-1)}>
+              <PixelIcon name="minus" />
+            </button>
+            <span aria-live="polite">{Math.round(zoom * 100)}%</span>
+            <button type="button" aria-label="拡大" title="拡大（+）" onClick={() => zoomBy(1)}>
+              <PixelIcon name="plus" />
+            </button>
+            <button
+              type="button"
+              aria-label="最初の位置に戻る（最新記事の住人）"
+              title="最初の位置に戻る（0）"
+              onClick={goHome}
+            >
+              <PixelIcon name="home" />
+            </button>
+          </fieldset>
         )}
       </footer>
       {openSlug && (

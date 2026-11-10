@@ -117,20 +117,6 @@ body::after {
 .is-ready .sticker-canvas {
   display: block;
 }
-/* A soft lens vignette over the town, beneath the residents' hit areas. */
-.town-page .sticker-surface.is-ready::before {
-  content: "";
-  position: absolute;
-  z-index: 1;
-  inset: 0;
-  pointer-events: none;
-  background: radial-gradient(
-    ellipse 120% 100% at 50% 45%,
-    transparent 55%,
-    rgba(12, 18, 40, 0.1) 80%,
-    rgba(12, 18, 40, 0.26) 100%
-  );
-}
 .board-footer {
   position: fixed;
   z-index: 20;
@@ -512,419 +498,6 @@ body::after {
   }
 }
 
-/* People belong to the town; only their conversations catch the light. */
-.town-loading {
-  --iris-x: 50%;
-  --iris-y: 50%;
-  position: absolute;
-  z-index: 20;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 72px 16px 24px;
-  background:
-    radial-gradient(ellipse 60% 45% at 50% 45%, #2b2240 0%, #101114 70%),
-    #101114;
-  color: #f8f0d8;
-}
-/* The panels wait with the town so the loading scene stands alone. */
-.town-page.is-loading :is(.site-header, .town-list-toggle, .board-footer) {
-  visibility: hidden;
-}
-.town-loading[data-phase="leaving"] {
-  pointer-events: none;
-  mask: radial-gradient(
-    circle at var(--iris-x) var(--iris-y),
-    transparent var(--iris),
-    #000 calc(var(--iris) + 1px)
-  );
-  animation: town-loading-iris 800ms cubic-bezier(0.7, 0, 0.25, 1) forwards;
-}
-@property --iris {
-  syntax: "<length>";
-  inherits: false;
-  initial-value: 0px;
-}
-/* Without @property the mask cannot animate, so the fade still lets the town through. */
-@keyframes town-loading-iris {
-  70% {
-    opacity: 1;
-  }
-  to {
-    --iris: 150vmax;
-    opacity: 0;
-  }
-}
-.town-loading__stage {
-  width: min(460px, 92vw);
-  max-height: 52dvh;
-  overflow: visible;
-}
-.town-loading__sky circle {
-  fill: #f8f0d8;
-  animation: town-loading-twinkle 2.4s ease-in-out calc(var(--n) * -0.37s) infinite;
-}
-.town-loading__bats {
-  transform: scale(1.8);
-  transform-origin: center;
-  transform-box: fill-box;
-}
-.town-loading__bats path {
-  fill: #050407;
-  stroke: #7a3fb8;
-  stroke-width: 0.6;
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: town-loading-bat 0.32s steps(2) infinite, town-loading-drift 6s ease-in-out infinite alternate;
-}
-.town-loading__ground {
-  animation: town-loading-fade 0.3s ease-out both;
-}
-.town-loading__ground .is-top {
-  fill: #2c2538;
-}
-.town-loading__ground .is-road {
-  fill: #3a3247;
-}
-.town-loading__ground .is-side-left {
-  fill: #1d1826;
-}
-.town-loading__ground .is-side-right {
-  fill: #16121d;
-}
-.town-loading__building {
-  transform-box: fill-box;
-  transform-origin: 50% 100%;
-  animation: town-loading-rise 0.55s cubic-bezier(0.3, 1.6, 0.5, 1) calc(0.05s + var(--n) * 0.07s) both;
-}
-.town-loading__building .is-wall-left {
-  fill: #3d3550;
-}
-.town-loading__building .is-wall-right {
-  fill: #2a2439;
-}
-.town-loading__window {
-  fill: #ffb23a;
-  opacity: 0;
-  animation:
-    town-loading-light 0.2s steps(1) calc(0.4s + var(--n) * 0.05s) forwards,
-    town-loading-flicker 3.2s steps(1) calc(2s + var(--n) * 0.7s) infinite;
-}
-.town-loading__lamp line {
-  stroke: #1a1622;
-  stroke-width: 2;
-}
-.town-loading__lamp circle {
-  fill: #fff5d4;
-  filter: drop-shadow(0 0 4px #ffd98a);
-  animation: town-loading-pop 0.35s cubic-bezier(0.3, 1.8, 0.5, 1) calc(0.55s + var(--n) * 0.1s) both;
-  transform-box: fill-box;
-  transform-origin: center;
-}
-.town-loading__pumpkin {
-  transform-box: fill-box;
-  transform-origin: 50% 100%;
-  animation: town-loading-pop 0.4s cubic-bezier(0.3, 1.8, 0.5, 1) calc(0.5s + var(--n) * 0.07s) both;
-}
-.town-loading__pumpkin ellipse {
-  fill: #f07a1e;
-  filter: drop-shadow(0 0 3px #ff8a1f);
-}
-.town-loading__pumpkin rect {
-  fill: #5a4a2a;
-}
-.town-loading__walker {
-  animation: town-loading-walk 0.6s cubic-bezier(0.2, 0.8, 0.3, 1) 0.2s both;
-}
-.town-loading__shadow {
-  fill: #00000080;
-}
-.town-loading__body {
-  fill: #08070b;
-  stroke: #e8c8ff;
-  stroke-width: 1.2;
-  animation: town-loading-bob 0.45s ease-in-out infinite alternate;
-}
-.town-loading__question {
-  transform-box: fill-box;
-  transform-origin: 50% 100%;
-  animation:
-    town-loading-pop 0.4s cubic-bezier(0.3, 1.8, 0.5, 1) 0.75s both,
-    town-loading-float 1.4s ease-in-out 1.15s infinite;
-}
-.town-loading__question rect {
-  fill: #181818;
-  stroke: #f8f0d8;
-  stroke-width: 2;
-}
-.town-loading__question path {
-  fill: #f8f0d8;
-}
-.town-loading__question text {
-  fill: #f8f0d8;
-  font: 400 15px "WDXL Lubrifont JP N", sans-serif;
-  text-anchor: middle;
-}
-.town-loading__new {
-  transform-box: fill-box;
-  transform-origin: 50% 100%;
-  animation: town-loading-pop 0.4s cubic-bezier(0.3, 1.8, 0.5, 1) 0.9s both;
-}
-.town-loading__new rect {
-  fill: url(#town-loading-new);
-  stroke: #fff;
-}
-.town-loading__new text {
-  fill: #362b48;
-  font: 600 8px "IBM Plex Mono", monospace;
-  text-anchor: middle;
-}
-/* A fast load skips the rest of the intro so the newcomer is in place for the reveal. */
-.town-loading:not([data-phase="loading"]) :is(
-    .town-loading__ground,
-    .town-loading__building,
-    .town-loading__lamp circle,
-    .town-loading__pumpkin,
-    .town-loading__walker,
-    .town-loading__new
-  ) {
-  animation: none;
-}
-.town-loading:not([data-phase="loading"]) .town-loading__window {
-  opacity: 1;
-  animation: none;
-}
-.town-loading:not([data-phase="loading"]) .town-loading__body {
-  animation: town-loading-jump 0.4s cubic-bezier(0.3, 0, 0.5, 1);
-}
-.town-loading:not([data-phase="loading"]) .town-loading__question {
-  animation: town-loading-pop 0.3s cubic-bezier(0.3, 1.8, 0.5, 1) both;
-}
-.town-loading:not([data-phase="loading"]) .town-loading__question text {
-  fill: #ffb23a;
-}
-.town-loading__window-box {
-  width: min(360px, 100%);
-  padding: 12px 16px 10px;
-  border: 3px solid #f8f0d8;
-  border-radius: 8px;
-  background: #181818;
-  box-shadow:
-    inset 0 0 0 2px #797568,
-    0 0 0 2px #181818,
-    0 0 0 4px #b8b0a0,
-    4px 6px 0 4px #18181860;
-  animation: town-loading-fade 0.3s ease-out 0.1s both;
-}
-.town-loading__message {
-  min-height: 1.5em;
-  margin: 0;
-  font: 400 19px / 1.5 "WDXL Lubrifont JP N", sans-serif;
-  text-shadow: 1px 1px #000;
-}
-.town-loading__caret {
-  display: inline-block;
-  margin-left: 6px;
-  color: #b8b0a0;
-  font-size: 10px;
-  vertical-align: middle;
-  animation: town-loading-caret 0.8s steps(1) infinite;
-}
-.town-loading__meter {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 8px;
-}
-.town-loading__segments {
-  display: flex;
-  flex: 1;
-  gap: 3px;
-}
-.town-loading__segments span {
-  flex: 1;
-  height: 8px;
-  background: #2b2b26;
-  transition: background 0.2s;
-}
-.town-loading__segments .is-filled {
-  background: #f8f0d8;
-}
-.town-loading__segments .is-filled:last-child,
-.town-loading[data-phase="loading"] .town-loading__segments .is-filled:has(+ :not(.is-filled)) {
-  background: #ffb23a;
-}
-.town-loading__count {
-  color: #b8b0a0;
-  font: 600 10px "IBM Plex Mono", monospace;
-  font-variant-numeric: tabular-nums;
-}
-.town-loading__hint {
-  margin: 6px 0 0;
-  color: #b8b0a0;
-  font-size: 11px;
-}
-@keyframes town-loading-fade {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-}
-@keyframes town-loading-rise {
-  from {
-    transform: scaleY(0);
-  }
-}
-@keyframes town-loading-pop {
-  from {
-    transform: scale(0);
-  }
-}
-@keyframes town-loading-light {
-  to {
-    opacity: 1;
-  }
-}
-@keyframes town-loading-flicker {
-  0%,
-  100% {
-    fill: #ffb23a;
-  }
-  47% {
-    fill: #3d3550;
-  }
-  52% {
-    fill: #ffd98a;
-  }
-}
-@keyframes town-loading-walk {
-  from {
-    opacity: 0;
-    transform: translate(88px, -44px);
-  }
-  20% {
-    opacity: 1;
-  }
-}
-@keyframes town-loading-jump {
-  40% {
-    transform: translateY(-9px);
-  }
-}
-@keyframes town-loading-bob {
-  to {
-    transform: translateY(-2px);
-  }
-}
-@keyframes town-loading-float {
-  50% {
-    transform: translateY(-3px);
-  }
-}
-@keyframes town-loading-twinkle {
-  50% {
-    opacity: 0.2;
-  }
-}
-@keyframes town-loading-bat {
-  50% {
-    transform: scaleY(-0.6);
-  }
-}
-@keyframes town-loading-drift {
-  to {
-    translate: 40px 12px;
-  }
-}
-@keyframes town-loading-caret {
-  50% {
-    opacity: 0;
-  }
-}
-@media (max-height: 560px) {
-  .town-loading__stage {
-    max-height: 40dvh;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .town-loading *,
-  .town-loading *::before,
-  .town-loading[data-phase] {
-    animation: none !important;
-  }
-  .town-loading__window {
-    opacity: 1;
-  }
-  .town-loading[data-phase="leaving"] {
-    mask: none;
-    opacity: 0;
-    transition: opacity 0.2s;
-  }
-}
-.town-person {
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 44px;
-  height: 58px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  cursor: grab;
-  visibility: hidden;
-  transition-property: none;
-  -webkit-tap-highlight-color: transparent;
-}
-.town-person.is-lifted {
-  z-index: 2;
-  cursor: grabbing;
-}
-.town-person.is-lifted[data-drop-allowed="false"] .town-person__ring {
-  border-color: #ff485e;
-  background: #ff485e55;
-  box-shadow: 0 0 12px #ff485e;
-}
-.town-person__ring {
-  position: absolute;
-  top: calc(var(--foot-y) - 6px);
-  left: 50%;
-  transform: translateX(-50%);
-  width: 34px;
-  height: 13px;
-  border: 2px solid #fff;
-  border-radius: 50%;
-  background: #96e5ef75;
-  box-shadow: 0 0 12px #e8c8ff;
-  opacity: 0;
-}
-.town-person:is(:hover, :focus-visible, [aria-expanded="true"], .is-lifted) .town-person__ring {
-  opacity: 1;
-}
-.town-person:focus-visible {
-  outline: 2px dashed #fff;
-  outline-offset: 2px;
-  border-radius: 12px;
-}
-.town-person__new {
-  position: absolute;
-  bottom: calc(100% + 4px);
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 3px 7px;
-  border: 1px solid white;
-  border-radius: 6px;
-  color: #362b48;
-  background: linear-gradient(110deg, #96e5ef, #e8c8ff, #fff5d4);
-  box-shadow: 0 2px 4px #33433340;
-  font: 600 10px "IBM Plex Mono", monospace;
-  pointer-events: none;
-}
-.town-person[aria-expanded="true"] .town-person__new {
-  display: none;
-}
 .town-bubble {
   --tail-x: 50%;
   position: absolute;
@@ -1176,20 +749,6 @@ body::after {
   pointer-events: auto;
   color: #e8c8ff;
 }
-.board-controls .town-camera-mode {
-  width: auto;
-  padding: 0 10px;
-  font-size: 12px;
-}
-.board-controls .town-camera-mode[aria-pressed="true"] {
-  background: #e8c8ff;
-  color: #17181d;
-}
-@media (pointer: coarse) {
-  .town-camera-mode {
-    display: none;
-  }
-}
 @media (max-width: 600px) {
   .town-list-toggle {
     top: 16px;
@@ -1231,4 +790,445 @@ body::after {
 .town-bubble,
 .town-bubble * {
   transition-property: none;
+}
+
+/* ---- Island ----------------------------------------------------------------
+   A pixel-art island: cream panels with a dark plum outline and hard shadows,
+   matching the sprites' palette. */
+.island-page {
+  --ink: #2b2236;
+  --paper: #fff7e3;
+  --paper-shade: #f1e2bf;
+  --pick: #ffd45c;
+  --sea: #3b6db0;
+  background: var(--sea);
+}
+.island-surface.is-ready {
+  cursor: grab;
+}
+.island-surface:focus-visible {
+  outline: 3px solid var(--pick);
+  outline-offset: -6px;
+}
+.island-page.is-editing .island-surface.is-ready {
+  cursor: crosshair;
+}
+.island-page.is-editing .island-surface.is-pan-tool,
+.island-surface.is-dragging {
+  cursor: grabbing;
+}
+.island-canvas {
+  image-rendering: pixelated;
+}
+.island-page.is-loading :is(.site-header, .town-list-toggle, .board-footer) {
+  visibility: hidden;
+}
+.island-loading {
+  position: absolute;
+  z-index: 20;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 14px;
+  background:
+    repeating-linear-gradient(0deg, #ffffff10 0 2px, transparent 2px 22px),
+    var(--sea);
+  color: var(--paper);
+  font: 500 13px "IBM Plex Mono", "Noto Sans JP", monospace;
+  transition: opacity 0.4s;
+}
+.island-loading.is-leaving {
+  opacity: 0;
+  pointer-events: none;
+}
+.island-loading__art {
+  animation: island-bob 1.2s steps(2) infinite;
+}
+.island-loading__sand { fill: #ead08f; }
+.island-loading__grass { fill: #69bb4c; }
+.island-loading__trunk { fill: #9a6c41; }
+.island-loading__leaf { fill: #4caa4c; }
+.island-loading__wave { fill: #eafcff; }
+@keyframes island-bob {
+  50% { transform: translateY(3px); }
+}
+
+/* Residents are hit areas over the canvas; the sprite itself is drawn in WebGL. */
+.island-resident {
+  position: absolute;
+  left: 0;
+  top: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  visibility: hidden;
+  -webkit-tap-highlight-color: transparent;
+}
+.island-page.is-editing .island-resident {
+  pointer-events: none;
+}
+.island-resident:focus-visible {
+  outline: 3px dashed #fff;
+  outline-offset: 2px;
+}
+.island-resident__new {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  translate: -50% 0;
+  padding: 2px 6px 3px;
+  border: 2px solid var(--ink);
+  background: var(--pick);
+  color: var(--ink);
+  box-shadow: 0 3px 0 #2b223680;
+  font: 700 11px/1 "IBM Plex Mono", monospace;
+  letter-spacing: 0.08em;
+  pointer-events: none;
+  animation: island-new 1.4s steps(2) infinite;
+}
+.island-resident__new::after {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  width: 8px;
+  height: 5px;
+  translate: -50% 2px;
+  background: var(--ink);
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+  content: "";
+}
+.island-resident[aria-expanded="true"] .island-resident__new {
+  display: none;
+}
+@keyframes island-new {
+  50% { transform: translateY(-3px); }
+}
+.town-bubble__description {
+  display: -webkit-box;
+  margin-top: 8px;
+  padding-left: 22px;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  color: #d9d1bd;
+  font-size: 12px;
+  line-height: 1.75;
+}
+
+/* Footer: mode switch on the left, camera on the right. */
+.island-footer {
+  padding: 16px 20px;
+  padding-bottom: max(16px, env(safe-area-inset-bottom));
+  background: none;
+}
+.island-mode,
+.island-camera {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  padding: 4px;
+  pointer-events: auto;
+  border: 3px solid var(--ink);
+  border-radius: 6px;
+  background: var(--paper);
+  box-shadow: 0 4px 0 #2b223666;
+}
+.island-mode button,
+.island-camera button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 40px;
+  height: 40px;
+  padding: 0 10px;
+  justify-content: center;
+  border: 2px solid transparent;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--ink);
+  font: 700 13px "Noto Sans JP", sans-serif;
+  cursor: pointer;
+}
+.island-camera button {
+  padding: 0;
+  width: 40px;
+}
+.island-camera span {
+  min-width: 44px;
+  color: #6d6178;
+  font: 600 11px "IBM Plex Mono", monospace;
+  text-align: center;
+}
+.island-mode button[aria-pressed="true"] {
+  border-color: var(--ink);
+  background: var(--pick);
+}
+:is(.island-mode, .island-camera, .island-toolbar) button:hover:not(:disabled) {
+  background: var(--paper-shade);
+}
+:is(.island-mode, .island-toolbar) button[aria-pressed="true"]:hover {
+  background: #ffe48f;
+}
+:is(.island-mode, .island-camera, .island-toolbar) button:focus-visible {
+  outline: 3px solid var(--sea);
+  outline-offset: 1px;
+}
+.pixel-icon {
+  flex-shrink: 0;
+  --icon-accent: #d08a3a;
+}
+
+/* Editing toolbar. */
+.island-toolbar {
+  position: fixed;
+  z-index: 25;
+  left: 50%;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  width: max-content;
+  max-width: calc(100vw - 24px);
+  translate: -50% 0;
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 3px solid var(--ink);
+  border-radius: 6px;
+  background: var(--paper);
+  box-shadow: 0 5px 0 #2b223666;
+  color: var(--ink);
+}
+.island-toolbar__options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 36px;
+}
+.island-toolbar__main {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: space-between;
+}
+.island-tools,
+.island-history {
+  display: flex;
+  gap: 4px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.island-history {
+  padding-left: 8px;
+  border-left: 2px dashed #2b223640;
+}
+.island-mode,
+.island-camera {
+  min-width: 0;
+}
+.island-tool {
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+  width: 52px;
+  padding: 6px 0 5px;
+  border: 2px solid transparent;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--ink);
+  font: 700 11px "Noto Sans JP", sans-serif;
+  cursor: pointer;
+}
+.island-tool[aria-pressed="true"] {
+  border-color: var(--ink);
+  background: var(--pick);
+  box-shadow: inset 0 -3px 0 #d8a93a;
+}
+.island-tool:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.island-tool--reset.is-confirming {
+  border-color: #c83a3a;
+  background: #ffd9d2;
+  color: #8f1f1f;
+}
+.island-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.island-chips button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 9px 0 6px;
+  border: 2px solid #2b223640;
+  border-radius: 3px;
+  background: #fffdf6;
+  color: var(--ink);
+  font: 700 12px "Noto Sans JP", sans-serif;
+  cursor: pointer;
+}
+.island-chips button[aria-pressed="true"] {
+  border-color: var(--ink);
+  background: var(--pick);
+}
+.island-swatch {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--ink);
+  background-size: 6px 6px;
+}
+.island-swatch.is-grass {
+  background-color: #69bb4c;
+  background-image: linear-gradient(45deg, #57a845 25%, transparent 25%);
+}
+.island-swatch.is-sand {
+  background-color: #ead08f;
+  background-image: linear-gradient(45deg, #d4b373 25%, transparent 25%);
+}
+.island-swatch.is-path {
+  background-color: #d2a978;
+  background-image: linear-gradient(45deg, #b48659 25%, transparent 25%);
+}
+.island-thumb {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+.island-brush {
+  display: block;
+  border: 2px solid var(--ink);
+  background: #fff;
+}
+.island-brush.is-1 {
+  width: 8px;
+  height: 8px;
+}
+.island-brush.is-3 {
+  width: 16px;
+  height: 16px;
+  background-image:
+    linear-gradient(var(--ink) 0 0) 4px 0 / 2px 100% no-repeat,
+    linear-gradient(var(--ink) 0 0) 0 4px / 100% 2px no-repeat;
+}
+.island-toolbar__note {
+  margin: 0;
+  font-size: 12px;
+  color: #6d6178;
+}
+.island-toolbar__status {
+  margin: 0;
+  min-height: 1.6em;
+  padding: 4px 8px;
+  border-radius: 3px;
+  background: #2b22360d;
+  color: #5d5168;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.island-toolbar__status.is-blocked {
+  background: #ffe1db;
+  color: #a12828;
+  font-weight: 700;
+}
+.island-toolbar__status.is-saved {
+  background: #e3f6d8;
+  color: #2f6f37;
+}
+.island-tooltip {
+  position: absolute;
+  z-index: 16;
+  top: 0;
+  left: 0;
+  max-width: 240px;
+  padding: 5px 8px;
+  border: 2px solid var(--ink);
+  background: #fff3f0;
+  color: #a12828;
+  font: 700 12px/1.5 "Noto Sans JP", sans-serif;
+  pointer-events: none;
+  visibility: hidden;
+  box-shadow: 0 3px 0 #2b223666;
+}
+.island-tooltip.is-visible {
+  visibility: visible;
+}
+
+/* Between the mode switch and the camera when there is room, otherwise above them. */
+@media (max-width: 1100px) {
+  .island-toolbar {
+    bottom: calc(76px + env(safe-area-inset-bottom));
+  }
+}
+@media (max-width: 600px) {
+  .island-footer {
+    padding: 10px 10px max(10px, env(safe-area-inset-bottom));
+  }
+  .island-mode button {
+    padding: 0 8px;
+    font-size: 12px;
+  }
+  .island-camera span {
+    display: none;
+  }
+  .island-camera button {
+    width: 36px;
+  }
+  .island-toolbar {
+    left: 8px;
+    right: 8px;
+    bottom: calc(68px + env(safe-area-inset-bottom));
+    width: auto;
+    max-width: none;
+    translate: none;
+    padding: 8px;
+    gap: 6px;
+  }
+  .island-toolbar__main {
+    flex-wrap: nowrap;
+    gap: 2px;
+  }
+  .island-tools,
+  .island-history {
+    gap: 1px;
+  }
+  .island-tool {
+    width: 39px;
+    padding: 5px 0 4px;
+    font-size: 10px;
+  }
+  .island-history {
+    padding-left: 2px;
+  }
+  .island-toolbar__options {
+    min-height: 32px;
+  }
+  .island-chips button {
+    height: 32px;
+    padding: 0 7px 0 5px;
+    font-size: 11px;
+  }
+}
+/* Two fingers already move the map on touch screens. */
+@media (pointer: coarse) {
+  .island-tool--hand {
+    display: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .island-loading__art,
+  .island-resident__new {
+    animation: none;
+  }
 }
