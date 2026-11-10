@@ -1,8 +1,11 @@
 import {
+  AdditiveBlending,
   AlwaysStencilFunc,
   CanvasTexture,
   Color,
+  CustomBlending,
   DataTexture,
+  DstColorFactor,
   EqualStencilFunc,
   GreaterDepth,
   InstancedMesh,
@@ -22,7 +25,8 @@ import {
   SRGBColorSpace,
   type Texture,
   UnsignedByteType,
-  WebGLRenderer
+  WebGLRenderer,
+  ZeroFactor
 } from 'three'
 import {
   createBuffer,
@@ -38,6 +42,7 @@ import {
   updateShoreField
 } from './island-art'
 import { type IslandView, WORLD_HEIGHT, WORLD_WIDTH } from './island-camera'
+import { daylightNow } from './island-daylight'
 import {
   dropResident,
   facings,
@@ -131,7 +136,8 @@ class SpriteLayer {
     private material: Material,
     private width: number,
     private height: number,
-    capacity = 32
+    capacity = 32,
+    private renderOrder = 0
   ) {
     this.mesh = this.create(capacity)
   }
@@ -139,6 +145,7 @@ class SpriteLayer {
     const mesh = new InstancedMesh(this.geometry, this.material, capacity)
     mesh.count = 0
     mesh.frustumCulled = false
+    mesh.renderOrder = this.renderOrder
     this.scene.add(mesh)
     return mesh
   }
@@ -430,6 +437,27 @@ function ringBuffer() {
   return buffer
 }
 
+// Warm light around a torch, added over the darkened scene at night. Dithered
+// rings keep it on the pixel grid.
+const GLOW = { width: 96, height: 72 } as const
+function glowBuffer() {
+  const buffer = createBuffer(GLOW.width, GLOW.height)
+  const bayer = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5]
+  for (let y = 0; y < GLOW.height; y++) {
+    for (let x = 0; x < GLOW.width; x++) {
+      const d = Math.hypot(
+        (x + 0.5 - GLOW.width / 2) / (GLOW.width / 2),
+        (y + 0.5 - GLOW.height / 2) / (GLOW.height / 2)
+      )
+      if (d >= 1) continue
+      const threshold = (bayer[((y >> 1) & 3) * 4 + ((x >> 1) & 3)] + 0.5) / 16
+      const level = Math.floor((1 - d) ** 1.5 * 6 + threshold)
+      if (level > 0) setPixel(buffer, x, y, hex('#ff9d3c', Math.min(150, level * 26)))
+    }
+  }
+  return buffer
+}
+
 // Stencil marks: decorations stamp 1 where they are drawn, residents stamp 0,
 // so a resident's silhouette shows only where a tree or rock hides them.
 const BEHIND_DECOR = 1
@@ -529,6 +557,50 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
   clouds.position.set(WORLD_WIDTH / 2, -WORLD_HEIGHT / 2, Z.sky)
   clouds.renderOrder = 20
   scene.add(clouds)
+
+  // Time of day: everything drawn so far is multiplied by the hour's color.
+  const tintMaterial = track(
+    new MeshBasicMaterial({
+      blending: CustomBlending,
+      blendSrc: DstColorFactor,
+      blendDst: ZeroFactor,
+      transparent: true,
+      depthTest: false,
+      depthWrite: false
+    })
+  )
+  const tint = new Mesh(water.geometry, tintMaterial)
+  tint.position.set(WORLD_WIDTH / 2, -WORLD_HEIGHT / 2, Z.sky)
+  tint.renderOrder = 24
+  scene.add(tint)
+  const glowMaterial = track(
+    new MeshBasicMaterial({
+      map: track(textureFrom(glowBuffer())),
+      blending: AdditiveBlending,
+      transparent: true,
+      depthTest: false,
+      depthWrite: false
+    })
+  )
+  const glows = new SpriteLayer(
+    scene,
+    track(new PlaneGeometry(GLOW.width, GLOW.height)),
+    glowMaterial,
+    GLOW.width,
+    GLOW.height,
+    16,
+    26
+  )
+  let glow = 0
+  let lightChecked = -Infinity
+  function updateDaylight(now: number) {
+    if (now - lightChecked < 15_000) return
+    lightChecked = now
+    const light = daylightNow()
+    tintMaterial.color.setRGB(...light.tint, SRGBColorSpace)
+    tint.visible = light.tint.some((channel) => channel < 0.999)
+    glow = light.glow
+  }
 
   // Terrain, painted into canvas chunks so an edit repaints only nearby pixels.
   const chunkGeometry = track(new PlaneGeometry(CHUNK, CHUNK))
@@ -677,6 +749,7 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
       const entry = decorLayers.get(previous)
       entry?.layer.remove(index)
       if (entry?.shadow) shadowLayers[entry.shadow].remove(index)
+      glows.remove(index)
       placedDecor.delete(index)
     }
     if (!key) return
@@ -693,6 +766,8 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
       entry.flat ? Z.flat : spriteZ(y * TILE_SIZE + TILE_SIZE / 2)
     )
     if (entry.shadow) shadowLayers[entry.shadow].set(index, footX, footY + 2, Z.shadow)
+    // Centered on the flame.
+    if (kind === 'torch') glows.set(index, footX, footY - 26 + GLOW.height / 2, Z.sky)
     placedDecor.set(index, key)
   }
   for (let index = 0; index < world.decor.length; index++) syncDecor(index)
@@ -894,9 +969,9 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
       material,
       TILE_SIZE,
       TILE_SIZE,
-      9
+      9,
+      30
     )
-    layer.mesh.renderOrder = 10
     return { layer, material }
   })
 
@@ -1025,6 +1100,10 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
       const tick = Math.floor(time * 7)
       for (const { material, textures } of animated)
         material.uniforms.map.value = textures[tick % textures.length]
+      updateDaylight(now)
+      glows.mesh.visible = glow > 0.01
+      // The firelight wavers in steps, like the flames.
+      glowMaterial.opacity = glow * (0.86 + 0.14 * Math.sin(tick * 2.4))
       placeWildlife(still ? 0 : dt)
       placeResidents()
       renderer.render(scene, camera)
@@ -1049,6 +1128,8 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
     fail()
   }
   document.addEventListener('visibilitychange', visibility)
+  // Under reduced motion nothing else redraws as the hours pass.
+  const lightTimer = setInterval(wake, 60_000)
   reducedMotion.addEventListener('change', wake)
   canvas.addEventListener('webglcontextlost', contextLost)
 
@@ -1174,12 +1255,14 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
       if (disposed) return
       disposed = true
       cancelAnimationFrame(frame)
+      clearInterval(lightTimer)
       document.removeEventListener('visibilitychange', visibility)
       reducedMotion.removeEventListener('change', wake)
       canvas.removeEventListener('webglcontextlost', contextLost)
       for (const layer of Object.values(shadowLayers)) layer.dispose()
       for (const { layer } of decorLayers.values()) layer.dispose()
       for (const { layer } of cursorLayers) layer.dispose()
+      glows.dispose()
       residentShadows.dispose()
       for (const item of disposables) item.dispose()
       renderer.dispose()

@@ -73,7 +73,7 @@ function branch(
     ],
     (x, y) => {
       const grain = Math.sin(y * 0.4 + x * 2.1)
-      return hex(grain > 0.55 ? '#95846a' : grain < -0.6 ? '#4f4b38' : '#736a50')
+      return hex(grain > 0.55 ? '#9a8565' : grain < -0.6 ? '#524d35' : '#776c4c')
     }
   )
 }
@@ -89,8 +89,8 @@ function leafSpray(
   dark = false
 ) {
   const palette = dark
-    ? shadesOf('#3d5031', '#4c6038', '#607443', '#7b8d50')
-    : shadesOf('#4a6039', '#637a43', '#829453', '#a6ad6b')
+    ? shadesOf('#345f2d', '#427131', '#56873a', '#71a344')
+    : shadesOf('#3f7132', '#568f38', '#78ac46', '#a0c062')
   for (let i = 0; i < radius * 5; i++) {
     const angle = hash2(i, seed, 410) * Math.PI * 2
     const distance = Math.sqrt(hash2(i, seed, 411)) * radius
@@ -104,9 +104,9 @@ function leafSpray(
 }
 
 // Foliage tones, darkest first.
-const greens = shadesOf('#34462c', '#465a35', '#5c7140', '#7b8d50', '#a3ad68')
-const deepGreens = shadesOf('#2a4032', '#38543a', '#4b6a44', '#688452', '#8fa266')
-const freshGreens = shadesOf('#3f5c33', '#55753c', '#739249', '#95ad5c', '#bcc77c')
+const greens = shadesOf('#2c5329', '#3c6a2f', '#518437', '#71a344', '#9cc15e')
+const deepGreens = shadesOf('#274331', '#35623b', '#3e7a41', '#599749', '#85b45e')
+const freshGreens = shadesOf('#306e2c', '#438b30', '#60ac39', '#86c44f', '#b3dc71')
 
 // A dense mass of leaves with a ragged edge, lit from the upper left. Several
 // overlapping clumps, painted top first, make a lobed canopy.
@@ -187,8 +187,8 @@ function paintAcacia(lean: number, seed: number, fruit: boolean): SpriteFrame {
       [49, 33],
       [28, 36]
     ]) {
-      setPixel(buffer, x, y, hex('#aa6546'))
-      setPixel(buffer, x, y + 1, hex('#75422f'))
+      setPixel(buffer, x, y, hex('#b6603a'))
+      setPixel(buffer, x, y + 1, hex('#7e3e26'))
     }
   }
   return { buffer: padded(buffer, 3), shadow: 'huge', sway: 1 }
@@ -285,7 +285,7 @@ function paintPalm(look: PalmLook): SpriteFrame {
   const lean = Math.sign(look.bend)
   const base = { x: 52, y: 87 }
   const crown = { x: 52 + look.bend, y: look.crownY }
-  const bark = shadesOf('#d6a86c', '#b98a55', '#946739', '#6f4a2a')
+  const bark = shadesOf('#e3aa5f', '#c68b49', '#9f672e', '#784921')
   // Trunk: a gentle curve, ringed every few pixels, tapering toward the crown.
   for (let y = crown.y; y <= base.y; y++) {
     const t = (base.y - y) / (base.y - crown.y)
@@ -305,7 +305,7 @@ function paintPalm(look: PalmLook): SpriteFrame {
     line(buffer, x - 1, y, x + 1, y + 1, bark[3])
     setPixel(buffer, x - 2, y - 1, bark[0])
   }
-  const leaf = shadesOf('#afc57e', '#809e54', '#537b43', '#34573a')
+  const leaf = shadesOf('#a2d974', '#6eb844', '#3c9038', '#2e6736')
   // Fronds fan out from the crown and droop; leaflets hang from each spine.
   const fronds: Array<[number, number, number]> = [
     [-178, 28, 0.55],
@@ -361,7 +361,7 @@ function paintPalm(look: PalmLook): SpriteFrame {
   ]
   for (const [dx, dy] of nuts.slice(0, look.nuts)) {
     disc(buffer, crown.x + dx, crown.y + dy, 2.3, 2.3, (x, y) =>
-      hex(x + y < crown.x + dx + crown.y + dy ? '#9a6a3c' : '#6b4426')
+      hex(x + y < crown.x + dx + crown.y + dy ? '#a66a30' : '#74431d')
     )
   }
 
@@ -379,7 +379,7 @@ function paintThicket(berries: boolean): SpriteFrame {
     const y = 6 + hash2(i, variant, 520) * 11
     branch(buffer, 17, 24, x, y, 0.7)
     leafSpray(buffer, x, y, 4.5, 530 + i + variant * 10, i > 4)
-    if (berries && i % 2 === 0) setPixel(buffer, x, Math.round(y), hex('#9d4e48'))
+    if (berries && i % 2 === 0) setPixel(buffer, x, Math.round(y), hex('#a8453d'))
   }
   return { buffer, shadow: 'medium', sway: 1 }
 }
@@ -398,9 +398,9 @@ function paintShrub(blooms: boolean): SpriteFrame {
       const x = 6 + Math.floor(hash2(i, 1, 1050) * 23)
       const y = 5 + Math.floor(hash2(i, 2, 1050) * 13)
       if (!alphaAt(buffer, x, y) || !alphaAt(buffer, x + 1, y + 1)) continue
-      setPixel(buffer, x, y, hex('#f6d7de'))
-      setPixel(buffer, x + 1, y, hex('#e59ab0'))
-      setPixel(buffer, x, y + 1, hex('#e59ab0'))
+      setPixel(buffer, x, y, hex('#fad3dc'))
+      setPixel(buffer, x + 1, y, hex('#ee91ac'))
+      setPixel(buffer, x, y + 1, hex('#ee91ac'))
     }
   }
   return { buffer, shadow: 'medium', sway: 1 }
@@ -409,7 +409,7 @@ function paintShrub(blooms: boolean): SpriteFrame {
 // Arching fronds from one root, lowest ones lying almost flat.
 function paintFern(): SpriteFrame {
   const buffer = createBuffer(38, 24)
-  const tones = shadesOf('#3c6338', '#568443', '#7da556', '#a9c476')
+  const tones = shadesOf('#307539', '#3b9c35', '#66bd48', '#99da6b')
   const fronds: Array<[number, number]> = [
     [-90, 15],
     [-118, 15],
@@ -452,7 +452,7 @@ function paintFern(): SpriteFrame {
 // A stand of tall grass, pale at the tips.
 function paintTallGrass(): SpriteFrame {
   const buffer = createBuffer(28, 26)
-  const tones = shadesOf('#4c6b3a', '#6a8a46', '#8fa957', '#c3c98a')
+  const tones = shadesOf('#3b7f31', '#57a338', '#7fc04a', '#bedb82')
   for (let i = 0; i < 17; i++) {
     const root = 6 + hash2(i, 1, 1100) * 16
     const height = 10 + hash2(i, 2, 1100) * 13
@@ -494,7 +494,7 @@ function moss(buffer: PixelBuffer, top: number, seed: number) {
   for (let y = top; y < buffer.height; y++) {
     for (let x = 0; x < buffer.width; x++) {
       if (alphaAt(buffer, x, y) && valueNoise(x / 4, y / 3, seed) > 0.65)
-        setPixel(buffer, x, y, hex(hash2(x, y, seed + 2) < 0.4 ? '#8e9870' : '#657456'))
+        setPixel(buffer, x, y, hex(hash2(x, y, seed + 2) < 0.4 ? '#8aa66c' : '#5f8252'))
     }
   }
 }
@@ -510,7 +510,7 @@ function rockFaces(buffer: PixelBuffer, variant: number, wet = false) {
   facet(buffer, [left, peak, [25, 5 + variant * 3], right, ridge], 28, seed, wet)
   facet(buffer, [left, ridge, [16, 25], [3, 22]], -6, seed, wet)
   facet(buffer, [ridge, right, [34, 22], base, [16, 25]], -40, seed, wet)
-  line(buffer, peak[0], peak[1] + 1, ridge[0], ridge[1], hex('#bec1ad'))
+  line(buffer, peak[0], peak[1] + 1, ridge[0], ridge[1], hex('#bfcaae'))
   line(buffer, 10, 15, 13, 18, hex('#505b50'))
   line(buffer, 13, 18, 11, 23, hex('#505b50'))
   moss(buffer, 15, 630 + variant)
@@ -603,7 +603,7 @@ function paintSpire(wet = false) {
     seed,
     wet
   )
-  line(buffer, 13, 4, 16, 21, hex('#bec1ad'))
+  line(buffer, 13, 4, 16, 21, hex('#bfcaae'))
   line(buffer, 9, 20, 11, 27, hex('#505b50'))
   boulder(buffer, 22, 39, 5, 4.5, 688, wet)
   return buffer
@@ -626,13 +626,13 @@ function landRock(buffer: PixelBuffer, foot: number, seed: number): SpriteFrame 
 // ---- Flowers ----------------------------------------------------------------
 
 const flowerColors = [
-  ['#f48fb4', '#d8577f'],
-  ['#ffe07a', '#e3a93b'],
-  ['#b9a2ff', '#7d64d6'],
-  ['#fffaf0', '#d9cbb8']
+  ['#ff84b1', '#e84779'],
+  ['#ffe07a', '#f8b026'],
+  ['#b9a2ff', '#7556e4'],
+  ['#fffaf0', '#ddccb4']
 ] as const
-const stem = hex('#3f8a3d')
-const blade = hex('#5aac46')
+const stem = hex('#2ca53c')
+const blade = hex('#2ece34')
 
 // A patch of small mixed blooms.
 function paintFlowers(variant: number): SpriteFrame {
@@ -661,7 +661,7 @@ function paintFlowers(variant: number): SpriteFrame {
 // Two big tropical blooms over broad leaves.
 function paintTropical(): SpriteFrame {
   const buffer = createBuffer(22, 18)
-  const leaves = shadesOf('#356b3a', '#4f8f45', '#7fb85a')
+  const leaves = shadesOf('#2a8036', '#35a940', '#60d24b')
   for (const [dx, dy] of [
     [-9, -4],
     [-5, -9],
@@ -684,8 +684,8 @@ function paintTropical(): SpriteFrame {
     }
     rect(buffer, x, y, 2, 1, hex('#ffe680'))
   }
-  bloom(6, 6, '#f6a05a', '#dd6a35')
-  bloom(14, 9, '#f2885a', '#cf5338')
+  bloom(6, 6, '#ff9f51', '#f26220')
+  bloom(14, 9, '#ff834d', '#e24725')
   return { buffer: padded(buffer, 1), shadow: 'small', sway: 1 }
 }
 
@@ -737,19 +737,19 @@ function paintDaisies(): SpriteFrame {
     const petal = hex('#fffaf0')
     setPixel(buffer, x, y - 1, petal)
     setPixel(buffer, x - 1, y, petal)
-    setPixel(buffer, x + 1, y, hex('#d9cbb8'))
-    setPixel(buffer, x, y + 1, hex('#d9cbb8'))
-    setPixel(buffer, x, y, hex('#f0b63c'))
+    setPixel(buffer, x + 1, y, hex('#ddccb4'))
+    setPixel(buffer, x, y + 1, hex('#ddccb4'))
+    setPixel(buffer, x, y, hex('#ffbb2d'))
   }
   return { buffer: padded(buffer, 1), shadow: 'small', sway: 1 }
 }
 
 // ---- Drawing helpers --------------------------------------------------------
 
-const ink = hex('#444638')
+const ink = hex('#474f39')
 const white = hex('#ffffff')
-const spray = hex('#c9f4f1')
-const creamShade = hex('#d9cdb8')
+const spray = hex('#c4f9f6')
+const creamShade = hex('#ddceb4')
 
 // Adds empty columns on both sides so a swaying sprite is not cut off.
 function padded(buffer: PixelBuffer, columns: number) {
@@ -810,7 +810,7 @@ function polygon(
 }
 
 // A flame in three flickering frames: red tip, orange body, pale core.
-const fire = shadesOf('#fff6c2', '#ffd447', '#ff9a2e', '#e8502a')
+const fire = shadesOf('#fff6c2', '#ffd447', '#ff9a2e', '#ff4213')
 function flame(
   buffer: PixelBuffer,
   cx: number,
@@ -834,7 +834,7 @@ function flame(
 
 // ---- Washed up and lit ------------------------------------------------------
 
-const bleached = shadesOf('#eadbc0', '#c9b494', '#a18b6e', '#7e6a55')
+const bleached = shadesOf('#efdcbb', '#d0b58d', '#a78c68', '#836a50')
 
 // A long sun-bleached log with one broken-off branch.
 function paintDriftwood(variant: number): SpriteFrame {
@@ -897,11 +897,11 @@ function paintTorch(): SpriteFrame {
     const buffer = createBuffer(14, 34)
     for (let y = 13; y <= 32; y++) {
       const band = y % 6 === 0
-      setPixel(buffer, 6, y, hex(band ? '#a07c45' : '#e0bb74'))
-      setPixel(buffer, 7, y, hex(band ? '#7d5c30' : '#a8834a'))
+      setPixel(buffer, 6, y, hex(band ? '#ab7e3a' : '#eebf66'))
+      setPixel(buffer, 7, y, hex(band ? '#875d26' : '#b4863e'))
     }
-    rect(buffer, 4, 11, 6, 1, hex('#9a6238'))
-    rect(buffer, 4, 12, 6, 2, hex('#5f3d26'))
+    rect(buffer, 4, 11, 6, 1, hex('#a6602c'))
+    rect(buffer, 4, 12, 6, 2, hex('#663c1f'))
     flame(buffer, 7, 10, 9, 3, f)
 
     return buffer
@@ -1009,7 +1009,7 @@ export function paintShadow(size: ShadowSize) {
 export const GULL_FRAME = { width: 16, height: 11 } as const
 export function paintGull() {
   const sheet = createBuffer(GULL_FRAME.width * 2, GULL_FRAME.height)
-  const tip = hex('#7f8aa3')
+  const tip = hex('#7b88a7')
   ;[0, 1].forEach((f) => {
     const frame = createBuffer(GULL_FRAME.width, GULL_FRAME.height)
     const wing = f === 0 ? 2 : 8
@@ -1049,7 +1049,7 @@ export function paintFishSchool() {
 
 export function paintTurtle() {
   const buffer = createBuffer(16, 12)
-  const shell = shadesOf('#8fd07a', '#5aa85a', '#3d8050')
+  const shell = shadesOf('#6fe76d', '#4ebe5d', '#2f993d')
   for (const [x, y] of [
     [3, 1],
     [10, 1],

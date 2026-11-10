@@ -800,7 +800,7 @@ body::after {
   --paper: #fff7e3;
   --paper-shade: #f1e2bf;
   --pick: #ffd45c;
-  --sea: #1763ad;
+  --sea: #0f6aa8;
   background: var(--sea);
 }
 .island-surface.is-ready {
