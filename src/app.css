@@ -635,6 +635,11 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+/* Keep multi-column tables readable; the wrapper scrolls on mobile. */
+.markdown-table:has(th:nth-child(3)) table {
+  min-width: 34rem;
+}
+
 /* Keep descriptions readable beside long identifiers; the wrapper scrolls on mobile. */
 .markdown-table:has(td:first-child > code) table {
   min-width: 46rem;
