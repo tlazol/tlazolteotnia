@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   createBuffer,
   createShoreField,
+  POOL_MASK,
   paintTerrain,
   SHORE_CELL,
   SHORE_RANGE,
@@ -30,18 +31,23 @@ import {
   DECK,
   decorAt,
   decorCode,
+  decorGroups,
   decorKinds,
   GRASS,
+  GROUND_COUNT,
   type Ground,
   groundAt,
+  HOTSPRING,
   ISLAND_SAVE_VERSION,
   ISLAND_STORAGE_KEY,
   isWalkable,
+  landGrounds,
   layoutResidentHomes,
   loadIsland,
   PATH,
   parseIsland,
   SAND,
+  SHALLOWS,
   SOIL,
   SWAMP,
   serializeIsland,
@@ -125,6 +131,22 @@ describe('island world', () => {
     expect(parseIsland(JSON.stringify({ ...save, decor: 'z*4800' }))).toBeNull()
     expect(parseIsland('{not json')).toBeNull()
     expect(parseIsland(null)).toBeNull()
+  })
+
+  it('offers every ground once, in groups, and saves the newest grounds and decorations', () => {
+    expect([...landGrounds].sort((a, b) => a - b)).toEqual(
+      Array.from({ length: GROUND_COUNT - 1 }, (_, i) => i + 1)
+    )
+    expect(decorGroups.flatMap((group) => group.kinds).sort()).toEqual([...decorKinds].sort())
+    const world = createIsland()
+    world.ground[10 * world.columns + 10] = HOTSPRING
+    world.decor[10 * world.columns + 10] = decorCode('fireflies')
+    world.decor[10 * world.columns + 11] = decorCode('buoy')
+    const restored = parseIsland(serializeIsland(world))
+    if (!restored) throw new Error('save rejected')
+    expect(groundAt(restored, 10, 10)).toBe(HOTSPRING)
+    expect(decorAt(restored, 10, 10)).toBe(decorCode('fireflies'))
+    expect(decorAt(restored, 11, 10)).toBe(decorCode('buoy'))
   })
 
   it('keeps the outer ring of sea when a save paints land there', () => {
@@ -275,6 +297,31 @@ describe('island rendering helpers', () => {
     expect(buffer.data.some((value, i) => i % 4 === 3 && value > 0)).toBe(true)
   })
 
+  it('shows every ground in the middle of its own patch and marks fresh water by kind', () => {
+    for (const ground of landGrounds) {
+      const world = createIsland()
+      for (let y = 9; y <= 11; y++)
+        for (let x = 9; x <= 11; x++) world.ground[y * world.columns + x] = ground
+      for (let py = 164; py < 172; py++)
+        for (let px = 164; px < 172; px++) expect(terrainClass(world, px, py)).toBe(ground)
+      const buffer = createBuffer(48, 48)
+      paintTerrain(world, buffer, 144, 144, 48, 48)
+      expect(buffer.data.some((value, i) => i % 4 === 3 && value > 0)).toBe(true)
+      const field = createShoreField(world)
+      updateShoreField(world, field)
+      const mask = field.lake[(168 / SHORE_CELL) * field.width + 168 / SHORE_CELL]
+      expect(mask).toBe(
+        ground === SWAMP
+          ? 255
+          : ground === SHALLOWS
+            ? POOL_MASK.shallows
+            : ground === HOTSPRING
+              ? POOL_MASK.spring
+              : 0
+      )
+    }
+  })
+
   it('keeps deck boards square to their tiles without growing a beach around them', () => {
     const world = createIsland()
     world.ground[10 * world.columns + 10] = DECK
@@ -313,8 +360,9 @@ describe('island rendering helpers', () => {
 
   it('paints a sprite for every decoration, with animation frames of one size', () => {
     for (const kind of decorKinds) {
-      // Only the torch is man-made enough to come in a single design.
-      expect(decorVariants[kind].length).toBeGreaterThan(kind === 'torch' ? 0 : 3)
+      // Only man-made things come in fewer than four designs.
+      const manMade = ['torch', 'campfire', 'lantern', 'buoy'].includes(kind)
+      expect(decorVariants[kind].length).toBeGreaterThan(manMade ? 0 : 3)
       for (const frame of decorVariants[kind] as Array<(typeof decorVariants)['torch'][number]>) {
         expect(frame.buffer.data.some((value, i) => i % 4 === 3 && value > 0)).toBe(true)
         for (const extra of frame.frames ?? []) {
@@ -360,7 +408,9 @@ describe('island residents', () => {
 
   it.each([
     ['sea', WATER],
-    ['lake', SWAMP]
+    ['lake', SWAMP],
+    ['shallows', SHALLOWS],
+    ['a hot spring', HOTSPRING]
   ] as const)('lets residents swim when their ground becomes %s', (_, ground) => {
     const world = createDefaultIsland()
     const residents = createResidents(['a'], [{ x: 40, y: 30 }])

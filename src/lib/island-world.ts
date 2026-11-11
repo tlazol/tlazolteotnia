@@ -19,8 +19,26 @@ export const SOIL = 5
 export const COBBLE = 6
 // A lake, shallow enough to build and plant in, but as slow going as the sea.
 export const SWAMP = 7
+// Greens that grow into the meadow and into each other.
+export const MOSS = 8
+export const DRYGRASS = 9
+export const CLOVER = 10
+export const WHITESAND = 11
+export const BLACKSAND = 12
+export const CLAY = 13
+// Soft going: residents take it only when there is no way round.
+export const MUD = 14
+export const GRAVEL = 15
+export const ROCK = 16
+export const LAVA = 17
+export const BRICK = 18
+// Flat stones set into the grass, one to a tile.
+export const STEPPING = 19
+// Water to wade and swim in, like the lake.
+export const SHALLOWS = 20
+export const HOTSPRING = 21
 // New grounds go at the end: saves store a ground as this number.
-export const GROUND_COUNT = 8
+export const GROUND_COUNT = 22
 export type Ground =
   | typeof WATER
   | typeof SAND
@@ -30,8 +48,29 @@ export type Ground =
   | typeof SOIL
   | typeof COBBLE
   | typeof SWAMP
+  | typeof MOSS
+  | typeof DRYGRASS
+  | typeof CLOVER
+  | typeof WHITESAND
+  | typeof BLACKSAND
+  | typeof CLAY
+  | typeof MUD
+  | typeof GRAVEL
+  | typeof ROCK
+  | typeof LAVA
+  | typeof BRICK
+  | typeof STEPPING
+  | typeof SHALLOWS
+  | typeof HOTSPRING
 export type LandGround = Exclude<Ground, typeof WATER>
-export const landGrounds: LandGround[] = [GRASS, SAND, SOIL, PATH, COBBLE, SWAMP, DECK]
+export const groundGroups: Array<{ name: string; grounds: LandGround[] }> = [
+  { name: '草', grounds: [GRASS, MOSS, DRYGRASS, CLOVER] },
+  { name: '砂と土', grounds: [SAND, WHITESAND, BLACKSAND, SOIL, CLAY, MUD, GRAVEL] },
+  { name: '岩', grounds: [ROCK, LAVA] },
+  { name: '道', grounds: [PATH, COBBLE, BRICK, STEPPING, DECK] },
+  { name: '水', grounds: [SWAMP, SHALLOWS, HOTSPRING] }
+]
+export const landGrounds: LandGround[] = groundGroups.flatMap((group) => group.grounds)
 export const groundNames: Record<Ground, string> = {
   [WATER]: '海',
   [SAND]: '砂浜',
@@ -40,7 +79,25 @@ export const groundNames: Record<Ground, string> = {
   [DECK]: '桟橋',
   [SOIL]: '土',
   [COBBLE]: '石畳',
-  [SWAMP]: '湖'
+  [SWAMP]: '湖',
+  [MOSS]: '苔地',
+  [DRYGRASS]: '乾いた草地',
+  [CLOVER]: 'クローバー',
+  [WHITESAND]: '白砂',
+  [BLACKSAND]: '黒砂',
+  [CLAY]: '赤土',
+  [MUD]: '泥',
+  [GRAVEL]: '砂利',
+  [ROCK]: '岩場',
+  [LAVA]: '溶岩石',
+  [BRICK]: 'レンガ道',
+  [STEPPING]: '飛び石',
+  [SHALLOWS]: '浅瀬',
+  [HOTSPRING]: '温泉'
+}
+// Fresh water lying on the land: residents swim in it as they do in the sea.
+export function isWetGround(ground: Ground) {
+  return ground === WATER || ground === SWAMP || ground === SHALLOWS || ground === HOTSPRING
 }
 
 // Decorations stand on land or float on the sea; flat ones can be walked over.
@@ -53,7 +110,23 @@ export const decorInfo = {
   flowers: { name: '花', on: 'land', blocks: false },
   driftwood: { name: '流木', on: 'land', blocks: true },
   torch: { name: 'たいまつ', on: 'land', blocks: true },
-  searock: { name: '岩礁', on: 'water', blocks: true }
+  searock: { name: '岩礁', on: 'water', blocks: true },
+  bamboo: { name: '竹', on: 'land', blocks: true },
+  banana: { name: 'バナナの木', on: 'land', blocks: true },
+  deadtree: { name: '枯れ木', on: 'land', blocks: true },
+  mangrove: { name: 'マングローブ', on: 'land', blocks: true },
+  monstera: { name: 'モンステラ', on: 'land', blocks: true },
+  cactus: { name: 'サボテン', on: 'land', blocks: true },
+  crystal: { name: '水晶', on: 'land', blocks: true },
+  mushroom: { name: 'キノコ', on: 'land', blocks: false },
+  shell: { name: '貝殻', on: 'land', blocks: false },
+  campfire: { name: '焚き火', on: 'land', blocks: true },
+  lantern: { name: '石灯籠', on: 'land', blocks: true },
+  fireflies: { name: 'ホタル', on: 'land', blocks: false },
+  coral: { name: 'サンゴ', on: 'water', blocks: true },
+  seaweed: { name: '海藻', on: 'water', blocks: true },
+  flotsam: { name: '浮き流木', on: 'water', blocks: true },
+  buoy: { name: 'ブイ', on: 'water', blocks: true }
 } as const satisfies Record<string, { name: string; on: 'land' | 'water'; blocks: boolean }>
 export type DecorKind = keyof typeof decorInfo
 export const decorKinds = Object.keys(decorInfo) as DecorKind[]
@@ -61,9 +134,28 @@ export const decorNames = Object.fromEntries(
   decorKinds.map((kind) => [kind, decorInfo[kind].name])
 ) as Record<DecorKind, string>
 export const decorGroups: Array<{ name: string; kinds: DecorKind[] }> = [
-  { name: '自然', kinds: ['palm', 'tree', 'bush', 'rock', 'flowers', 'driftwood'] },
-  { name: 'あかり', kinds: ['torch'] },
-  { name: '海', kinds: ['searock'] }
+  {
+    name: '自然',
+    kinds: [
+      'palm',
+      'tree',
+      'banana',
+      'bamboo',
+      'mangrove',
+      'deadtree',
+      'bush',
+      'monstera',
+      'cactus',
+      'rock',
+      'crystal',
+      'flowers',
+      'mushroom',
+      'driftwood',
+      'shell'
+    ]
+  },
+  { name: 'あかり', kinds: ['torch', 'campfire', 'lantern', 'fireflies'] },
+  { name: '海', kinds: ['searock', 'coral', 'seaweed', 'flotsam', 'buoy'] }
 ]
 // Stored decoration codes: 0 is empty, otherwise the index in decorKinds plus one.
 export function decorCode(kind: DecorKind) {

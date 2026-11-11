@@ -1,23 +1,38 @@
 import { createBuffer, hex, outline, type PixelBuffer, type Rgba, setPixel } from './island-art'
 import {
+  BLACKSAND,
+  BRICK,
+  CLAY,
+  CLOVER,
   COBBLE,
   DECK,
+  DRYGRASS,
   decorAt,
   decorBlocksWalking,
   GRASS,
+  GRAVEL,
   type Ground,
   groundAt,
+  HOTSPRING,
   hash2,
   type IslandWorld,
   inBounds,
   isWalkable,
+  isWetGround,
+  LAVA,
+  MOSS,
+  MUD,
   nearestWalkable,
   PATH,
+  ROCK,
   SAND,
+  SHALLOWS,
   SOIL,
+  STEPPING,
   SWAMP,
   TILE_SIZE,
-  WATER
+  WATER,
+  WHITESAND
 } from './island-world'
 import { hashSlug } from './scene-math'
 
@@ -714,8 +729,8 @@ export function canResidentEnter(world: IslandWorld, x: number, y: number) {
   return inBounds(world, x, y) && !decorBlocksWalking(decorAt(world, x, y))
 }
 
-// The sea and lakes alike are for swimming in.
-const isWet = (ground: Ground) => ground === WATER || ground === SWAMP
+// The sea, lakes and springs alike are for swimming in.
+const isWet = isWetGround
 
 export function residentIsSwimming(world: IslandWorld, resident: Pick<Resident, 'x' | 'y'>) {
   return isWet(
@@ -739,8 +754,8 @@ export function dropResident(
   return true
 }
 
-// Residents like firm footing: trails and cobbles first, then the boardwalk,
-// grass, sand and soil and, last of all, the lake and the sea. A route pays
+// Residents like firm footing: trails and paving first, then boards and
+// stepping stones, grass, bare ground and, last of all, mud and water. A route pays
 // `cost` for each tile it steps onto, so a trail is worth a modest detour but
 // never a long way round. Where journeys end: a footing is picked by `odds`,
 // then a tile on it, so the few trail tiles still draw more visits than all
@@ -756,11 +771,25 @@ const FOOTINGS = [
 const FOOTING: Record<Ground, number> = {
   [PATH]: 0,
   [COBBLE]: 0,
+  [BRICK]: 0,
   [DECK]: 1,
+  [STEPPING]: 1,
   [GRASS]: 2,
+  [MOSS]: 2,
+  [DRYGRASS]: 2,
+  [CLOVER]: 2,
   [SAND]: 3,
+  [WHITESAND]: 3,
+  [BLACKSAND]: 3,
   [SOIL]: 3,
+  [CLAY]: 3,
+  [GRAVEL]: 3,
+  [ROCK]: 3,
+  [LAVA]: 3,
+  [MUD]: 4,
   [SWAMP]: 4,
+  [SHALLOWS]: 4,
+  [HOTSPRING]: 4,
   [WATER]: 4
 }
 // Swimmers paddle about the shallows instead of heading for open water.

@@ -26,6 +26,9 @@ export type SpriteFrame = {
   bob?: number
   // Lies on the ground: residents walk over it.
   flat?: boolean
+  // Lights up at night: how far above the foot the light sits, and whether it
+  // is the soft green of fireflies rather than firelight.
+  glow?: { height: number; soft?: boolean }
 }
 
 function disc(
@@ -49,14 +52,19 @@ function disc(
 
 const shadesOf = (...values: string[]) => values.map((value) => hex(value))
 
+const bark = ['#9a8565', '#524d35', '#776c4c']
+const weathered = ['#d2c7b2', '#7f7668', '#a89d8a']
+
 // Branches taper from a load-bearing base to a twig, with light on the left.
+// `wood` is its lit, shaded and middle tone.
 function branch(
   buffer: PixelBuffer,
   ax: number,
   ay: number,
   bx: number,
   by: number,
-  width: number
+  width: number,
+  wood = bark
 ) {
   const dx = bx - ax
   const dy = by - ay
@@ -73,7 +81,7 @@ function branch(
     ],
     (x, y) => {
       const grain = Math.sin(y * 0.4 + x * 2.1)
-      return hex(grain > 0.55 ? '#9a8565' : grain < -0.6 ? '#524d35' : '#776c4c')
+      return hex(grain > 0.55 ? wood[0] : grain < -0.6 ? wood[1] : wood[2])
     }
   )
 }
@@ -906,7 +914,584 @@ function paintTorch(): SpriteFrame {
 
     return buffer
   })
-  return { buffer: frames[0], frames: frames.slice(1), shadow: 'small' }
+  return { buffer: frames[0], frames: frames.slice(1), shadow: 'small', glow: { height: 26 } }
+}
+
+// ---- More greenery ----------------------------------------------------------
+
+const bambooTones = shadesOf('#d3e58a', '#a4c957', '#6f9d3d', '#47722f')
+
+// A stand of bamboo: jointed culms of uneven height, leafing from the upper
+// joints. Each culm is its root, its height and how far its tip leans.
+function paintBamboo(culms: Array<[number, number, number]>, seed: number): SpriteFrame {
+  const buffer = createBuffer(46, 86)
+  const foot = 84
+  culms.forEach(([root, height, lean], n) => {
+    for (let k = 0; k <= height; k++) {
+      const t = k / height
+      const x = Math.round(root + lean * t * t)
+      const y = foot - k
+      const joint = k % 8 === 7
+      setPixel(buffer, x, y, bambooTones[joint ? 3 : n % 2])
+      setPixel(buffer, x + 1, y, bambooTones[joint ? 3 : 2])
+      if (joint && t > 0.3) {
+        const side = hash2(k, n, seed) < 0.5 ? -1 : 1
+        leafSpray(buffer, x + side * 4, y - 1, 4, seed + n * 10 + k, n % 2 === 0)
+      }
+    }
+    leafSpray(buffer, root + lean, foot - height - 1, 5, seed + n * 7)
+  })
+  return { buffer: padded(buffer, 2), shadow: 'medium', sway: 2 }
+}
+
+// One broad leaf along a drooping midrib, torn here and there by the wind.
+// `tones` are the midrib, the upper half and the lower half.
+function paddle(
+  buffer: PixelBuffer,
+  x0: number,
+  y0: number,
+  degrees: number,
+  length: number,
+  droop: number,
+  width: number,
+  tones: Rgba[],
+  seed: number
+) {
+  const angle = (degrees * Math.PI) / 180
+  for (let i = 0; i <= length * 2; i++) {
+    const d = i / 2
+    const t = d / length
+    const x = x0 + Math.cos(angle) * d
+    const y = y0 + Math.sin(angle) * d + droop * d * t
+    const tx = Math.cos(angle)
+    const ty = Math.sin(angle) + droop * t * 2
+    const tl = Math.hypot(tx, ty)
+    const nx = -ty / tl
+    const ny = tx / tl
+    const torn = hash2(Math.floor(d), seed, 811) < 0.14
+    const half = Math.sin(Math.PI * Math.min(1, t * 1.06 + 0.04)) * width
+    for (let k = -half; k <= half; k += 0.5) {
+      if (torn && Math.abs(k) > half * 0.35) continue
+      const tone = Math.abs(k) < 0.5 ? tones[0] : ny * k < 0 ? tones[1] : tones[2]
+      setPixel(buffer, Math.round(x + nx * k), Math.round(y + ny * k), tone)
+    }
+  }
+}
+
+type BananaLook = {
+  crownY: number
+  // Each leaf: its direction in degrees, its length and how hard it hangs.
+  leaves: Array<[number, number, number]>
+  fruit: boolean
+}
+const bananaLooks: BananaLook[] = [
+  {
+    crownY: 40,
+    leaves: [
+      [172, 22, 0.6],
+      [8, 22, 0.6],
+      [-158, 30, 0.42],
+      [-22, 30, 0.42],
+      [-122, 32, 0.2],
+      [-58, 32, 0.2],
+      [-92, 28, 0.06]
+    ],
+    fruit: true
+  },
+  {
+    crownY: 44,
+    leaves: [
+      [176, 20, 0.65],
+      [-150, 29, 0.36],
+      [-30, 28, 0.4],
+      [-112, 31, 0.14],
+      [-66, 30, 0.18]
+    ],
+    fruit: false
+  },
+  // A sucker, not yet as tall as a resident's reach.
+  {
+    crownY: 58,
+    leaves: [
+      [-145, 17, 0.3],
+      [-30, 16, 0.36],
+      [-105, 20, 0.1],
+      [-62, 19, 0.16]
+    ],
+    fruit: false
+  },
+  {
+    crownY: 36,
+    leaves: [
+      [166, 23, 0.62],
+      [14, 20, 0.7],
+      [-168, 29, 0.46],
+      [-12, 31, 0.42],
+      [-134, 32, 0.26],
+      [-48, 31, 0.26],
+      [-86, 28, 0.04]
+    ],
+    fruit: true
+  }
+]
+
+// A banana plant: a fleshy stem under a fountain of huge leaves.
+function paintBanana(look: BananaLook, n: number): SpriteFrame {
+  const buffer = createBuffer(88, 76)
+  const foot = 74
+  const stemTones = shadesOf('#c3cf74', '#94a852', '#6c803d', '#8a6a3c')
+  for (let y = look.crownY; y <= foot; y++) {
+    const half = 1.6 + ((y - look.crownY) / (foot - look.crownY)) * 1.6
+    for (let x = Math.round(44 - half); x <= Math.round(44 + half); x++) {
+      const u = (x - (44 - half)) / (half * 2)
+      const sheath = hash2(x >> 1, y >> 2, 830 + n) < 0.16
+      setPixel(buffer, x, y, stemTones[sheath ? 3 : u < 0.3 ? 0 : u < 0.7 ? 1 : 2])
+    }
+  }
+  const back = shadesOf('#7fb04a', '#4f8f3a', '#356b33')
+  const front = shadesOf('#d4ef8c', '#8fd052', '#55a53c')
+  const small = look.crownY > 50
+  look.leaves.forEach(([degrees, length, droop], i) => {
+    const tones = i < 2 ? back : front
+    paddle(
+      buffer,
+      44,
+      look.crownY,
+      degrees,
+      length,
+      droop,
+      small ? 4.5 : 6.5,
+      tones,
+      840 + n * 9 + i
+    )
+  })
+  if (look.fruit) {
+    line(buffer, 46, look.crownY + 1, 50, look.crownY + 6, hex('#6c803d'))
+    for (let row = 0; row < 4; row++) {
+      const y = look.crownY + 7 + row * 2
+      rect(buffer, 48 - (row % 2), y, 5, 2, hex('#f5d547'))
+      rect(buffer, 51 - (row % 2), y + 1, 2, 1, hex('#c9a227'))
+    }
+    rect(buffer, 49, look.crownY + 15, 2, 3, hex('#7a3b5d'))
+  }
+  return { buffer: padded(buffer, 2), shadow: small ? 'medium' : 'large', sway: small ? 1 : 2 }
+}
+
+// A dead tree, its bare limbs forking until they are twigs.
+function paintDeadTree(seed: number, height: number, spread: number): SpriteFrame {
+  const buffer = createBuffer(60, 74)
+  const grow = (
+    x: number,
+    y: number,
+    angle: number,
+    length: number,
+    width: number,
+    depth: number
+  ) => {
+    const bx = x + Math.cos(angle) * length
+    const by = y + Math.sin(angle) * length
+    branch(buffer, x, y, bx, by, width, weathered)
+    if (!depth || length < 4) return
+    const key = Math.round(bx) * 3 + depth
+    const forks = hash2(key, seed, 821) < 0.35 ? 3 : 2
+    for (let i = 0; i < forks; i++) {
+      const turn = (i - (forks - 1) / 2) * spread + (hash2(key + i * 7, seed, 822) - 0.5) * 0.5
+      const next = length * (0.6 + hash2(key + i, seed, 823) * 0.18)
+      grow(bx, by, angle + turn, next, Math.max(0.5, width * 0.6), depth - 1)
+    }
+  }
+  grow(30, 72, -Math.PI / 2 + (hash2(seed, 0, 824) - 0.5) * 0.3, height, 3, 3)
+  branch(buffer, 30, 67, 24, 72, 1.3, weathered)
+  branch(buffer, 31, 68, 36, 72, 1.1, weathered)
+  return { buffer, shadow: 'medium' }
+}
+
+// A mangrove standing on arching stilt roots under a low, dense crown.
+function paintMangrove(seed: number, roots: number, lean: number): SpriteFrame {
+  const buffer = createBuffer(64, 64)
+  const rootTones = shadesOf('#9a8260', '#6a5a3e', '#463b2b')
+  // Stilt roots leave the trunk at different heights and bow out before they
+  // drop, the widest at the back and the nearest last.
+  for (let i = 0; i < roots; i++) {
+    const side = i % 2 ? 1 : -1
+    const rank = Math.floor(i / 2)
+    const reach = [21, 13, 7, 3][rank] + (hash2(i, seed, 851) - 0.5) * 5
+    const sx = 32 + side
+    const sy = 33 + rank * 5 + Math.floor(hash2(i, seed, 852) * 3)
+    const ex = 32 + side * reach
+    const ey = 59 + rank + Math.floor(hash2(i, seed, 853) * 2)
+    for (let step = 0; step <= 60; step++) {
+      const t = step / 60
+      const x = Math.round(sx + (ex - sx) * (1 - (1 - t) ** 2.4))
+      const y = Math.round(sy + (ey - sy) * t ** 1.7)
+      setPixel(buffer, x, y, rootTones[side < 0 ? 0 : 1])
+      setPixel(buffer, x + 1, y, rootTones[side < 0 ? 1 : 2])
+    }
+  }
+  line(buffer, 31, 44, 31, 61, (k) => rootTones[k ? 2 : 1], 2)
+  branch(buffer, 32, 46, 32 + lean, 24, 2.6)
+  branch(buffer, 32 + lean * 0.5, 34, 20, 24, 1.3)
+  branch(buffer, 32 + lean * 0.5, 33, 45, 23, 1.3)
+  const lobes = [
+    [32 + lean, 12, 15, 9],
+    [19, 19, 11, 8],
+    [46, 19, 11, 8],
+    [32 + lean * 0.5, 23, 15, 7]
+  ]
+  lobes.forEach(([x, y, rx, ry], i) => {
+    clump(buffer, x, y, rx, ry, seed * 31 + i * 7, deepGreens)
+  })
+  return { buffer: padded(buffer, 2), shadow: 'large', sway: 1 }
+}
+
+// A monstera: big split leaves on long stalks from one root. Each leaf is its
+// direction in degrees, how far out it sits and its size.
+function paintMonstera(leaves: Array<[number, number, number]>, seed: number): SpriteFrame {
+  const buffer = createBuffer(50, 36)
+  const stalk = hex('#3d7a36')
+  leaves.forEach(([degrees, reach, size], n) => {
+    const angle = (degrees * Math.PI) / 180
+    const cx = 25 + Math.cos(angle) * reach
+    const cy = 32 + Math.sin(angle) * reach * 0.8
+    line(buffer, 25, 33, Math.round(cx), Math.round(cy), stalk)
+    const tones = n < 2 ? deepGreens : freshGreens
+    disc(buffer, cx, cy, size, size * 0.8, (x, y) => {
+      const dx = x + 0.5 - cx
+      const dy = (y + 0.5 - cy) / 0.8
+      const r = Math.hypot(dx, dy) / size
+      const around = Math.atan2(dy, dx) - angle
+      // The notch where the stalk joins, and the slits between the lobes.
+      if (Math.cos(around) < -0.9 && r > 0.2) return null
+      if (r > 0.5 && Math.abs(Math.sin(around * 2.5)) > 0.96 && Math.cos(around) < 0.9) return null
+      if (Math.abs(Math.sin(around)) * r < 0.1 && Math.cos(around) > 0) return tones[4]
+      const light = -dy / size + (hash2(x, y, seed + n) - 0.5) * 0.5
+      return tones[light > 0.35 ? 3 : light > -0.3 ? 2 : 1]
+    })
+  })
+  return { buffer: padded(buffer, 1), shadow: 'medium', sway: 1 }
+}
+
+const cactusTones = shadesOf('#9fd884', '#5fae5c', '#3f8a4a', '#2c6640')
+const spine = hex('#eef7cf')
+
+// One ribbed, round-topped column of a cactus.
+function cactusColumn(buffer: PixelBuffer, cx: number, top: number, bottom: number, half: number) {
+  for (let y = top; y <= bottom; y++) {
+    const h = Math.min(half, half - 2 + (y - top))
+    for (let x = cx - h; x <= cx + h; x++) {
+      const u = h ? (x - (cx - h)) / (h * 2) : 0.5
+      const rib = Math.abs(x - cx) % 2 === 1
+      const shade = (u < 0.25 ? 0 : u < 0.65 ? 1 : 2) + (rib ? 1 : 0)
+      setPixel(buffer, x, y, rib && (y + x) % 4 === 0 ? spine : cactusTones[Math.min(3, shade)])
+    }
+  }
+}
+
+// A flat pad or a barrel, dotted with spines.
+function cactusPad(
+  buffer: PixelBuffer,
+  cx: number,
+  cy: number,
+  rx: number,
+  ry: number,
+  seed: number
+) {
+  disc(buffer, cx, cy, rx, ry, (x, y) => {
+    const light = -(x + 0.5 - cx) / rx - ((y + 0.5 - cy) / ry) * 0.8
+    if (hash2(x, y, seed) < 0.1 && (x + y) % 2 === 0) return spine
+    return cactusTones[light > 0.7 ? 0 : light > 0 ? 1 : light > -0.8 ? 2 : 3]
+  })
+}
+
+function bloom(buffer: PixelBuffer, x: number, y: number, light: string, dark: string) {
+  setPixel(buffer, x, y, hex(light))
+  setPixel(buffer, x + 1, y, hex(dark))
+  setPixel(buffer, x, y - 1, hex(light))
+}
+
+function paintCactus(variant: number): SpriteFrame {
+  const buffer = createBuffer(32, 48)
+  if (variant === 0) {
+    // A tall one with an arm on either side.
+    cactusColumn(buffer, 16, 6, 46, 3)
+    rect(buffer, 8, 27, 5, 3, cactusTones[2])
+    cactusColumn(buffer, 8, 17, 28, 2)
+    rect(buffer, 20, 21, 5, 3, cactusTones[2])
+    cactusColumn(buffer, 25, 12, 22, 2)
+    return { buffer, shadow: 'medium' }
+  }
+  if (variant === 1) {
+    // Shorter, one-armed, in flower.
+    cactusColumn(buffer, 15, 18, 46, 3)
+    rect(buffer, 19, 31, 5, 3, cactusTones[2])
+    cactusColumn(buffer, 24, 23, 32, 2)
+    bloom(buffer, 14, 17, '#ffd1e0', '#f07fa6')
+    bloom(buffer, 24, 22, '#ffd1e0', '#f07fa6')
+    return { buffer, shadow: 'small' }
+  }
+  if (variant === 2) {
+    // Prickly pear: pads growing out of pads, red fruit along their rims.
+    cactusPad(buffer, 16, 38, 6.5, 8.5, 871)
+    cactusPad(buffer, 8, 28, 4.5, 6, 872)
+    cactusPad(buffer, 23, 25, 5, 6.5, 873)
+    cactusPad(buffer, 22, 13, 4, 5, 874)
+    for (const [x, y] of [
+      [6, 21],
+      [10, 21],
+      [26, 18],
+      [20, 7]
+    ])
+      rect(buffer, x, y, 2, 2, hex('#d8434f'))
+    return { buffer, shadow: 'medium' }
+  }
+  // A barrel, crowned with yellow flowers.
+  cactusPad(buffer, 16, 37, 10, 10, 875)
+  for (let y = 28; y <= 46; y++)
+    for (let x = 7; x <= 25; x += 3)
+      if (alphaAt(buffer, x, y)) setPixel(buffer, x, y, cactusTones[3])
+  bloom(buffer, 13, 27, '#fff0a3', '#f2b632')
+  bloom(buffer, 17, 26, '#fff0a3', '#f2b632')
+  return { buffer, shadow: 'medium' }
+}
+
+// ---- Small finds ------------------------------------------------------------
+
+// One six-sided crystal: lit faces on the left, a pale cap toward the light.
+function shard(
+  buffer: PixelBuffer,
+  x: number,
+  base: number,
+  w: number,
+  h: number,
+  tilt: number,
+  tones: Rgba[]
+) {
+  const neck = h * 0.76
+  const mx = x + tilt * 0.76
+  const left: [number, number] = [mx - w, base - neck]
+  const right: [number, number] = [mx + w, base - neck]
+  const middle: [number, number] = [mx, base - neck + 2]
+  const tip: [number, number] = [x + tilt, base - h]
+  polygon(buffer, [[x - w, base], [x, base], middle, left], () => tones[1])
+  polygon(buffer, [[x, base], [x + w, base], right, middle], () => tones[3])
+  polygon(buffer, [left, middle, tip], () => tones[0])
+  polygon(buffer, [middle, right, tip], () => tones[2])
+  setPixel(buffer, Math.round(mx - w / 2), Math.round(base - neck * 0.55), white)
+}
+
+const crystalTones = [
+  shadesOf('#f0e3ff', '#c9a8f5', '#9a6fe0', '#6b46b8'),
+  shadesOf('#e6fffb', '#9be8e0', '#4fc3c8', '#2c8f9e'),
+  shadesOf('#fff0f3', '#ffc2d1', '#f089a8', '#c25580'),
+  shadesOf('#fffbe0', '#ffe38a', '#f2b84a', '#c98727')
+]
+
+// A cluster of crystals growing out of a bed of rock.
+function paintCrystal(variant: number): SpriteFrame {
+  const buffer = createBuffer(34, 38)
+  const tones = crystalTones[variant]
+  boulder(buffer, 17, 33, 13, 4.5, 880 + variant)
+  const lean = variant % 2 ? -1 : 1
+  shard(buffer, 17, 34, 4.5, 26 - variant * 2, lean * 2, tones)
+  shard(buffer, 9, 35, 3.5, 15 + variant, -4, tones)
+  shard(buffer, 25, 35, 3.5, 17 - variant, 4, tones)
+  shard(buffer, 14 - lean * 2, 36, 2.5, 9, -lean * 2, tones)
+  return { buffer, shadow: 'medium' }
+}
+
+// A few mushrooms of different ages; `spots` dots the caps with white.
+function paintMushrooms(light: string, dark: string, spots: boolean, seed: number): SpriteFrame {
+  const buffer = createBuffer(18, 17)
+  const caps: Array<[number, number, number, number]> = [
+    [5, 9, 3.5, 5],
+    [12, 7, 4.5, 8],
+    [9, 13, 2.5, 2]
+  ]
+  for (const [cx, brim, r, stalk] of caps) {
+    rect(buffer, cx - 1, brim, 1, stalk, hex('#f6edd8'))
+    rect(buffer, cx, brim, 1, stalk, hex('#d6c7a6'))
+    disc(buffer, cx, brim, r, r, (x, y) => {
+      if (y >= brim) return null
+      if (spots && hash2(x, y, seed) < 0.16) return white
+      return hex(x + 0.5 < cx && y < brim - 1 ? light : dark)
+    })
+    rect(buffer, Math.round(cx - r), brim, Math.round(r * 2), 1, hex('#f6edd8'))
+  }
+  return { buffer, shadow: 'small' }
+}
+
+// Things the tide left on the beach.
+function paintShell(variant: number): SpriteFrame {
+  const buffer = createBuffer(18, 12)
+  if (variant === 0) {
+    // A scallop, ribbed from its hinge.
+    disc(buffer, 9, 9, 7, 7, (x, y) => {
+      if (y > 8) return null
+      const rib = Math.floor((Math.atan2(y + 0.5 - 9, x + 0.5 - 9) / Math.PI) * 9)
+      return hex(rib % 2 ? '#f7a9a0' : '#ffd9d2')
+    })
+    rect(buffer, 7, 9, 4, 1, hex('#d9837b'))
+    rect(buffer, 8, 10, 2, 1, hex('#f7a9a0'))
+  } else if (variant === 1) {
+    // A conch, spiralling to a point.
+    disc(buffer, 7, 6, 5.5, 4.5, (x, y) =>
+      hex((x + y * 2) % 4 === 0 ? '#d9a877' : y < 5 ? '#fff4dc' : '#f1d6ac')
+    )
+    polygon(
+      buffer,
+      [
+        [11, 3],
+        [17, 6],
+        [11, 9]
+      ],
+      (_, y) => hex(y < 6 ? '#fff4dc' : '#e2bd8c')
+    )
+    rect(buffer, 4, 6, 4, 2, hex('#f59fa8'))
+  } else if (variant === 2) {
+    // A starfish.
+    for (let arm = 0; arm < 5; arm++) {
+      const angle = -Math.PI / 2 + (arm * Math.PI * 2) / 5
+      line(
+        buffer,
+        9,
+        5,
+        Math.round(9 + Math.cos(angle) * 6),
+        Math.round(5 + Math.sin(angle) * 5),
+        (k) => hex(k ? '#d9682c' : '#f08a4b'),
+        2
+      )
+    }
+    for (const [x, y] of [
+      [9, 5],
+      [9, 2],
+      [12, 5],
+      [6, 5]
+    ])
+      setPixel(buffer, x, y, hex('#ffc890'))
+  } else {
+    // A mussel and a little whelk.
+    disc(buffer, 6, 6, 4.5, 3, (x, y) => hex(y < 5 ? '#6f86a8' : x % 2 ? '#3c4d6b' : '#4f6388'))
+    disc(buffer, 13, 7, 3, 2.5, (_, y) => hex(y < 7 ? '#ffffff' : '#f3c9c0'))
+    setPixel(buffer, 13, 4, hex('#f3c9c0'))
+  }
+  return { buffer, shadow: null, flat: true }
+}
+
+// ---- More lights ------------------------------------------------------------
+
+const logTones = shadesOf('#8a5a32', '#6b4226', '#4a2c18')
+const log = (k: number) => logTones[Math.min(2, k)]
+
+// A fire of crossed logs in a ring of stones, or a bonfire stacked tall.
+function paintCampfire(tall: boolean): SpriteFrame {
+  const frames = [0, 1, 2].map((f) => {
+    const buffer = createBuffer(30, tall ? 40 : 28)
+    const base = buffer.height - 3
+    if (tall) {
+      line(buffer, 5, base, 14, base - 17, log, 3)
+      line(buffer, 24, base, 15, base - 17, log, 3)
+      flame(buffer, 15, base - 6, 24, 5.5, f)
+      line(buffer, 10, base, 14, base - 13, log, 3)
+      line(buffer, 20, base, 16, base - 13, log, 3)
+    } else {
+      for (const [x, y] of [
+        [6, base - 5],
+        [15, base - 7],
+        [24, base - 5]
+      ])
+        boulder(buffer, x, y, 3.5, 3, 890 + x)
+      line(buffer, 7, base - 2, 22, base - 6, log, 3)
+      line(buffer, 22, base - 2, 8, base - 6, log, 3)
+      flame(buffer, 15, base - 5, 12, 4.5, f)
+      for (const [x, y] of [
+        [4, base - 1],
+        [11, base],
+        [19, base],
+        [26, base - 1]
+      ])
+        boulder(buffer, x, y, 3.5, 3, 895 + x)
+    }
+    setPixel(buffer, 11 + f * 3, base - 3, fire[1])
+    setPixel(buffer, 18 - f * 2, base - 2, fire[2])
+    return buffer
+  })
+  return {
+    buffer: frames[0],
+    frames: frames.slice(1),
+    shadow: 'medium',
+    glow: { height: tall ? 16 : 10 }
+  }
+}
+
+// A stone lantern, a flame wavering behind its window.
+function paintLantern(mossy: boolean): SpriteFrame {
+  const stone = shadesOf('#c9cdbd', '#a2a799', '#787d70', '#565b52')
+  const lit = shadesOf('#fff6c2', '#ffd447', '#ffb93a')
+  const frames = [0, 1, 2].map((f) => {
+    const buffer = createBuffer(26, 40)
+    rect(buffer, 6, 35, 14, 3, stone[2])
+    rect(buffer, 6, 35, 14, 1, stone[1])
+    rect(buffer, 8, 33, 10, 2, stone[1])
+    rect(buffer, 11, 22, 4, 11, stone[2])
+    rect(buffer, 11, 22, 2, 11, stone[0])
+    rect(buffer, 7, 20, 12, 2, stone[1])
+    rect(buffer, 7, 21, 12, 1, stone[3])
+    rect(buffer, 9, 12, 8, 8, stone[2])
+    rect(buffer, 9, 12, 2, 8, stone[1])
+    rect(buffer, 11, 14, 4, 5, lit[1 + ((f + 1) % 2)])
+    rect(buffer, 12, 15 + (f % 2), 2, 3, lit[0])
+    polygon(
+      buffer,
+      [
+        [3, 12],
+        [23, 12],
+        [17, 6],
+        [9, 6]
+      ],
+      (x, y) => (y > 10 ? stone[3] : x < 13 ? stone[0] : stone[1])
+    )
+    setPixel(buffer, 2, 11, stone[1])
+    setPixel(buffer, 23, 11, stone[2])
+    rect(buffer, 12, 3, 2, 3, stone[1])
+    rect(buffer, 11, 2, 4, 2, stone[0])
+    if (mossy) moss(buffer, 4, 901)
+    // Moss never grows over the flame.
+    if (mossy) rect(buffer, 12, 15 + (f % 2), 2, 3, lit[0])
+    return buffer
+  })
+  return { buffer: frames[0], frames: frames.slice(1), shadow: 'medium', glow: { height: 22 } }
+}
+
+// Fireflies drifting over a tuft of grass, each blinking in its own time.
+function paintFireflies(seed: number): SpriteFrame {
+  const blades = shadesOf('#3b7f31', '#57a338', '#7fc04a')
+  const frames = [0, 1, 2, 3].map((f) => {
+    const buffer = createBuffer(28, 26)
+    for (let i = 0; i < 12; i++) {
+      const root = 8 + hash2(i, 1, seed) * 12
+      const height = 5 + hash2(i, 2, seed) * 9
+      const lean = (root - 14) * 0.3 + (hash2(i, 3, seed) - 0.5) * 4
+      for (let k = 0; k <= height; k++) {
+        const t = k / height
+        setPixel(buffer, Math.round(root + lean * t * t), 24 - k, blades[t > 0.8 ? 2 : i % 2])
+      }
+    }
+    for (let i = 0; i < 6; i++) {
+      if ((i + f) % 4 > 1) continue
+      const x = 3 + Math.floor(hash2(i, 4, seed) * 21) + ((i + f) % 2)
+      const y = 2 + Math.floor(hash2(i, 5, seed) * 15)
+      setPixel(buffer, x, y, hex('#fbffb0'))
+      setPixel(buffer, x + ((i + f) % 4 ? 1 : -1), y, hex('#c9ec5a'))
+      setPixel(buffer, x, y + 1, hex('#c9ec5a'))
+    }
+    return buffer
+  })
+  return {
+    buffer: frames[0],
+    frames: frames.slice(1),
+    shadow: 'small',
+    glow: { height: 14, soft: true }
+  }
 }
 
 // ---- Things in the sea ------------------------------------------------------
@@ -935,6 +1520,77 @@ function paintReef(variant: number): SpriteFrame {
   const buffer = createBuffer(36, 30)
   rockFaces(buffer, variant, true)
   return seaRock(buffer, 24, 2 + variant)
+}
+
+// Coral grown up to the surface, branching like a little tree.
+function paintCoral(tones: Rgba[], seed: number): SpriteFrame {
+  const buffer = createBuffer(34, 28)
+  const grow = (x: number, y: number, angle: number, length: number, depth: number) => {
+    const bx = Math.round(x + Math.cos(angle) * length)
+    const by = Math.round(y + Math.sin(angle) * length)
+    line(buffer, x, y, bx, by, (k) => tones[k ? 2 : 1], 2)
+    if (!depth) {
+      setPixel(buffer, bx, by - 1, tones[0])
+      return
+    }
+    for (const side of [-1, 1]) {
+      const turn = side * (0.45 + hash2(bx + side, by + depth, seed) * 0.4)
+      grow(bx, by, angle + turn, length * 0.72, depth - 1)
+    }
+  }
+  grow(10, 24, -Math.PI / 2 - 0.25, 6, 2)
+  grow(17, 25, -Math.PI / 2, 8, 2)
+  grow(24, 24, -Math.PI / 2 + 0.3, 6, 2)
+  return seaRock(buffer, 22, seed)
+}
+
+// A raft of seaweed, its fronds rising and falling with the swell.
+function paintSeaweed(tones: Rgba[], seed: number): SpriteFrame {
+  const frames = [0, 1].map((f) => {
+    const buffer = createBuffer(30, 18)
+    for (let strand = 0; strand < 5; strand++) {
+      const from = 2 + Math.floor(hash2(strand, 1, seed) * 6)
+      const to = 21 + Math.floor(hash2(strand, 2, seed) * 7)
+      for (let x = from; x <= to; x++) {
+        const y = Math.round(
+          4 + strand * 2.4 + Math.sin(x * 0.55 + strand * 1.7 + seed + f * 1.3) * 1.4
+        )
+        setPixel(buffer, x, y, tones[(x + strand) % 5 === 0 ? 0 : 1 + (strand % 2)])
+        setPixel(buffer, x, y + 1, tones[3])
+        if ((x + strand * 3) % 7 === 0) setPixel(buffer, x, y - 1, tones[0])
+      }
+      setPixel(buffer, from - 1, Math.round(4 + strand * 2.4) + f, white)
+      setPixel(buffer, to + 1, Math.round(4 + strand * 2.4) + 1 - f, spray)
+    }
+    return buffer
+  })
+  return { buffer: frames[0], frames: frames.slice(1), shadow: null, bob: 1 }
+}
+
+// Driftwood still at sea, riding low in the water.
+function afloat(frame: SpriteFrame, waterline: number, seed: number): SpriteFrame {
+  const buffer = createBuffer(frame.buffer.width, frame.buffer.height)
+  blit(buffer, frame.buffer, 0, 0)
+  surf(buffer, waterline, seed)
+  return { buffer, shadow: null, bob: 1 }
+}
+
+// A marker buoy: a banded float under a tapering tower and a lamp.
+function paintBuoy(band: string, other: string, seed: number): SpriteFrame {
+  const buffer = createBuffer(20, 32)
+  const tones = [hex(band), hex(other)]
+  const shade = (color: Rgba, dark: boolean): Rgba =>
+    dark ? [color[0] * 0.78, color[1] * 0.78, color[2] * 0.78, 255] : color
+  for (let y = 9; y <= 20; y++) {
+    const half = 1 + ((y - 9) / 11) * 2.6
+    for (let x = Math.round(10 - half); x <= Math.round(9 + half); x++)
+      setPixel(buffer, x, y, shade(tones[Math.floor((y - 9) / 4) % 2], x > 10))
+  }
+  disc(buffer, 10, 23, 7, 5, (x, y) => shade(tones[y < 23 ? 0 : 1], x > 11 || y > 25))
+  rect(buffer, 9, 5, 2, 4, hex('#4b4f57'))
+  rect(buffer, 8, 3, 4, 3, hex('#ffd447'))
+  rect(buffer, 9, 3, 1, 1, white)
+  return { ...seaRock(buffer, 26, seed), bob: 1 }
 }
 
 // Each kind's designs. Which one a tile shows is drawn from its position, so
@@ -979,7 +1635,126 @@ export const decorVariants = {
     seaRock(paintBoulder(true), 20, 5),
     seaRock(paintStones(true), 18, 6),
     seaRock(paintSpire(true), 40, 7)
-  ]
+  ],
+  bamboo: [
+    paintBamboo(
+      [
+        [14, 70, -3],
+        [22, 78, 1],
+        [30, 66, 4]
+      ],
+      1300
+    ),
+    paintBamboo(
+      [
+        [10, 60, -4],
+        [17, 76, -1],
+        [24, 80, 1],
+        [31, 70, 3],
+        [36, 56, 5]
+      ],
+      1320
+    ),
+    paintBamboo(
+      [
+        [18, 46, -2],
+        [25, 52, 2]
+      ],
+      1340
+    ),
+    paintBamboo(
+      [
+        [12, 74, -5],
+        [20, 80, -2],
+        [27, 72, 2],
+        [33, 62, 6]
+      ],
+      1360
+    )
+  ],
+  banana: bananaLooks.map(paintBanana),
+  deadtree: [
+    paintDeadTree(1, 26, 0.75),
+    paintDeadTree(2, 22, 0.9),
+    paintDeadTree(3, 28, 0.6),
+    paintDeadTree(4, 16, 1)
+  ],
+  mangrove: [
+    paintMangrove(1, 6, 0),
+    paintMangrove(2, 5, 3),
+    paintMangrove(3, 7, -3),
+    paintMangrove(4, 4, 1)
+  ],
+  monstera: [
+    paintMonstera(
+      [
+        [-155, 13, 7],
+        [-25, 13, 7],
+        [-115, 15, 8],
+        [-62, 16, 8]
+      ],
+      1400
+    ),
+    paintMonstera(
+      [
+        [-165, 14, 7],
+        [-90, 17, 7.5],
+        [-20, 14, 7.5],
+        [-128, 11, 7.5],
+        [-52, 11, 7.5]
+      ],
+      1410
+    ),
+    paintMonstera(
+      [
+        [-140, 10, 6.5],
+        [-40, 10, 6.5],
+        [-90, 13, 7]
+      ],
+      1420
+    ),
+    paintMonstera(
+      [
+        [-172, 14, 6.5],
+        [-8, 14, 6.5],
+        [-135, 16, 7.5],
+        [-45, 16, 7.5],
+        [-90, 10, 7.5]
+      ],
+      1430
+    )
+  ],
+  cactus: [0, 1, 2, 3].map(paintCactus),
+  crystal: [0, 1, 2, 3].map(paintCrystal),
+  mushroom: [
+    paintMushrooms('#f0604d', '#c23a35', true, 1500),
+    paintMushrooms('#c99a6a', '#9a6e45', false, 1501),
+    paintMushrooms('#b79ae8', '#8565c4', true, 1502),
+    paintMushrooms('#ffc04d', '#e08a2a', false, 1503)
+  ],
+  shell: [0, 1, 2, 3].map(paintShell),
+  campfire: [paintCampfire(false), paintCampfire(true)],
+  lantern: [paintLantern(false), paintLantern(true)],
+  fireflies: [1600, 1610, 1620, 1630].map(paintFireflies),
+  coral: [
+    paintCoral(shadesOf('#ffd9e2', '#ff9fb5', '#e0668a'), 11),
+    paintCoral(shadesOf('#ffe2b8', '#ffad5c', '#e07a2a'), 12),
+    paintCoral(shadesOf('#e9d9ff', '#b99af0', '#8660cf'), 13),
+    paintCoral(shadesOf('#ffffff', '#f1ece0', '#cfc6b2'), 14)
+  ],
+  seaweed: [
+    paintSeaweed(shadesOf('#b9d06a', '#7fa843', '#5a8238', '#34572f'), 21),
+    paintSeaweed(shadesOf('#d1bd76', '#a08a4a', '#77623a', '#4b3c22'), 22),
+    paintSeaweed(shadesOf('#a8d87a', '#62a84a', '#3f8640', '#27592f'), 23),
+    paintSeaweed(shadesOf('#c7b46a', '#8c8a44', '#5f6a36', '#3a4526'), 24)
+  ],
+  flotsam: [
+    afloat(paintDriftwood(0), 10, 31),
+    afloat(paintDriftwood(1), 10, 32),
+    afloat(paintBough(), 14, 33),
+    afloat(paintStump(), 12, 34)
+  ],
+  buoy: [paintBuoy('#e5483f', '#fbf6ea', 41), paintBuoy('#f2c230', '#3d424b', 42)]
 } satisfies Record<DecorKind, SpriteFrame[]>
 
 export function decorVariantIndex(kind: DecorKind, x: number, y: number) {

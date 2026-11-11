@@ -2,20 +2,34 @@ import { useEffect, useState } from 'react'
 import { type EditOptions, type IslandTool, toolNames } from '#/lib/island-edit'
 import { decorVariants } from '#/lib/island-sprites'
 import {
+  BLACKSAND,
+  BRICK,
+  CLAY,
+  CLOVER,
   COBBLE,
   DECK,
   type DecorKind,
+  DRYGRASS,
   decorGroups,
   decorKinds,
   decorNames,
   GRASS,
+  GRAVEL,
+  groundGroups,
   groundNames,
+  HOTSPRING,
+  LAVA,
   type LandGround,
-  landGrounds,
+  MOSS,
+  MUD,
   PATH,
+  ROCK,
   SAND,
+  SHALLOWS,
   SOIL,
-  SWAMP
+  STEPPING,
+  SWAMP,
+  WHITESAND
 } from '#/lib/island-world'
 import { type IconName, PixelIcon } from './island-icons'
 
@@ -34,7 +48,21 @@ const groundSwatch: Record<LandGround, string> = {
   [PATH]: 'is-path',
   [COBBLE]: 'is-cobble',
   [SWAMP]: 'is-swamp',
-  [DECK]: 'is-deck'
+  [DECK]: 'is-deck',
+  [MOSS]: 'is-moss',
+  [DRYGRASS]: 'is-drygrass',
+  [CLOVER]: 'is-clover',
+  [WHITESAND]: 'is-whitesand',
+  [BLACKSAND]: 'is-blacksand',
+  [CLAY]: 'is-clay',
+  [MUD]: 'is-mud',
+  [GRAVEL]: 'is-gravel',
+  [ROCK]: 'is-rock',
+  [LAVA]: 'is-lava',
+  [BRICK]: 'is-brick',
+  [STEPPING]: 'is-stepping',
+  [SHALLOWS]: 'is-shallows',
+  [HOTSPRING]: 'is-hotspring'
 }
 
 // Decoration thumbnails drawn from the same sprites as the island.
@@ -88,20 +116,27 @@ export function IslandToolbar({
       {(showGround || options.tool === 'decor') && (
         <div className="island-toolbar__options">
           {showGround && (
-            <fieldset className="island-chips">
-              <legend className="sr-only">土地の種類</legend>
-              {landGrounds.map((ground) => (
-                <button
-                  key={ground}
-                  type="button"
-                  aria-pressed={options.ground === ground}
-                  onClick={() => onOptions({ ...options, ground })}
-                >
-                  <span className={`island-swatch ${groundSwatch[ground]}`} aria-hidden="true" />
-                  {groundNames[ground]}
-                </button>
+            <div className="island-palette">
+              {groundGroups.map((group) => (
+                <fieldset key={group.name} className="island-chips island-chips--ground">
+                  <legend className="sr-only">{group.name}</legend>
+                  {group.grounds.map((ground) => (
+                    <button
+                      key={ground}
+                      type="button"
+                      aria-pressed={options.ground === ground}
+                      onClick={() => onOptions({ ...options, ground })}
+                    >
+                      <span
+                        className={`island-swatch ${groundSwatch[ground]}`}
+                        aria-hidden="true"
+                      />
+                      {groundNames[ground]}
+                    </button>
+                  ))}
+                </fieldset>
               ))}
-            </fieldset>
+            </div>
           )}
           {options.tool === 'decor' && (
             <div className="island-palette">

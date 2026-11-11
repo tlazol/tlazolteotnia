@@ -241,11 +241,13 @@ float bayer4(vec2 a) {
 
 // The sea: depth bands dithered into each other from pale lagoon to deep blue,
 // reef patches and moving light on the shallows, surf rolling onto the shore.
-// Lakes show through the terrain too, as clear fresh water under the same ripples.
+// Lakes, shallows and hot springs show through the terrain too, as clear fresh
+// water under the same ripples.
 const waterFragment = /* glsl */ `
 uniform sampler2D uShore;
 uniform sampler2D uLake;
 uniform vec2 uWorld;
+uniform float uPad;
 uniform float uRange;
 uniform float uTime;
 varying vec2 vWorld;
@@ -254,20 +256,38 @@ void main() {
   vec2 p = floor(vWorld);
   vec2 uv = (p + 0.5) / uWorld;
   float d = 1.0;
-  if (uv.x > 0.0 && uv.y > 0.0 && uv.x < 1.0 && uv.y < 1.0) d = texture2D(uShore, uv).r;
+  // The shore field reaches past the map's edge; beyond it lies open sea.
+  vec2 suv = (p + 0.5 + uPad) / (uWorld + 2.0 * uPad);
+  if (suv.x > 0.0 && suv.y > 0.0 && suv.x < 1.0 && suv.y < 1.0) d = texture2D(uShore, suv).r;
+  bool inside = uv.x > 0.0 && uv.y > 0.0 && uv.x < 1.0 && uv.y < 1.0;
   float dist = d * uRange;
   float dither = bayer4(p) - 0.5;
   vec3 foam = ${vec3Of(islandPalette.foam)};
 
-  if (d < 0.5 && texture2D(uLake, uv).r > 0.5) {
+  float pool = inside ? texture2D(uLake, uv).r : 0.0;
+  if (d < 0.5 && pool > 0.2) {
     // Clear blue water, its darker depths and pale shallows slowly shifting.
+    // The pool's value tells a lake from sandy shallows and from a hot spring.
+    vec3 base = ${vec3Of(islandPalette.lake)};
     vec3 deep = ${vec3Of(islandPalette.lakeDeep)};
     vec3 shallow = ${vec3Of(islandPalette.lakeShallow)};
     vec3 shine = ${vec3Of(islandPalette.lakeShine)};
+    bool spring = pool < 0.5;
+    if (spring) {
+      base = ${vec3Of(islandPalette.spring)};
+      deep = ${vec3Of(islandPalette.springDeep)};
+      shallow = ${vec3Of(islandPalette.springShallow)};
+      shine = ${vec3Of(islandPalette.springShine)};
+    } else if (pool < 0.8) {
+      base = ${vec3Of(islandPalette.shoal)};
+      deep = ${vec3Of(islandPalette.shoalDeep)};
+      shallow = ${vec3Of(islandPalette.shoalShallow)};
+      shine = ${vec3Of(islandPalette.shoalShine)};
+    }
     float tick = floor(uTime * 6.0) / 6.0;
     float depth = vnoise(vec2(p.x / 26.0 + tick * 0.03, p.y / 17.0 + 5.3)) * 0.8
       + vnoise(vec2(p.x / 8.0, p.y / 5.0 - tick * 0.05)) * 0.2 + dither * 0.07;
-    vec3 col = ${vec3Of(islandPalette.lake)};
+    vec3 col = base;
     if (depth > 0.63) col = shallow;
     else if (depth < 0.36) col = deep;
 
@@ -299,6 +319,13 @@ void main() {
     if (gh > 0.45 && fract(uTime * 0.4 + gh * 5.0) < 0.16) {
       vec2 k = abs(p - gp);
       if ((k.x == 0.0 && k.y <= 1.0) || (k.y == 0.0 && k.x <= 1.0)) col = vec3(1.0);
+    }
+
+    // Steam curling up off a hot spring.
+    if (spring) {
+      float steam = vnoise(vec2(p.x / 9.0 + sin(tick * 0.5) * 0.4, p.y / 6.0 + tick * 0.55))
+        * vnoise(p / 23.0 + vec2(tick * 0.04, 8.1));
+      if (steam + dither * 0.08 > 0.42) col = mix(col, vec3(1.0), 0.55);
     }
     gl_FragColor = vec4(col, 1.0);
     return;
@@ -484,22 +511,23 @@ function ringBuffer() {
   return buffer
 }
 
-// Warm light around a torch, added over the darkened scene at night. Dithered
-// rings keep it on the pixel grid.
-const GLOW = { width: 96, height: 72 } as const
-function glowBuffer() {
-  const buffer = createBuffer(GLOW.width, GLOW.height)
+// Warm light around a fire, added over the darkened scene at night, and the
+// smaller, greener light of fireflies. Dithered rings keep both on the pixel grid.
+const GLOW = { width: 96, height: 72, color: '#ff9d3c' } as const
+const SOFT_GLOW = { width: 56, height: 42, color: '#b9e85a' } as const
+function glowBuffer(look: { width: number; height: number; color: string }) {
+  const buffer = createBuffer(look.width, look.height)
   const bayer = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5]
-  for (let y = 0; y < GLOW.height; y++) {
-    for (let x = 0; x < GLOW.width; x++) {
+  for (let y = 0; y < look.height; y++) {
+    for (let x = 0; x < look.width; x++) {
       const d = Math.hypot(
-        (x + 0.5 - GLOW.width / 2) / (GLOW.width / 2),
-        (y + 0.5 - GLOW.height / 2) / (GLOW.height / 2)
+        (x + 0.5 - look.width / 2) / (look.width / 2),
+        (y + 0.5 - look.height / 2) / (look.height / 2)
       )
       if (d >= 1) continue
       const threshold = (bayer[((y >> 1) & 3) * 4 + ((x >> 1) & 3)] + 0.5) / 16
       const level = Math.floor((1 - d) ** 1.5 * 6 + threshold)
-      if (level > 0) setPixel(buffer, x, y, hex('#ff9d3c', Math.min(150, level * 26)))
+      if (level > 0) setPixel(buffer, x, y, hex(look.color, Math.min(150, level * 26)))
     }
   }
   return buffer
@@ -563,7 +591,13 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
   const field = createShoreField(world)
   updateShoreField(world, field)
   const shoreTexture = track(
-    new DataTexture(field.distance, field.width, field.height, RedFormat, UnsignedByteType)
+    new DataTexture(
+      field.sea,
+      field.width + 2 * SHORE_RANGE,
+      field.height + 2 * SHORE_RANGE,
+      RedFormat,
+      UnsignedByteType
+    )
   )
   shoreTexture.magFilter = LinearFilter
   shoreTexture.minFilter = LinearFilter
@@ -580,6 +614,7 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
         uShore: { value: shoreTexture },
         uLake: { value: lakeTexture },
         uWorld: { value: [WORLD_WIDTH, WORLD_HEIGHT] },
+        uPad: { value: SHORE_RANGE * SHORE_CELL },
         uRange: { value: SHORE_RANGE * SHORE_CELL },
         uTime: { value: 0 }
       }
@@ -625,24 +660,29 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
   tint.position.set(WORLD_WIDTH / 2, -WORLD_HEIGHT / 2, Z.sky)
   tint.renderOrder = 24
   scene.add(tint)
-  const glowMaterial = track(
-    new MeshBasicMaterial({
-      map: track(textureFrom(glowBuffer())),
-      blending: AdditiveBlending,
-      transparent: true,
-      depthTest: false,
-      depthWrite: false
-    })
-  )
-  const glows = new SpriteLayer(
-    scene,
-    track(new PlaneGeometry(GLOW.width, GLOW.height)),
-    glowMaterial,
-    GLOW.width,
-    GLOW.height,
-    16,
-    26
-  )
+  const glowLayer = (look: typeof GLOW | typeof SOFT_GLOW) => {
+    const material = track(
+      new MeshBasicMaterial({
+        map: track(textureFrom(glowBuffer(look))),
+        blending: AdditiveBlending,
+        transparent: true,
+        depthTest: false,
+        depthWrite: false
+      })
+    )
+    const layer = new SpriteLayer(
+      scene,
+      track(new PlaneGeometry(look.width, look.height)),
+      material,
+      look.width,
+      look.height,
+      16,
+      26
+    )
+    return { material, layer }
+  }
+  const { material: glowMaterial, layer: glows } = glowLayer(GLOW)
+  const { material: softGlowMaterial, layer: softGlows } = glowLayer(SOFT_GLOW)
   let glow = 0
   let lightChecked = -Infinity
   function updateDaylight(now: number) {
@@ -771,7 +811,7 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
 
   const decorLayers = new Map<
     string,
-    { layer: SpriteLayer; shadow: ShadowSize | null; flat: boolean }
+    { layer: SpriteLayer; shadow: ShadowSize | null; flat: boolean; glow: SpriteFrame['glow'] }
   >()
   for (const [kind, frames] of Object.entries(decorVariants)) {
     frames.forEach((frame: SpriteFrame, variant) => {
@@ -785,7 +825,8 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
       decorLayers.set(`${kind}:${variant}`, {
         layer,
         shadow: frame.shadow,
-        flat: frame.flat === true
+        flat: frame.flat === true,
+        glow: frame.glow
       })
     })
   }
@@ -802,6 +843,7 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
       entry?.layer.remove(index)
       if (entry?.shadow) shadowLayers[entry.shadow].remove(index)
       glows.remove(index)
+      softGlows.remove(index)
       placedDecor.delete(index)
     }
     if (!key) return
@@ -819,7 +861,11 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
     )
     if (entry.shadow) shadowLayers[entry.shadow].set(index, footX, footY + 2, Z.shadow)
     // Centered on the flame.
-    if (kind === 'torch') glows.set(index, footX, footY - 26 + GLOW.height / 2, Z.sky)
+    if (entry.glow) {
+      const look = entry.glow.soft ? SOFT_GLOW : GLOW
+      const lights = entry.glow.soft ? softGlows : glows
+      lights.set(index, footX, footY - entry.glow.height + look.height / 2, Z.sky)
+    }
     placedDecor.set(index, key)
   }
   for (let index = 0; index < world.decor.length; index++) syncDecor(index)
@@ -1161,6 +1207,9 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
       glows.mesh.visible = glow > 0.01
       // The firelight wavers in steps, like the flames.
       glowMaterial.opacity = glow * (0.86 + 0.14 * Math.sin(tick * 2.4))
+      softGlows.mesh.visible = glows.mesh.visible
+      // Fireflies pulse slowly instead.
+      softGlowMaterial.opacity = glow * (0.6 + 0.3 * Math.sin(time * 1.6))
       placeWildlife(still ? 0 : dt)
       placeResidents()
       renderer.render(scene, camera)
@@ -1321,6 +1370,7 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
       for (const { layer } of decorLayers.values()) layer.dispose()
       for (const { layer } of cursorLayers) layer.dispose()
       glows.dispose()
+      softGlows.dispose()
       residentShadows.dispose()
       for (const item of disposables) item.dispose()
       renderer.dispose()

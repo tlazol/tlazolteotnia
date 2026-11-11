@@ -906,7 +906,7 @@ body::after {
   left: 50%;
   bottom: 0;
   width: max-content;
-  max-width: calc(100vw - 24px);
+  max-width: min(720px, calc(100vw - 24px));
   translate: -50% 100%;
   transition: translate 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
@@ -1064,8 +1064,73 @@ body::after {
   background-image: linear-gradient(#a87240 0 2px, transparent 2px);
   background-size: 100% 5px;
 }
-/* The decoration palette: groups of picture tiles, scrolling sideways when
-   they do not fit. */
+.island-swatch.is-moss {
+  background-color: #4f8f4d;
+  background-image: radial-gradient(#8cc070 0 1px, transparent 1.5px);
+}
+.island-swatch.is-drygrass {
+  background-color: #c8b356;
+  background-image: linear-gradient(45deg, #ad9746 25%, transparent 25%);
+}
+.island-swatch.is-clover {
+  background-color: #5fb548;
+  background-image: radial-gradient(#ffffff 0 1px, transparent 1.5px);
+}
+.island-swatch.is-whitesand {
+  background-color: #fbf5e4;
+  background-image: linear-gradient(45deg, #e8dcc0 25%, transparent 25%);
+}
+.island-swatch.is-blacksand {
+  background-color: #504e58;
+  background-image: linear-gradient(45deg, #3d3b45 25%, transparent 25%);
+}
+.island-swatch.is-clay {
+  background-color: #bf6239;
+  background-image: linear-gradient(45deg, #a04c2c 25%, transparent 25%);
+}
+.island-swatch.is-mud {
+  background-color: #6d5846;
+  background-image: radial-gradient(#a3b6ba 0 1px, #5b666b 1.5px 2.5px, transparent 3px);
+}
+.island-swatch.is-gravel {
+  background-color: #b3ab9a;
+  background-image:
+    linear-gradient(#6d665b 0 1px, transparent 1px), linear-gradient(90deg, #6d665b 0 1px, transparent 1px);
+  background-size: 4px 3px;
+}
+.island-swatch.is-rock {
+  background-color: #8e9387;
+  background-image: linear-gradient(135deg, transparent 45%, #53584f 45% 55%, transparent 55%);
+  background-size: 9px 9px;
+}
+.island-swatch.is-lava {
+  background-color: #3c3638;
+  background-image: linear-gradient(135deg, transparent 45%, #ff7a2e 45% 55%, transparent 55%);
+  background-size: 9px 9px;
+}
+.island-swatch.is-brick {
+  background-color: #b8573f;
+  background-image:
+    linear-gradient(#d9c5a3 0 1px, transparent 1px), linear-gradient(90deg, #d9c5a3 0 1px, transparent 1px);
+  background-size: 7px 4px;
+}
+.island-swatch.is-stepping {
+  background-color: #5dbd4b;
+  background-image: radial-gradient(#c9c4b5 0 2px, #87847d 2.5px 3px, transparent 3.5px);
+  background-size: 7px 7px;
+}
+.island-swatch.is-shallows {
+  background-color: #6fd3d8;
+  background-image: linear-gradient(#f0fdf4 0 1px, #4dbfd0 1px 2px, transparent 2px);
+  background-size: 7px 5px;
+}
+.island-swatch.is-hotspring {
+  background-color: #a3dcd6;
+  background-image: radial-gradient(#ffffff 0 1.5px, transparent 2px);
+  background-size: 6px 6px;
+}
+/* The ground and decoration palettes: groups of tiles, scrolling sideways
+   when they do not fit. */
 .island-palette {
   display: flex;
   gap: 10px;
@@ -1073,6 +1138,11 @@ body::after {
   padding-bottom: 2px;
   overflow-x: auto;
   scrollbar-width: thin;
+}
+.island-chips--ground {
+  flex: none;
+  flex-wrap: nowrap;
+  white-space: nowrap;
 }
 .island-chips--decor {
   flex: none;
