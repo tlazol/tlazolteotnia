@@ -1,15 +1,3 @@
-import { createContext, type ReactNode, useContext } from 'react'
-
-const CspNonceContext = createContext('')
-
-export function CspNonceProvider({ children, nonce }: { children?: ReactNode; nonce: string }) {
-  return <CspNonceContext.Provider value={nonce}>{children}</CspNonceContext.Provider>
-}
-
-export function useCspNonce() {
-  return useContext(CspNonceContext)
-}
-
 export function createHtmlSecurityHeaders(nonce: string) {
   return {
     ...commonSecurityHeaders,

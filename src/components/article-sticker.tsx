@@ -1,43 +1,39 @@
 import { createClientOnlyFn } from '@tanstack/react-start'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { BlogPostSummary } from '#/lib/blog-post'
-import { layoutStickers } from '#/lib/sticker-board'
+import { createSticker, stickerPadding } from '#/lib/sticker-design'
 import type { createStickerScene } from '#/lib/sticker-three.client'
 
 const loadRenderer = createClientOnlyFn(() => import('#/lib/sticker-three.client'))
 
 export function ArticleSticker({ post }: { post: BlogPostSummary }) {
-  const sticker = useMemo(() => layoutStickers([post]).stickers[0], [post])
+  const sticker = useMemo(() => createSticker(post), [post])
   const canvas = useRef<HTMLCanvasElement>(null)
   const heading = useRef<HTMLHeadingElement>(null)
   const [ready, setReady] = useState(false)
-  const width = sticker.width + 48
-  const height = sticker.height + 48
+  const width = sticker.width + stickerPadding
+  const height = sticker.height + stickerPadding
 
   useEffect(() => {
     const element = heading.current
     const target = canvas.current
     if (!element || !target) return
     let cancelled = false
-    let hovered = -1
+    let hovered = false
     let renderer: ReturnType<typeof createStickerScene> | undefined
     setReady(false)
 
     function update() {
       if (!element) return
       const size = { width: element.clientWidth, height: element.clientHeight }
-      renderer?.update(
-        { x: size.width / 2, y: size.height / 2, zoom: size.width / width },
-        size,
-        hovered
-      )
+      renderer?.update(size, hovered)
     }
     function enter() {
-      hovered = 0
+      hovered = true
       update()
     }
     function leave() {
-      hovered = -1
+      hovered = false
       update()
     }
     const observer = new ResizeObserver(update)
@@ -51,14 +47,9 @@ export function ArticleSticker({ post }: { post: BlogPostSummary }) {
         await document.fonts.load('400 31px "WDXL Lubrifont JP N"', post.title)
         await document.fonts.load('700 12px "IBM Plex Mono"', '0123456789.')
         if (cancelled || !target) return
-        renderer = module.createStickerScene(
-          target,
-          [{ ...sticker, x: 0, y: 0 }],
-          () => {
-            setReady(false)
-          },
-          { eyes: true }
-        )
+        renderer = module.createStickerScene(target, sticker, () => {
+          setReady(false)
+        })
         update()
         setReady(true)
       } catch {
@@ -74,7 +65,7 @@ export function ArticleSticker({ post }: { post: BlogPostSummary }) {
       element.removeEventListener('pointerleave', leave)
       renderer?.dispose()
     }
-  }, [post.title, sticker, width])
+  }, [post.title, sticker])
 
   return (
     <h1

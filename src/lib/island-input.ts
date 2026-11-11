@@ -1,7 +1,7 @@
 import {
-  clampView,
   type IslandView,
   nearestZoom,
+  type Point,
   panView,
   screenToWorld,
   stepZoom,
@@ -9,7 +9,6 @@ import {
 } from './island-camera'
 import type { SceneSize } from './scene-math'
 
-type Point = { x: number; y: number }
 // Both DOM and React pointer events fit this shape.
 type PointerLike = {
   pointerId: number
@@ -208,13 +207,6 @@ export function createIslandInput(bind: IslandInputBindings) {
     cancel() {
       pointers.clear()
       end(true)
-    },
-    worldAt(point: Point) {
-      return screenToWorld(bind.view(), bind.size(), point)
-    },
-    clamp(view: IslandView) {
-      return clampView(view, bind.size())
     }
   }
 }
-export type IslandInput = ReturnType<typeof createIslandInput>

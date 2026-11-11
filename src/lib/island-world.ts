@@ -97,10 +97,6 @@ export function createIsland(columns = ISLAND_COLUMNS, rows = ISLAND_ROWS): Isla
   }
 }
 
-export function cloneIsland(world: IslandWorld): IslandWorld {
-  return { ...world, ground: world.ground.slice(), decor: world.decor.slice() }
-}
-
 export function inBounds(world: IslandWorld, x: number, y: number) {
   return x >= 0 && y >= 0 && x < world.columns && y < world.rows
 }
@@ -419,7 +415,7 @@ export function parseIsland(raw: string | null | undefined): IslandWorld | null 
 }
 
 type ReadStorage = Pick<Storage, 'getItem'>
-type WriteStorage = Pick<Storage, 'setItem' | 'removeItem'>
+type WriteStorage = Pick<Storage, 'setItem'>
 
 export function loadIsland(storage: ReadStorage | null): { world: IslandWorld; restored: boolean } {
   let raw: string | null = null
@@ -441,18 +437,10 @@ export function saveIsland(world: IslandWorld, storage: WriteStorage | null) {
   }
 }
 
-export function clearSavedIsland(storage: WriteStorage | null) {
-  try {
-    storage?.removeItem(ISLAND_STORAGE_KEY)
-  } catch {
-    // Storage may be unavailable; the island still resets in memory.
-  }
-}
-
 // ---- Residents' homes -----------------------------------------------------
 
 // Homes are laid out once on the default island so they stay put however the
-// visitor reshapes it; settleHomes moves any that ended up in the sea.
+// visitor reshapes it; settleResidents relocates residents from blocked tiles.
 export function layoutResidentHomes(count: number): Array<{ x: number; y: number }> {
   const world = createDefaultIsland()
   const homes: Array<{ x: number; y: number }> = []

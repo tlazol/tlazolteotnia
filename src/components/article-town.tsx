@@ -499,7 +499,7 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
         )}
       </div>
       {ready && (
-        <fieldset className="board-controls island-camera" aria-label="表示の操作">
+        <fieldset className="island-camera-controls island-camera" aria-label="表示の操作">
           <button type="button" aria-label="縮小" title="縮小（−）" onClick={() => zoomBy(-1)}>
             <PixelIcon name="minus" />
           </button>

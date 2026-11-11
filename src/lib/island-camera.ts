@@ -5,7 +5,7 @@ import type { SceneSize } from './scene-math'
 // pixels per art pixel. Zoom steps keep every art pixel a whole number of
 // device pixels on 1x and 2x screens.
 export type IslandView = { x: number; y: number; zoom: number }
-type Point = { x: number; y: number }
+export type Point = { x: number; y: number }
 
 export const zoomLevels = [1, 1.5, 2, 2.5, 3, 4, 5, 6] as const
 export const WORLD_WIDTH = ISLAND_COLUMNS * TILE_SIZE
@@ -35,13 +35,6 @@ export function screenToWorld(view: IslandView, size: SceneSize, point: Point): 
   return {
     x: view.x + (point.x - size.width / 2) / view.zoom,
     y: view.y + (point.y - size.height / 2) / view.zoom
-  }
-}
-
-export function worldToScreen(view: IslandView, size: SceneSize, point: Point): Point {
-  return {
-    x: (point.x - view.x) * view.zoom + size.width / 2,
-    y: (point.y - view.y) * view.zoom + size.height / 2
   }
 }
 

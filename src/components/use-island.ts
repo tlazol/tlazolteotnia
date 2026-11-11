@@ -53,7 +53,6 @@ export function useIsland({
   const [status, setStatus] = useState<IslandStatus>('loading')
   const [size, setSize] = useState<SceneSize>({ width: 0, height: 0 })
   const [zoom, setZoom] = useState(2)
-  const [revision, setRevision] = useState(0)
   const [saveState, setSaveState] = useState<'idle' | 'saved' | 'failed'>('idle')
   const surface = useRef<HTMLDivElement>(null)
   const canvas = useRef<HTMLCanvasElement>(null)
@@ -162,7 +161,6 @@ export function useIsland({
   const persist = useCallback(() => {
     if (!world.current) return
     setSaveState(saveIsland(world.current, storage()) ? 'saved' : 'failed')
-    setRevision((value) => value + 1)
   }, [])
 
   const occupied = useCallback(
@@ -264,7 +262,6 @@ export function useIsland({
     status,
     size,
     zoom,
-    revision,
     saveState,
     surface,
     canvas,

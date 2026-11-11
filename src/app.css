@@ -440,14 +440,6 @@ body {
   scrollbar-width: thin;
 }
 
-.no-scrollbar {
-  scrollbar-width: none;
-}
-
-.no-scrollbar::-webkit-scrollbar {
-  display: none;
-}
-
 .lights-out-console {
   position: relative;
   isolation: isolate;

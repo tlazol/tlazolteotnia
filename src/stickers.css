@@ -117,54 +117,7 @@ body::after {
 .is-ready .sticker-canvas {
   display: block;
 }
-.board-footer {
-  position: fixed;
-  z-index: 20;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 28px;
-  pointer-events: none;
-  background: linear-gradient(transparent, #101114cc);
-}
-.board-caption {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  padding: 10px 12px;
-  border: 1px solid #ffffff24;
-  border-radius: 12px;
-  background: #17181ded;
-  color: #c1beca;
-  font:
-    10px "IBM Plex Mono",
-    monospace;
-  letter-spacing: 0.03em;
-}
-.board-caption__dot {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: #c6b5d9;
-}
-.board-caption button {
-  pointer-events: auto;
-  max-width: 150px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  border: 1px solid #ffffff30;
-  border-radius: 20px;
-  background: #202027;
-  color: #e6d8f5;
-  padding: 6px 12px;
-  cursor: pointer;
-}
-.board-controls {
+.island-camera-controls {
   display: flex;
   align-items: center;
   pointer-events: auto;
@@ -173,7 +126,7 @@ body::after {
   padding: 3px;
   background: #17181ded;
 }
-.board-controls button {
+.island-camera-controls button {
   width: 38px;
   height: 36px;
   border: 0;
@@ -183,10 +136,10 @@ body::after {
   font-size: 20px;
   cursor: pointer;
 }
-.board-controls button:hover {
+.island-camera-controls button:hover {
   background: #ffffff15;
 }
-.board-controls span {
+.island-camera-controls span {
   min-width: 42px;
   text-align: center;
   font:
@@ -472,21 +425,11 @@ body::after {
   .site-header__bar {
     gap: 12px;
   }
-  .board-footer {
-    padding: 16px;
-    padding-bottom: max(16px, env(safe-area-inset-bottom));
-    gap: 6px;
-  }
-  .board-caption {
-    gap: 6px;
-    font-size: 9px;
-    flex-wrap: wrap;
-  }
-  .board-controls button {
+  .island-camera-controls button {
     width: 33px;
     min-height: 40px;
   }
-  .board-controls span {
+  .island-camera-controls span {
     min-width: 34px;
     font-size: 9px;
   }
@@ -665,24 +608,7 @@ body::after {
   outline: 2px solid #e8c8ff;
   outline-offset: 2px;
 }
-.town-footer .board-caption a {
-  pointer-events: auto;
-  color: #e8c8ff;
-}
 @media (max-width: 600px) {
-  .town-footer {
-    flex-wrap: wrap;
-    gap: 8px;
-  }
-  .town-footer .board-caption {
-    order: 2;
-    width: 100%;
-    justify-content: center;
-    background: #17181de6;
-  }
-  .town-footer .board-controls {
-    margin-left: auto;
-  }
   .town-bubble__title {
     font-size: 23px;
   }

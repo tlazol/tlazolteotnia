@@ -4,8 +4,8 @@ import type { ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { BlogPostSummary } from '../src/lib/blog-post'
 import { hashSlug } from '../src/lib/scene-math'
-import { layoutStickers, type Sticker } from '../src/lib/sticker-board'
 import { foilPalettes, palettes, stickerMaterial } from '../src/lib/sticker-colors'
+import { createSticker, type Sticker } from '../src/lib/sticker-design'
 
 const imageWidth = 1200
 const imageHeight = 630
@@ -216,7 +216,7 @@ function foilPattern(sticker: Sticker) {
 }
 
 export async function renderSvg(post: BlogPostSummary) {
-  const sticker = layoutStickers([post]).stickers[0]
+  const sticker = createSticker(post)
   const { width, height, seed, angle, eyeCount } = sticker
   const rows = makeLettering(sticker)
   const outline = silhouette(sticker, rows)

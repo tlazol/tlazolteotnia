@@ -85,7 +85,3 @@ export function mergeReaction(
 
   return reactions.map((reaction, index) => (index === existingIndex ? nextReaction : reaction))
 }
-
-export function getReactionTotal(reactions: ReactionCount[]): number {
-  return reactions.reduce((total, reaction) => total + reaction.count, 0)
-}
