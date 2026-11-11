@@ -56,3 +56,8 @@ Orca などの IDE を使っていれば、サブエージェントが立ち上�
 ぜひ認知負債の限界に挑んでほしい。
 
 疲れたら AI エージェントを眺めてコーヒーブレイクだ。
+
+## 参考文献
+
+1. <a id="reference-1"></a>[GPT-6 Sol と Luna の公式発表](https://openai.com/index/introducing-gpt-6-sol-and-luna/)
+2. <a id="reference-2"></a>[GPT-6.1 Sol の公式発表](https://openai.com/index/introducing-gpt-6-1-sol/)
