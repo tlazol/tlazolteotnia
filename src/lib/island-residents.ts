@@ -1,13 +1,18 @@
 import { createBuffer, hex, outline, type PixelBuffer, type Rgba, setPixel } from './island-art'
 import {
+  DECK,
   decorAt,
   decorBlocksWalking,
+  GRASS,
+  type Ground,
   groundAt,
   hash2,
   type IslandWorld,
   inBounds,
   isWalkable,
   nearestWalkable,
+  PATH,
+  SAND,
   TILE_SIZE,
   WATER
 } from './island-world'
@@ -719,43 +724,93 @@ export function dropResident(
   return true
 }
 
-// A journey crosses the island, routing around trees, rocks and other residents.
+// Residents like firm footing: trails first, then the boardwalk, grass, sand
+// and, last of all, the sea. A route pays this much for each tile it steps
+// onto, so a trail is worth a modest detour but never a long way round.
+const STEP_COST: Record<Ground, number> = {
+  [PATH]: 4,
+  [DECK]: 5,
+  [GRASS]: 7,
+  [SAND]: 9,
+  [WATER]: 16
+}
+// Where journeys end: the ground is picked by these odds, then a tile on it,
+// so the few trail tiles still draw more visits than all the grass.
+const DESTINATION_ODDS: Array<[Ground, number]> = [
+  [PATH, 34],
+  [DECK, 20],
+  [GRASS, 22],
+  [SAND, 16],
+  [WATER, 8]
+]
+// Swimmers paddle about the shallows instead of heading for the open sea.
+const MAX_STROKES_FROM_SHORE = 3
+
+// A journey crosses the island along the most comfortable route, around
+// trees, rocks and other residents.
 function planJourney(world: IslandWorld, residents: Resident[], resident: Resident) {
   const start = resident.tile.y * world.columns + resident.tile.x
   const previous = new Int32Array(world.ground.length).fill(-1)
+  const cost = new Float64Array(world.ground.length).fill(Number.POSITIVE_INFINITY)
+  const strokes = new Uint8Array(world.ground.length)
   const blocked = new Set<number>()
   for (const other of residents) {
     if (other === resident) continue
     blocked.add(other.tile.y * world.columns + other.tile.x)
     if (other.target) blocked.add(other.target.y * world.columns + other.target.x)
   }
-  const queue = [start]
-  const destinations: number[] = []
+  // Cheapest-first search; step costs are whole numbers, so tiles queue by total cost.
+  const queues: number[][] = [[start]]
+  const reached: number[] = []
+  // Candidate destinations, listed per kind of ground.
+  const destinations: number[][] = [[], [], [], [], []]
   previous[start] = start
-  for (let head = 0; head < queue.length; head++) {
-    const index = queue[head]
-    const x = index % world.columns
-    const y = Math.floor(index / world.columns)
-    if (isWalkable(world, x, y) && Math.hypot(x - resident.tile.x, y - resident.tile.y) >= 8)
-      destinations.push(index)
-    for (const [dx, dy] of [
-      [1, 0],
-      [0, 1],
-      [-1, 0],
-      [0, -1]
-    ]) {
-      const nx = x + dx
-      const ny = y + dy
-      const next = ny * world.columns + nx
-      if (!canResidentEnter(world, nx, ny) || previous[next] !== -1 || blocked.has(next)) continue
-      previous[next] = index
-      queue.push(next)
+  cost[start] = 0
+  for (let total = 0; total < queues.length; total++) {
+    for (const index of queues[total] ?? []) {
+      if (cost[index] !== total) continue
+      const x = index % world.columns
+      const y = Math.floor(index / world.columns)
+      const ground = groundAt(world, x, y)
+      if (index !== start) reached.push(index)
+      if (
+        Math.hypot(x - resident.tile.x, y - resident.tile.y) >= 8 &&
+        (ground !== WATER || strokes[index] <= MAX_STROKES_FROM_SHORE)
+      )
+        destinations[ground].push(index)
+      for (const [dx, dy] of [
+        [1, 0],
+        [0, 1],
+        [-1, 0],
+        [0, -1]
+      ]) {
+        const nx = x + dx
+        const ny = y + dy
+        const next = ny * world.columns + nx
+        if (!canResidentEnter(world, nx, ny) || blocked.has(next)) continue
+        const nextGround = groundAt(world, nx, ny)
+        const nextCost = total + STEP_COST[nextGround]
+        if (nextCost >= cost[next]) continue
+        cost[next] = nextCost
+        previous[next] = index
+        strokes[next] = nextGround === WATER ? Math.min(255, strokes[index] + 1) : 0
+        if (!queues[nextCost]) queues[nextCost] = []
+        queues[nextCost].push(next)
+      }
     }
   }
-  const choices = destinations.length ? destinations : queue.slice(1)
+  const decision = performanceSeed(resident)
+  let choices = reached
+  const odds = DESTINATION_ODDS.filter(([ground]) => destinations[ground].length)
+  let pick =
+    hash2(resident.seed & 0xffff, decision, 4) * odds.reduce((sum, [, weight]) => sum + weight, 0)
+  for (const [ground, weight] of odds) {
+    choices = destinations[ground]
+    pick -= weight
+    if (pick < 0) break
+  }
   if (!choices.length) return []
-  const roll = hash2(resident.seed & 0xffff, performanceSeed(resident), 3)
-  let end = choices[Math.floor(roll * choices.length)]
+  let end = choices[Math.floor(hash2(resident.seed & 0xffff, decision, 3) * choices.length)]
   const route = []
   while (end !== start) {
     route.push({ x: end % world.columns, y: Math.floor(end / world.columns) })

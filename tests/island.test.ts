@@ -462,6 +462,50 @@ describe('island residents', () => {
     expect(landed).toBe(true)
   })
 
+  it('takes the trail in preference to a straight line over grass', () => {
+    const world = createIsland(24, 2)
+    world.ground.fill(GRASS, 0, 24)
+    world.ground.fill(PATH, 24)
+    const residents = createResidents(['stroller'], [{ x: 0, y: 0 }])
+    const resident = residents[0]
+    resident.action = 'walk'
+    resident.actionRemaining = 1000
+    const steps = [0, 0]
+    let last = resident.tile
+    for (let i = 0; i < 1800; i++) {
+      stepResidents(world, residents, 0.1, () => false)
+      if (resident.tile !== last) steps[resident.tile.y]++
+      last = resident.tile
+    }
+    expect(steps[0]).toBeGreaterThan(0)
+    expect(steps[1]).toBeGreaterThan(steps[0] * 3)
+  })
+
+  it('gathers on trails, spreads over the island and leaves a few residents in the sea', () => {
+    const world = createDefaultIsland()
+    const slugs = Array.from({ length: 50 }, (_, i) => `post-${i}`)
+    const residents = createResidents(slugs, layoutResidentHomes(slugs.length))
+    const tiles = [0, 0, 0, 0, 0]
+    for (const ground of world.ground) tiles[ground]++
+    const seen = [0, 0, 0, 0, 0]
+    for (let i = 0; i < 3000; i++) {
+      stepResidents(world, residents, 0.2, () => false)
+      if (i < 500 || i % 5) continue
+      for (const resident of residents)
+        seen[groundAt(world, Math.floor(resident.x / 16), Math.floor(resident.y / 16))]++
+    }
+    const total = seen.reduce((a, b) => a + b, 0)
+    const crowding = seen.map((count, ground) => count / tiles[ground])
+    // Tile for tile: trail, then boardwalk, grass, sand and, last, the sea.
+    const order = [PATH, DECK, GRASS, SAND, WATER]
+    for (let i = 1; i < order.length; i++)
+      expect(crowding[order[i - 1]]).toBeGreaterThan(crowding[order[i]] * 1.1)
+    // Yet most residents are off the trail, and a handful are swimming.
+    expect(seen[PATH] / total).toBeLessThan(0.4)
+    expect(seen[WATER] / total).toBeGreaterThan(0.02)
+    expect(seen[WATER] / total).toBeLessThan(0.15)
+  })
+
   it('routes around solid objects and reserves steps without overlapping residents', () => {
     const world = createIsland(20, 12)
     world.ground.fill(GRASS)
