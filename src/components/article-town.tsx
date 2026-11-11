@@ -104,12 +104,15 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
       if (position.slug === active && bubble.current) {
         const element = bubble.current
         const placement = placeTownBubble(
-          { x: position.x, y: position.y - position.height - 4, bottom: position.y + 6 },
+          {
+            x: position.bubbleX,
+            y: position.bubbleY - position.height - 4,
+            bottom: position.bubbleY + 6
+          },
           { width: element.offsetWidth, height: element.offsetHeight },
           { width, height }
         )
-        element.style.left = `${placement.left}px`
-        element.style.top = `${placement.top}px`
+        element.style.transform = `translate3d(${placement.left}px, ${placement.top}px, 0)`
         element.style.setProperty('--tail-x', `${placement.tail}px`)
         element.dataset.side = placement.above ? 'above' : 'below'
         element.style.visibility = inView ? 'visible' : 'hidden'

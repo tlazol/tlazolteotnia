@@ -444,6 +444,8 @@ body::after {
 .town-bubble {
   --tail-x: 50%;
   position: absolute;
+  top: 0;
+  left: 0;
   z-index: 15;
   visibility: hidden;
   transition-property: none;

@@ -78,6 +78,9 @@ export type ResidentScreen = {
   // Foot position and sprite box in CSS pixels.
   x: number
   y: number
+  // Unsnapped foot position for smooth DOM overlays while the camera follows.
+  bubbleX: number
+  bubbleY: number
   width: number
   height: number
   swimming: boolean
@@ -1110,6 +1113,8 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
         slug: resident.slug,
         x: (x - origin.left) * view.zoom,
         y: (y - origin.top) * view.zoom,
+        bubbleX: (resident.x + resident.offsetX - view.x) * view.zoom + size.width / 2,
+        bubbleY: (resident.y + resident.offsetY - view.y) * view.zoom + size.height / 2,
         width: residentWidth * view.zoom,
         height: residentHeight * view.zoom,
         swimming: residentIsSwimming(world, resident) && dragged?.resident !== resident,

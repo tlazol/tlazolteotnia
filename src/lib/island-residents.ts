@@ -122,6 +122,15 @@ export type ResidentDesign = {
 
 // Hand-picked looks for the newest regulars.
 const designOverrides: Record<string, Partial<ResidentDesign>> = {
+  'gpt-sol-luna-coding-workflow': {
+    hair: 'long',
+    accessory: 'headphones',
+    outfit: 'coat',
+    hairColor: '#e8e6f0',
+    top: '#f08a3c',
+    bottom: '#4a5a9c',
+    accent: '#7fbfe6'
+  },
   'understanding-harnesses-again': {
     hair: 'ponytail',
     accessory: 'helmet',
