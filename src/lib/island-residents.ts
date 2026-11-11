@@ -714,10 +714,12 @@ export function canResidentEnter(world: IslandWorld, x: number, y: number) {
   return inBounds(world, x, y) && !decorBlocksWalking(decorAt(world, x, y))
 }
 
+// The sea and lakes alike are for swimming in.
+const isWet = (ground: Ground) => ground === WATER || ground === SWAMP
+
 export function residentIsSwimming(world: IslandWorld, resident: Pick<Resident, 'x' | 'y'>) {
-  return (
-    groundAt(world, Math.floor(resident.x / TILE_SIZE), Math.floor(resident.y / TILE_SIZE)) ===
-    WATER
+  return isWet(
+    groundAt(world, Math.floor(resident.x / TILE_SIZE), Math.floor(resident.y / TILE_SIZE))
   )
 }
 
@@ -738,7 +740,7 @@ export function dropResident(
 }
 
 // Residents like firm footing: trails and cobbles first, then the boardwalk,
-// grass, sand and soil and, last of all, the swamp and the sea. A route pays
+// grass, sand and soil and, last of all, the lake and the sea. A route pays
 // `cost` for each tile it steps onto, so a trail is worth a modest detour but
 // never a long way round. Where journeys end: a footing is picked by `odds`,
 // then a tile on it, so the few trail tiles still draw more visits than all
@@ -761,7 +763,7 @@ const FOOTING: Record<Ground, number> = {
   [SWAMP]: 4,
   [WATER]: 4
 }
-// Swimmers paddle about the shallows instead of heading for the open sea.
+// Swimmers paddle about the shallows instead of heading for open water.
 const MAX_STROKES_FROM_SHORE = 3
 
 // A journey crosses the island along the most comfortable route, around
@@ -793,7 +795,7 @@ function planJourney(world: IslandWorld, residents: Resident[], resident: Reside
       if (index !== start) reached.push(index)
       if (
         Math.hypot(x - resident.tile.x, y - resident.tile.y) >= 8 &&
-        (ground !== WATER || strokes[index] <= MAX_STROKES_FROM_SHORE)
+        (!isWet(ground) || strokes[index] <= MAX_STROKES_FROM_SHORE)
       )
         destinations[FOOTING[ground]].push(index)
       for (const [dx, dy] of [
@@ -811,7 +813,7 @@ function planJourney(world: IslandWorld, residents: Resident[], resident: Reside
         if (nextCost >= cost[next]) continue
         cost[next] = nextCost
         previous[next] = index
-        strokes[next] = nextGround === WATER ? Math.min(255, strokes[index] + 1) : 0
+        strokes[next] = isWet(nextGround) ? Math.min(255, strokes[index] + 1) : 0
         if (!queues[nextCost]) queues[nextCost] = []
         queues[nextCost].push(next)
       }

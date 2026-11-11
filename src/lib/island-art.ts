@@ -114,17 +114,20 @@ export const islandPalette = {
   soilLight: '#b98a5e',
   soilDark: '#87583a',
   soilEdge: '#684029',
-  cobble: '#aeb0b8',
-  cobbleLight: '#cfd1d6',
-  cobbleDark: '#8d8f9a',
-  cobbleGap: '#62646f',
-  swamp: '#66804f',
-  swampLight: '#829a5c',
-  swampDark: '#4f6a47',
-  swampEdge: '#3b5340',
-  bog: '#3d5a4b',
-  bogDeep: '#2f4841',
-  bogShine: '#7fa48c',
+  cobble: '#a9a69e',
+  cobbleLight: '#c9c4b5',
+  cobbleDark: '#87847d',
+  cobbleGap: '#8d7653',
+  cobbleSand: '#dcc594',
+  cobbleSandDark: '#c0a273',
+  lake: '#3d9bdc',
+  lakeDeep: '#2a7fc8',
+  lakeShallow: '#72c4ee',
+  lakeShine: '#d8f4fb',
+  lakeBank: '#7a5a3a',
+  pad: '#8ccb55',
+  padDark: '#4f9641',
+  padBloom: '#f7bccb',
   deck: '#bd8950',
   deckLight: '#deb078',
   deckDark: '#986838',
@@ -208,7 +211,8 @@ const PAD = 7
 
 // Paints the terrain for art pixels [x0, x0 + width) × [y0, y0 + height) into
 // `buffer` at (bx, by). Sea pixels stay transparent for the water shader,
-// except the shore face below southern coasts and the stilts below decks.
+// except the shore face below southern coasts and the stilts below decks; so
+// does the open water of a lake, wherever the shore field marks it as one.
 export function paintTerrain(
   world: IslandWorld,
   buffer: PixelBuffer,
@@ -290,15 +294,32 @@ export function paintTerrain(
         else if (at(x, y - 1) !== SOIL) color = c.soilLight
         else color = soilPixel(px, py)
       } else if (kind === COBBLE) {
-        if (at(x, y + 1) !== COBBLE || at(x - 1, y) !== COBBLE || at(x + 1, y) !== COBBLE)
-          color = c.cobbleGap
-        else if (at(x, y - 1) !== COBBLE) color = c.cobbleDark
+        // The paving frays at its edges, where sand has crept in over the stones.
+        const frayed = (d: number) =>
+          at(x, y + d) !== COBBLE ||
+          at(x, y - d) !== COBBLE ||
+          at(x - d, y) !== COBBLE ||
+          at(x + d, y) !== COBBLE
+        if (frayed(1)) color = c.cobbleGap
+        else if (hash2(px >> 1, py >> 1, 107) < (frayed(2) ? 0.15 : frayed(3) ? 0.04 : 0))
+          color = hash2(px, py, 108) < 0.25 ? c.cobbleSandDark : c.cobbleSand
         else color = cobblePixel(px, py)
       } else if (kind === SWAMP) {
-        if (at(x, y + 1) !== SWAMP) color = c.swampEdge
-        else if (at(x - 1, y) !== SWAMP || at(x + 1, y) !== SWAMP) color = c.swampDark
-        else if (at(x, y - 1) !== SWAMP) color = c.swampLight
-        else color = swampPixel(px, py)
+        // Clear water lying below its banks: the bank's shadow along the top,
+        // pale shallows lapping the rest of the rim.
+        const bank = (d: number) =>
+          at(x - d, y) !== SWAMP || at(x + d, y) !== SWAMP || at(x, y + d) !== SWAMP
+        if (at(x, y - 1) !== SWAMP) color = c.lakeBank
+        else if (at(x, y - 2) !== SWAMP || at(x, y - 3) !== SWAMP) color = c.lakeDeep
+        else if (bank(1)) color = c.lakeShine
+        else if (bank(2) || (bank(3) && (px + py) % 2 === 0)) color = c.lakeShallow
+        else {
+          color = swampPixel(px, py)
+          // The shader takes over only in cells the shore field knows as lake.
+          const cell = (v: number) => Math.floor(v / SHORE_CELL) * SHORE_CELL + 1
+          if (color === transparent && at(x + cell(px) - px, y + cell(py) - py) !== SWAMP)
+            color = c.lake
+        }
       } else {
         const speck = hash2(px, py, 51)
         if (at(x, y + 1) !== PATH || at(x - 1, y) !== PATH || at(x + 1, y) !== PATH)
@@ -373,8 +394,13 @@ function soilPixel(px: number, py: number): Rgba {
   return c.soil
 }
 
-// Cobbles: courses of rounded stones of uneven width, each its own shade.
+// Old cobbles: courses of rounded stones of uneven width, with a little sand
+// caught in the joints and in the odd gap where a stone has gone missing.
 function cobblePixel(px: number, py: number): Rgba {
+  const grit = hash2(px, py, 104)
+  const sand = grit < 0.2 ? c.cobbleSandDark : c.cobbleSand
+  const drift = valueNoise(px / 10, py / 8, 105) * 0.65 + valueNoise(px / 3, py / 3, 106) * 0.35
+  if (drift > 0.86 || (drift > 0.83 && (px + py) % 2 === 0)) return sand
   const row = Math.floor(py / 6)
   const ly = ((py % 6) + 6) % 6
   // Stones are 6 to 9 wide; a course is cut from a strip that repeats every 30.
@@ -389,48 +415,51 @@ function cobblePixel(px: number, py: number): Rgba {
   let stone = 0
   while (lx >= widths[stone]) lx -= widths[stone++]
   const width = widths[stone]
-  if (lx === 0 || ly === 5) return c.cobbleGap
-  // Clipped corners round each stone off.
-  if ((lx === 1 || lx === width - 1) && (ly === 0 || ly === 4)) return c.cobbleGap
+  const joint = grit < 0.1 ? c.cobbleSandDark : c.cobbleGap
+  if (lx === 0 || ly === 5) return joint
   const shade = hash2(strip * 4 + stone, row, 103)
-  if (ly === 0 || (lx === 1 && ly < 4)) return shade < 0.25 ? c.cobble : c.cobbleLight
-  if (ly === 4 || lx === width - 1) return c.cobbleDark
-  if (hash2(px, py, 104) < 0.04) return c.cobbleDark
-  return shade < 0.25 ? c.cobbleDark : shade > 0.8 ? c.cobbleLight : c.cobble
+  // A missing stone leaves a hollow of sand, shaded along its upper lip.
+  if (shade < 0.02) return ly === 0 || lx === 1 ? c.cobbleGap : sand
+  // Clipped corners round each stone off; worn ones have lost more.
+  const worn = shade > 0.7 ? 1 : 0
+  const fromSide = Math.min(lx - 1, width - 1 - lx)
+  const fromEnd = Math.min(ly, 4 - ly)
+  if (fromSide + fromEnd <= worn) return joint
+  // Cracked right across.
+  if (shade > 0.86 && lx === Math.floor(width / 2) + (ly > 2 ? 1 : 0)) return c.cobbleGap
+  // Sand caught against the foot of the stone and in its pits.
+  if (ly === 4) return grit < 0.07 ? c.cobbleSandDark : c.cobbleDark
+  if (grit > 0.985) return c.cobbleSand
+  if (ly === 0 || (lx === 1 && ly < 4)) return shade < 0.3 ? c.cobble : c.cobbleLight
+  if (lx === width - 1 || grit > 0.88) return c.cobbleDark
+  return shade < 0.3 ? c.cobbleDark : shade > 0.78 ? c.cobbleLight : c.cobble
 }
 
-// Mire: mossy mud between dark pools, with reeds at the water's edge.
+// What stands in a lake: the odd lily pad floating on it and reeds growing out
+// of it.
+// The water between them is left transparent for the water shader.
 function swampPixel(px: number, py: number): Rgba {
-  const pool = (x: number, y: number) =>
-    valueNoise(x / 11, y / 8, 111) * 0.75 + valueNoise(x / 4, y / 3, 112) * 0.25
-  const depth = pool(px, py)
-  if (depth > 0.56) {
-    if (pool(px, py - 1) <= 0.56) return c.bogDeep
-    if (depth > 0.7) {
-      // Slow glints on the open water.
-      const glint = hash2(Math.floor(px / 5), py, 113)
-      return glint < 0.1 ? c.bogShine : c.bogDeep
+  const cx = Math.floor(px / 19)
+  const cy = Math.floor(py / 15)
+  const roll = hash2(cx, cy, 114)
+  if (roll < 0.2) {
+    const lx = px - (cx * 19 + 4 + Math.floor(hash2(cx, cy, 115) * 10))
+    const ly = py - (cy * 15 + 5 + Math.floor(hash2(cx, cy, 116) * 6))
+    if (roll < 0.12) {
+      // Lily pad, a notch cut from one side, now and then in flower.
+      if (ly === -1 && Math.abs(lx) <= 1) return lx === 0 && roll < 0.04 ? c.padBloom : c.pad
+      if (ly === 0 && lx >= -2 && lx <= 1) return c.pad
+      if (ly === 1 && Math.abs(lx) <= 1) return c.padDark
+      if (ly === 2 && lx >= -2 && lx <= 2) return c.lakeDeep
+    } else {
+      // Reeds, each ringed by a ripple where it breaks the surface.
+      if (lx === 0 && ly >= -4 && ly <= 0) return ly === -4 ? c.soilDark : c.padDark
+      if (lx === 2 && ly >= -2 && ly <= 0) return c.padDark
+      if (ly === 1 && lx >= -1 && lx <= 3) return c.lakeShine
+      if (ly === 2 && lx >= -2 && lx <= 4) return c.lakeDeep
     }
-    return c.bog
   }
-  if (pool(px, py + 1) > 0.56) return c.swampEdge
-  const cx = Math.floor(px / 9)
-  const cy = Math.floor(py / 8)
-  const reed = hash2(cx, cy, 114)
-  if (reed < 0.3) {
-    const lx = px - (cx * 9 + 2 + Math.floor(hash2(cx, cy, 115) * 4))
-    const ly = py - (cy * 8 + 4 + Math.floor(hash2(cx, cy, 116) * 3))
-    if (lx === 0 && ly >= -3 && ly <= 0) return ly === -3 && reed < 0.1 ? c.soilDark : c.swampEdge
-    if (lx === 2 && ly >= -2 && ly <= 0) return c.swampDark
-    if (ly === 1 && lx >= -1 && lx <= 3) return c.swampEdge
-  }
-  const tone = valueNoise(px / 13, py / 10, 117) * 0.7 + valueNoise(px / 4, py / 4, 118) * 0.3
-  const grain = hash2(px, py, 119)
-  if (grain < 0.03) return c.swampDark
-  if (grain > 0.975) return c.swampLight
-  if (tone > 0.62) return c.swampLight
-  if (tone < 0.4) return c.swampDark
-  return c.swamp
+  return transparent
 }
 
 // Meadow: layered blades, dry tips and low moss between irregular tufts.
@@ -476,7 +505,7 @@ function grassPixel(px: number, py: number): Rgba {
 }
 
 // Distance from each 2×2 pixel cell to the nearest land, for the sea's depth
-// colors and the surf.
+// colors and the surf, and which cells are lake, for its own water.
 export const SHORE_CELL = 2
 export const SHORE_RANGE = 48 // cells
 
@@ -487,6 +516,7 @@ export function createShoreField(world: IslandWorld) {
     width,
     height,
     land: new Uint8Array(width * height),
+    lake: new Uint8Array(width * height),
     distance: new Uint8Array(width * height)
   }
 }
@@ -543,6 +573,7 @@ export function updateShoreField(
     for (let x = Math.max(0, cx0); x < Math.min(width, cx1); x++) {
       const kind = terrainClass(world, x * SHORE_CELL + 1, y * SHORE_CELL + 1)
       field.land[y * width + x] = kind === WATER || kind === DECK ? 0 : 1
+      field.lake[y * width + x] = kind === SWAMP ? 255 : 0
     }
   const size = Math.max(width, height)
   const f = new Float32Array(size)

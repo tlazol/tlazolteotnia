@@ -17,7 +17,7 @@ export const PATH = 3
 export const DECK = 4
 export const SOIL = 5
 export const COBBLE = 6
-// Boggy ground: land to build and plant on, but as slow going as the sea.
+// A lake, shallow enough to build and plant in, but as slow going as the sea.
 export const SWAMP = 7
 // New grounds go at the end: saves store a ground as this number.
 export const GROUND_COUNT = 8
@@ -40,7 +40,7 @@ export const groundNames: Record<Ground, string> = {
   [DECK]: '桟橋',
   [SOIL]: '土',
   [COBBLE]: '石畳',
-  [SWAMP]: '沼地'
+  [SWAMP]: '湖'
 }
 
 // Decorations stand on land or float on the sea; flat ones can be walked over.

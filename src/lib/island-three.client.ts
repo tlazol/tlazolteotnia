@@ -241,8 +241,10 @@ float bayer4(vec2 a) {
 
 // The sea: depth bands dithered into each other from pale lagoon to deep blue,
 // reef patches and moving light on the shallows, surf rolling onto the shore.
+// Lakes show through the terrain too, as clear fresh water under the same ripples.
 const waterFragment = /* glsl */ `
 uniform sampler2D uShore;
+uniform sampler2D uLake;
 uniform vec2 uWorld;
 uniform float uRange;
 uniform float uTime;
@@ -255,6 +257,52 @@ void main() {
   if (uv.x > 0.0 && uv.y > 0.0 && uv.x < 1.0 && uv.y < 1.0) d = texture2D(uShore, uv).r;
   float dist = d * uRange;
   float dither = bayer4(p) - 0.5;
+  vec3 foam = ${vec3Of(islandPalette.foam)};
+
+  if (d < 0.5 && texture2D(uLake, uv).r > 0.5) {
+    // Clear blue water, its darker depths and pale shallows slowly shifting.
+    vec3 deep = ${vec3Of(islandPalette.lakeDeep)};
+    vec3 shallow = ${vec3Of(islandPalette.lakeShallow)};
+    vec3 shine = ${vec3Of(islandPalette.lakeShine)};
+    float tick = floor(uTime * 6.0) / 6.0;
+    float depth = vnoise(vec2(p.x / 26.0 + tick * 0.03, p.y / 17.0 + 5.3)) * 0.8
+      + vnoise(vec2(p.x / 8.0, p.y / 5.0 - tick * 0.05)) * 0.2 + dither * 0.07;
+    vec3 col = ${vec3Of(islandPalette.lake)};
+    if (depth > 0.63) col = shallow;
+    else if (depth < 0.36) col = deep;
+
+    // Light rippling across the surface.
+    vec2 q = p / 8.0;
+    float net = abs(
+      vnoise(q + vec2(tick * 0.26, tick * 0.17)) - vnoise(q * 1.6 - vec2(tick * 0.22, -tick * 0.19) + 4.0)
+    );
+    if (net < 0.03) col = mix(col, shine, 0.42);
+
+    // Wavelets: bright dashes over a line of shadow, swaying and fading.
+    vec2 size = vec2(14.0, 6.0);
+    vec2 at = vec2(p.x + floor(p.y / size.y) * 5.0, p.y);
+    vec2 cell = floor(at / size);
+    float h = hash(cell + 2.3);
+    vec2 local = at - cell * size;
+    float sway = floor(sin(uTime * 1.1 + h * 6.283) * 1.5 + 0.5);
+    float start = 2.0 + floor(hash(cell + 5.1) * 5.0) + sway;
+    float len = 3.0 + floor(hash(cell + 7.0) * 4.0);
+    if (h > 0.5 && fract(uTime * 0.2 + h * 3.0) < 0.7) {
+      if (local.y == 2.0 && local.x >= start && local.x < start + len) col = mix(col, shine, 0.8);
+      if (local.y == 3.0 && local.x > start && local.x <= start + len) col = mix(col, deep, 0.6);
+    }
+
+    // Glints of sun.
+    vec2 g = floor(p / 18.0);
+    float gh = hash(g + 4.4);
+    vec2 gp = g * 18.0 + floor(vec2(hash(g + 2.9), hash(g + 6.6)) * 13.0) + 2.0;
+    if (gh > 0.45 && fract(uTime * 0.4 + gh * 5.0) < 0.16) {
+      vec2 k = abs(p - gp);
+      if ((k.x == 0.0 && k.y <= 1.0) || (k.y == 0.0 && k.x <= 1.0)) col = vec3(1.0);
+    }
+    gl_FragColor = vec4(col, 1.0);
+    return;
+  }
   float drift = (vnoise(p / 26.0 + 3.7) - 0.5) * 22.0 * smoothstep(6.0, 50.0, dist);
   float dd = dist + drift + dither * 5.0;
 
@@ -264,7 +312,6 @@ void main() {
   col = mix(col, ${vec3Of(islandPalette.shallow)}, 1.0 - smoothstep(20.0, 52.0, dd));
   col = mix(col, ${vec3Of(islandPalette.lagoon)}, 1.0 - smoothstep(8.0, 30.0, dd));
   col = mix(col, ${vec3Of(islandPalette.pale)}, 1.0 - smoothstep(0.0, 12.0, dd));
-  vec3 foam = ${vec3Of(islandPalette.foam)};
 
   // Long swells far out, slowly drifting.
   if (dd >= 86.0) {
@@ -521,12 +568,17 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
   shoreTexture.magFilter = LinearFilter
   shoreTexture.minFilter = LinearFilter
   shoreTexture.needsUpdate = true
+  const lakeTexture = track(
+    new DataTexture(field.lake, field.width, field.height, RedFormat, UnsignedByteType)
+  )
+  lakeTexture.needsUpdate = true
   const waterMaterial = track(
     new ShaderMaterial({
       vertexShader: waterVertex,
       fragmentShader: waterFragment,
       uniforms: {
         uShore: { value: shoreTexture },
+        uLake: { value: lakeTexture },
         uWorld: { value: [WORLD_WIDTH, WORLD_HEIGHT] },
         uRange: { value: SHORE_RANGE * SHORE_CELL },
         uTime: { value: 0 }
@@ -1183,6 +1235,7 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
           (maxY + 2) * cells
         )
         shoreTexture.needsUpdate = true
+        lakeTexture.needsUpdate = true
         settleResidents(world, residents)
       } catch (error) {
         fail(error)
