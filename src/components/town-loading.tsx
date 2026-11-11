@@ -1,11 +1,46 @@
-import { useEffect, useState } from 'react'
+import { type CSSProperties, useEffect, useLayoutEffect, useState } from 'react'
+import type { PixelBuffer } from '../lib/island-art'
+import { BOAT_FRAME, BOAT_FRAMES, paintLoadingArt, SEA_TILE } from '../lib/island-loading'
+import { designResidents, type ResidentDesign } from '../lib/island-residents'
 
 type Status = 'loading' | 'ready' | 'failed'
 
-// A small pixel island bobbing on the waves while the renderer starts.
-export function TownLoading({ status }: { status: Status }) {
+const fallbackRower: ResidentDesign = {
+  hair: 'short',
+  accessory: 'strawHat',
+  outfit: 'pants',
+  hairColor: '#6a4535',
+  top: '#e0574f',
+  bottom: '#f4f0e6',
+  accent: '#f2c84b',
+  skin: '#fbd7bd'
+}
+
+function toDataUrl(buffer: PixelBuffer) {
+  const canvas = document.createElement('canvas')
+  canvas.width = buffer.width
+  canvas.height = buffer.height
+  const context = canvas.getContext('2d')
+  if (!context) return null
+  const image = context.createImageData(buffer.width, buffer.height)
+  image.data.set(buffer.data)
+  context.putImageData(image, 0, 0)
+  return `url(${canvas.toDataURL()})`
+}
+
+// The newest resident rows across the island's own sea while the renderer starts.
+export function TownLoading({
+  status,
+  posts,
+  newestSlug
+}: {
+  status: Status
+  posts: Array<{ slug: string; date: string }>
+  newestSlug?: string
+}) {
   const [leaving, setLeaving] = useState(false)
   const [done, setDone] = useState(false)
+  const [art, setArt] = useState<CSSProperties | null>(null)
   useEffect(() => {
     if (status === 'loading') {
       setLeaving(false)
@@ -20,30 +55,45 @@ export function TownLoading({ status }: { status: Status }) {
     const timer = setTimeout(() => setDone(true), 450)
     return () => clearTimeout(timer)
   }, [status])
+  // Painted before the first paint after hydration; until then the plain sea shows.
+  useLayoutEffect(() => {
+    const rower = (newestSlug && designResidents(posts).get(newestSlug)) || fallbackRower
+    const painted = paintLoadingArt(rower)
+    const [sea, shimmer, boat] = [painted.sea, painted.shimmer, painted.boat].map(toDataUrl)
+    if (!sea || !shimmer || !boat) return
+    setArt({
+      '--loading-sea': sea,
+      '--loading-shimmer': shimmer,
+      '--loading-boat': boat,
+      '--loading-tile': SEA_TILE,
+      '--loading-boat-w': BOAT_FRAME.width,
+      '--loading-boat-h': BOAT_FRAME.height,
+      '--loading-boat-frames': BOAT_FRAMES
+    } as CSSProperties)
+    // The rower is chosen once: the art must not repaint under a running animation.
+  }, [])
   if (done) return null
   return (
-    <div className={`island-loading${leaving ? ' is-leaving' : ''}`} role="status">
-      <svg
-        className="island-loading__art"
-        viewBox="0 0 32 20"
-        width="160"
-        height="100"
-        shapeRendering="crispEdges"
-        aria-hidden="true"
-      >
-        <path className="island-loading__sand" d="M7 12h18v1h2v2h-2v1H7v-1H5v-2h2z" />
-        <path className="island-loading__grass" d="M10 10h12v1h2v2H8v-2h2z" />
-        <path className="island-loading__trunk" d="M15 5h2v6h-2z" />
-        <path
-          className="island-loading__leaf"
-          d="M11 3h4v1h2V3h4v1h1v1h-4v1h-2V5h-1v1h-4V5h-1V4h1z"
-        />
-        <path
-          className="island-loading__wave"
-          d="M2 17h3v1H2zM9 18h4v1H9zM20 18h3v1h-3zM27 17h3v1h-3z"
-        />
-      </svg>
-      <p>島へ向かっています…</p>
+    <div
+      className={`island-loading${leaving ? ' is-leaving' : ''}${art ? ' is-painted' : ''}`}
+      style={art ?? undefined}
+      role="status"
+    >
+      <div className="island-loading__sea" aria-hidden="true" />
+      <div className="island-loading__shimmer" aria-hidden="true" />
+      <div className="island-loading__stage">
+        <div className="island-loading__boat" aria-hidden="true">
+          <div className="island-loading__boat-frames" />
+        </div>
+        <p className="island-loading__label">
+          島へ向かっています
+          <span className="island-loading__dots" aria-hidden="true">
+            <i />
+            <i />
+            <i />
+          </span>
+        </p>
+      </div>
     </div>
   )
 }

@@ -651,34 +651,110 @@ body::after {
   visibility: hidden;
 }
 .island-loading {
+  --px: 4px;
   position: absolute;
   z-index: 20;
   inset: 0;
+  overflow: hidden;
   display: grid;
-  place-content: center;
-  justify-items: center;
-  gap: 14px;
-  background:
-    repeating-linear-gradient(0deg, #ffffff10 0 2px, transparent 2px 22px),
-    var(--sea);
-  color: var(--paper);
-  font: 500 13px "IBM Plex Mono", "Noto Sans JP", monospace;
+  place-items: center;
+  background: #22add0;
   transition: opacity 0.4s;
 }
 .island-loading.is-leaving {
   opacity: 0;
   pointer-events: none;
 }
-.island-loading__art {
-  animation: island-bob 1.2s steps(2) infinite;
+/* The sea is one repeating tile; each layer slides by exactly one tile, in whole
+   art pixels, so the loop has no seam and stays on the compositor. */
+.island-loading__sea,
+.island-loading__shimmer {
+  --tile: calc(var(--loading-tile) * var(--px));
+  position: absolute;
+  inset: 0 calc(var(--tile) * -1) 0 0;
+  background-repeat: repeat;
+  background-size: var(--tile) var(--tile);
+  image-rendering: pixelated;
+  opacity: 0;
+  transition: opacity 0.3s;
 }
-.island-loading__sand { fill: #f5e8c0; }
-.island-loading__grass { fill: #5dbd4b; }
-.island-loading__trunk { fill: #9a6c41; }
-.island-loading__leaf { fill: #4caa4c; }
-.island-loading__wave { fill: #eafcff; }
-@keyframes island-bob {
-  50% { transform: translateY(3px); }
+.island-loading.is-painted :is(.island-loading__sea, .island-loading__shimmer) {
+  opacity: 1;
+}
+.island-loading__sea {
+  background-image: var(--loading-sea);
+  animation: island-loading-drift 80s steps(320) infinite;
+}
+.island-loading__shimmer {
+  background-image: var(--loading-shimmer);
+  animation: island-loading-drift 32s steps(320) infinite;
+}
+.island-loading__stage {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 22px;
+}
+.island-loading__boat {
+  width: calc(var(--loading-boat-w) * var(--px));
+  height: calc(var(--loading-boat-h) * var(--px));
+  overflow: hidden;
+  visibility: hidden;
+  animation: island-loading-bob 1.4s steps(1) infinite;
+}
+.island-loading.is-painted .island-loading__boat {
+  visibility: visible;
+}
+.island-loading__boat-frames {
+  width: calc(100% * var(--loading-boat-frames));
+  height: 100%;
+  background: var(--loading-boat) 0 0 / 100% 100% no-repeat;
+  image-rendering: pixelated;
+  animation: island-loading-row 0.9s steps(2) infinite;
+}
+.island-loading__label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 7px 14px 8px;
+  border: 3px solid var(--ink);
+  border-radius: 6px;
+  background: var(--paper);
+  box-shadow: 0 4px 0 #2b223666;
+  color: var(--ink);
+  font: 700 13px "Noto Sans JP", sans-serif;
+  letter-spacing: 0.04em;
+}
+.island-loading__dots {
+  display: flex;
+  gap: 3px;
+}
+.island-loading__dots i {
+  width: 3px;
+  height: 3px;
+  background: var(--ink);
+  animation: island-loading-dot 1.2s steps(1) infinite;
+}
+.island-loading__dots i:nth-child(2) { animation-delay: 0.2s; }
+.island-loading__dots i:nth-child(3) { animation-delay: 0.4s; }
+@media (max-width: 640px) {
+  .island-loading {
+    --px: 3px;
+  }
+}
+@keyframes island-loading-drift {
+  to { transform: translateX(calc(var(--tile) * -1)); }
+}
+@keyframes island-loading-row {
+  to { transform: translateX(-100%); }
+}
+@keyframes island-loading-bob {
+  50% { transform: translateY(var(--px)); }
+}
+@keyframes island-loading-dot {
+  0%, 60% { opacity: 0.2; }
+  20%, 40% { opacity: 1; }
 }
 
 /* Residents are hit areas over the canvas; the sprite itself is drawn in WebGL. */
@@ -1101,7 +1177,11 @@ body::after {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .island-loading__art,
+  .island-loading__sea,
+  .island-loading__shimmer,
+  .island-loading__boat,
+  .island-loading__boat-frames,
+  .island-loading__dots i,
   .island-resident__new {
     animation: none;
   }

@@ -419,7 +419,7 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
           aria-hidden="true"
           tabIndex={-1}
         />
-        <TownLoading status={status} />
+        <TownLoading status={status} posts={sorted} newestSlug={newestSlug} />
         {ready &&
           sorted.map((post) => (
             <button
