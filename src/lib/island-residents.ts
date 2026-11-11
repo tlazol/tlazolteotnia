@@ -640,16 +640,25 @@ export type Resident = {
   seed: number
 }
 
-const COMMON_ACTIONS = ['walk', 'idle', 'jump'] as const
-
 function chooseAction(random: () => number, current?: Resident['action']): Resident['action'] {
   const roll = random()
-  // Dancing is a rare treat: 2% on arrival and on each eligible activity change.
-  if (current !== 'dance' && roll < 0.02) return 'dance'
-  const choices = COMMON_ACTIONS.filter((action) => action !== current)
-  const commonRoll = current === 'dance' ? roll : (roll - 0.02) / 0.98
-  return choices[Math.min(choices.length - 1, Math.floor(commonRoll * choices.length))]
+  // Dancing and jumping are rare treats: 2% each on arrival and on each activity change.
+  if (roll < 0.02) return current === 'dance' ? 'walk' : 'dance'
+  if (roll < 0.04) return current === 'jump' ? 'walk' : 'jump'
+  // Otherwise residents mostly walk, stopping for a breather between strolls.
+  if (current === 'walk') return 'idle'
+  if (current === 'idle') return 'walk'
+  return roll < 0.85 ? 'walk' : 'idle'
 }
+
+// Long strolls, brief stops and short bursts of hopping; dances last a while.
+function actionDuration(action: Resident['action'], random: () => number) {
+  if (action === 'walk') return 10 + random() * 20
+  if (action === 'idle') return 2 + random() * 3
+  if (action === 'jump') return 2.8 + random() * 2.8
+  return 6 + random() * 14
+}
+
 // Slow stroll, regular walk and brisk walk, in art pixels per second.
 const WALK_SPEEDS = [14, 21, 28] as const
 
@@ -666,6 +675,7 @@ export function createResidents(
   return slugs.map<Resident>((slug, i) => {
     const home = homes[i] ?? homes[0] ?? { x: 0, y: 0 }
     const foot = footOf(home)
+    const action = chooseAction(random)
     return {
       slug,
       home: { ...home },
@@ -679,9 +689,9 @@ export function createResidents(
       wait: hash2(i, 3, 5) * 2,
       walkClock: 0,
       speed: WALK_SPEEDS[hashSlug(`walk:${slug}`) % WALK_SPEEDS.length],
-      action: chooseAction(random),
+      action,
       actionClock: random() * 2,
-      actionRemaining: 6 + random() * 14,
+      actionRemaining: actionDuration(action, random),
       offsetX: 0,
       offsetY: 0,
       tilt: 0,
@@ -864,8 +874,9 @@ export function stepResidents(
     if (resident.actionRemaining <= 0 && !resident.target) {
       resident.action = chooseAction(Math.random, resident.action)
       resident.actionClock = 0
-      resident.actionRemaining = 6 + Math.random() * 14
-      resident.route = []
+      resident.actionRemaining = actionDuration(resident.action, Math.random)
+      // A breather only interrupts the journey; performances end it.
+      if (resident.action === 'dance' || resident.action === 'jump') resident.route = []
       resident.facing = 'down'
       resident.flip = false
     }

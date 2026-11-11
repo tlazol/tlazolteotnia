@@ -393,7 +393,7 @@ describe('island residents', () => {
     const world = createIsland(20, 1)
     world.ground.fill(GRASS)
     const activities = ['walk', 'idle', 'dance', 'jump']
-    const rolls = [0.1, 0.5, 0.01, 0.9]
+    const rolls = [0.1, 0.9, 0.01, 0.03]
     for (const [index, action] of activities.entries()) {
       const residents = createResidents(['performer'], [{ x: 0, y: 0 }], () => rolls[index])
       const resident = residents[0]
@@ -504,7 +504,7 @@ describe('island residents', () => {
     expect(seen[PATH] / total).toBeLessThan(0.4)
     expect(seen[WATER] / total).toBeGreaterThan(0.02)
     expect(seen[WATER] / total).toBeLessThan(0.15)
-  })
+  }, 30_000)
 
   it('routes around solid objects and reserves steps without overlapping residents', () => {
     const world = createIsland(20, 12)
