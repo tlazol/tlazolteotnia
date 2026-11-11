@@ -507,10 +507,11 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
             disabled={!ready}
             aria-expanded={editing}
             aria-controls="island-toolbar"
+            aria-label={editing ? '作るのを終える' : '島をつくる'}
+            title={editing ? '作るのを終える' : '島をつくる'}
             onClick={() => toggleEditor(!editorOpen)}
           >
-            <PixelIcon name="build" />
-            <span>{editing ? '作るのを終える' : '島をつくる'}</span>
+            <PixelIcon name="shovel" />
           </button>
         </div>
         {ready && (
