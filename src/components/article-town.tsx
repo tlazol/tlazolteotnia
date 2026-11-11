@@ -64,9 +64,7 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
   const [panTool, setPanTool] = useState(false)
   const [spaceHeld, setSpaceHeld] = useState(false)
   const [dragging, setDragging] = useState(false)
-  const [activeSlug, setActiveSlug] = useState<string | null>(() =>
-    openSlug ? null : (newestSlug ?? null)
-  )
+  const [activeSlug, setActiveSlug] = useState<string | null>(() => openSlug ?? newestSlug ?? null)
   const [listOpen, setListOpen] = useState(false)
   const [cursor, setCursor] = useState<CursorInfo>(null)
   const [coarse, setCoarse] = useState(false)
@@ -79,10 +77,10 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
   const latestPositions = useRef<ResidentScreen[]>([])
   const pendingBubbleFocus = useRef<string | null>(null)
 
-  const latest = useRef({ editorOpen, options, panTool, spaceHeld, activeSlug })
-  latest.current = { editorOpen, options, panTool, spaceHeld, activeSlug }
+  const latest = useRef({ editorOpen, options, panTool, spaceHeld, activeSlug, openSlug })
+  latest.current = { editorOpen, options, panTool, spaceHeld, activeSlug, openSlug }
 
-  const positionOverlay = useCallback((positions: ResidentScreen[]) => {
+  const positionOverlay = useCallback((positions: ResidentScreen[], closeOffscreen = false) => {
     latestPositions.current = positions
     const { activeSlug: active, editorOpen: currentEditorOpen } = latest.current
     const surfaceElement = scene.surface.current
@@ -117,6 +115,11 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
         element.style.setProperty('--tail-x', `${placement.tail}px`)
         element.dataset.side = placement.above ? 'above' : 'below'
         element.style.visibility = inView ? 'visible' : 'hidden'
+        // Only fresh renderer positions can dismiss a bubble after a camera move.
+        if (!inView && closeOffscreen && !latest.current.openSlug) {
+          pendingBubbleFocus.current = null
+          setActiveSlug((slug) => (slug === position.slug ? null : slug))
+        }
         if (inView && pendingBubbleFocus.current === position.slug) {
           const link = element.querySelector('a')
           link?.focus({ preventScroll: true })
@@ -126,7 +129,11 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
     }
   }, [])
 
-  const scene = useIsland({ posts: sorted, initialSlug: openSlug, onPositions: positionOverlay })
+  const scene = useIsland({
+    posts: sorted,
+    initialSlug: openSlug,
+    onPositions: (positions) => positionOverlay(positions, true)
+  })
   const { status, size, zoom, surface, canvas, renderer, view, setView, homeView, edits } = scene
   const ready = status === 'ready'
   const failed = status === 'failed'
@@ -134,6 +141,14 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
   const editing = editorOpen && ready
   const listVisible = failed || (ready && listOpen)
   const activePost = sorted.find((post) => post.slug === activeSlug)
+
+  useEffect(() => {
+    if (!openSlug || !ready) return
+    pendingBubbleFocus.current = null
+    setEditorOpen(false)
+    setActiveSlug(openSlug)
+    setView(homeView(openSlug, view.current.zoom))
+  }, [openSlug, ready, setView, homeView, view])
 
   useEffect(() => {
     const query = window.matchMedia('(pointer: coarse)')
@@ -218,6 +233,7 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
 
   function selectResident(slug: string, viaKeyboard = false) {
     pendingBubbleFocus.current = viaKeyboard ? slug : null
+    if (activeSlug !== slug) setView(homeView(slug, view.current.zoom))
     setActiveSlug((active) => (active === slug ? null : slug))
   }
   function closeBubble() {

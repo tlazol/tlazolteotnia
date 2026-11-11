@@ -495,7 +495,7 @@ describe('island residents', () => {
     expect(crossed).toBe(true)
   })
 
-  it('pauses even mid-step while a resident is held or selected', () => {
+  it('pauses even mid-step while a resident is held', () => {
     const world = createIsland(20, 1)
     world.ground.fill(GRASS)
     const residents = createResidents(['a'], [{ x: 0, y: 0 }])

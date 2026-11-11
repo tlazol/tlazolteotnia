@@ -41,7 +41,7 @@ import {
   setPixel,
   updateShoreField
 } from './island-art'
-import { type IslandView, WORLD_HEIGHT, WORLD_WIDTH } from './island-camera'
+import { clampView, type IslandView, WORLD_HEIGHT, WORLD_WIDTH } from './island-camera'
 import { daylightNow } from './island-daylight'
 import {
   dropResident,
@@ -493,7 +493,7 @@ export type IslandRendererOptions = {
   world: IslandWorld
   residents: Resident[]
   designs: Map<string, ResidentDesign>
-  onFrame: (positions: ResidentScreen[]) => void
+  onFrame: (positions: ResidentScreen[], view: IslandView) => void
   onFailure: () => void
 }
 
@@ -1088,12 +1088,17 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
       const still = reducedMotion.matches
       if (!still) {
         time += dt
-        stepResidents(
-          world,
-          residents,
-          dt,
-          (slug) => slug === selected || slug === dragged?.resident.slug
-        )
+        const followed = residents.find((resident) => resident.slug === selected)
+        const previous = followed && { x: followed.x, y: followed.y }
+        stepResidents(world, residents, dt, (slug) => slug === dragged?.resident.slug)
+        if (followed && previous && (followed.x !== previous.x || followed.y !== previous.y)) {
+          // Follow walking without undoing the user's pan or zoom, or chasing each hop.
+          view = clampView(
+            { ...view, x: view.x + followed.x - previous.x, y: view.y + followed.y - previous.y },
+            size
+          )
+          placeCamera()
+        }
       }
       waterMaterial.uniforms.uTime.value = time
       clock.value = time
@@ -1107,7 +1112,7 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
       placeWildlife(still ? 0 : dt)
       placeResidents()
       renderer.render(scene, camera)
-      onFrame(project())
+      onFrame(project(), view)
       if (!still) frame = requestAnimationFrame(draw)
     } catch (error) {
       fail(error)

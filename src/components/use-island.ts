@@ -83,11 +83,13 @@ export function useIsland({
     renderer.current?.setView(clamped, sizeRef.current)
   }, [])
 
-  const homeView = useCallback((slug?: string | null) => {
+  const homeView = useCallback((slug?: string | null, zoom = defaultZoom(sizeRef.current)) => {
     const target =
       residents.current.find((resident) => resident.slug === slug) ?? residents.current[0]
-    const foot = target ? { x: target.x, y: target.y } : footOf({ x: 40, y: 30 })
-    return viewOn({ x: foot.x, y: foot.y - 12 }, sizeRef.current, defaultZoom(sizeRef.current))
+    const foot = target
+      ? { x: target.x + target.offsetX, y: target.y + target.offsetY }
+      : footOf({ x: 40, y: 30 })
+    return viewOn({ x: foot.x, y: foot.y - 12 }, sizeRef.current, zoom)
   }, [])
 
   useEffect(() => {
@@ -135,7 +137,11 @@ export function useIsland({
           world: loaded,
           residents: residents.current,
           designs,
-          onFrame: (positions) => positionsCallback.current(positions, view.current),
+          onFrame: (positions, nextView) => {
+            view.current = nextView
+            islandSession.view = nextView
+            positionsCallback.current(positions, nextView)
+          },
           onFailure: fail
         })
         renderer.current.setView(view.current, sizeRef.current)
