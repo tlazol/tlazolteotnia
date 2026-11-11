@@ -358,10 +358,13 @@ describe('island residents', () => {
     expect(sheet.data.some((value, i) => i % 4 === 3 && value > 0)).toBe(true)
   })
 
-  it('lets residents swim when their ground becomes sea', () => {
+  it.each([
+    ['sea', WATER],
+    ['lake', SWAMP]
+  ] as const)('lets residents swim when their ground becomes %s', (_, ground) => {
     const world = createDefaultIsland()
     const residents = createResidents(['a'], [{ x: 40, y: 30 }])
-    world.ground[30 * world.columns + 40] = WATER
+    world.ground[30 * world.columns + 40] = ground
     expect(settleResidents(world, residents)).toEqual([])
     expect(residentIsSwimming(world, residents[0])).toBe(true)
   })
@@ -379,7 +382,7 @@ describe('island residents', () => {
 
   it('moves at each walking speed and slows down in water', () => {
     const world = createIsland(20, 1)
-    for (const ground of [GRASS, WATER]) {
+    for (const ground of [GRASS, WATER, SWAMP]) {
       world.ground.fill(ground)
       for (const speed of [14, 21, 28]) {
         const residents = createResidents(['walker'], [{ x: 0, y: 0 }])
@@ -388,7 +391,7 @@ describe('island residents', () => {
         resident.target = { x: 1, y: 0 }
         const start = resident.x
         stepResidents(world, residents, 0.1, () => false)
-        expect(resident.x - start).toBeCloseTo(speed * (ground === WATER ? 0.65 : 1) * 0.1)
+        expect(resident.x - start).toBeCloseTo(speed * (ground === GRASS ? 1 : 0.65) * 0.1)
       }
     }
   })
@@ -510,7 +513,7 @@ describe('island residents', () => {
     expect(seen[WATER] / total).toBeLessThan(0.15)
   }, 30_000)
 
-  it('treats soil like sand, cobbles like trails and swamp like the sea underfoot', () => {
+  it('treats soil like sand, cobbles like trails and lakes like the sea underfoot', () => {
     // Two lanes side by side: the stroller keeps to whichever is better footing.
     const lanes = (top: Ground, bottom: Ground) => {
       const world = createIsland(24, 2)
@@ -526,7 +529,6 @@ describe('island residents', () => {
         stepResidents(world, residents, 0.1, () => false)
         if (resident.tile !== last) steps[resident.tile.y]++
         last = resident.tile
-        expect(residentIsSwimming(world, resident)).toBe(false)
       }
       return steps
     }
@@ -534,8 +536,8 @@ describe('island residents', () => {
     expect(cobbled[1]).toBeGreaterThan(cobbled[0] * 3)
     const earthy = lanes(SOIL, GRASS)
     expect(earthy[1]).toBeGreaterThan(earthy[0] * 1.5)
-    const boggy = lanes(SWAMP, SAND)
-    expect(boggy[1]).toBeGreaterThan(boggy[0] * 3)
+    const lake = lanes(SWAMP, SAND)
+    expect(lake[1]).toBeGreaterThan(lake[0] * 3)
     // Equal footing: neither lane is shunned.
     for (const [top, bottom] of [
       [SAND, SOIL],
