@@ -24,6 +24,7 @@ import {
 } from '../src/lib/island-residents'
 import { decorVariants } from '../src/lib/island-sprites'
 import {
+  COBBLE,
   createDefaultIsland,
   createIsland,
   DECK,
@@ -31,6 +32,7 @@ import {
   decorCode,
   decorKinds,
   GRASS,
+  type Ground,
   groundAt,
   ISLAND_SAVE_VERSION,
   ISLAND_STORAGE_KEY,
@@ -40,6 +42,8 @@ import {
   PATH,
   parseIsland,
   SAND,
+  SOIL,
+  SWAMP,
   serializeIsland,
   WATER
 } from '../src/lib/island-world'
@@ -505,6 +509,54 @@ describe('island residents', () => {
     expect(seen[WATER] / total).toBeGreaterThan(0.02)
     expect(seen[WATER] / total).toBeLessThan(0.15)
   }, 30_000)
+
+  it('treats soil like sand, cobbles like trails and swamp like the sea underfoot', () => {
+    // Two lanes side by side: the stroller keeps to whichever is better footing.
+    const lanes = (top: Ground, bottom: Ground) => {
+      const world = createIsland(24, 2)
+      world.ground.fill(top, 0, 24)
+      world.ground.fill(bottom, 24)
+      const residents = createResidents(['stroller'], [{ x: 0, y: 0 }])
+      const resident = residents[0]
+      resident.action = 'walk'
+      resident.actionRemaining = 1000
+      const steps = [0, 0]
+      let last = resident.tile
+      for (let i = 0; i < 1800; i++) {
+        stepResidents(world, residents, 0.1, () => false)
+        if (resident.tile !== last) steps[resident.tile.y]++
+        last = resident.tile
+        expect(residentIsSwimming(world, resident)).toBe(false)
+      }
+      return steps
+    }
+    const cobbled = lanes(GRASS, COBBLE)
+    expect(cobbled[1]).toBeGreaterThan(cobbled[0] * 3)
+    const earthy = lanes(SOIL, GRASS)
+    expect(earthy[1]).toBeGreaterThan(earthy[0] * 1.5)
+    const boggy = lanes(SWAMP, SAND)
+    expect(boggy[1]).toBeGreaterThan(boggy[0] * 3)
+    // Equal footing: neither lane is shunned.
+    for (const [top, bottom] of [
+      [SAND, SOIL],
+      [PATH, COBBLE]
+    ] as const) {
+      const even = lanes(top, bottom)
+      expect(Math.min(...even) / Math.max(...even)).toBeGreaterThan(0.4)
+    }
+  })
+
+  it('saves the new grounds and draws each as itself', () => {
+    const world = createIsland()
+    for (const [i, ground] of [SOIL, COBBLE, SWAMP].entries())
+      for (let y = 10; y < 16; y++)
+        world.ground.fill(ground, y * world.columns + 10 + i * 10, y * world.columns + 16 + i * 10)
+    const restored = parseIsland(serializeIsland(world))
+    expect(restored?.ground).toEqual(world.ground)
+    for (const [i, ground] of [SOIL, COBBLE, SWAMP].entries())
+      expect(terrainClass(world, (13 + i * 10) * 16, 13 * 16)).toBe(ground)
+    expect(isWalkable(world, 33, 13)).toBe(true)
+  })
 
   it('routes around solid objects and reserves steps without overlapping residents', () => {
     const world = createIsland(20, 12)

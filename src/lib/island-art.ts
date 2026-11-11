@@ -1,4 +1,5 @@
 import {
+  COBBLE,
   DECK,
   GRASS,
   type Ground,
@@ -7,6 +8,8 @@ import {
   type IslandWorld,
   PATH,
   SAND,
+  SOIL,
+  SWAMP,
   TILE_SIZE,
   valueNoise,
   WATER
@@ -107,6 +110,21 @@ export const islandPalette = {
   pathLight: '#f7da9f',
   pathDark: '#d09e5e',
   pathEdge: '#b17d44',
+  soil: '#a3714a',
+  soilLight: '#b98a5e',
+  soilDark: '#87583a',
+  soilEdge: '#684029',
+  cobble: '#aeb0b8',
+  cobbleLight: '#cfd1d6',
+  cobbleDark: '#8d8f9a',
+  cobbleGap: '#62646f',
+  swamp: '#66804f',
+  swampLight: '#829a5c',
+  swampDark: '#4f6a47',
+  swampEdge: '#3b5340',
+  bog: '#3d5a4b',
+  bogDeep: '#2f4841',
+  bogShine: '#7fa48c',
   deck: '#bd8950',
   deckLight: '#deb078',
   deckDark: '#986838',
@@ -156,15 +174,34 @@ export function terrainClass(world: IslandWorld, px: number, py: number) {
   const noise =
     (valueNoise(px / 9, py / 9, 3) - 0.5) * 0.55 + (hash2(px >> 1, py >> 1, 9) - 0.5) * 0.1
   if (land <= 0.5 + noise) return WATER
-  const path = mix(+(g00 === PATH), +(g10 === PATH), +(g01 === PATH), +(g11 === PATH))
-  if (path > 0.5 + (valueNoise(px / 5, py / 5, 13) - 0.5) * 0.35 + (hash2(px, py, 17) - 0.5) * 0.08)
-    return PATH
-  const grass = mix(+(g00 === GRASS), +(g10 === GRASS), +(g01 === GRASS), +(g11 === GRASS))
+  const share = (g: Ground) => mix(+(g00 === g), +(g10 === g), +(g01 === g), +(g11 === g))
+  // Trails and cobbles are laid over the ground and run into each other.
+  const path = share(PATH)
+  const cobble = share(COBBLE)
+  if (
+    path + cobble >
+    0.5 + (valueNoise(px / 5, py / 5, 13) - 0.5) * 0.35 + (hash2(px, py, 17) - 0.5) * 0.08
+  )
+    return cobble - path > (valueNoise(px / 6, py / 6, 81) - 0.5) * 0.5 ? COBBLE : PATH
+  const grass = share(GRASS)
   // Grass gives way to a strip of beach where land meets the sea.
   const grassNoise =
     (valueNoise(px / 7, py / 7, 19) - 0.5) * 0.4 + (hash2(px >> 1, py >> 1, 29) - 0.5) * 0.1
   if (grass - (1 - land) * 0.9 > 0.5 + grassNoise) return GRASS
-  return SAND
+  // Bare ground: whichever of sand, soil and swamp has the most of this spot,
+  // counted among themselves so each runs right up to grass, trails and sea.
+  const soil = share(SOIL)
+  const swamp = share(SWAMP)
+  if (!soil && !swamp) return SAND
+  const sand = share(SAND)
+  const bare = soil + swamp + sand
+  // Kept under half so ground with a spot all to itself always shows there.
+  const lean =
+    (valueNoise(px / 6, py / 6, 83) - 0.5) * 0.8 + (hash2(px >> 1, py >> 1, 85) - 0.5) * 0.1
+  const soilScore = soil / bare + lean
+  const swampScore = swamp / bare - lean * 0.5
+  if (soil && soilScore > sand / bare && soilScore >= swampScore) return SOIL
+  return swamp && swampScore > sand / bare ? SWAMP : SAND
 }
 
 const PAD = 7
@@ -247,6 +284,21 @@ export function paintTerrain(
         else if (grain > 0.9) color = c.deckDark
         else if (grain < -0.8 || hash2(Math.floor(px / 22), row, 73) < 0.18) color = c.deckLight
         else color = c.deck
+      } else if (kind === SOIL) {
+        if (at(x, y + 1) !== SOIL) color = c.soilEdge
+        else if (at(x - 1, y) !== SOIL || at(x + 1, y) !== SOIL) color = c.soilDark
+        else if (at(x, y - 1) !== SOIL) color = c.soilLight
+        else color = soilPixel(px, py)
+      } else if (kind === COBBLE) {
+        if (at(x, y + 1) !== COBBLE || at(x - 1, y) !== COBBLE || at(x + 1, y) !== COBBLE)
+          color = c.cobbleGap
+        else if (at(x, y - 1) !== COBBLE) color = c.cobbleDark
+        else color = cobblePixel(px, py)
+      } else if (kind === SWAMP) {
+        if (at(x, y + 1) !== SWAMP) color = c.swampEdge
+        else if (at(x - 1, y) !== SWAMP || at(x + 1, y) !== SWAMP) color = c.swampDark
+        else if (at(x, y - 1) !== SWAMP) color = c.swampLight
+        else color = swampPixel(px, py)
       } else {
         const speck = hash2(px, py, 51)
         if (at(x, y + 1) !== PATH || at(x - 1, y) !== PATH || at(x + 1, y) !== PATH)
@@ -291,6 +343,94 @@ function sandPixel(px: number, py: number): Rgba {
   if (speck > 0.985) return c.sandLight
   const relief = ripple * 3 + (dune - 0.5) * 15 + (speck - 0.5) * 6
   return [c.sand[0] + relief, c.sand[1] + relief, c.sand[2] + relief, 255]
+}
+
+// Bare earth: soft mottling, with clods and the odd pebble.
+function soilPixel(px: number, py: number): Rgba {
+  const cx = Math.floor(px / 11)
+  const cy = Math.floor(py / 9)
+  const roll = hash2(cx, cy, 91)
+  if (roll < 0.4) {
+    const lx = px - (cx * 11 + 2 + Math.floor(hash2(cx, cy, 92) * 6))
+    const ly = py - (cy * 9 + 2 + Math.floor(hash2(cx, cy, 93) * 4))
+    if (roll < 0.08) {
+      // Pebble.
+      if (ly === 0 && (lx === 0 || lx === 1)) return c.cobbleLight
+      if (ly === 1 && lx >= 0 && lx <= 1) return c.cobbleDark
+      if (ly === 2 && lx >= 0 && lx <= 2) return c.soilEdge
+    } else {
+      // Clod: a lit top over a short shadow.
+      if (ly === 0 && lx >= 0 && lx <= 2) return c.soilLight
+      if (ly === 1 && lx >= -1 && lx <= 2) return c.soilDark
+    }
+  }
+  const tone = valueNoise(px / 14, py / 10, 94) * 0.7 + valueNoise(px / 4, py / 3, 95) * 0.3
+  const grain = hash2(px, py, 96)
+  if (grain < 0.03) return c.soilDark
+  if (grain > 0.975) return c.soilLight
+  if (tone > 0.64) return c.soilLight
+  if (tone < 0.36) return c.soilDark
+  return c.soil
+}
+
+// Cobbles: courses of rounded stones of uneven width, each its own shade.
+function cobblePixel(px: number, py: number): Rgba {
+  const row = Math.floor(py / 6)
+  const ly = ((py % 6) + 6) % 6
+  // Stones are 6 to 9 wide; a course is cut from a strip that repeats every 30.
+  const shift = Math.floor(hash2(row, 0, 101) * 30)
+  const strip = Math.floor((px + shift) / 30)
+  let lx = (((px + shift) % 30) + 30) % 30
+  const widths = [
+    [7, 8, 6, 9],
+    [9, 6, 8, 7],
+    [6, 9, 7, 8]
+  ][Math.floor(hash2(row, 1, 102) * 3)]
+  let stone = 0
+  while (lx >= widths[stone]) lx -= widths[stone++]
+  const width = widths[stone]
+  if (lx === 0 || ly === 5) return c.cobbleGap
+  // Clipped corners round each stone off.
+  if ((lx === 1 || lx === width - 1) && (ly === 0 || ly === 4)) return c.cobbleGap
+  const shade = hash2(strip * 4 + stone, row, 103)
+  if (ly === 0 || (lx === 1 && ly < 4)) return shade < 0.25 ? c.cobble : c.cobbleLight
+  if (ly === 4 || lx === width - 1) return c.cobbleDark
+  if (hash2(px, py, 104) < 0.04) return c.cobbleDark
+  return shade < 0.25 ? c.cobbleDark : shade > 0.8 ? c.cobbleLight : c.cobble
+}
+
+// Mire: mossy mud between dark pools, with reeds at the water's edge.
+function swampPixel(px: number, py: number): Rgba {
+  const pool = (x: number, y: number) =>
+    valueNoise(x / 11, y / 8, 111) * 0.75 + valueNoise(x / 4, y / 3, 112) * 0.25
+  const depth = pool(px, py)
+  if (depth > 0.56) {
+    if (pool(px, py - 1) <= 0.56) return c.bogDeep
+    if (depth > 0.7) {
+      // Slow glints on the open water.
+      const glint = hash2(Math.floor(px / 5), py, 113)
+      return glint < 0.1 ? c.bogShine : c.bogDeep
+    }
+    return c.bog
+  }
+  if (pool(px, py + 1) > 0.56) return c.swampEdge
+  const cx = Math.floor(px / 9)
+  const cy = Math.floor(py / 8)
+  const reed = hash2(cx, cy, 114)
+  if (reed < 0.3) {
+    const lx = px - (cx * 9 + 2 + Math.floor(hash2(cx, cy, 115) * 4))
+    const ly = py - (cy * 8 + 4 + Math.floor(hash2(cx, cy, 116) * 3))
+    if (lx === 0 && ly >= -3 && ly <= 0) return ly === -3 && reed < 0.1 ? c.soilDark : c.swampEdge
+    if (lx === 2 && ly >= -2 && ly <= 0) return c.swampDark
+    if (ly === 1 && lx >= -1 && lx <= 3) return c.swampEdge
+  }
+  const tone = valueNoise(px / 13, py / 10, 117) * 0.7 + valueNoise(px / 4, py / 4, 118) * 0.3
+  const grain = hash2(px, py, 119)
+  if (grain < 0.03) return c.swampDark
+  if (grain > 0.975) return c.swampLight
+  if (tone > 0.62) return c.swampLight
+  if (tone < 0.4) return c.swampDark
+  return c.swamp
 }
 
 // Meadow: layered blades, dry tips and low moss between irregular tufts.

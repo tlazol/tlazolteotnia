@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { type EditOptions, type IslandTool, toolNames } from '#/lib/island-edit'
 import { decorVariants } from '#/lib/island-sprites'
 import {
+  COBBLE,
   DECK,
   type DecorKind,
   decorGroups,
@@ -11,7 +12,10 @@ import {
   groundNames,
   type LandGround,
   landGrounds,
-  PATH
+  PATH,
+  SAND,
+  SOIL,
+  SWAMP
 } from '#/lib/island-world'
 import { type IconName, PixelIcon } from './island-icons'
 
@@ -25,8 +29,11 @@ export const toolShortcuts = Object.fromEntries(tools.map(({ key, tool }) => [ke
 
 const groundSwatch: Record<LandGround, string> = {
   [GRASS]: 'is-grass',
-  1: 'is-sand',
+  [SAND]: 'is-sand',
+  [SOIL]: 'is-soil',
   [PATH]: 'is-path',
+  [COBBLE]: 'is-cobble',
+  [SWAMP]: 'is-swamp',
   [DECK]: 'is-deck'
 }
 

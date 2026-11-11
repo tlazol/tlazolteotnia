@@ -15,15 +15,32 @@ export const GRASS = 2
 export const PATH = 3
 // Wooden boards on stilts: laid over the sea they make piers and platforms.
 export const DECK = 4
-export type Ground = typeof WATER | typeof SAND | typeof GRASS | typeof PATH | typeof DECK
+export const SOIL = 5
+export const COBBLE = 6
+// Boggy ground: land to build and plant on, but as slow going as the sea.
+export const SWAMP = 7
+// New grounds go at the end: saves store a ground as this number.
+export const GROUND_COUNT = 8
+export type Ground =
+  | typeof WATER
+  | typeof SAND
+  | typeof GRASS
+  | typeof PATH
+  | typeof DECK
+  | typeof SOIL
+  | typeof COBBLE
+  | typeof SWAMP
 export type LandGround = Exclude<Ground, typeof WATER>
-export const landGrounds: LandGround[] = [GRASS, SAND, PATH, DECK]
+export const landGrounds: LandGround[] = [GRASS, SAND, SOIL, PATH, COBBLE, SWAMP, DECK]
 export const groundNames: Record<Ground, string> = {
   [WATER]: '海',
   [SAND]: '砂浜',
   [GRASS]: '草地',
   [PATH]: '小道',
-  [DECK]: '桟橋'
+  [DECK]: '桟橋',
+  [SOIL]: '土',
+  [COBBLE]: '石畳',
+  [SWAMP]: '沼地'
 }
 
 // Decorations stand on land or float on the sea; flat ones can be walked over.
@@ -381,7 +398,7 @@ export function parseIsland(raw: string | null | undefined): IslandWorld | null 
   )
     return null
   const length = ISLAND_COLUMNS * ISLAND_ROWS
-  const ground = decodeRuns(save.ground, length, DECK)
+  const ground = decodeRuns(save.ground, length, GROUND_COUNT - 1)
   const decor = decodeRuns(
     save.decor,
     length,

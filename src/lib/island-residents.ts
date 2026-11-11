@@ -1,5 +1,6 @@
 import { createBuffer, hex, outline, type PixelBuffer, type Rgba, setPixel } from './island-art'
 import {
+  COBBLE,
   DECK,
   decorAt,
   decorBlocksWalking,
@@ -13,6 +14,8 @@ import {
   nearestWalkable,
   PATH,
   SAND,
+  SOIL,
+  SWAMP,
   TILE_SIZE,
   WATER
 } from './island-world'
@@ -734,25 +737,30 @@ export function dropResident(
   return true
 }
 
-// Residents like firm footing: trails first, then the boardwalk, grass, sand
-// and, last of all, the sea. A route pays this much for each tile it steps
-// onto, so a trail is worth a modest detour but never a long way round.
-const STEP_COST: Record<Ground, number> = {
-  [PATH]: 4,
-  [DECK]: 5,
-  [GRASS]: 7,
-  [SAND]: 9,
-  [WATER]: 16
+// Residents like firm footing: trails and cobbles first, then the boardwalk,
+// grass, sand and soil and, last of all, the swamp and the sea. A route pays
+// `cost` for each tile it steps onto, so a trail is worth a modest detour but
+// never a long way round. Where journeys end: a footing is picked by `odds`,
+// then a tile on it, so the few trail tiles still draw more visits than all
+// the grass.
+const FOOTINGS = [
+  { cost: 4, odds: 34 },
+  { cost: 5, odds: 20 },
+  { cost: 7, odds: 22 },
+  { cost: 9, odds: 16 },
+  { cost: 16, odds: 8 }
+] as const
+// Grounds that share a footing are equally welcome underfoot.
+const FOOTING: Record<Ground, number> = {
+  [PATH]: 0,
+  [COBBLE]: 0,
+  [DECK]: 1,
+  [GRASS]: 2,
+  [SAND]: 3,
+  [SOIL]: 3,
+  [SWAMP]: 4,
+  [WATER]: 4
 }
-// Where journeys end: the ground is picked by these odds, then a tile on it,
-// so the few trail tiles still draw more visits than all the grass.
-const DESTINATION_ODDS: Array<[Ground, number]> = [
-  [PATH, 34],
-  [DECK, 20],
-  [GRASS, 22],
-  [SAND, 16],
-  [WATER, 8]
-]
 // Swimmers paddle about the shallows instead of heading for the open sea.
 const MAX_STROKES_FROM_SHORE = 3
 
@@ -772,8 +780,8 @@ function planJourney(world: IslandWorld, residents: Resident[], resident: Reside
   // Cheapest-first search; step costs are whole numbers, so tiles queue by total cost.
   const queues: number[][] = [[start]]
   const reached: number[] = []
-  // Candidate destinations, listed per kind of ground.
-  const destinations: number[][] = [[], [], [], [], []]
+  // Candidate destinations, listed per footing.
+  const destinations: number[][] = FOOTINGS.map(() => [])
   previous[start] = start
   cost[start] = 0
   for (let total = 0; total < queues.length; total++) {
@@ -787,7 +795,7 @@ function planJourney(world: IslandWorld, residents: Resident[], resident: Reside
         Math.hypot(x - resident.tile.x, y - resident.tile.y) >= 8 &&
         (ground !== WATER || strokes[index] <= MAX_STROKES_FROM_SHORE)
       )
-        destinations[ground].push(index)
+        destinations[FOOTING[ground]].push(index)
       for (const [dx, dy] of [
         [1, 0],
         [0, 1],
@@ -799,7 +807,7 @@ function planJourney(world: IslandWorld, residents: Resident[], resident: Reside
         const next = ny * world.columns + nx
         if (!canResidentEnter(world, nx, ny) || blocked.has(next)) continue
         const nextGround = groundAt(world, nx, ny)
-        const nextCost = total + STEP_COST[nextGround]
+        const nextCost = total + FOOTINGS[FOOTING[nextGround]].cost
         if (nextCost >= cost[next]) continue
         cost[next] = nextCost
         previous[next] = index
@@ -811,12 +819,14 @@ function planJourney(world: IslandWorld, residents: Resident[], resident: Reside
   }
   const decision = performanceSeed(resident)
   let choices = reached
-  const odds = DESTINATION_ODDS.filter(([ground]) => destinations[ground].length)
+  const open = FOOTINGS.map((footing, i) => ({ ...footing, tiles: destinations[i] })).filter(
+    (footing) => footing.tiles.length
+  )
   let pick =
-    hash2(resident.seed & 0xffff, decision, 4) * odds.reduce((sum, [, weight]) => sum + weight, 0)
-  for (const [ground, weight] of odds) {
-    choices = destinations[ground]
-    pick -= weight
+    hash2(resident.seed & 0xffff, decision, 4) * open.reduce((sum, { odds }) => sum + odds, 0)
+  for (const footing of open) {
+    choices = footing.tiles
+    pick -= footing.odds
     if (pick < 0) break
   }
   if (!choices.length) return []
