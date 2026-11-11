@@ -7,6 +7,7 @@ import {
   useRouter
 } from '@tanstack/react-router'
 import {
+  type CSSProperties,
   type MouseEvent,
   type KeyboardEvent as ReactKeyboardEvent,
   useCallback,
@@ -68,6 +69,8 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
   const [listOpen, setListOpen] = useState(false)
   const [cursor, setCursor] = useState<CursorInfo>(null)
   const [coarse, setCoarse] = useState(false)
+  const drawer = useRef<HTMLDivElement>(null)
+  const [drawerHeight, setDrawerHeight] = useState(0)
   const listToggle = useRef<HTMLButtonElement>(null)
   const listHeading = useRef<HTMLHeadingElement>(null)
   const bubble = useRef<HTMLDivElement>(null)
@@ -261,6 +264,15 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
     if (listOpen) listHeading.current?.focus()
   }, [listOpen])
 
+  // The camera controls ride above the drawer where they would otherwise overlap.
+  useEffect(() => {
+    const element = drawer.current
+    if (!element || !ready) return
+    const observer = new ResizeObserver(() => setDrawerHeight(element.offsetHeight))
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [ready])
+
   useEffect(() => {
     function keydown(event: KeyboardEvent) {
       if (openSlug || document.querySelector('dialog[open]') || isTyping(event.target)) return
@@ -378,6 +390,7 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
   return (
     <main
       className={`sticker-page town-page island-page${loading ? ' is-loading' : ''}${editing ? ' is-editing' : ''}`}
+      style={{ '--island-drawer-height': `${drawerHeight}px` } as CSSProperties}
     >
       <h1 className="sr-only">記事の住人がいる島</h1>
       <SiteHeader />
@@ -491,15 +504,7 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
         }}
         openPost={openPost}
       />
-      {editing && (
-        <IslandToolbar
-          options={options}
-          onOptions={setOptions}
-          panTool={panTool}
-          onPanTool={setPanTool}
-        />
-      )}
-      <footer className="board-footer town-footer island-footer">
+      <div ref={drawer} className={`island-drawer${editing ? ' is-open' : ''}`}>
         <div className="island-editor-toggle">
           <button
             ref={editorToggle}
@@ -507,13 +512,25 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
             disabled={!ready}
             aria-expanded={editing}
             aria-controls="island-toolbar"
-            aria-label={editing ? '作るのを終える' : '島をつくる'}
-            title={editing ? '作るのを終える' : '島をつくる'}
+            aria-label={editing ? '島クリエイトを終える' : '島クリエイト'}
+            title={editing ? '島クリエイトを終える' : '島クリエイト'}
             onClick={() => toggleEditor(!editorOpen)}
           >
             <PixelIcon name="shovel" />
+            <span>島クリエイト</span>
           </button>
         </div>
+        {ready && (
+          <IslandToolbar
+            open={editing}
+            options={options}
+            onOptions={setOptions}
+            panTool={panTool}
+            onPanTool={setPanTool}
+          />
+        )}
+      </div>
+      <footer className="board-footer town-footer island-footer">
         {ready && (
           <fieldset className="board-controls island-camera" aria-label="表示の操作">
             <button type="button" aria-label="縮小" title="縮小（−）" onClick={() => zoomBy(-1)}>

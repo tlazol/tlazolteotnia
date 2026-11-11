@@ -62,11 +62,13 @@ function useDecorThumbnails() {
 }
 
 export function IslandToolbar({
+  open,
   options,
   onOptions,
   panTool,
   onPanTool
 }: {
+  open: boolean
   options: EditOptions
   onOptions: (options: EditOptions) => void
   panTool: boolean
@@ -80,55 +82,55 @@ export function IslandToolbar({
       id="island-toolbar"
       className="island-toolbar"
       aria-label="島の編集ツール"
+      inert={!open}
       data-island-ui
     >
-      <div className="island-toolbar__options">
-        {showGround && (
-          <fieldset className="island-chips">
-            <legend className="sr-only">土地の種類</legend>
-            {landGrounds.map((ground) => (
-              <button
-                key={ground}
-                type="button"
-                aria-pressed={options.ground === ground}
-                onClick={() => onOptions({ ...options, ground })}
-              >
-                <span className={`island-swatch ${groundSwatch[ground]}`} aria-hidden="true" />
-                {groundNames[ground]}
-              </button>
-            ))}
-          </fieldset>
-        )}
-        {options.tool === 'decor' && (
-          <div className="island-palette">
-            {decorGroups.map((group) => (
-              <fieldset key={group.name} className="island-chips island-chips--decor">
-                <legend>{group.name}</legend>
-                {group.kinds.map((decor) => (
-                  <button
-                    key={decor}
-                    type="button"
-                    aria-pressed={options.decor === decor}
-                    aria-label={decorNames[decor]}
-                    title={decorNames[decor]}
-                    onClick={() => onOptions({ ...options, decor })}
-                  >
-                    {thumbnails[decor] ? (
-                      <img className="island-thumb" src={thumbnails[decor]} alt="" />
-                    ) : (
-                      <span className="island-thumb" aria-hidden="true" />
-                    )}
-                    <span>{decorNames[decor]}</span>
-                  </button>
-                ))}
-              </fieldset>
-            ))}
-          </div>
-        )}
-        {options.tool === 'remove' && (
-          <p className="island-toolbar__note">木や岩、たいまつなどに触れると片付けます</p>
-        )}
-      </div>
+      {(showGround || options.tool === 'decor') && (
+        <div className="island-toolbar__options">
+          {showGround && (
+            <fieldset className="island-chips">
+              <legend className="sr-only">土地の種類</legend>
+              {landGrounds.map((ground) => (
+                <button
+                  key={ground}
+                  type="button"
+                  aria-pressed={options.ground === ground}
+                  onClick={() => onOptions({ ...options, ground })}
+                >
+                  <span className={`island-swatch ${groundSwatch[ground]}`} aria-hidden="true" />
+                  {groundNames[ground]}
+                </button>
+              ))}
+            </fieldset>
+          )}
+          {options.tool === 'decor' && (
+            <div className="island-palette">
+              {decorGroups.map((group) => (
+                <fieldset key={group.name} className="island-chips island-chips--decor">
+                  <legend className="sr-only">{group.name}</legend>
+                  {group.kinds.map((decor) => (
+                    <button
+                      key={decor}
+                      type="button"
+                      aria-pressed={options.decor === decor}
+                      aria-label={decorNames[decor]}
+                      title={decorNames[decor]}
+                      onClick={() => onOptions({ ...options, decor })}
+                    >
+                      {thumbnails[decor] ? (
+                        <img className="island-thumb" src={thumbnails[decor]} alt="" />
+                      ) : (
+                        <span className="island-thumb" aria-hidden="true" />
+                      )}
+                      <span>{decorNames[decor]}</span>
+                    </button>
+                  ))}
+                </fieldset>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
       <div className="island-toolbar__main">
         <fieldset className="island-tools">
           <legend className="sr-only">ツール</legend>
