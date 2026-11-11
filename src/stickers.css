@@ -767,6 +767,11 @@ body::after {
   z-index: 51;
   top: 24px;
   right: 28px;
+  padding: 5px 6px;
+  border: 1px solid #ffffff18;
+  border-radius: 9px;
+  background: #101114ed;
+  box-shadow: 0 4px 20px #0003;
 }
 .island-editor-toggle button,
 .island-camera button {
@@ -787,10 +792,13 @@ body::after {
 .island-camera button {
   padding: 0;
   width: 40px;
+  height: 36px;
+  min-height: 36px;
+  color: #dedee5;
 }
 .island-camera span {
   min-width: 44px;
-  color: #6d6178;
+  color: #c8c5d3;
   font: 600 11px "IBM Plex Mono", monospace;
   text-align: center;
 }
@@ -798,7 +806,7 @@ body::after {
   border-color: var(--ink);
   background: var(--pick);
 }
-:is(.island-editor-toggle, .island-camera, .island-toolbar) button:hover:not(:disabled) {
+:is(.island-editor-toggle, .island-toolbar) button:hover:not(:disabled) {
   background: var(--paper-shade);
 }
 .island-editor-toggle button[aria-expanded="true"]:hover,
