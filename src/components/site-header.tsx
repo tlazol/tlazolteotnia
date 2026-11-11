@@ -1,11 +1,24 @@
 import { Link } from '@tanstack/react-router'
-import { useEffect, useRef, useState } from 'react'
+import { type ReactNode, type RefObject, useEffect, useRef, useState } from 'react'
 import { artStationUrl, authorAccount, authorName, siteName, xUrl } from '#/lib/site'
 
-export function SiteHeader() {
+export function SiteHeader({
+  children,
+  revealMenu = false,
+  toggleRef
+}: {
+  children?: ReactNode
+  revealMenu?: boolean
+  toggleRef?: RefObject<HTMLButtonElement | null>
+} = {}) {
   const [open, setOpen] = useState(false)
   const header = useRef<HTMLElement>(null)
-  const toggle = useRef<HTMLButtonElement>(null)
+  const internalToggle = useRef<HTMLButtonElement>(null)
+  const toggle = toggleRef ?? internalToggle
+
+  useEffect(() => {
+    if (revealMenu) setOpen(true)
+  }, [revealMenu])
 
   useEffect(() => {
     if (!open) return
@@ -24,7 +37,7 @@ export function SiteHeader() {
       document.removeEventListener('pointerdown', dismiss)
       document.removeEventListener('keydown', handleEscape)
     }
-  }, [open])
+  }, [open, toggle])
 
   return (
     <header className="site-header" ref={header}>
@@ -45,27 +58,26 @@ export function SiteHeader() {
           {open ? '−' : '+'}
         </button>
       </div>
-      {open && (
-        <div className="site-menu" id="site-menu">
-          <div className="site-menu__profile">
-            <strong>{authorName}</strong>
-            <span>@{authorAccount} · Art, code & little experiments.</span>
-          </div>
-          <nav
-            aria-label="サイトメニュー"
-            onClick={(event) => {
-              if (event.target instanceof Element && event.target.closest('a')) setOpen(false)
-            }}
-          >
-            <Link to="/">Town</Link>
-            <Link to="/app/lights-out">Lights Out ↗</Link>
-            <a href={artStationUrl}>ArtStation ↗</a>
-            <a href={xUrl}>X / Twitter ↗</a>
-            <a href="/rss.xml">RSS</a>
-            <a href="/atom.xml">Atom</a>
-          </nav>
+      <div className="site-menu" id="site-menu" hidden={!open}>
+        <div className="site-menu__profile">
+          <strong>{authorName}</strong>
+          <span>@{authorAccount} · Art, code & little experiments.</span>
         </div>
-      )}
+        <nav
+          aria-label="サイトメニュー"
+          onClick={(event) => {
+            if (event.target instanceof Element && event.target.closest('a')) setOpen(false)
+          }}
+        >
+          <Link to="/">Town</Link>
+          <Link to="/app/lights-out">Lights Out ↗</Link>
+          <a href={artStationUrl}>ArtStation ↗</a>
+          <a href={xUrl}>X / Twitter ↗</a>
+          <a href="/rss.xml">RSS</a>
+          <a href="/atom.xml">Atom</a>
+        </nav>
+        {children}
+      </div>
     </header>
   )
 }

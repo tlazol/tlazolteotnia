@@ -625,123 +625,43 @@ body::after {
   outline: 2px solid #f8f0d8;
   outline-offset: 3px;
 }
-.town-list-toggle {
-  position: fixed;
-  z-index: 51;
-  top: 24px;
-  right: 28px;
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  height: 46px;
-  padding: 0 16px;
-  border: 1px solid #ffffff30;
-  border-radius: 9px;
-  background: #17181df0;
+.town-list {
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid #ffffff20;
+}
+.town-list h2 {
+  margin: 0 0 10px;
   color: #f4f4f7;
   font-size: 12px;
-  cursor: pointer;
-  box-shadow: 0 4px 20px #0003;
-}
-.town-list-toggle > span {
-  display: flex;
-}
-.town-list-toggle > small {
-  font: 11px "IBM Plex Mono", monospace;
-  color: #cfc0df;
-}
-.town-list {
-  position: fixed;
-  z-index: 45;
-  top: 84px;
-  right: 28px;
-  bottom: 90px;
-  display: flex;
-  flex-direction: column;
-  width: min(390px, calc(100vw - 32px));
-  padding: 24px 22px 0;
-  border: 1px solid #ffffff45;
-  border-radius: 16px;
-  background: #1c2025f5;
-  color: #f4f4f7;
-  box-shadow: 0 18px 60px #10252560;
-  backdrop-filter: blur(16px);
-}
-.town-list[hidden] {
-  display: none;
-}
-.town-list__heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-}
-.town-list__eyebrow {
-  color: #b8bbbc;
-  font: 9px "IBM Plex Mono", monospace;
-  letter-spacing: 0.12em;
-}
-.town-list__heading h2 {
-  margin: 6px 0 18px;
-  font-size: 21px;
   font-weight: 500;
 }
-.town-list__heading small {
-  margin-left: 8px;
-  color: #b6dbc9;
-  font: 12px "IBM Plex Mono", monospace;
-}
-.town-list__heading > button {
-  align-self: flex-start;
-  width: 44px;
-  height: 44px;
-  border: 1px solid #ffffff26;
-  border-radius: 8px;
-  background: transparent;
-  color: #eee;
-  font: 26px sans-serif;
-  cursor: pointer;
+.town-list h2 small {
+  margin-left: 6px;
+  color: #aaa8b3;
+  font: 10px "IBM Plex Mono", monospace;
 }
 .town-list__status {
   font-size: 12px;
   line-height: 1.7;
   color: #dfd4ee;
 }
-.town-list__posts {
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  padding-bottom: 18px;
-  scrollbar-color: #77717f transparent;
-}
 .town-list__posts > a {
-  display: block;
-  padding: 18px 2px;
-  border-top: 1px solid #ffffff1f;
-  color: #f0edf3;
-  font-size: 14px;
-  line-height: 1.7;
-  text-decoration: none;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 9px 0;
+  border-top: 1px solid #ffffff0d;
+  font-size: 12px;
+  line-height: 1.65;
   overflow-wrap: anywhere;
 }
-.town-list__posts > a:hover {
-  color: #caf0de;
-}
-.town-list__posts > a > div {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-top: 9px;
-  color: #a9b5b1;
-  font: 10px "IBM Plex Mono", monospace;
-}
 .town-list__posts small {
+  flex-shrink: 0;
   color: #e8c8ff;
+  font: 9px "IBM Plex Mono", monospace;
 }
-.town-list__posts > a > div > span {
-  margin-left: auto;
-  font-size: 16px;
-}
-.town-list :is(a, input, button):focus-visible, .town-list-toggle:focus-visible {
+.town-list a:focus-visible {
   outline: 2px solid #e8c8ff;
   outline-offset: 2px;
 }
@@ -750,25 +670,6 @@ body::after {
   color: #e8c8ff;
 }
 @media (max-width: 600px) {
-  .town-list-toggle {
-    top: 16px;
-    right: 16px;
-    padding: 0 12px;
-    gap: 6px;
-    height: 46px;
-  }
-  .town-list-toggle > span, .town-list-toggle > small {
-    display: none;
-  }
-  .town-list {
-    top: auto;
-    right: 0;
-    bottom: 0;
-    width: 100%;
-    height: min(72dvh, 620px);
-    padding: 20px 20px env(safe-area-inset-bottom);
-    border-radius: 22px 22px 0 0;
-  }
   .town-footer {
     flex-wrap: wrap;
     gap: 8px;
@@ -820,7 +721,7 @@ body::after {
 .island-canvas {
   image-rendering: pixelated;
 }
-.island-page.is-loading :is(.site-header, .town-list-toggle, .board-footer) {
+.island-page.is-loading :is(.site-header, .island-camera) {
   visibility: hidden;
 }
 .island-loading {
@@ -922,14 +823,6 @@ body::after {
   line-height: 1.75;
 }
 
-/* Footer: camera on the right. */
-.island-footer {
-  justify-content: flex-end;
-  padding: 16px 20px;
-  padding-bottom: max(16px, env(safe-area-inset-bottom));
-  background: none;
-  transition: translate 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
-}
 .island-editor-toggle,
 .island-camera {
   display: flex;
@@ -942,6 +835,12 @@ body::after {
   border-radius: 6px;
   background: var(--paper);
   box-shadow: 0 4px 0 #2b223666;
+}
+.island-camera {
+  position: fixed;
+  z-index: 51;
+  top: 24px;
+  right: 28px;
 }
 .island-editor-toggle button,
 .island-camera button {
@@ -1215,16 +1114,10 @@ body::after {
   visibility: visible;
 }
 
-/* The camera sits beside the drawer when there is room, otherwise above it. */
-@media (max-width: 1100px) {
-  .island-page.is-editing .island-footer {
-    translate: 0 calc(-1 * var(--island-drawer-height, 0px));
-  }
-}
 @media (max-width: 600px) {
-  /* The labelled shovel tab needs the bottom edge to itself. */
-  .island-footer {
-    padding: 10px 10px calc(60px + env(safe-area-inset-bottom));
+  .island-camera {
+    top: 16px;
+    right: 16px;
   }
   .island-camera span {
     display: none;
@@ -1279,7 +1172,6 @@ body::after {
     animation: none;
   }
   .island-drawer,
-  .island-footer,
   .island-toolbar {
     transition: none;
   }

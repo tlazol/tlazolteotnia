@@ -7,7 +7,6 @@ import {
   useRouter
 } from '@tanstack/react-router'
 import {
-  type CSSProperties,
   type MouseEvent,
   type KeyboardEvent as ReactKeyboardEvent,
   useCallback,
@@ -66,13 +65,9 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
   const [spaceHeld, setSpaceHeld] = useState(false)
   const [dragging, setDragging] = useState(false)
   const [activeSlug, setActiveSlug] = useState<string | null>(() => openSlug ?? newestSlug ?? null)
-  const [listOpen, setListOpen] = useState(false)
   const [cursor, setCursor] = useState<CursorInfo>(null)
   const [coarse, setCoarse] = useState(false)
-  const drawer = useRef<HTMLDivElement>(null)
-  const [drawerHeight, setDrawerHeight] = useState(0)
-  const listToggle = useRef<HTMLButtonElement>(null)
-  const listHeading = useRef<HTMLHeadingElement>(null)
+  const menuToggle = useRef<HTMLButtonElement>(null)
   const bubble = useRef<HTMLDivElement>(null)
   const tooltip = useRef<HTMLDivElement>(null)
   const buttons = useRef(new Map<string, HTMLButtonElement>())
@@ -142,7 +137,6 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
   const failed = status === 'failed'
   const loading = status === 'loading'
   const editing = editorOpen && ready
-  const listVisible = failed || (ready && listOpen)
   const activePost = sorted.find((post) => post.slug === activeSlug)
 
   useEffect(() => {
@@ -261,28 +255,12 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
   }
 
   useEffect(() => {
-    if (listOpen) listHeading.current?.focus()
-  }, [listOpen])
-
-  // The camera controls ride above the drawer where they would otherwise overlap.
-  useEffect(() => {
-    const element = drawer.current
-    if (!element || !ready) return
-    const observer = new ResizeObserver(() => setDrawerHeight(element.offsetHeight))
-    observer.observe(element)
-    return () => observer.disconnect()
-  }, [ready])
-
-  useEffect(() => {
     function keydown(event: KeyboardEvent) {
       if (openSlug || document.querySelector('dialog[open]') || isTyping(event.target)) return
       const { editorOpen: currentEditorOpen } = latest.current
       if (event.key === 'Escape') {
         input.cancel()
-        if (listOpen) {
-          setListOpen(false)
-          listToggle.current?.focus()
-        } else if (activeSlug) closeBubble()
+        if (activeSlug) closeBubble()
         else if (currentEditorOpen) toggleEditor(false)
         return
       }
@@ -390,10 +368,16 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
   return (
     <main
       className={`sticker-page town-page island-page${loading ? ' is-loading' : ''}${editing ? ' is-editing' : ''}`}
-      style={{ '--island-drawer-height': `${drawerHeight}px` } as CSSProperties}
     >
       <h1 className="sr-only">記事の住人がいる島</h1>
-      <SiteHeader />
+      <SiteHeader revealMenu={failed} toggleRef={menuToggle}>
+        <TownArticleList
+          posts={sorted}
+          newestSlug={newestSlug}
+          failed={failed}
+          openPost={openPost}
+        />
+      </SiteHeader>
       <div
         ref={surface}
         className={`sticker-surface island-surface${ready ? ' is-ready' : ''}${dragging ? ' is-dragging' : ''}${panTool || spaceHeld ? ' is-pan-tool' : ''}`}
@@ -488,23 +472,7 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
           </div>
         )}
       </div>
-      <TownArticleList
-        posts={sorted}
-        newestSlug={newestSlug}
-        loading={loading}
-        ready={ready}
-        failed={failed}
-        listVisible={listVisible}
-        listToggle={listToggle}
-        listHeading={listHeading}
-        onToggle={() => setListOpen(!listOpen)}
-        onClose={() => {
-          setListOpen(false)
-          listToggle.current?.focus()
-        }}
-        openPost={openPost}
-      />
-      <div ref={drawer} className={`island-drawer${editing ? ' is-open' : ''}`}>
+      <div className={`island-drawer${editing ? ' is-open' : ''}`}>
         <div className="island-editor-toggle">
           <button
             ref={editorToggle}
@@ -530,34 +498,24 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
           />
         )}
       </div>
-      <footer className="board-footer town-footer island-footer">
-        {ready && (
-          <fieldset className="board-controls island-camera" aria-label="表示の操作">
-            <button type="button" aria-label="縮小" title="縮小（−）" onClick={() => zoomBy(-1)}>
-              <PixelIcon name="minus" />
-            </button>
-            <span aria-live="polite">{Math.round(zoom * 100)}%</span>
-            <button type="button" aria-label="拡大" title="拡大（+）" onClick={() => zoomBy(1)}>
-              <PixelIcon name="plus" />
-            </button>
-            <button
-              type="button"
-              aria-label="最初の位置に戻る（最新記事の住人）"
-              title="最初の位置に戻る（0）"
-              onClick={goHome}
-            >
-              <PixelIcon name="home" />
-            </button>
-          </fieldset>
-        )}
-      </footer>
+      {ready && (
+        <fieldset className="board-controls island-camera" aria-label="表示の操作">
+          <button type="button" aria-label="縮小" title="縮小（−）" onClick={() => zoomBy(-1)}>
+            <PixelIcon name="minus" />
+          </button>
+          <span aria-live="polite">{Math.round(zoom * 100)}%</span>
+          <button type="button" aria-label="拡大" title="拡大（+）" onClick={() => zoomBy(1)}>
+            <PixelIcon name="plus" />
+          </button>
+        </fieldset>
+      )}
       {openSlug && (
         <PostModal
           key={openSlug}
           slug={openSlug}
           title={openedPost?.title ?? '記事'}
           onClose={closePost}
-          fallbackFocus={() => bubble.current?.querySelector('a') ?? listToggle.current}
+          fallbackFocus={() => bubble.current?.querySelector('a') ?? menuToggle.current}
         >
           {loadedSlug === openSlug ? (
             <Outlet />
