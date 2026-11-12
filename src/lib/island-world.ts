@@ -117,7 +117,7 @@ export const decorInfo = {
   mangrove: { name: 'マングローブ', on: 'land', blocks: true },
   monstera: { name: 'モンステラ', on: 'land', blocks: true },
   cactus: { name: 'サボテン', on: 'land', blocks: true },
-  crystal: { name: '水晶', on: 'land', blocks: true },
+  relic: { name: '遺物', on: 'land', blocks: true },
   mushroom: { name: 'キノコ', on: 'land', blocks: false },
   shell: { name: '貝殻', on: 'land', blocks: false },
   campfire: { name: '焚き火', on: 'land', blocks: true },
@@ -147,7 +147,7 @@ export const decorGroups: Array<{ name: string; kinds: DecorKind[] }> = [
       'monstera',
       'cactus',
       'rock',
-      'crystal',
+      'relic',
       'flowers',
       'mushroom',
       'driftwood',
@@ -432,7 +432,7 @@ export function createDefaultIsland(): IslandWorld {
     [59, 15, 'lantern'],
     // The islets.
     [11, 48, 'palm'],
-    [70, 10, 'crystal'],
+    [70, 10, 'relic'],
     [72, 51, 'campfire']
   ]
   // Nothing grows over a set piece: plants keep off it and the rows in front.
@@ -540,7 +540,7 @@ export function createDefaultIsland(): IslandWorld {
         } else if (ground === BLACKSAND)
           kind = pick(roll, ['rock', 0.07], ['deadtree', 0.04], ['driftwood', 0.03])
         else if (ground === ROCK)
-          kind = pick(roll, ['crystal', 0.1], ['rock', 0.08], ['deadtree', 0.04])
+          kind = pick(roll, ['relic', 0.1], ['rock', 0.08], ['deadtree', 0.04])
         else if (ground === GRAVEL) kind = pick(roll, ['rock', 0.07])
         else if (ground === MUD) {
           dense = true

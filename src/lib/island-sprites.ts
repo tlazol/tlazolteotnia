@@ -373,7 +373,11 @@ function paintPalm(look: PalmLook): SpriteFrame {
     )
   }
 
-  return { buffer, shadow: look.crownY > 50 ? 'medium' : 'large', sway: look.crownY > 50 ? 2 : 3 }
+  return {
+    buffer,
+    shadow: look.crownY > 50 ? 'medium' : 'large',
+    sway: look.crownY > 50 ? 2 : 3
+  }
 }
 
 // ---- Undergrowth ------------------------------------------------------------
@@ -914,7 +918,12 @@ function paintTorch(): SpriteFrame {
 
     return buffer
   })
-  return { buffer: frames[0], frames: frames.slice(1), shadow: 'small', glow: { height: 26 } }
+  return {
+    buffer: frames[0],
+    frames: frames.slice(1),
+    shadow: 'small',
+    glow: { height: 26 }
+  }
 }
 
 // ---- More greenery ----------------------------------------------------------
@@ -1074,7 +1083,11 @@ function paintBanana(look: BananaLook, n: number): SpriteFrame {
     }
     rect(buffer, 49, look.crownY + 15, 2, 3, hex('#7a3b5d'))
   }
-  return { buffer: padded(buffer, 2), shadow: small ? 'medium' : 'large', sway: small ? 1 : 2 }
+  return {
+    buffer: padded(buffer, 2),
+    shadow: small ? 'medium' : 'large',
+    sway: small ? 1 : 2
+  }
 }
 
 // A dead tree, its bare limbs forking until they are twigs.
@@ -1254,50 +1267,271 @@ function paintCactus(variant: number): SpriteFrame {
   return { buffer, shadow: 'medium' }
 }
 
-// ---- Small finds ------------------------------------------------------------
+// ---- Relics -----------------------------------------------------------------
 
-// One six-sided crystal: lit faces on the left, a pale cap toward the light.
-function shard(
+// Stone worked by whoever lived here before: sandstone, basalt, limestone and
+// granite.
+const relicStone = [
+  [198, 180, 142],
+  [70, 76, 86],
+  [196, 196, 180],
+  [146, 150, 144]
+]
+
+// One dressed face: flat and even beside a fractured rock, streaked by rain.
+function dressed(
+  buffer: PixelBuffer,
+  points: Array<[number, number]>,
+  tone: number[],
+  light: number,
+  seed: number
+) {
+  polygon(buffer, points, (x, y) => {
+    const streak = (valueNoise(x / 3, y / 10, seed + 1) - 0.5) * 22
+    const shade = light + (hash2(x, y, seed) - 0.5) * 10 + streak
+    return [tone[0] + shade, tone[1] + shade, tone[2] + shade, 255]
+  })
+}
+
+// A squared block seen from the front left: lit top, front face, and a shaded
+// side receding to the right. `inset` narrows the top of a tapering shaft.
+function block(
   buffer: PixelBuffer,
   x: number,
   base: number,
   w: number,
   h: number,
-  tilt: number,
-  tones: Rgba[]
+  d: number,
+  tone: number[],
+  seed: number,
+  inset = 0
 ) {
-  const neck = h * 0.76
-  const mx = x + tilt * 0.76
-  const left: [number, number] = [mx - w, base - neck]
-  const right: [number, number] = [mx + w, base - neck]
-  const middle: [number, number] = [mx, base - neck + 2]
-  const tip: [number, number] = [x + tilt, base - h]
-  polygon(buffer, [[x - w, base], [x, base], middle, left], () => tones[1])
-  polygon(buffer, [[x, base], [x + w, base], right, middle], () => tones[3])
-  polygon(buffer, [left, middle, tip], () => tones[0])
-  polygon(buffer, [middle, right, tip], () => tones[2])
-  setPixel(buffer, Math.round(mx - w / 2), Math.round(base - neck * 0.55), white)
+  const top = base - h
+  const left = x + inset
+  const right = x + w - inset
+  const depth = (d * (w - inset * 2)) / w
+  dressed(
+    buffer,
+    [
+      [x, base],
+      [x + w, base],
+      [right, top],
+      [left, top]
+    ],
+    tone,
+    6,
+    seed
+  )
+  dressed(
+    buffer,
+    [
+      [x + w, base],
+      [x + w + d, base - d / 2],
+      [right + depth, top - depth / 2],
+      [right, top]
+    ],
+    tone,
+    -36,
+    seed
+  )
+  dressed(
+    buffer,
+    [
+      [left, top],
+      [right, top],
+      [right + depth, top - depth / 2],
+      [left + depth, top - depth / 2]
+    ],
+    tone,
+    30,
+    seed
+  )
 }
 
-const crystalTones = [
-  shadesOf('#f0e3ff', '#c9a8f5', '#9a6fe0', '#6b46b8'),
-  shadesOf('#e6fffb', '#9be8e0', '#4fc3c8', '#2c8f9e'),
-  shadesOf('#fff0f3', '#ffc2d1', '#f089a8', '#c25580'),
-  shadesOf('#fffbe0', '#ffe38a', '#f2b84a', '#c98727')
-]
+// A run of carved signs, each a different 3×3 mark, down a face or `across` it.
+function glyphs(
+  buffer: PixelBuffer,
+  x: number,
+  y: number,
+  count: number,
+  seed: number,
+  color: Rgba,
+  across = false
+) {
+  for (let i = 0; i < count; i++) {
+    for (let k = 0; k < 9; k++) {
+      if (hash2(k, i, seed) > 0.55) continue
+      setPixel(
+        buffer,
+        x + (k % 3) + (across ? i * 4 : 0),
+        y + Math.floor(k / 3) + (across ? 0 : i * 4),
+        color
+      )
+    }
+  }
+}
 
-// A cluster of crystals growing out of a bed of rock.
-function paintCrystal(variant: number): SpriteFrame {
-  const buffer = createBuffer(34, 38)
-  const tones = crystalTones[variant]
-  boulder(buffer, 17, 33, 13, 4.5, 880 + variant)
-  const lean = variant % 2 ? -1 : 1
-  shard(buffer, 17, 34, 4.5, 26 - variant * 2, lean * 2, tones)
-  shard(buffer, 9, 35, 3.5, 15 + variant, -4, tones)
-  shard(buffer, 25, 35, 3.5, 17 - variant, 4, tones)
-  shard(buffer, 14 - lean * 2, 36, 2.5, 9, -lean * 2, tones)
+// A mossy stone lying against the foot of a relic.
+function footStone(
+  buffer: PixelBuffer,
+  x: number,
+  y: number,
+  rx: number,
+  ry: number,
+  seed: number
+) {
+  const stone = createBuffer(buffer.width, buffer.height)
+  boulder(stone, x, y, rx, ry, seed)
+  moss(stone, Math.round(y - 1), seed + 4)
+  blit(buffer, stone, 0, 0)
+}
+
+// An obelisk on a stepped plinth, signs cut down its face.
+function paintObelisk(): SpriteFrame {
+  const buffer = createBuffer(34, 62)
+  const tone = relicStone[0]
+  block(buffer, 5, 60, 20, 4, 6, tone, 880)
+  block(buffer, 9, 55, 13, 3, 4, tone, 881)
+  block(buffer, 11, 51, 9, 37, 4, tone, 882, 1.5)
+  // The capstone is paler, as if it was once sheathed in metal.
+  const cap = [tone[0] + 22, tone[1] + 22, tone[2] + 10]
+  dressed(
+    buffer,
+    [
+      [12.5, 14],
+      [18.5, 14],
+      [16.5, 5]
+    ],
+    cap,
+    14,
+    883
+  )
+  dressed(
+    buffer,
+    [
+      [18.5, 14],
+      [21.2, 12.7],
+      [16.5, 5]
+    ],
+    cap,
+    -30,
+    883
+  )
+  glyphs(buffer, 14, 19, 7, 884, hex('#8f7c58'))
+  line(buffer, 12, 47, 19, 47, hex('#8f7c58'))
+  moss(buffer, 50, 885)
+  footStone(buffer, 6, 59, 4.5, 3.5, 886)
   return { buffer, shadow: 'medium' }
 }
+
+// A black slab, sunk a little to one side, its inlaid signs still bright.
+function paintMonolith(): SpriteFrame {
+  const buffer = createBuffer(34, 52)
+  const inlay = hex('#7fe0d0')
+  block(buffer, 8, 50, 15, 40, 4, relicStone[1], 890)
+  // A ring over a column of signs.
+  for (const [x, y] of [
+    [14, 15],
+    [15, 15],
+    [16, 15],
+    [13, 16],
+    [17, 16],
+    [13, 17],
+    [17, 17],
+    [13, 18],
+    [17, 18],
+    [14, 19],
+    [15, 19],
+    [16, 19]
+  ])
+    setPixel(buffer, x, y, inlay)
+  glyphs(buffer, 14, 23, 5, 891, inlay)
+  moss(buffer, 44, 892)
+  footStone(buffer, 8, 49, 5, 3.5, 893)
+  footStone(buffer, 25, 49, 4, 3, 894)
+  return { buffer, shadow: 'medium' }
+}
+
+// A pillar snapped off above its foot, the rest lying where it fell.
+function paintBrokenPillar(): SpriteFrame {
+  const buffer = createBuffer(44, 40)
+  const tone = relicStone[2]
+  block(buffer, 5, 37, 15, 3, 5, tone, 900)
+  // The stump: a jagged break across the top, pale where the stone is fresh.
+  dressed(
+    buffer,
+    [
+      [8, 34],
+      [18, 34],
+      [18, 20],
+      [15, 17],
+      [12, 19],
+      [10, 13],
+      [8, 15]
+    ],
+    tone,
+    6,
+    901
+  )
+  dressed(
+    buffer,
+    [
+      [18, 34],
+      [22, 32],
+      [22, 19],
+      [18, 20]
+    ],
+    tone,
+    -36,
+    901
+  )
+  dressed(
+    buffer,
+    [
+      [10, 13],
+      [14, 11],
+      [22, 19],
+      [18, 20],
+      [15, 17],
+      [12, 19]
+    ],
+    tone,
+    34,
+    902
+  )
+  glyphs(buffer, 12, 22, 3, 903, hex('#8d8f7e'))
+  // Two fallen drums, half sunk.
+  block(buffer, 25, 38, 11, 6, 5, tone, 904)
+  block(buffer, 30, 31, 7, 5, 4, tone, 905)
+  glyphs(buffer, 27, 34, 2, 906, hex('#8d8f7e'), true)
+  moss(buffer, 29, 907)
+  footStone(buffer, 22, 37, 4, 3, 908)
+  footStone(buffer, 6, 37, 3.5, 2.5, 909)
+  return { buffer, shadow: 'medium' }
+}
+
+// Two uprights carrying a lintel: a gate with nothing left to open onto.
+function paintTrilithon(): SpriteFrame {
+  const buffer = createBuffer(44, 48)
+  const tone = relicStone[3]
+  block(buffer, 6, 46, 8, 28, 4, tone, 910, 0.5)
+  block(buffer, 27, 46, 8, 28, 4, tone, 911, 0.5)
+  block(buffer, 3, 18, 34, 6, 5, tone, 912)
+  glyphs(buffer, 7, 14, 7, 913, hex('#6c706a'), true)
+  glyphs(buffer, 9, 22, 4, 914, hex('#6c706a'))
+  line(buffer, 31, 24, 29, 31, hex('#505b50'))
+  line(buffer, 29, 31, 31, 36, hex('#505b50'))
+  moss(buffer, 38, 915)
+  // Moss has taken the top of the lintel too.
+  for (let x = 6; x < 40; x++)
+    if (valueNoise(x / 3, 0, 916) > 0.55 && alphaAt(buffer, x, 11))
+      setPixel(buffer, x, 11, hex(hash2(x, 0, 917) < 0.4 ? '#8aa66c' : '#5f8252'))
+  footStone(buffer, 19, 45, 4.5, 3, 918)
+  footStone(buffer, 38, 45, 3.5, 2.5, 919)
+  return { buffer, shadow: 'large' }
+}
+
+// ---- Small finds ------------------------------------------------------------
 
 // A few mushrooms of different ages; `spots` dots the caps with white.
 function paintMushrooms(light: string, dark: string, spots: boolean, seed: number): SpriteFrame {
@@ -1459,7 +1693,12 @@ function paintLantern(mossy: boolean): SpriteFrame {
     if (mossy) rect(buffer, 12, 15 + (f % 2), 2, 3, lit[0])
     return buffer
   })
-  return { buffer: frames[0], frames: frames.slice(1), shadow: 'medium', glow: { height: 22 } }
+  return {
+    buffer: frames[0],
+    frames: frames.slice(1),
+    shadow: 'medium',
+    glow: { height: 22 }
+  }
 }
 
 // Fireflies drifting over a tuft of grass, each blinking in its own time.
@@ -1725,7 +1964,7 @@ export const decorVariants = {
     )
   ],
   cactus: [0, 1, 2, 3].map(paintCactus),
-  crystal: [0, 1, 2, 3].map(paintCrystal),
+  relic: [paintObelisk(), paintMonolith(), paintBrokenPillar(), paintTrilithon()],
   mushroom: [
     paintMushrooms('#f0604d', '#c23a35', true, 1500),
     paintMushrooms('#c99a6a', '#9a6e45', false, 1501),
