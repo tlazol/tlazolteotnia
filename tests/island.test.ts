@@ -25,33 +25,48 @@ import {
 } from '../src/lib/island-residents'
 import { decorVariants } from '../src/lib/island-sprites'
 import {
+  BLACKSAND,
+  BRICK,
+  CLAY,
+  CLOVER,
   COBBLE,
   createDefaultIsland,
   createIsland,
   DECK,
+  DRYGRASS,
   decorAt,
   decorCode,
+  decorFits,
   decorGroups,
+  decorKindOf,
   decorKinds,
   GRASS,
+  GRAVEL,
   GROUND_COUNT,
   type Ground,
   groundAt,
   HOTSPRING,
+  ISLAND_CENTER,
   ISLAND_SAVE_VERSION,
   ISLAND_STORAGE_KEY,
   isWalkable,
+  isWetGround,
+  LAVA,
   landGrounds,
   layoutResidentHomes,
   loadIsland,
+  MOSS,
   PATH,
   parseIsland,
+  ROCK,
   SAND,
   SHALLOWS,
   SOIL,
+  STEPPING,
   SWAMP,
   serializeIsland,
-  WATER
+  WATER,
+  WHITESAND
 } from '../src/lib/island-world'
 
 const options = (overrides: Partial<EditOptions> = {}): EditOptions => ({
@@ -74,11 +89,15 @@ describe('island world', () => {
     expect(a.decor.some((code) => code === decorCode('palm'))).toBe(true)
   })
 
-  it('starts with torches and a pier, and nothing else man-made', () => {
+  it('starts with every ground and every decoration, each on ground that suits it', () => {
     const world = createDefaultIsland()
-    for (const kind of ['tree', 'palm', 'bush', 'rock', 'flowers', 'driftwood', 'torch'] as const)
-      expect(world.decor.includes(decorCode(kind))).toBe(true)
-    expect(world.ground.includes(DECK)).toBe(true)
+    for (const ground of landGrounds) expect(world.ground.includes(ground)).toBe(true)
+    for (const kind of decorKinds) expect(world.decor.includes(decorCode(kind))).toBe(true)
+    world.decor.forEach((code, index) => {
+      const kind = decorKindOf(code)
+      if (kind) expect(decorFits(kind, world.ground[index] as Ground)).toBe(true)
+    })
+    expect(isWalkable(world, ISLAND_CENTER.x, ISLAND_CENTER.y)).toBe(true)
     world.decor.forEach((code, index) => {
       if (code === decorCode('searock')) expect(world.ground[index]).toBe(WATER)
     })
@@ -175,7 +194,10 @@ describe('island world', () => {
     const homes = layoutResidentHomes(50)
     expect(homes[0]).toEqual({ x: 40, y: 30 })
     expect(new Set(homes.map(({ x, y }) => `${x},${y}`)).size).toBe(50)
-    for (const home of homes) expect(isWalkable(world, home.x, home.y)).toBe(true)
+    for (const home of homes) {
+      expect(isWalkable(world, home.x, home.y)).toBe(true)
+      expect(isWetGround(groundAt(world, home.x, home.y))).toBe(false)
+    }
   })
 })
 
@@ -542,9 +564,9 @@ describe('island residents', () => {
     const world = createDefaultIsland()
     const slugs = Array.from({ length: 50 }, (_, i) => `post-${i}`)
     const residents = createResidents(slugs, layoutResidentHomes(slugs.length))
-    const tiles = [0, 0, 0, 0, 0]
+    const tiles = new Array<number>(GROUND_COUNT).fill(0)
     for (const ground of world.ground) tiles[ground]++
-    const seen = [0, 0, 0, 0, 0]
+    const seen = new Array<number>(GROUND_COUNT).fill(0)
     for (let i = 0; i < 3000; i++) {
       stepResidents(world, residents, 0.2, () => false)
       if (i < 500 || i % 5) continue
@@ -552,13 +574,22 @@ describe('island residents', () => {
         seen[groundAt(world, Math.floor(resident.x / 16), Math.floor(resident.y / 16))]++
     }
     const total = seen.reduce((a, b) => a + b, 0)
-    const crowding = seen.map((count, ground) => count / tiles[ground])
-    // Tile for tile: trail, then boardwalk, grass, sand and, last, the sea.
-    const order = [PATH, DECK, GRASS, SAND, WATER]
-    for (let i = 1; i < order.length; i++)
-      expect(crowding[order[i - 1]]).toBeGreaterThan(crowding[order[i]] * 1.1)
+    const sum = (counts: number[], grounds: Ground[]) =>
+      grounds.reduce<number>((all, ground) => all + counts[ground], 0)
+    // Tile for tile: trails and paving, then boards, greens, bare ground and, last, the sea.
+    const trails: Ground[] = [PATH, COBBLE, BRICK]
+    const footings: Ground[][] = [
+      trails,
+      [DECK, STEPPING],
+      [GRASS, MOSS, DRYGRASS, CLOVER],
+      [SAND, WHITESAND, BLACKSAND, SOIL, CLAY, GRAVEL, ROCK, LAVA],
+      [WATER]
+    ]
+    const crowding = footings.map((grounds) => sum(seen, grounds) / sum(tiles, grounds))
+    for (let i = 1; i < crowding.length; i++)
+      expect(crowding[i - 1]).toBeGreaterThan(crowding[i] * 1.1)
     // Yet most residents are off the trail, and a handful are swimming.
-    expect(seen[PATH] / total).toBeLessThan(0.4)
+    expect(sum(seen, trails) / total).toBeLessThan(0.4)
     expect(seen[WATER] / total).toBeGreaterThan(0.02)
     expect(seen[WATER] / total).toBeLessThan(0.15)
   }, 30_000)
