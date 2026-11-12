@@ -1,1 +1,2 @@
 REACTION_COOKIE_SECRET=replace-with-a-long-random-local-secret
+ISLAND_COOKIE_SECRET=replace-with-another-long-random-local-secret

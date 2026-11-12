@@ -10,7 +10,13 @@ import {
   updateShoreField
 } from '../src/lib/island-art'
 import { clampView, stepZoom, tileAt, WORLD_WIDTH, zoomViewAt } from '../src/lib/island-camera'
-import { createIslandStroke, type EditOptions, planBrush, tilesAlong } from '../src/lib/island-edit'
+import {
+  type EditOptions,
+  overlayPreview,
+  planBrush,
+  planStroke,
+  tilesAlong
+} from '../src/lib/island-edit'
 import {
   canResidentEnter,
   createResidents,
@@ -34,12 +40,15 @@ import {
   createIsland,
   DECK,
   DRYGRASS,
+  decodeIsland,
   decorAt,
+  decorBlocksWalking,
   decorCode,
   decorFits,
   decorGroups,
   decorKindOf,
   decorKinds,
+  encodeIsland,
   GRASS,
   GRAVEL,
   GROUND_COUNT,
@@ -48,16 +57,13 @@ import {
   HOTSPRING,
   ISLAND_CENTER,
   ISLAND_SAVE_VERSION,
-  ISLAND_STORAGE_KEY,
   isWalkable,
   isWetGround,
   LAVA,
   landGrounds,
   layoutResidentHomes,
-  loadIsland,
   MOSS,
   PATH,
-  parseIsland,
   ROCK,
   SAND,
   SHALLOWS,
@@ -76,7 +82,6 @@ const options = (overrides: Partial<EditOptions> = {}): EditOptions => ({
   brush: 1,
   ...overrides
 })
-const free = () => false
 
 describe('island world', () => {
   it('builds the same default island every time, with land, paths and decorations', () => {
@@ -103,53 +108,46 @@ describe('island world', () => {
     })
   })
 
-  it('keeps sea rocks on the sea and drops decorations left on the wrong ground', () => {
+  it('reserves retired seaweed codes without changing existing sea decorations', () => {
+    expect(decorKinds).not.toContain('seaweed')
+    expect(decorKindOf(22)).toBeNull()
+    expect(decorCode('flotsam')).toBe(23)
+    expect(decorCode('buoy')).toBe(24)
+    expect(createDefaultIsland().decor.includes(22)).toBe(false)
     const world = createIsland()
-    world.ground[10 * world.columns + 10] = SAND
-    world.decor[10 * world.columns + 10] = decorCode('searock')
-    world.decor[10 * world.columns + 11] = decorCode('searock')
-    world.decor[10 * world.columns + 12] = decorCode('palm')
-    const restored = parseIsland(serializeIsland(world))
-    if (!restored) throw new Error('save rejected')
-    expect(decorAt(restored, 10, 10)).toBe(0)
-    expect(decorAt(restored, 11, 10)).toBe(decorCode('searock'))
-    expect(decorAt(restored, 12, 10)).toBe(0)
+    world.decor[10 * world.columns + 10] = 22
+    world.decor[10 * world.columns + 11] = 23
+    world.decor[10 * world.columns + 12] = 24
+    const restored = decodeIsland(encodeIsland(world))
+    expect(restored).not.toBeNull()
+    expect(restored && serializeIsland(restored)).toBe(serializeIsland(world))
+    expect(decorBlocksWalking(22)).toBe(false)
   })
 
-  it('reads version 2 saves, dropping the man-made decorations they had', () => {
+  it('keeps sea rocks on the sea and refuses saves with decorations on the wrong ground', () => {
     const world = createIsland()
-    const row = 10 * world.columns
-    world.ground.fill(SAND, row + 10, row + 14)
-    const save = JSON.parse(serializeIsland(world))
-    // Old codes: 9 driftwood, 13 torch, 14 cottage, 17 sea rock, 18 boat.
-    const decor = new Array(world.decor.length).fill('0')
-    decor[row + 10] = '9'
-    decor[row + 11] = 'd'
-    decor[row + 12] = 'e'
-    decor[row + 20] = 'h'
-    decor[row + 21] = 'i'
-    const restored = parseIsland(JSON.stringify({ ...save, version: 2, decor: decor.join('.') }))
-    if (!restored) throw new Error('save rejected')
-    expect(decorAt(restored, 10, 10)).toBe(decorCode('driftwood'))
-    expect(decorAt(restored, 11, 10)).toBe(decorCode('torch'))
-    expect(decorAt(restored, 12, 10)).toBe(0)
-    expect(decorAt(restored, 20, 10)).toBe(decorCode('searock'))
-    expect(decorAt(restored, 21, 10)).toBe(0)
+    world.decor[10 * world.columns + 11] = decorCode('searock')
+    expect(decodeIsland(encodeIsland(world))?.decor[10 * world.columns + 11]).toBe(
+      decorCode('searock')
+    )
+    world.ground[10 * world.columns + 10] = SAND
+    world.decor[10 * world.columns + 10] = decorCode('searock')
+    expect(decodeIsland(encodeIsland(world))).toBeNull()
   })
 
   it('round-trips saves and rejects broken, foreign or outdated data', () => {
     const world = createDefaultIsland()
     world.ground[10 * world.columns + 10] = GRASS
-    const restored = parseIsland(serializeIsland(world))
+    const restored = decodeIsland(encodeIsland(world))
     expect(restored && serializeIsland(restored)).toBe(serializeIsland(world))
 
-    const save = JSON.parse(serializeIsland(world))
-    expect(parseIsland(JSON.stringify({ ...save, version: ISLAND_SAVE_VERSION + 1 }))).toBeNull()
-    expect(parseIsland(JSON.stringify({ ...save, columns: 10 }))).toBeNull()
-    expect(parseIsland(JSON.stringify({ ...save, ground: '0*5' }))).toBeNull()
-    expect(parseIsland(JSON.stringify({ ...save, decor: 'z*4800' }))).toBeNull()
-    expect(parseIsland('{not json')).toBeNull()
-    expect(parseIsland(null)).toBeNull()
+    const save = encodeIsland(world)
+    expect(decodeIsland({ ...save, version: ISLAND_SAVE_VERSION + 1 })).toBeNull()
+    expect(decodeIsland({ ...save, columns: 10 })).toBeNull()
+    expect(decodeIsland({ ...save, ground: '0*5' })).toBeNull()
+    expect(decodeIsland({ ...save, decor: 'z*4800' })).toBeNull()
+    expect(decodeIsland('{not json')).toBeNull()
+    expect(decodeIsland(null)).toBeNull()
   })
 
   it('offers every ground once, in groups, and saves the newest grounds and decorations', () => {
@@ -161,32 +159,19 @@ describe('island world', () => {
     world.ground[10 * world.columns + 10] = HOTSPRING
     world.decor[10 * world.columns + 10] = decorCode('fireflies')
     world.decor[10 * world.columns + 11] = decorCode('buoy')
-    const restored = parseIsland(serializeIsland(world))
+    const restored = decodeIsland(encodeIsland(world))
     if (!restored) throw new Error('save rejected')
     expect(groundAt(restored, 10, 10)).toBe(HOTSPRING)
     expect(decorAt(restored, 10, 10)).toBe(decorCode('fireflies'))
     expect(decorAt(restored, 11, 10)).toBe(decorCode('buoy'))
   })
 
-  it('keeps the outer ring of sea when a save paints land there', () => {
+  it('refuses a save that paints land on the outer ring of sea', () => {
     const world = createIsland()
-    world.ground.fill(GRASS)
-    const restored = parseIsland(serializeIsland(world))
-    expect(restored?.ground[0]).toBe(WATER)
-    expect(restored?.ground[5 * world.columns + 5]).toBe(GRASS)
-  })
-
-  it('falls back to the default island when storage is unreadable or invalid', () => {
-    const throwing = {
-      getItem: () => {
-        throw new Error('blocked')
-      }
-    }
-    expect(loadIsland(throwing).restored).toBe(false)
-    expect(loadIsland({ getItem: () => '{"version":0}' }).restored).toBe(false)
-    const saved = serializeIsland(createIsland())
-    const loaded = loadIsland({ getItem: (key) => (key === ISLAND_STORAGE_KEY ? saved : null) })
-    expect(loaded.restored).toBe(true)
+    world.ground[5 * world.columns + 5] = GRASS
+    expect(decodeIsland(encodeIsland(world))?.ground[5 * world.columns + 5]).toBe(GRASS)
+    world.ground[0] = GRASS
+    expect(decodeIsland(encodeIsland(world))).toBeNull()
   })
 
   it('gives every resident a separate walkable home, the newest at the plaza', () => {
@@ -202,69 +187,64 @@ describe('island world', () => {
 })
 
 describe('island editing', () => {
-  it('adds land and removes it only where nobody stands', () => {
+  it('adds land and refuses to sink the shelter at the centre', () => {
     const world = createIsland()
-    expect(planBrush(world, 10, 10, options(), free).edits).toHaveLength(1)
+    expect(planBrush(world, 10, 10, options()).edits).toHaveLength(1)
     world.ground[10 * world.columns + 10] = GRASS
-    const again = planBrush(world, 10, 10, options(), free)
+    const again = planBrush(world, 10, 10, options())
     expect(again.edits).toHaveLength(0)
     expect(again.soft).toBe(true)
-    const blocked = planBrush(
-      world,
-      10,
-      10,
-      options({ tool: 'erase' }),
-      (x, y) => x === 10 && y === 10
-    )
+    world.ground[ISLAND_CENTER.y * world.columns + ISLAND_CENTER.x] = GRASS
+    const blocked = planBrush(world, ISLAND_CENTER.x, ISLAND_CENTER.y, options({ tool: 'erase' }))
     expect(blocked.edits).toHaveLength(0)
-    expect(blocked.reason).toBe('住人の足もとは削れません')
+    expect(blocked.reason).toBe('島の中心は削れません')
     expect(blocked.soft).toBe(false)
-    expect(planBrush(world, 0, 0, options(), free).reason).toBe('編集できる範囲の外です')
+    expect(planBrush(world, 0, 0, options()).reason).toBe('編集できる範囲の外です')
   })
 
   it('explains why decorations cannot be placed', () => {
     const world = createIsland()
-    expect(planBrush(world, 10, 10, options({ tool: 'decor' }), free).reason).toBe(
-      '海の上には置けません'
-    )
+    expect(planBrush(world, 10, 10, options({ tool: 'decor' })).reason).toBe('海の上には置けません')
     world.ground[10 * world.columns + 10] = SAND
     world.decor[10 * world.columns + 10] = decorCode('rock')
-    expect(planBrush(world, 10, 10, options({ tool: 'decor' }), free).reason).toMatch(
-      /岩があります/
-    )
-    expect(planBrush(world, 10, 10, options({ tool: 'remove' }), free).edits).toHaveLength(1)
-    world.decor[10 * world.columns + 10] = 0
-    expect(planBrush(world, 10, 10, options({ tool: 'decor' }), () => true).reason).toBe(
-      '住人が立っている場所には置けません'
-    )
+    expect(planBrush(world, 10, 10, options({ tool: 'decor' })).reason).toMatch(/岩があります/)
+    expect(planBrush(world, 10, 10, options({ tool: 'remove' })).edits).toHaveLength(1)
+    const center = ISLAND_CENTER.y * world.columns + ISLAND_CENTER.x
+    world.ground[center] = GRASS
     expect(
-      planBrush(world, 10, 10, options({ tool: 'decor', decor: 'flowers' }), () => true).edits
+      planBrush(world, ISLAND_CENTER.x, ISLAND_CENTER.y, options({ tool: 'decor' })).reason
+    ).toBe('島の中心には置けません')
+    expect(
+      planBrush(
+        world,
+        ISLAND_CENTER.x,
+        ISLAND_CENTER.y,
+        options({ tool: 'decor', decor: 'flowers' })
+      ).edits
     ).toHaveLength(1)
   })
 
   it('floats sea decorations only on water and builds piers over it', () => {
     const world = createIsland()
-    expect(
-      planBrush(world, 10, 10, options({ tool: 'decor', decor: 'searock' }), free).edits
-    ).toEqual([{ index: 10 * world.columns + 10, ground: WATER, decor: decorCode('searock') }])
-    expect(planBrush(world, 10, 10, options({ ground: DECK }), free).edits[0].ground).toBe(DECK)
+    expect(planBrush(world, 10, 10, options({ tool: 'decor', decor: 'searock' })).edits).toEqual([
+      { index: 10 * world.columns + 10, ground: WATER, decor: decorCode('searock') }
+    ])
+    expect(planBrush(world, 10, 10, options({ ground: DECK })).edits[0].ground).toBe(DECK)
     world.ground[10 * world.columns + 10] = DECK
-    expect(
-      planBrush(world, 10, 10, options({ tool: 'decor', decor: 'searock' }), free).reason
-    ).toBe('岩礁は海に浮かべてください')
-    expect(
-      planBrush(world, 10, 10, options({ tool: 'decor', decor: 'torch' }), free).edits
-    ).toHaveLength(1)
-    expect(isWalkable(world, 10, 10)).toBe(true)
+    expect(planBrush(world, 10, 10, options({ tool: 'decor', decor: 'searock' })).reason).toBe(
+      '岩礁は海に浮かべてください'
+    )
+    expect(planBrush(world, 10, 10, options({ tool: 'decor', decor: 'torch' })).edits).toHaveLength(
+      1
+    )
+    expect(decorBlocksWalking(22)).toBe(false)
   })
 
   it('uses the big brush for land but places decorations one at a time', () => {
     const world = createIsland()
-    expect(planBrush(world, 10, 10, options({ brush: 3 }), free).edits).toHaveLength(9)
+    expect(planBrush(world, 10, 10, options({ brush: 3 })).edits).toHaveLength(9)
     world.ground.fill(GRASS)
-    expect(planBrush(world, 10, 10, options({ tool: 'decor', brush: 3 }), free).edits).toHaveLength(
-      1
-    )
+    expect(planBrush(world, 10, 10, options({ tool: 'decor', brush: 3 })).edits).toHaveLength(1)
   })
 
   it('connects drag samples through edge-adjacent tiles', () => {
@@ -280,30 +260,31 @@ describe('island editing', () => {
     const index = 10 * world.columns + 10
     world.ground[index] = GRASS
     world.decor[index] = decorCode('tree')
-    expect(planBrush(world, 10, 10, options({ ground: SAND }), free).edits).toEqual([
+    expect(planBrush(world, 10, 10, options({ ground: SAND })).edits).toEqual([
       { index, ground: SAND, decor: decorCode('tree') }
     ])
     world.ground[index] = WATER
     world.decor[index] = decorCode('searock')
-    expect(planBrush(world, 10, 10, options(), free).edits).toEqual([
-      { index, ground: GRASS, decor: 0 }
-    ])
+    expect(planBrush(world, 10, 10, options()).edits).toEqual([{ index, ground: GRASS, decor: 0 }])
   })
 
-  it('cancels only the unfinished gesture, including repeated edits to a tile', () => {
-    const world = createIsland()
-    const stroke = createIslandStroke()
-    stroke.begin()
-    stroke.apply(world, planBrush(world, 10, 10, options(), free).edits)
-    expect(stroke.commit()).toBe(true)
-    const drawn = serializeIsland(world)
-    stroke.begin()
-    for (const ground of [SAND, DECK] as const)
-      stroke.apply(world, planBrush(world, 10, 10, options({ ground }), free).edits)
-    stroke.apply(world, planBrush(world, 20, 20, options(), free).edits)
-    stroke.cancel(world)
-    expect(serializeIsland(world)).toBe(drawn)
-    expect(stroke.commit()).toBe(false)
+  it('previews over the confirmed island without writing back stale tiles', () => {
+    const confirmed = createIsland()
+    const drawn = createIsland()
+    const command = { tool: 'land', ground: SAND } as const
+    const index = 10 * confirmed.columns + 10
+    const preview = planStroke(confirmed, command, [index, index + 1])
+    expect(overlayPreview(drawn, confirmed, [], preview)).toEqual([index, index + 1])
+    expect(drawn.ground[index]).toBe(SAND)
+    // Someone else paints a nearby tile and the same tile before this stroke is sent.
+    confirmed.ground[index + 2] = GRASS
+    confirmed.ground[index] = SAND
+    const replanned = planStroke(confirmed, command, [index, index + 1])
+    expect(replanned.map((edit) => edit.index)).toEqual([index + 1])
+    overlayPreview(drawn, confirmed, [index + 2, index], replanned)
+    // Cancelling drops only the preview: the other visitor's tiles stay.
+    overlayPreview(drawn, confirmed, [index, index + 1], [])
+    expect(serializeIsland(drawn)).toBe(serializeIsland(confirmed))
   })
 })
 
@@ -634,7 +615,7 @@ describe('island residents', () => {
     for (const [i, ground] of [SOIL, COBBLE, SWAMP].entries())
       for (let y = 10; y < 16; y++)
         world.ground.fill(ground, y * world.columns + 10 + i * 10, y * world.columns + 16 + i * 10)
-    const restored = parseIsland(serializeIsland(world))
+    const restored = decodeIsland(encodeIsland(world))
     expect(restored?.ground).toEqual(world.ground)
     for (const [i, ground] of [SOIL, COBBLE, SWAMP].entries())
       expect(terrainClass(world, (13 + i * 10) * 16, 13 * 16)).toBe(ground)

@@ -1001,6 +1001,106 @@ body::after {
   opacity: 0.35;
   cursor: default;
 }
+/* Shared-island status: quota gauge, refill countdown, connection, island total. */
+.island-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+  font: 700 11px "IBM Plex Mono", monospace;
+}
+.island-quota {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.island-quota__bar {
+  position: relative;
+  width: 54px;
+  height: 10px;
+  border: 2px solid var(--ink);
+  border-radius: 2px;
+  background: var(--paper-shade);
+  overflow: hidden;
+}
+.island-quota__bar > span {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: repeating-linear-gradient(90deg, #5cae4f 0 4px, #4a9a3f 4px 6px);
+  transition: width 0.3s;
+}
+.island-quota.is-empty .island-quota__bar {
+  background: repeating-linear-gradient(45deg, var(--paper-shade) 0 3px, #d9d2c3 3px 5px);
+}
+.island-quota__count {
+  min-width: 4.5ch;
+  font-variant-numeric: tabular-nums;
+}
+.island-refill,
+.island-connection {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-variant-numeric: tabular-nums;
+}
+.island-connection {
+  padding: 2px 5px;
+  border: 2px solid var(--ink);
+  border-radius: 3px;
+  --icon-accent: #d0453a;
+}
+.island-connection.is-online {
+  padding: 2px 3px;
+  border-color: transparent;
+  color: #3c7f33;
+}
+.island-connection small {
+  margin-left: 4px;
+  font: inherit;
+  font-weight: 600;
+}
+.island-connection.is-busy .pixel-icon {
+  animation: island-blink 0.9s steps(2, end) infinite;
+}
+.island-global-toggle {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 28px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+}
+.island-global-toggle[aria-expanded="true"] {
+  border-color: var(--ink);
+  background: var(--pick);
+}
+.island-global {
+  white-space: nowrap;
+}
+.island-tool.is-pending {
+  position: relative;
+}
+.island-tool.is-pending::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 6px;
+  height: 6px;
+  background: var(--ink);
+  animation: island-blink 0.6s steps(2, end) infinite;
+}
+@keyframes island-blink {
+  50% {
+    opacity: 0.25;
+  }
+}
 .island-chips {
   display: flex;
   flex-wrap: wrap;
@@ -1026,6 +1126,10 @@ body::after {
 .island-chips button[aria-pressed="true"] {
   border-color: var(--ink);
   background: var(--pick);
+}
+.island-chips button:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 .island-swatch {
   width: 18px;
@@ -1216,8 +1320,14 @@ body::after {
     gap: 6px;
   }
   .island-toolbar__main {
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
     gap: 2px;
+  }
+  .island-tools {
+    flex-wrap: nowrap;
+  }
+  .island-status {
+    flex-basis: 100%;
   }
   .island-tools {
     gap: 1px;
@@ -1254,7 +1364,9 @@ body::after {
   .island-loading__boat,
   .island-loading__boat-frames,
   .island-loading__dots i,
-  .island-resident__new {
+  .island-resident__new,
+  .island-connection.is-busy .pixel-icon,
+  .island-tool.is-pending::after {
     animation: none;
   }
   .island-drawer,

@@ -1783,29 +1783,6 @@ function paintCoral(tones: Rgba[], seed: number): SpriteFrame {
   return seaRock(buffer, 22, seed)
 }
 
-// A raft of seaweed, its fronds rising and falling with the swell.
-function paintSeaweed(tones: Rgba[], seed: number): SpriteFrame {
-  const frames = [0, 1].map((f) => {
-    const buffer = createBuffer(30, 18)
-    for (let strand = 0; strand < 5; strand++) {
-      const from = 2 + Math.floor(hash2(strand, 1, seed) * 6)
-      const to = 21 + Math.floor(hash2(strand, 2, seed) * 7)
-      for (let x = from; x <= to; x++) {
-        const y = Math.round(
-          4 + strand * 2.4 + Math.sin(x * 0.55 + strand * 1.7 + seed + f * 1.3) * 1.4
-        )
-        setPixel(buffer, x, y, tones[(x + strand) % 5 === 0 ? 0 : 1 + (strand % 2)])
-        setPixel(buffer, x, y + 1, tones[3])
-        if ((x + strand * 3) % 7 === 0) setPixel(buffer, x, y - 1, tones[0])
-      }
-      setPixel(buffer, from - 1, Math.round(4 + strand * 2.4) + f, white)
-      setPixel(buffer, to + 1, Math.round(4 + strand * 2.4) + 1 - f, spray)
-    }
-    return buffer
-  })
-  return { buffer: frames[0], frames: frames.slice(1), shadow: null, bob: 1 }
-}
-
 // Driftwood still at sea, riding low in the water.
 function afloat(frame: SpriteFrame, waterline: number, seed: number): SpriteFrame {
   const buffer = createBuffer(frame.buffer.width, frame.buffer.height)
@@ -1980,12 +1957,6 @@ export const decorVariants = {
     paintCoral(shadesOf('#ffe2b8', '#ffad5c', '#e07a2a'), 12),
     paintCoral(shadesOf('#e9d9ff', '#b99af0', '#8660cf'), 13),
     paintCoral(shadesOf('#ffffff', '#f1ece0', '#cfc6b2'), 14)
-  ],
-  seaweed: [
-    paintSeaweed(shadesOf('#b9d06a', '#7fa843', '#5a8238', '#34572f'), 21),
-    paintSeaweed(shadesOf('#d1bd76', '#a08a4a', '#77623a', '#4b3c22'), 22),
-    paintSeaweed(shadesOf('#a8d87a', '#62a84a', '#3f8640', '#27592f'), 23),
-    paintSeaweed(shadesOf('#c7b46a', '#8c8a44', '#5f6a36', '#3a4526'), 24)
   ],
   flotsam: [
     afloat(paintDriftwood(0), 10, 31),

@@ -1,0 +1,28 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "tlazolteotnia-island-test",
+  "main": "./island-worker.ts",
+  "compatibility_date": "2026-08-27",
+  "compatibility_flags": ["nodejs_compat"],
+  "vars": {
+    "ISLAND_COOKIE_SECRET": "runtime-test-secret-not-used-anywhere-else",
+    "TEST_CONTROL": "runtime-test-control",
+    "ISLAND_DAILY_TILE_LIMIT": "40"
+  },
+  "ratelimits": [
+    {
+      "name": "ISLAND_SESSION_RATE_LIMITER",
+      "namespace_id": "9000000001",
+      "simple": { "limit": 10, "period": 60 }
+    },
+    {
+      "name": "ISLAND_CONNECT_RATE_LIMITER",
+      "namespace_id": "9000000002",
+      "simple": { "limit": 30, "period": 60 }
+    }
+  ],
+  "durable_objects": {
+    "bindings": [{ "name": "ISLAND_ROOM", "class_name": "IslandRoom" }]
+  },
+  "migrations": [{ "tag": "v1-island-room", "new_sqlite_classes": ["IslandRoom"] }]
+}

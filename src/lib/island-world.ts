@@ -7,7 +7,6 @@ export const TILE_SIZE = 16
 // A ring of open sea around the map keeps every shoreline drawable.
 export const EDIT_MARGIN = 2
 export const ISLAND_SAVE_VERSION = 3
-export const ISLAND_STORAGE_KEY = 'tlazolteotnia:island'
 
 export const WATER = 0
 export const SAND = 1
@@ -124,7 +123,6 @@ export const decorInfo = {
   lantern: { name: '石灯籠', on: 'land', blocks: true },
   fireflies: { name: 'ホタル', on: 'land', blocks: false },
   coral: { name: 'サンゴ', on: 'water', blocks: true },
-  seaweed: { name: '海藻', on: 'water', blocks: true },
   flotsam: { name: '浮き流木', on: 'water', blocks: true },
   buoy: { name: 'ブイ', on: 'water', blocks: true }
 } as const satisfies Record<string, { name: string; on: 'land' | 'water'; blocks: boolean }>
@@ -155,14 +153,21 @@ export const decorGroups: Array<{ name: string; kinds: DecorKind[] }> = [
     ]
   },
   { name: 'あかり', kinds: ['torch', 'campfire', 'lantern', 'fireflies'] },
-  { name: '海', kinds: ['searock', 'coral', 'seaweed', 'flotsam', 'buoy'] }
+  { name: '海', kinds: ['searock', 'coral', 'flotsam', 'buoy'] }
 ]
-// Stored decoration codes: 0 is empty, otherwise the index in decorKinds plus one.
+// Stored decoration codes: 0 is empty; retired seaweed code 22 stays reserved.
+// Keep this hole so existing flotsam (23) and buoy (24) saves retain their kinds.
+const storedDecorKinds: Array<DecorKind | null> = [
+  ...decorKinds.slice(0, 21),
+  null,
+  ...decorKinds.slice(21)
+]
+export const MAX_DECOR_CODE = storedDecorKinds.length
 export function decorCode(kind: DecorKind) {
-  return decorKinds.indexOf(kind) + 1
+  return storedDecorKinds.indexOf(kind) + 1
 }
 export function decorKindOf(code: number): DecorKind | null {
-  return decorKinds[code - 1] ?? null
+  return storedDecorKinds[code - 1] ?? null
 }
 export function decorBlocksWalking(code: number) {
   const kind = decorKindOf(code)
@@ -478,10 +483,9 @@ export function createDefaultIsland(): IslandWorld {
       let dense = false
       if (ground === WATER) {
         if (!near(x, y, 2, anyLand) || near(x, y, 1, anyLand)) continue
-        // Reef rocks keep to the north and west; coral and weed to the warm south-east.
+        // Reef rocks keep to the north and west; coral to the warm south-east.
         if (y < 22 || x < 20) kind = pick(roll, ['searock', 0.07])
-        else if (x > 38 && y > 30) kind = pick(roll, ['coral', 0.1], ['seaweed', 0.08])
-        else kind = pick(roll, ['seaweed', 0.04])
+        else if (x > 38 && y > 30) kind = pick(roll, ['coral', 0.1])
       } else if (ground === SOIL) {
         // The flower bed is planted in rows, shoulder to shoulder.
         if ((x + y) % 2 === 0) put(x, y, 'flowers')
@@ -606,82 +610,47 @@ export type IslandSave = {
   decor: string
 }
 
-export function serializeIsland(world: IslandWorld): string {
-  const save: IslandSave = {
+export function encodeIsland(world: IslandWorld): IslandSave {
+  return {
     version: ISLAND_SAVE_VERSION,
     columns: world.columns,
     rows: world.rows,
     ground: encodeRuns(world.ground),
     decor: encodeRuns(world.decor)
   }
-  return JSON.stringify(save)
 }
 
-// Version 2 saves had man-made decorations between the natural ones. Indexed by
-// the old code: the kinds that remain map to their new code, the rest to none.
-const VERSION_2_DECOR = [0, 1, 2, 3, 4, 5, 0, 0, 0, 6, 0, 0, 0, 7, 0, 0, 0, 8, 0, 0]
+export function serializeIsland(world: IslandWorld): string {
+  return JSON.stringify(encodeIsland(world))
+}
 
-// Anything unexpected — other versions, other sizes, broken runs — is rejected
-// so the caller falls back to the default island instead of a half-built one.
-export function parseIsland(raw: string | null | undefined): IslandWorld | null {
-  if (!raw) return null
-  let data: unknown
-  try {
-    data = JSON.parse(raw)
-  } catch {
-    return null
-  }
+// Decodes exactly the current save version and nothing else: no migration, no
+// repair. The shared island and its snapshots use this, so a damaged or
+// unknown save is reported instead of quietly becoming a different island.
+export function decodeIsland(data: unknown): IslandWorld | null {
   if (typeof data !== 'object' || data === null) return null
   const save = data as Partial<IslandSave>
-  const outdated = (save.version as number) === 2
   if (
-    (save.version !== ISLAND_SAVE_VERSION && !outdated) ||
+    save.version !== ISLAND_SAVE_VERSION ||
     save.columns !== ISLAND_COLUMNS ||
     save.rows !== ISLAND_ROWS
   )
     return null
   const length = ISLAND_COLUMNS * ISLAND_ROWS
   const ground = decodeRuns(save.ground, length, GROUND_COUNT - 1)
-  const decor = decodeRuns(
-    save.decor,
-    length,
-    outdated ? VERSION_2_DECOR.length - 1 : decorKinds.length
-  )
+  const decor = decodeRuns(save.decor, length, MAX_DECOR_CODE)
   if (!ground || !decor) return null
-  if (outdated) for (let i = 0; i < length; i++) decor[i] = VERSION_2_DECOR[decor[i]]
   const world: IslandWorld = { columns: ISLAND_COLUMNS, rows: ISLAND_ROWS, ground, decor }
   for (let y = 0; y < world.rows; y++) {
     for (let x = 0; x < world.columns; x++) {
       const index = y * world.columns + x
-      if (!isEditableTile(world, x, y)) world.ground[index] = WATER
-      const kind = decorKindOf(world.decor[index])
-      if (kind && !decorFits(kind, world.ground[index] as Ground)) world.decor[index] = 0
+      if (!isEditableTile(world, x, y) && (ground[index] !== WATER || decor[index] !== 0))
+        return null
+      const kind = decorKindOf(decor[index])
+      if (kind && !decorFits(kind, ground[index] as Ground)) return null
     }
   }
   return world
-}
-
-type ReadStorage = Pick<Storage, 'getItem'>
-type WriteStorage = Pick<Storage, 'setItem'>
-
-export function loadIsland(storage: ReadStorage | null): { world: IslandWorld; restored: boolean } {
-  let raw: string | null = null
-  try {
-    raw = storage?.getItem(ISLAND_STORAGE_KEY) ?? null
-  } catch {
-    raw = null
-  }
-  const world = parseIsland(raw)
-  return world ? { world, restored: true } : { world: createDefaultIsland(), restored: false }
-}
-
-export function saveIsland(world: IslandWorld, storage: WriteStorage | null) {
-  try {
-    storage?.setItem(ISLAND_STORAGE_KEY, serializeIsland(world))
-    return true
-  } catch {
-    return false
-  }
 }
 
 // ---- Residents' homes -----------------------------------------------------

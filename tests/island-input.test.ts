@@ -86,3 +86,38 @@ describe('resident gestures', () => {
     expect(bindings.setDragging).toHaveBeenLastCalledWith(false)
   })
 })
+
+describe('shared editing gestures', () => {
+  const surface = { setPointerCapture: vi.fn(), closest: () => null }
+  const down = (id: number, x: number) => ({
+    pointerId: id,
+    pointerType: 'touch',
+    button: 0,
+    clientX: x,
+    clientY: 300,
+    type: 'pointerdown',
+    target: surface as unknown as EventTarget,
+    preventDefault: vi.fn()
+  })
+
+  it('moves the camera instead of editing while edits are not allowed', () => {
+    const { input, bindings } = setup()
+    bindings.editing = () => true
+    bindings.canStroke = () => false
+    input.pointerDown(down(1, 400))
+    expect(bindings.strokeStart).not.toHaveBeenCalled()
+    input.pointerUp({ ...down(1, 400), type: 'pointerup' })
+    bindings.canStroke = () => true
+    input.pointerDown(down(2, 400))
+    expect(bindings.strokeStart).toHaveBeenCalledTimes(1)
+  })
+
+  it('drops an unsent stroke when a second finger starts a pinch', () => {
+    const { input, bindings } = setup()
+    bindings.editing = () => true
+    bindings.canStroke = () => true
+    input.pointerDown(down(1, 400))
+    input.pointerDown(down(2, 500))
+    expect(bindings.strokeEnd).toHaveBeenCalledWith(true)
+  })
+})

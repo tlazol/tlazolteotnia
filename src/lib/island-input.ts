@@ -28,6 +28,9 @@ export type IslandInputBindings = {
   setView: (view: IslandView) => void
   ready: () => boolean
   editing: () => boolean
+  // Whether a new stroke may start now (connected, quota left, nothing pending).
+  // When it may not, the primary button moves the camera instead.
+  canStroke?: () => boolean
   // Hand tool or held Space: the primary button pans even while editing.
   panning: () => boolean
   hover: (point: Point | null) => void
@@ -112,7 +115,12 @@ export function createIslandInput(bind: IslandInputBindings) {
         )
         return
       }
-      const camera = event.button === 1 || event.button === 2 || bind.panning() || !bind.editing()
+      const camera =
+        event.button === 1 ||
+        event.button === 2 ||
+        bind.panning() ||
+        !bind.editing() ||
+        (bind.canStroke ? !bind.canStroke() : false)
       if (!camera && event.button === 0) {
         gesture = { kind: 'stroke', id: event.pointerId }
         bind.strokeStart(point)

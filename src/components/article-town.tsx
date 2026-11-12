@@ -130,10 +130,22 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
     }
   }, [])
 
+  const [announcement, setAnnouncement] = useState('')
   const scene = useIsland({
     posts: sorted,
     initialSlug: openSlug,
-    onPositions: (positions) => positionOverlay(positions, true)
+    onPositions: (positions) => positionOverlay(positions, true),
+    // Spoken briefly; the island and the gauge show the result on screen.
+    onOutcome: (outcome) =>
+      setAnnouncement(
+        outcome.status === 'applied'
+          ? `${outcome.result.changedCount}マス反映しました`
+          : outcome.status === 'rejected'
+            ? '編集できませんでした'
+            : outcome.status === 'unknown'
+              ? '島を確認しています'
+              : ''
+      )
   })
   const { status, size, zoom, surface, canvas, renderer, view, setView, homeView, edits } = scene
   const ready = status === 'ready'
@@ -175,6 +187,7 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
       setView: (next) => sceneRef.current.setView(next),
       ready: () => sceneRef.current.status === 'ready',
       editing: () => latest.current.editorOpen,
+      canStroke: () => !sceneRef.current.editBlocked(),
       panning: () => latest.current.panTool || latest.current.spaceHeld,
       hover: (point) => showCursor(sceneRef.current.preview(point, latest.current.options)),
       strokeStart: (point) =>
@@ -373,6 +386,9 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
       className={`sticker-page town-page island-page${loading ? ' is-loading' : ''}${editing ? ' is-editing' : ''}`}
     >
       <h1 className="sr-only">記事の住人がいる島</h1>
+      <p className="sr-only" role="status">
+        {announcement}
+      </p>
       <SiteHeader revealMenu={failed} toggleRef={menuToggle}>
         <TownArticleList
           posts={sorted}
@@ -498,6 +514,8 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
             onOptions={setOptions}
             panTool={panTool}
             onPanTool={setPanTool}
+            shared={scene.shared}
+            now={() => performance.now()}
           />
         )}
       </div>

@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { type EditOptions, type IslandTool, toolNames } from '#/lib/island-edit'
 import { decorVariants } from '#/lib/island-sprites'
+import { type ConnectionState, type EditBlock, editBlock, estimateActor } from '#/lib/island-status'
 import {
   BLACKSAND,
   BRICK,
@@ -94,16 +95,30 @@ export function IslandToolbar({
   options,
   onOptions,
   panTool,
-  onPanTool
+  onPanTool,
+  shared,
+  now
 }: {
   open: boolean
   options: EditOptions
   onOptions: (options: EditOptions) => void
   panTool: boolean
   onPanTool: (value: boolean) => void
+  shared: ConnectionState | null
+  // Monotonic milliseconds, the clock the connection uses.
+  now: () => number
 }) {
   const thumbnails = useDecorThumbnails()
+  const [, tick] = useState(0)
+  // Countdowns and refills repaint once a second; nothing is sent for them.
+  useEffect(() => {
+    const timer = window.setInterval(() => tick((value) => value + 1), 1000)
+    return () => window.clearInterval(timer)
+  }, [])
+  const block: EditBlock = shared ? editBlock(shared, now()) : 'connecting'
   const showGround = options.tool === 'land'
+  // While waiting for an answer the tools stay usable to pick, but not to edit.
+  const disabled = block !== null && block !== 'pending'
 
   return (
     <section
@@ -124,6 +139,7 @@ export function IslandToolbar({
                     <button
                       key={ground}
                       type="button"
+                      disabled={disabled}
                       aria-pressed={options.ground === ground}
                       onClick={() => onOptions({ ...options, ground })}
                     >
@@ -147,6 +163,7 @@ export function IslandToolbar({
                     <button
                       key={decor}
                       type="button"
+                      disabled={disabled}
                       aria-pressed={options.decor === decor}
                       aria-label={decorNames[decor]}
                       title={decorNames[decor]}
@@ -173,7 +190,9 @@ export function IslandToolbar({
             <button
               key={tool}
               type="button"
-              className="island-tool"
+              className={`island-tool${block === 'pending' && !panTool && options.tool === tool ? ' is-pending' : ''}`}
+              disabled={disabled}
+              aria-busy={block === 'pending' && !panTool && options.tool === tool}
               aria-pressed={!panTool && options.tool === tool}
               aria-label={`${toolNames[tool]}（${key}）`}
               title={`${toolNames[tool]}（${key}）`}
@@ -198,7 +217,121 @@ export function IslandToolbar({
             <span>移動</span>
           </button>
         </fieldset>
+        <IslandStatus shared={shared} block={block} now={now} />
       </div>
     </section>
+  )
+}
+
+const pad = (value: number) => String(value).padStart(2, '0')
+// "0:43" for a countdown, from milliseconds.
+export function formatCountdown(ms: number) {
+  const seconds = Math.max(0, Math.ceil(ms / 1000))
+  return `${Math.floor(seconds / 60)}:${pad(seconds % 60)}`
+}
+// Wall-clock time in Japan for a UTC timestamp, e.g. "9:00".
+export function formatJst(time: number) {
+  const date = new Date(time + 9 * 60 * 60 * 1000)
+  return `${date.getUTCHours()}:${pad(date.getUTCMinutes())}`
+}
+const number = new Intl.NumberFormat('ja-JP')
+
+const connectionLabels: Partial<Record<NonNullable<EditBlock>, string>> = {
+  connecting: '接続中',
+  syncing: '同期中',
+  waiting: '未接続',
+  limited: '待機中',
+  storage: '同期エラー',
+  daily: '本日終了',
+  busy: '混雑中'
+}
+
+// Quota gauge, refill countdown, connection state and the island-wide count.
+function IslandStatus({
+  shared,
+  block,
+  now
+}: {
+  shared: ConnectionState | null
+  block: EditBlock
+  now: () => number
+}) {
+  const [details, setDetails] = useState(false)
+  const detailsId = useId()
+  const monotonic = now()
+  const serverNow = monotonic + (shared?.serverOffset ?? 0)
+  const actor = shared?.actor ? estimateActor(shared.actor, serverNow) : null
+  const max = 30
+  const available = actor?.available ?? 0
+  const refillIn = actor?.nextRefillAt ? actor.nextRefillAt - serverNow : null
+  const global = shared?.global ?? null
+  const online = block === null || block === 'pending' || block === 'empty'
+  const label = block ? connectionLabels[block] : undefined
+  const retryIn =
+    block === 'limited' && shared?.retryAt ? formatCountdown(shared.retryAt - monotonic) : null
+  const resumeAt = block === 'daily' && global ? `再開 ${formatJst(global.resetsAt)} JST` : null
+
+  return (
+    <div className="island-status" data-state={block ?? 'ready'}>
+      <div className={`island-quota${available < 1 ? ' is-empty' : ''}`}>
+        <meter
+          className="sr-only"
+          min={0}
+          max={max}
+          value={actor ? available : 0}
+          aria-label={actor ? `編集残量 ${available} / ${max}マス` : '編集残量 不明'}
+        />
+        <span className="island-quota__bar" aria-hidden="true">
+          <span style={{ width: `${(available / max) * 100}%` }} />
+        </span>
+        <span className="island-quota__count" aria-hidden="true">
+          {actor ? available : '–'} / {max}
+        </span>
+      </div>
+      {refillIn !== null && actor && available < max && (
+        <span
+          className="island-refill"
+          role="img"
+          aria-label={`次の回復まで ${formatCountdown(refillIn)}`}
+        >
+          <PixelIcon name="clock" size={14} />
+          <span aria-hidden="true">{formatCountdown(refillIn)}</span>
+        </span>
+      )}
+      <span
+        className={`island-connection${online ? ' is-online' : ''}${block === 'connecting' || block === 'syncing' ? ' is-busy' : ''}`}
+        role="img"
+        aria-label={label ? [label, retryIn, resumeAt].filter(Boolean).join(' ') : '接続済み'}
+      >
+        <PixelIcon name={online ? 'signal' : 'offline'} size={14} />
+        {label && (
+          <span aria-hidden="true">
+            {label}
+            {retryIn && ` ${retryIn}`}
+            {resumeAt && <small>{resumeAt}</small>}
+          </span>
+        )}
+      </span>
+      <button
+        type="button"
+        className="island-global-toggle"
+        aria-expanded={details}
+        aria-controls={detailsId}
+        aria-label="島全体の残り"
+        title="島全体の残り"
+        onClick={() => setDetails((open) => !open)}
+      >
+        <PixelIcon name="island" size={14} />
+      </button>
+      <span className="sr-only" role="status">
+        {label ?? ''}
+      </span>
+      <span id={detailsId} className="island-global" hidden={!details}>
+        島全体{' '}
+        {global
+          ? `${number.format(Math.max(0, global.limit - global.used))} / ${number.format(global.limit)}`
+          : '–'}
+      </span>
+    </div>
   )
 }

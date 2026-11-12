@@ -9,7 +9,21 @@ import {
   tileAt,
   viewOn
 } from '#/lib/island-camera'
-import { createIslandStroke, type EditOptions, planBrush, tilesAlong } from '#/lib/island-edit'
+import type { ConnectionState, EditOutcome, IslandConnection } from '#/lib/island-connection.client'
+import {
+  applyEdits,
+  brushIndices,
+  cloneIsland,
+  collectStrokeTargets,
+  commandOf,
+  type EditOptions,
+  type IslandCommand,
+  overlayPreview,
+  planBrush,
+  planStroke,
+  type TileEdit,
+  tilesAlong
+} from '#/lib/island-edit'
 import {
   createResidents,
   designResidents,
@@ -18,53 +32,54 @@ import {
   settleResidents
 } from '#/lib/island-residents'
 import type { IslandRenderer, ResidentScreen } from '#/lib/island-three.client'
-import {
-  createDefaultIsland,
-  type IslandWorld,
-  layoutResidentHomes,
-  loadIsland,
-  saveIsland
-} from '#/lib/island-world'
+import { type IslandWorld, layoutResidentHomes } from '#/lib/island-world'
 import type { SceneSize } from '#/lib/scene-math'
 
 const loadRenderer = createClientOnlyFn(() => import('#/lib/island-three.client'))
-
-function storage() {
-  try {
-    return window.localStorage
-  } catch {
-    return null
-  }
-}
+const loadConnection = createClientOnlyFn(() => import('#/lib/island-connection.client'))
 
 export type IslandStatus = 'loading' | 'ready' | 'failed'
 export type CursorInfo = { reason: string | null; soft: boolean; x: number; y: number } | null
 
+// A stroke being drawn, or sent and waiting for the island's answer.
+type Stroke = { command: IslandCommand; targets: number[]; limit: number; sent: boolean }
+
 export function useIsland({
   posts,
   initialSlug,
-  onPositions
+  onPositions,
+  onOutcome
 }: {
   // Newest first.
   posts: BlogPostSummary[]
   initialSlug: string | null
   onPositions: (positions: ResidentScreen[], view: IslandView) => void
+  onOutcome?: (outcome: EditOutcome) => void
 }) {
   const [status, setStatus] = useState<IslandStatus>('loading')
   const [size, setSize] = useState<SceneSize>({ width: 0, height: 0 })
   const [zoom, setZoom] = useState(2)
-  const [saveState, setSaveState] = useState<'idle' | 'saved' | 'failed'>('idle')
+  const [shared, setShared] = useState<ConnectionState | null>(null)
+  // Bumped when an island first arrives (live or read-only), to start drawing.
+  const [islandKey, setIslandKey] = useState(0)
   const surface = useRef<HTMLDivElement>(null)
   const canvas = useRef<HTMLCanvasElement>(null)
   const renderer = useRef<IslandRenderer | null>(null)
-  const world = useRef<IslandWorld | null>(null)
-  const stroke = useRef(createIslandStroke())
+  // The island as the server last confirmed it, and the copy that is drawn:
+  // confirmed plus this visitor's unsent or unanswered stroke.
+  const confirmed = useRef<IslandWorld | null>(null)
+  const drawn = useRef<IslandWorld | null>(null)
+  const preview = useRef<TileEdit[]>([])
+  const stroke = useRef<Stroke | null>(null)
+  const connection = useRef<IslandConnection | null>(null)
   const residents = useRef<Resident[]>([])
   const view = useRef<IslandView>({ x: 0, y: 0, zoom: 2 })
   const sizeRef = useRef(size)
   sizeRef.current = size
   const positionsCallback = useRef(onPositions)
   positionsCallback.current = onPositions
+  const outcomeCallback = useRef(onOutcome)
+  outcomeCallback.current = onOutcome
   const lastStrokeTile = useRef<{ x: number; y: number } | null>(null)
   // The tile an edit just finished on: its "nothing to do here" is not news.
   const settledTile = useRef<{ x: number; y: number } | null>(null)
@@ -111,16 +126,115 @@ export function useIsland({
     } else setView(view.current)
   }, [size, setView, homeView])
 
+  // Redraws the preview over the confirmed island at the touched tiles.
+  const redraw = useCallback((touched: Iterable<number>) => {
+    const base = confirmed.current
+    const target = drawn.current
+    if (!base || !target) return
+    const current = stroke.current
+    const next = current ? planStroke(base, current.command, current.targets) : []
+    const indices = new Set(touched)
+    for (const edit of preview.current) indices.add(edit.index)
+    preview.current = next
+    renderer.current?.updateTiles(overlayPreview(target, base, indices, next))
+  }, [])
+
+  // The shared island: one connection for the page's lifetime, kept across
+  // post modals and resident rebuilds.
   useEffect(() => {
     let cancelled = false
+    let live: IslandConnection | null = null
+    const visibility = () => {
+      if (document.visibilityState === 'visible') live?.resume()
+    }
+    void loadConnection().then((module) => {
+      if (cancelled) return
+      live = module.createBrowserIslandConnection({
+        island: (world) => {
+          const first = !confirmed.current
+          if (first) {
+            confirmed.current = world
+            drawn.current = cloneIsland(world)
+            preview.current = []
+            setIslandKey((key) => key + 1)
+            return
+          }
+          const base = confirmed.current
+          if (!base) return
+          const changed: number[] = []
+          for (let i = 0; i < base.ground.length; i++)
+            if (base.ground[i] !== world.ground[i] || base.decor[i] !== world.decor[i])
+              changed.push(i)
+          base.ground.set(world.ground)
+          base.decor.set(world.decor)
+          redraw(changed)
+        },
+        patch: (edits) => {
+          const base = confirmed.current
+          if (!base) return
+          applyEdits(base, edits)
+          redraw(edits.map((edit) => edit.index))
+        },
+        state: (next) => {
+          // A disconnect also ends a stroke still being drawn. It has no
+          // pending request, so the connection will not report an outcome for it.
+          if (next.phase === 'waiting' && stroke.current && !stroke.current.sent) {
+            stroke.current = null
+            lastStrokeTile.current = null
+            settledTile.current = null
+            redraw([])
+            renderer.current?.setCursor(null)
+          }
+          setShared(next)
+        },
+        outcome: (outcome) => {
+          // Answered or unknown: the stroke leaves; the confirmed island stays.
+          if (stroke.current?.sent) {
+            stroke.current = null
+            redraw([])
+          }
+          outcomeCallback.current?.(outcome)
+        }
+      })
+      connection.current = live
+      setShared(live.state())
+      live.start()
+      // Development only: lets browser checks compare what each visitor holds.
+      if (import.meta.env.DEV) {
+        const world = (target: IslandWorld | null) =>
+          target
+            ? `${Array.from(target.ground).join('')}|${Array.from(target.decor).join(',')}`
+            : null
+        ;(window as unknown as Record<string, unknown>).__islandDebug = {
+          confirmed: () => world(confirmed.current),
+          drawn: () => world(drawn.current),
+          state: () => live?.state()
+        }
+      }
+      document.addEventListener('visibilitychange', visibility)
+    })
+    return () => {
+      cancelled = true
+      document.removeEventListener('visibilitychange', visibility)
+      live?.stop()
+      connection.current = null
+    }
+  }, [redraw])
+
+  // Nothing could be loaded in time: let the page fall back to the article list.
+  useEffect(() => {
+    if (shared?.initialFailed && !drawn.current) setStatus('failed')
+  }, [shared?.initialFailed])
+
+  useEffect(() => {
+    const world = drawn.current
+    if (!world) return
+    let cancelled = false
     setStatus('loading')
-    const { world: loaded } = loadIsland(storage())
-    world.current = loaded
-    stroke.current = createIslandStroke()
     const currentPosts = latestPosts.current
     const slugs = currentPosts.map((post) => post.slug)
     residents.current = createResidents(slugs, layoutResidentHomes(slugs.length))
-    settleResidents(loaded, residents.current)
+    settleResidents(world, residents.current)
     const designs = designResidents(currentPosts)
     if (hadSize.current && !islandSession.view) setView(homeView(initialTarget.current))
     function fail() {
@@ -133,7 +247,7 @@ export function useIsland({
       .then((module) => {
         if (cancelled || !canvas.current) return
         renderer.current = module.createIslandRenderer(canvas.current, {
-          world: loaded,
+          world,
           residents: residents.current,
           designs,
           onFrame: (positions, nextView) => {
@@ -156,68 +270,113 @@ export function useIsland({
       renderer.current?.dispose()
       renderer.current = null
     }
-  }, [postsKey, setView, homeView])
+  }, [postsKey, islandKey, setView, homeView])
 
-  const persist = useCallback(() => {
-    if (!world.current) return
-    setSaveState(saveIsland(world.current, storage()) ? 'saved' : 'failed')
+  const editBlocked = useCallback(() => {
+    const live = connection.current
+    if (!live || !confirmed.current || stroke.current?.sent) return true
+    return live.editBlock() !== null || !live.canSendSoon()
   }, [])
 
-  const occupied = useCallback(
-    (x: number, y: number) => renderer.current?.occupied(x, y) ?? false,
-    []
-  )
-
   // Shows what the current tool would do at a screen point, and why not.
-  const preview = useCallback(
+  const previewAt = useCallback(
     (point: { x: number; y: number } | null, options: EditOptions): CursorInfo => {
-      if (!point || !world.current) {
+      if (!point || !drawn.current) {
         renderer.current?.setCursor(null)
         return null
       }
       const tile = tileAt(view.current, sizeRef.current, point)
-      const plan = planBrush(world.current, tile.x, tile.y, options, occupied)
+      const plan = planBrush(drawn.current, tile.x, tile.y, options)
       const settled = settledTile.current
       if (settled && (settled.x !== tile.x || settled.y !== tile.y)) settledTile.current = null
       const soft = plan.soft || (settledTile.current !== null && !plan.edits.length)
       renderer.current?.setCursor({ tiles: plan.tiles, soft, center: tile })
       return { reason: plan.reason, soft, ...point }
     },
-    [occupied]
+    []
   )
 
-  const strokeTo = useCallback(
-    (point: { x: number; y: number }, options: EditOptions) => {
-      const current = world.current
-      if (!current) return null
-      const tile = tileAt(view.current, sizeRef.current, point)
-      const path = lastStrokeTile.current
-        ? tilesAlong(lastStrokeTile.current, tile).slice(1)
-        : [tile]
-      lastStrokeTile.current = tile
+  // Adds the tiles under a pointer path to the stroke, up to its limit.
+  const extend = useCallback(
+    (tiles: Array<{ x: number; y: number }>, options: EditOptions) => {
+      const base = confirmed.current
+      const current = stroke.current
+      const world = drawn.current
+      if (!base || !current || !world) return { reason: null, soft: false }
       let reason: string | null = null
       let soft = false
-      for (const step of path) {
-        const plan = planBrush(current, step.x, step.y, options, occupied)
-        const changed = stroke.current.apply(current, plan.edits)
-        renderer.current?.updateTiles(changed)
+      for (const step of tiles) {
+        const before = current.targets.length
+        collectStrokeTargets(
+          base,
+          current.command,
+          current.targets,
+          brushIndices(base, step.x, step.y, options),
+          current.limit
+        )
+        if (current.targets.length > before) continue
+        const plan = planBrush(world, step.x, step.y, options)
         if (plan.reason && !plan.soft) reason = plan.reason
         else if (plan.reason && !reason) {
           reason = plan.reason
           soft = true
         }
       }
-      const after = planBrush(current, tile.x, tile.y, options, occupied)
+      redraw([])
+      return { reason, soft }
+    },
+    [redraw]
+  )
+
+  const strokeTo = useCallback(
+    (point: { x: number; y: number }, options: EditOptions) => {
+      if (!stroke.current || stroke.current.sent || !drawn.current) return null
+      const tile = tileAt(view.current, sizeRef.current, point)
+      const path = lastStrokeTile.current
+        ? tilesAlong(lastStrokeTile.current, tile).slice(1)
+        : [tile]
+      lastStrokeTile.current = tile
+      const { reason, soft } = extend(path, options)
+      const after = planBrush(drawn.current, tile.x, tile.y, options)
       renderer.current?.setCursor({ tiles: after.tiles, soft: true, center: tile })
       return { reason, soft, ...point }
     },
-    [occupied]
+    [extend]
   )
+
+  const startStroke = useCallback(
+    (options: EditOptions) => {
+      const live = connection.current
+      if (!live || editBlocked()) return false
+      stroke.current = {
+        command: commandOf(options),
+        targets: [],
+        limit: live.strokeLimit(),
+        sent: false
+      }
+      return true
+    },
+    [editBlocked]
+  )
+
+  // Sends the finished stroke as one batch, or drops it.
+  const finish = useCallback(() => {
+    const current = stroke.current
+    const live = connection.current
+    if (!current || current.sent) return false
+    if (current.targets.length && live?.sendEdit(current.command, current.targets)) {
+      current.sent = true
+      return true
+    }
+    stroke.current = null
+    redraw([])
+    return false
+  }, [redraw])
 
   const edits = {
     begin(point: { x: number; y: number }, options: EditOptions) {
-      stroke.current.begin()
       lastStrokeTile.current = null
+      if (!startStroke(options)) return null
       return strokeTo(point, options)
     },
     move: strokeTo,
@@ -225,36 +384,22 @@ export function useIsland({
       const tile = lastStrokeTile.current
       lastStrokeTile.current = null
       settledTile.current = null
-      if (!world.current) return
-      if (cancel) renderer.current?.updateTiles(stroke.current.cancel(world.current))
-      else if (stroke.current.commit()) {
-        settledTile.current = tile
-        persist()
-      }
+      if (!stroke.current || stroke.current.sent) return
+      if (cancel) {
+        // Only this visitor's unsent preview goes; the confirmed island stays.
+        stroke.current = null
+        redraw([])
+      } else if (finish()) settledTile.current = tile
     },
     // Applies the tool once at a tile, for keyboard editing.
     applyAt(tile: { x: number; y: number }, options: EditOptions) {
-      const current = world.current
-      if (!current) return null
-      stroke.current.begin()
-      const plan = planBrush(current, tile.x, tile.y, options, occupied)
-      renderer.current?.updateTiles(stroke.current.apply(current, plan.edits))
-      if (stroke.current.commit()) persist()
+      const world = drawn.current
+      if (!world) return null
+      const plan = planBrush(world, tile.x, tile.y, options)
+      if (!startStroke(options)) return plan
+      extend([tile], options)
+      finish()
       return plan
-    },
-    reset() {
-      if (!world.current) return
-      const target = createDefaultIsland()
-      const current = world.current
-      const changed = Array.from(current.ground.keys()).filter(
-        (index) =>
-          current.ground[index] !== target.ground[index] ||
-          current.decor[index] !== target.decor[index]
-      )
-      current.ground.set(target.ground)
-      current.decor.set(target.decor)
-      renderer.current?.updateTiles(changed)
-      persist()
     }
   }
 
@@ -262,7 +407,7 @@ export function useIsland({
     status,
     size,
     zoom,
-    saveState,
+    shared,
     surface,
     canvas,
     renderer,
@@ -270,7 +415,8 @@ export function useIsland({
     sizeRef,
     setView,
     homeView,
-    preview,
+    preview: previewAt,
+    editBlocked,
     edits
   }
 }
