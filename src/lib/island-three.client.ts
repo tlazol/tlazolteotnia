@@ -59,7 +59,6 @@ import {
   stepResidents
 } from './island-residents'
 import {
-  decorVariantIndex,
   decorVariants,
   GULL_FRAME,
   paintFishSchool,
@@ -70,7 +69,14 @@ import {
   type SpriteFrame,
   shadowSizes
 } from './island-sprites'
-import { decorKindOf, EDIT_MARGIN, hash2, type IslandWorld, TILE_SIZE } from './island-world'
+import {
+  decorKindOf,
+  decorLookAt,
+  EDIT_MARGIN,
+  hash2,
+  type IslandWorld,
+  TILE_SIZE
+} from './island-world'
 import type { SceneSize } from './scene-math'
 
 export type ResidentScreen = {
@@ -837,8 +843,9 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
   function syncDecor(index: number) {
     const x = index % world.columns
     const y = Math.floor(index / world.columns)
-    const kind = decorKindOf(world.decor[index])
-    const key = kind ? `${kind}:${decorVariantIndex(kind, x, y)}` : null
+    const code = world.decor[index]
+    const kind = decorKindOf(code)
+    const key = kind ? `${kind}:${decorLookAt(code, x, y)}` : null
     const previous = placedDecor.get(index)
     if (previous === key) return
     if (previous) {

@@ -163,11 +163,62 @@ const storedDecorKinds: Array<DecorKind | null> = [
   ...decorKinds.slice(21)
 ]
 export const MAX_DECOR_CODE = storedDecorKinds.length
-export function decorCode(kind: DecorKind) {
-  return storedDecorKinds.indexOf(kind) + 1
+// How many looks each kind has; the sprites draw exactly this many.
+export const decorLooks = {
+  tree: 5,
+  palm: 5,
+  bush: 6,
+  rock: 5,
+  flowers: 6,
+  driftwood: 4,
+  torch: 1,
+  searock: 5,
+  bamboo: 4,
+  banana: 4,
+  deadtree: 4,
+  mangrove: 4,
+  monstera: 4,
+  cactus: 4,
+  relic: 4,
+  mushroom: 4,
+  shell: 4,
+  campfire: 2,
+  lantern: 2,
+  fireflies: 4,
+  coral: 4,
+  flotsam: 4,
+  buoy: 2
+} as const satisfies Record<DecorKind, number>
+// A stored code keeps the kind in its low five bits and, above them, the look
+// the visitor picked plus one. Zero there (every older save) lets the tile's
+// position pick the look.
+const LOOK_SHIFT = 5
+const KIND_MASK = (1 << LOOK_SHIFT) - 1
+export const MAX_DECOR_LOOKS = (0xff >> LOOK_SHIFT) - 1
+export function decorCode(kind: DecorKind, look?: number | null) {
+  const base = storedDecorKinds.indexOf(kind) + 1
+  return look == null ? base : base | ((look + 1) << LOOK_SHIFT)
 }
 export function decorKindOf(code: number): DecorKind | null {
-  return storedDecorKinds[code - 1] ?? null
+  return storedDecorKinds[(code & KIND_MASK) - 1] ?? null
+}
+// The look picked when the decoration was placed, or null if none was.
+export function decorLookOf(code: number): number | null {
+  const look = code >> LOOK_SHIFT
+  return look ? look - 1 : null
+}
+// The look a tile shows: the picked one, or one drawn from its position.
+export function decorLookAt(code: number, x: number, y: number): number | null {
+  const kind = decorKindOf(code)
+  if (!kind) return null
+  return decorLookOf(code) ?? Math.floor(hash2(x, y, 211) * decorLooks[kind])
+}
+export function isDecorCode(code: number) {
+  if (!Number.isSafeInteger(code) || code < 0 || code > 0xff) return false
+  const look = decorLookOf(code)
+  if (look === null) return code <= MAX_DECOR_CODE
+  const kind = decorKindOf(code)
+  return kind !== null && look < decorLooks[kind]
 }
 export function decorBlocksWalking(code: number) {
   const kind = decorKindOf(code)
@@ -591,7 +642,7 @@ function decodeRuns(text: unknown, length: number, max: number) {
   const values = new Uint8Array(length)
   let offset = 0
   for (const run of text.split('.')) {
-    const match = /^([0-9a-z])(?:\*(\d{1,5}))?$/.exec(run)
+    const match = /^([1-9a-z]?[0-9a-z])(?:\*(\d{1,5}))?$/.exec(run)
     if (!match) return null
     const value = Number.parseInt(match[1], 36)
     const count = match[2] ? Number(match[2]) : 1
@@ -638,7 +689,7 @@ export function decodeIsland(data: unknown): IslandWorld | null {
     return null
   const length = ISLAND_COLUMNS * ISLAND_ROWS
   const ground = decodeRuns(save.ground, length, GROUND_COUNT - 1)
-  const decor = decodeRuns(save.decor, length, MAX_DECOR_CODE)
+  const decor = decodeRuns(save.decor, length, 0xff)
   if (!ground || !decor) return null
   const world: IslandWorld = { columns: ISLAND_COLUMNS, rows: ISLAND_ROWS, ground, decor }
   for (let y = 0; y < world.rows; y++) {
@@ -646,6 +697,7 @@ export function decodeIsland(data: unknown): IslandWorld | null {
       const index = y * world.columns + x
       if (!isEditableTile(world, x, y) && (ground[index] !== WATER || decor[index] !== 0))
         return null
+      if (!isDecorCode(decor[index])) return null
       const kind = decorKindOf(decor[index])
       if (kind && !decorFits(kind, ground[index] as Ground)) return null
     }

@@ -6,6 +6,7 @@ import {
   decorFits,
   decorInfo,
   decorKindOf,
+  decorLookAt,
   decorNames,
   type Ground,
   groundNames,
@@ -21,6 +22,8 @@ export type EditOptions = {
   tool: IslandTool
   ground: LandGround
   decor: DecorKind
+  // The look picked for each kind; a kind left out uses its first look.
+  looks?: Partial<Record<DecorKind, number>>
   brush: BrushSize
 }
 export type TileState = { ground: Ground; decor: number }
@@ -38,7 +41,7 @@ export const toolNames: Record<IslandTool, string> = {
 export type IslandCommand =
   | { tool: 'land'; ground: LandGround }
   | { tool: 'erase' }
-  | { tool: 'decor'; decor: DecorKind }
+  | { tool: 'decor'; decor: DecorKind; look?: number }
   | { tool: 'remove' }
 
 // Why a tile in a valid request was left alone. Malformed requests (outside the
@@ -46,12 +49,14 @@ export type IslandCommand =
 export type SkipCode = 'PROTECTED_TILE' | 'DECOR_CONFLICT' | 'INVALID_GROUND' | 'NO_CHANGE'
 export type CommandPlan = { edit: TileEdit; code: null } | { edit: null; code: SkipCode }
 
-export function commandOf(options: Pick<EditOptions, 'tool' | 'ground' | 'decor'>): IslandCommand {
+export function commandOf(
+  options: Pick<EditOptions, 'tool' | 'ground' | 'decor' | 'looks'>
+): IslandCommand {
   switch (options.tool) {
     case 'land':
       return { tool: 'land', ground: options.ground }
     case 'decor':
-      return { tool: 'decor', decor: options.decor }
+      return { tool: 'decor', decor: options.decor, look: options.looks?.[options.decor] ?? 0 }
     default:
       return { tool: options.tool }
   }
@@ -92,9 +97,16 @@ export function planCommand(
     case 'decor': {
       if (!decorFits(command.decor, ground)) return skip('INVALID_GROUND')
       const existing = decorKindOf(decor)
-      if (existing === command.decor) return skip('NO_CHANGE')
+      const code = decorCode(command.decor, command.look)
+      if (existing === command.decor) {
+        // A picked look restyles the same kind in place.
+        const x = index % world.columns
+        const y = Math.floor(index / world.columns)
+        if (command.look === undefined || decorLookAt(decor, x, y) === command.look)
+          return skip('NO_CHANGE')
+        return edit({ decor: code })
+      }
       if (existing) return skip('DECOR_CONFLICT')
-      const code = decorCode(command.decor)
       if (decorBlocksWalking(code) && isProtectedIndex(index)) return skip('PROTECTED_TILE')
       return edit({ decor: code })
     }
@@ -130,7 +142,10 @@ function explain(
         return { reason: `もう${groundNames[options.ground]}です`, soft: true }
       if (options.tool === 'erase') return { reason: 'ここはもう海です', soft: true }
       if (options.tool === 'decor' && existing)
-        return { reason: `もう${decorNames[existing]}があります`, soft: true }
+        return {
+          reason: `もう同じ${decorNames[existing]}があります`,
+          soft: true
+        }
       return { reason: '撤去できる装飾がありません' }
     case 'PROTECTED_TILE':
       return {

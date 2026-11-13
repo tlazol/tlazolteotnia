@@ -6,12 +6,13 @@ import type { ActorAdmission, GlobalQuota } from './island-policy'
 import { MAX_EDIT_TILES, MAX_MESSAGE_BYTES } from './island-policy'
 import {
   decorKinds,
+  decorLooks,
   GROUND_COUNT,
   ISLAND_COLUMNS,
   ISLAND_ROWS,
   type IslandSave,
-  landGrounds,
-  MAX_DECOR_CODE
+  isDecorCode,
+  landGrounds
 } from './island-world'
 
 export const PROTOCOL_VERSION = 1
@@ -138,12 +139,19 @@ function parseCommand(value: unknown): IslandCommand | null {
         landGrounds.includes(value.ground as (typeof landGrounds)[number])
         ? { tool: 'land', ground: value.ground as (typeof landGrounds)[number] }
         : null
-    case 'decor':
-      return hasOnlyKeys(value, ['tool', 'decor']) &&
-        typeof value.decor === 'string' &&
-        (decorKinds as string[]).includes(value.decor)
-        ? { tool: 'decor', decor: value.decor as (typeof decorKinds)[number] }
+    case 'decor': {
+      if (
+        !hasOnlyKeys(value, ['tool', 'decor', 'look']) ||
+        typeof value.decor !== 'string' ||
+        !(decorKinds as string[]).includes(value.decor)
+      )
+        return null
+      const decor = value.decor as (typeof decorKinds)[number]
+      if (value.look === undefined) return { tool: 'decor', decor }
+      return isCount(value.look) && value.look < decorLooks[decor]
+        ? { tool: 'decor', decor, look: value.look }
         : null
+    }
     case 'erase':
     case 'remove':
       return hasOnlyKeys(value, ['tool']) ? { tool: value.tool } : null
@@ -237,7 +245,7 @@ function isTileEdit(value: unknown): value is TileEdit {
     isCount(value.ground) &&
     value.ground < GROUND_COUNT &&
     isCount(value.decor) &&
-    value.decor <= MAX_DECOR_CODE
+    isDecorCode(value.decor)
   )
 }
 

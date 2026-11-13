@@ -1809,8 +1809,8 @@ function paintBuoy(band: string, other: string, seed: number): SpriteFrame {
   return { ...seaRock(buffer, 26, seed), bob: 1 }
 }
 
-// Each kind's designs. Which one a tile shows is drawn from its position, so
-// the visitor places a kind and the island picks the look.
+// Each kind's designs, as many as decorLooks counts. The visitor may pick one;
+// otherwise the tile's position picks it (decorLookAt).
 export const decorVariants = {
   tree: [
     paintAcacia(-4, 470, false),
@@ -1966,10 +1966,6 @@ export const decorVariants = {
   ],
   buoy: [paintBuoy('#e5483f', '#fbf6ea', 41), paintBuoy('#f2c230', '#3d424b', 42)]
 } satisfies Record<DecorKind, SpriteFrame[]>
-
-export function decorVariantIndex(kind: DecorKind, x: number, y: number) {
-  return Math.floor(hash2(x, y, 211) * decorVariants[kind].length)
-}
 
 export const shadowSizes = {
   small: [12, 4],

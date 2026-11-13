@@ -193,6 +193,28 @@ describe('shared edit rules', () => {
     expect(planCommand(world, index, { tool: 'decor', decor: 'rock' }).code).toBe('NO_CHANGE')
   })
 
+  it('restyles a decoration of the same kind when a look is picked', () => {
+    const world = createIsland()
+    const index = 10 * world.columns + 10
+    world.ground[index] = GRASS
+    world.decor[index] = decorCode('palm', 1)
+    expect(planCommand(world, index, { tool: 'decor', decor: 'palm', look: 1 }).code).toBe(
+      'NO_CHANGE'
+    )
+    expect(planCommand(world, index, { tool: 'decor', decor: 'palm', look: 3 }).edit).toEqual({
+      index,
+      ground: GRASS,
+      decor: decorCode('palm', 3)
+    })
+    expect(planCommand(world, index, { tool: 'decor', decor: 'tree', look: 0 }).code).toBe(
+      'DECOR_CONFLICT'
+    )
+    world.decor[index] = 0
+    expect(planCommand(world, index, { tool: 'decor', decor: 'palm', look: 2 }).edit?.decor).toBe(
+      decorCode('palm', 2)
+    )
+  })
+
   it('counts only tiles that really change under the big brush', () => {
     const world = createIsland()
     world.ground[10 * world.columns + 10] = GRASS
@@ -265,6 +287,9 @@ describe('edit request validation', () => {
     ['unknown tool', { command: { tool: 'paint' } }],
     ['sea as land', { command: { tool: 'land', ground: WATER } }],
     ['unknown decoration', { command: { tool: 'decor', decor: 'castle' } }],
+    ['look the kind lacks', { command: { tool: 'decor', decor: 'torch', look: 1 } }],
+    ['negative look', { command: { tool: 'decor', decor: 'palm', look: -1 } }],
+    ['fractional look', { command: { tool: 'decor', decor: 'palm', look: 0.5 } }],
     ['extra command key', { command: { tool: 'erase', ground: GRASS } }],
     ['unknown key', { actor: 'someone' }],
     ['wrong version', { v: 2 }],
@@ -272,6 +297,11 @@ describe('edit request validation', () => {
     ['long request id', { requestId: 'x'.repeat(65) }]
   ])('rejects %s', (_name, change) => {
     expect(parse({ ...valid, ...change })).toBeNull()
+  })
+
+  it('accepts a decoration with or without a picked look', () => {
+    expect(parse({ ...valid, command: { tool: 'decor', decor: 'palm', look: 4 } })).not.toBeNull()
+    expect(parse({ ...valid, command: { tool: 'decor', decor: 'palm' } })).not.toBeNull()
   })
 
   it('rejects NaN-like and non-JSON input', () => {

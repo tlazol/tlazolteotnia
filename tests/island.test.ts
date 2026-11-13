@@ -48,6 +48,9 @@ import {
   decorGroups,
   decorKindOf,
   decorKinds,
+  decorLookAt,
+  decorLookOf,
+  decorLooks,
   encodeIsland,
   GRASS,
   GRAVEL,
@@ -122,6 +125,33 @@ describe('island world', () => {
     expect(restored).not.toBeNull()
     expect(restored && serializeIsland(restored)).toBe(serializeIsland(world))
     expect(decorBlocksWalking(22)).toBe(false)
+  })
+
+  it('stores a picked look with the kind and keeps older codes picking by position', () => {
+    for (const kind of decorKinds)
+      for (let look = 0; look < decorLooks[kind]; look++) {
+        const code = decorCode(kind, look)
+        expect(code).toBeLessThan(256)
+        expect(decorKindOf(code)).toBe(kind)
+        expect(decorLookOf(code)).toBe(look)
+        expect(decorLookAt(code, 3, 4)).toBe(look)
+      }
+    expect(decorLookOf(decorCode('palm'))).toBeNull()
+    const auto = decorLookAt(decorCode('palm'), 3, 4)
+    expect(auto).toBeGreaterThanOrEqual(0)
+    expect(auto).toBeLessThan(decorLooks.palm)
+
+    const world = createIsland()
+    world.ground[10 * world.columns + 10] = GRASS
+    world.ground[10 * world.columns + 11] = GRASS
+    world.decor[10 * world.columns + 10] = decorCode('palm', 4)
+    world.decor[10 * world.columns + 11] = decorCode('palm')
+    const restored = decodeIsland(encodeIsland(world))
+    expect(restored?.decor[10 * world.columns + 10]).toBe(decorCode('palm', 4))
+    expect(restored?.decor[10 * world.columns + 11]).toBe(decorCode('palm'))
+    // A look the kind does not have is refused.
+    world.decor[10 * world.columns + 10] = decorCode('torch', 1)
+    expect(decodeIsland(encodeIsland(world))).toBeNull()
   })
 
   it('keeps sea rocks on the sea and refuses saves with decorations on the wrong ground', () => {
@@ -227,7 +257,7 @@ describe('island editing', () => {
   it('floats sea decorations only on water and builds piers over it', () => {
     const world = createIsland()
     expect(planBrush(world, 10, 10, options({ tool: 'decor', decor: 'searock' })).edits).toEqual([
-      { index: 10 * world.columns + 10, ground: WATER, decor: decorCode('searock') }
+      { index: 10 * world.columns + 10, ground: WATER, decor: decorCode('searock', 0) }
     ])
     expect(planBrush(world, 10, 10, options({ ground: DECK })).edits[0].ground).toBe(DECK)
     world.ground[10 * world.columns + 10] = DECK
@@ -366,6 +396,7 @@ describe('island rendering helpers', () => {
       // Only man-made things come in fewer than four designs.
       const manMade = ['torch', 'campfire', 'lantern', 'buoy'].includes(kind)
       expect(decorVariants[kind].length).toBeGreaterThan(manMade ? 0 : 3)
+      expect(decorVariants[kind].length).toBe(decorLooks[kind])
       for (const frame of decorVariants[kind] as Array<(typeof decorVariants)['torch'][number]>) {
         expect(frame.buffer.data.some((value, i) => i % 4 === 3 && value > 0)).toBe(true)
         for (const extra of frame.frames ?? []) {

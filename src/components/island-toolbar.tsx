@@ -13,6 +13,7 @@ import {
   DRYGRASS,
   decorGroups,
   decorKinds,
+  decorLooks,
   decorNames,
   GRASS,
   GRAVEL,
@@ -66,24 +67,25 @@ const groundSwatch: Record<LandGround, string> = {
   [HOTSPRING]: 'is-hotspring'
 }
 
-// Decoration thumbnails drawn from the same sprites as the island.
+// Thumbnails of every look of every decoration, drawn from the island's sprites.
 function useDecorThumbnails() {
-  const [thumbnails, setThumbnails] = useState<Partial<Record<DecorKind, string>>>({})
+  const [thumbnails, setThumbnails] = useState<Partial<Record<DecorKind, string[]>>>({})
   useEffect(() => {
-    const next: Partial<Record<DecorKind, string>> = {}
+    const canvas = document.createElement('canvas')
+    const context = canvas.getContext('2d')
+    if (!context) return
+    const next: Partial<Record<DecorKind, string[]>> = {}
     for (const kind of decorKinds) {
-      const { buffer } = decorVariants[kind][0]
-      const canvas = document.createElement('canvas')
-      canvas.width = buffer.width
-      canvas.height = buffer.height
-      const context = canvas.getContext('2d')
-      if (!context) continue
-      context.putImageData(
-        new ImageData(new Uint8ClampedArray(buffer.data), buffer.width, buffer.height),
-        0,
-        0
-      )
-      next[kind] = canvas.toDataURL()
+      next[kind] = decorVariants[kind].map(({ buffer }) => {
+        canvas.width = buffer.width
+        canvas.height = buffer.height
+        context.putImageData(
+          new ImageData(new Uint8ClampedArray(buffer.data), buffer.width, buffer.height),
+          0,
+          0
+        )
+        return canvas.toDataURL()
+      })
     }
     setThumbnails(next)
   }, [])
@@ -155,6 +157,17 @@ export function IslandToolbar({
             </div>
           )}
           {options.tool === 'decor' && (
+            <DecorLooks
+              kind={options.decor}
+              thumbnails={thumbnails[options.decor]}
+              selected={options.looks?.[options.decor] ?? 0}
+              disabled={disabled}
+              onSelect={(look) =>
+                onOptions({ ...options, looks: { ...options.looks, [options.decor]: look } })
+              }
+            />
+          )}
+          {options.tool === 'decor' && (
             <div className="island-palette">
               {decorGroups.map((group) => (
                 <fieldset key={group.name} className="island-chips island-chips--decor">
@@ -170,11 +183,14 @@ export function IslandToolbar({
                       onClick={() => onOptions({ ...options, decor })}
                     >
                       {thumbnails[decor] ? (
-                        <img className="island-thumb" src={thumbnails[decor]} alt="" />
+                        <img
+                          className="island-thumb"
+                          src={thumbnails[decor][options.looks?.[decor] ?? 0]}
+                          alt=""
+                        />
                       ) : (
                         <span className="island-thumb" aria-hidden="true" />
                       )}
-                      <span>{decorNames[decor]}</span>
                     </button>
                   ))}
                 </fieldset>
@@ -220,6 +236,51 @@ export function IslandToolbar({
         <IslandStatus shared={shared} block={block} now={now} />
       </div>
     </section>
+  )
+}
+
+// The chosen decoration's name and looks, shown above the palette. The first
+// look is picked until the visitor chooses another.
+function DecorLooks({
+  kind,
+  thumbnails,
+  selected,
+  disabled,
+  onSelect
+}: {
+  kind: DecorKind
+  thumbnails: string[] | undefined
+  selected: number
+  disabled: boolean
+  onSelect: (look: number) => void
+}) {
+  const nameId = useId()
+  const name = decorNames[kind]
+  return (
+    <div className="island-looks" role="group" aria-labelledby={nameId}>
+      <p id={nameId} className="island-looks__name">
+        {name}
+      </p>
+      <div className="island-chips island-chips--decor island-looks__list">
+        {Array.from({ length: decorLooks[kind] }, (_, look) => (
+          <button
+            key={look}
+            type="button"
+            disabled={disabled}
+            aria-pressed={selected === look}
+            aria-label={`${name}（${look + 1}）`}
+            title={`${name}（${look + 1}）`}
+            onClick={() => onSelect(look)}
+          >
+            {thumbnails?.[look] ? (
+              <img className="island-thumb" src={thumbnails[look]} alt="" />
+            ) : (
+              <span className="island-thumb" aria-hidden="true" />
+            )}
+          </button>
+        ))}
+      </div>
+    </div>
   )
 }
 
