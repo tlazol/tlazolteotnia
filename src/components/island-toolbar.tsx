@@ -257,7 +257,7 @@ function DecorLooks({
   const nameId = useId()
   const name = decorNames[kind]
   return (
-    <div className="island-looks" role="group" aria-labelledby={nameId}>
+    <fieldset className="island-looks" aria-labelledby={nameId}>
       <p id={nameId} className="island-looks__name">
         {name}
       </p>
@@ -280,7 +280,7 @@ function DecorLooks({
           </button>
         ))}
       </div>
-    </div>
+    </fieldset>
   )
 }
 

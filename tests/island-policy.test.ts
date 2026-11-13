@@ -287,7 +287,7 @@ describe('edit request validation', () => {
     ['unknown tool', { command: { tool: 'paint' } }],
     ['sea as land', { command: { tool: 'land', ground: WATER } }],
     ['unknown decoration', { command: { tool: 'decor', decor: 'castle' } }],
-    ['look the kind lacks', { command: { tool: 'decor', decor: 'torch', look: 1 } }],
+    ['look the kind lacks', { command: { tool: 'decor', decor: 'torch', look: 4 } }],
     ['negative look', { command: { tool: 'decor', decor: 'palm', look: -1 } }],
     ['fractional look', { command: { tool: 'decor', decor: 'palm', look: 0.5 } }],
     ['extra command key', { command: { tool: 'erase', ground: GRASS } }],

@@ -100,7 +100,7 @@ export function isWetGround(ground: Ground) {
 }
 
 // Decorations stand on land or float on the sea; flat ones can be walked over.
-// New kinds go at the end: saves store a kind as its position in this list.
+// Saves store a kind by its slot in storedDecorKinds, not by its place here.
 export const decorInfo = {
   tree: { name: '木', on: 'land', blocks: true },
   palm: { name: 'ヤシ', on: 'land', blocks: true },
@@ -120,7 +120,6 @@ export const decorInfo = {
   mushroom: { name: 'キノコ', on: 'land', blocks: false },
   shell: { name: '貝殻', on: 'land', blocks: false },
   campfire: { name: '焚き火', on: 'land', blocks: true },
-  lantern: { name: '石灯籠', on: 'land', blocks: true },
   fireflies: { name: 'ホタル', on: 'land', blocks: false },
   coral: { name: 'サンゴ', on: 'water', blocks: true },
   flotsam: { name: '浮き流木', on: 'water', blocks: true },
@@ -152,15 +151,37 @@ export const decorGroups: Array<{ name: string; kinds: DecorKind[] }> = [
       'shell'
     ]
   },
-  { name: 'あかり', kinds: ['torch', 'campfire', 'lantern', 'fireflies'] },
+  { name: 'あかり', kinds: ['torch', 'campfire', 'fireflies'] },
   { name: '海', kinds: ['searock', 'coral', 'flotsam', 'buoy'] }
 ]
-// Stored decoration codes: 0 is empty; retired seaweed code 22 stays reserved.
-// Keep this hole so existing flotsam (23) and buoy (24) saves retain their kinds.
+// Stored decoration codes: 0 is empty, otherwise the slot here plus one.
+// Retired kinds leave a null hole (stone lantern 19, seaweed 22) so the codes
+// after them keep their kinds; new kinds go at the end.
 const storedDecorKinds: Array<DecorKind | null> = [
-  ...decorKinds.slice(0, 21),
+  'tree',
+  'palm',
+  'bush',
+  'rock',
+  'flowers',
+  'driftwood',
+  'torch',
+  'searock',
+  'bamboo',
+  'banana',
+  'deadtree',
+  'mangrove',
+  'monstera',
+  'cactus',
+  'relic',
+  'mushroom',
+  'shell',
+  'campfire',
   null,
-  ...decorKinds.slice(21)
+  'fireflies',
+  'coral',
+  null,
+  'flotsam',
+  'buoy'
 ]
 export const MAX_DECOR_CODE = storedDecorKinds.length
 // How many looks each kind has; the sprites draw exactly this many.
@@ -171,7 +192,7 @@ export const decorLooks = {
   rock: 5,
   flowers: 6,
   driftwood: 4,
-  torch: 1,
+  torch: 4,
   searock: 5,
   bamboo: 4,
   banana: 4,
@@ -182,8 +203,7 @@ export const decorLooks = {
   relic: 4,
   mushroom: 4,
   shell: 4,
-  campfire: 2,
-  lantern: 2,
+  campfire: 5,
   fireflies: 4,
   coral: 4,
   flotsam: 4,
@@ -223,6 +243,12 @@ export function isDecorCode(code: number) {
 export function decorBlocksWalking(code: number) {
   const kind = decorKindOf(code)
   return kind !== null && decorInfo[kind].blocks
+}
+// A code left by a retired kind, with or without a picked look: it shows
+// nothing, and loading a save clears it.
+export function isRetiredDecorCode(code: number) {
+  const slot = code & KIND_MASK
+  return slot > 0 && slot <= MAX_DECOR_CODE && storedDecorKinds[slot - 1] === null
 }
 // Whether a decoration may sit on this kind of ground.
 export function decorFits(kind: DecorKind, ground: Ground) {
@@ -481,11 +507,6 @@ export function createDefaultIsland(): IslandWorld {
     [56, 35, 'torch'],
     [61, 47, 'buoy'],
     [64, 46, 'buoy'],
-    // Stone lanterns at the hot spring and along the stepping stones.
-    [33, 22, 'lantern'],
-    [39, 22, 'lantern'],
-    [53, 18, 'lantern'],
-    [59, 15, 'lantern'],
     // The islets.
     [11, 48, 'palm'],
     [70, 10, 'relic'],
@@ -695,6 +716,7 @@ export function decodeIsland(data: unknown): IslandWorld | null {
   for (let y = 0; y < world.rows; y++) {
     for (let x = 0; x < world.columns; x++) {
       const index = y * world.columns + x
+      if (isRetiredDecorCode(decor[index])) decor[index] = 0
       if (!isEditableTile(world, x, y) && (ground[index] !== WATER || decor[index] !== 0))
         return null
       if (!isDecorCode(decor[index])) return null

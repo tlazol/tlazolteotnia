@@ -122,9 +122,27 @@ describe('island world', () => {
     world.decor[10 * world.columns + 11] = 23
     world.decor[10 * world.columns + 12] = 24
     const restored = decodeIsland(encodeIsland(world))
-    expect(restored).not.toBeNull()
-    expect(restored && serializeIsland(restored)).toBe(serializeIsland(world))
+    expect(restored?.decor[10 * world.columns + 10]).toBe(0)
+    expect(restored?.decor[10 * world.columns + 11]).toBe(23)
+    expect(restored?.decor[10 * world.columns + 12]).toBe(24)
     expect(decorBlocksWalking(22)).toBe(false)
+  })
+
+  it('retires stone lanterns, clearing them from saves without shifting later kinds', () => {
+    expect(decorKinds).not.toContain('lantern')
+    expect(decorKindOf(19)).toBeNull()
+    expect(decorCode('campfire')).toBe(18)
+    expect(decorCode('fireflies')).toBe(20)
+    expect(createDefaultIsland().decor.some((code) => (code & 31) === 19)).toBe(false)
+    const world = createIsland()
+    world.ground[10 * world.columns + 10] = GRASS
+    world.ground[10 * world.columns + 11] = GRASS
+    world.decor[10 * world.columns + 10] = 19
+    // A lantern placed with its mossy look picked.
+    world.decor[10 * world.columns + 11] = 19 | (2 << 5)
+    const restored = decodeIsland(encodeIsland(world))
+    expect(restored?.decor[10 * world.columns + 10]).toBe(0)
+    expect(restored?.decor[10 * world.columns + 11]).toBe(0)
   })
 
   it('stores a picked look with the kind and keeps older codes picking by position', () => {
@@ -150,7 +168,7 @@ describe('island world', () => {
     expect(restored?.decor[10 * world.columns + 10]).toBe(decorCode('palm', 4))
     expect(restored?.decor[10 * world.columns + 11]).toBe(decorCode('palm'))
     // A look the kind does not have is refused.
-    world.decor[10 * world.columns + 10] = decorCode('torch', 1)
+    world.decor[10 * world.columns + 10] = decorCode('torch', decorLooks.torch)
     expect(decodeIsland(encodeIsland(world))).toBeNull()
   })
 
@@ -394,7 +412,7 @@ describe('island rendering helpers', () => {
   it('paints a sprite for every decoration, with animation frames of one size', () => {
     for (const kind of decorKinds) {
       // Only man-made things come in fewer than four designs.
-      const manMade = ['torch', 'campfire', 'lantern', 'buoy'].includes(kind)
+      const manMade = ['buoy'].includes(kind)
       expect(decorVariants[kind].length).toBeGreaterThan(manMade ? 0 : 3)
       expect(decorVariants[kind].length).toBe(decorLooks[kind])
       for (const frame of decorVariants[kind] as Array<(typeof decorVariants)['torch'][number]>) {

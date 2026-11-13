@@ -1005,6 +1005,7 @@ body::after {
 .island-status {
   display: flex;
   flex-wrap: wrap;
+  flex-basis: 100%;
   align-items: center;
   justify-content: center;
   gap: 6px;
@@ -1349,9 +1350,6 @@ body::after {
   }
   .island-tools {
     flex-wrap: nowrap;
-  }
-  .island-status {
-    flex-basis: 100%;
   }
   .island-tools {
     gap: 1px;

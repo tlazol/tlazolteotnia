@@ -926,6 +926,86 @@ function paintTorch(): SpriteFrame {
   }
 }
 
+const flickering = (frames: PixelBuffer[], shadow: ShadowSize, height: number): SpriteFrame => ({
+  buffer: frames[0],
+  frames: frames.slice(1),
+  shadow,
+  glow: { height }
+})
+
+// A tiki torch: a tall bamboo pole holding up a woven basket of fire.
+function paintTikiTorch(): SpriteFrame {
+  const cane = shadesOf('#e6cf86', '#c4a65a', '#8d7238')
+  const straw = shadesOf('#e8c77a', '#b88a42', '#7e5a2a')
+  const frames = [0, 1, 2].map((f) => {
+    const buffer = createBuffer(16, 44)
+    for (let y = 17; y <= 42; y++) {
+      const joint = y % 7 === 3
+      setPixel(buffer, 7, y, cane[joint ? 2 : 0])
+      setPixel(buffer, 8, y, cane[joint ? 2 : 1])
+    }
+    // The basket flares upward, woven in a checker of two straws.
+    for (let y = 11; y <= 17; y++) {
+      const half = 2 + (17 - y) * 0.45
+      for (let x = Math.round(7.5 - half); x <= Math.round(7.5 + half); x++)
+        setPixel(buffer, x, y, straw[y === 11 ? 0 : (x + y) % 2 ? 1 : 2])
+    }
+    rect(buffer, 5, 16, 6, 1, straw[2])
+    flame(buffer, 8, 11, 10, 3.5, f)
+    return buffer
+  })
+  return flickering(frames, 'small', 35)
+}
+
+// An iron fire bowl standing on three splayed legs.
+function paintBrazier(): SpriteFrame {
+  const iron = shadesOf('#8b8f96', '#5d6168', '#3d4046', '#26282c')
+  const frames = [0, 1, 2].map((f) => {
+    const buffer = createBuffer(22, 32)
+    line(buffer, 11, 19, 11, 30, iron[2], 1)
+    line(buffer, 9, 18, 4, 30, (k) => iron[k + 1], 2)
+    line(buffer, 13, 18, 17, 30, (k) => iron[k + 1], 2)
+    rect(buffer, 3, 30, 3, 1, iron[3])
+    rect(buffer, 16, 30, 3, 1, iron[3])
+    rect(buffer, 7, 23, 9, 1, iron[2])
+    flame(buffer, 11, 13, 11, 4.5, f)
+    // The bowl in front of the flame's root, glowing coals heaped inside.
+    for (let x = 5; x <= 17; x++) setPixel(buffer, x, 13, fire[(x + f) % 3 === 0 ? 1 : 3])
+    disc(buffer, 11, 14, 7, 5, (x, y) =>
+      y < 14 ? null : y === 14 ? iron[0] : x < 9 ? iron[1] : x > 14 ? iron[3] : iron[2]
+    )
+    rect(buffer, 4, 14, 15, 1, iron[0])
+    return buffer
+  })
+  return flickering(frames, 'small', 21)
+}
+
+// A rag-wrapped torch planted in a cairn of stones.
+function paintCairnTorch(): SpriteFrame {
+  const rag = shadesOf('#e3d4b0', '#b59e72', '#7f6a48')
+  const frames = [0, 1, 2].map((f) => {
+    const buffer = createBuffer(20, 36)
+    for (let y = 12; y <= 30; y++) {
+      setPixel(buffer, 9, y, hex('#7a4f2a'))
+      setPixel(buffer, 10, y, hex('#55351c'))
+    }
+    for (let y = 11; y <= 16; y++) {
+      const wrap = (y + Math.floor(y / 2)) % 3
+      setPixel(buffer, 8, y, rag[wrap === 0 ? 0 : 1])
+      setPixel(buffer, 9, y, rag[wrap])
+      setPixel(buffer, 10, y, rag[wrap === 2 ? 1 : 2])
+      setPixel(buffer, 11, y, rag[2])
+    }
+    flame(buffer, 10, 11, 9, 3, f)
+    boulder(buffer, 10, 29, 4.5, 3.5, 931)
+    boulder(buffer, 5, 32, 4, 3, 933)
+    boulder(buffer, 15, 32, 4, 3, 937)
+    boulder(buffer, 10, 33, 3.5, 2.5, 941)
+    return buffer
+  })
+  return flickering(frames, 'small', 27)
+}
+
 // ---- More greenery ----------------------------------------------------------
 
 const bambooTones = shadesOf('#d3e58a', '#a4c957', '#6f9d3d', '#47722f')
@@ -1657,48 +1737,108 @@ function paintCampfire(tall: boolean): SpriteFrame {
   }
 }
 
-// A stone lantern, a flame wavering behind its window.
-function paintLantern(mossy: boolean): SpriteFrame {
-  const stone = shadesOf('#c9cdbd', '#a2a799', '#787d70', '#565b52')
-  const lit = shadesOf('#fff6c2', '#ffd447', '#ffb93a')
+// Logs stacked square, two to a course, the fire roaring up inside.
+function paintLogCabin(): SpriteFrame {
+  const endGrain = shadesOf('#e0b57a', '#b9844c', '#7a4a26')
   const frames = [0, 1, 2].map((f) => {
-    const buffer = createBuffer(26, 40)
-    rect(buffer, 6, 35, 14, 3, stone[2])
-    rect(buffer, 6, 35, 14, 1, stone[1])
-    rect(buffer, 8, 33, 10, 2, stone[1])
-    rect(buffer, 11, 22, 4, 11, stone[2])
-    rect(buffer, 11, 22, 2, 11, stone[0])
-    rect(buffer, 7, 20, 12, 2, stone[1])
-    rect(buffer, 7, 21, 12, 1, stone[3])
-    rect(buffer, 9, 12, 8, 8, stone[2])
-    rect(buffer, 9, 12, 2, 8, stone[1])
-    rect(buffer, 11, 14, 4, 5, lit[1 + ((f + 1) % 2)])
-    rect(buffer, 12, 15 + (f % 2), 2, 3, lit[0])
-    polygon(
-      buffer,
-      [
-        [3, 12],
-        [23, 12],
-        [17, 6],
-        [9, 6]
-      ],
-      (x, y) => (y > 10 ? stone[3] : x < 13 ? stone[0] : stone[1])
-    )
-    setPixel(buffer, 2, 11, stone[1])
-    setPixel(buffer, 23, 11, stone[2])
-    rect(buffer, 12, 3, 2, 3, stone[1])
-    rect(buffer, 11, 2, 4, 2, stone[0])
-    if (mossy) moss(buffer, 4, 901)
-    // Moss never grows over the flame.
-    if (mossy) rect(buffer, 12, 15 + (f % 2), 2, 3, lit[0])
+    const buffer = createBuffer(30, 36)
+    const base = buffer.height - 3
+    flame(buffer, 15, base - 5, 24, 5.5, f)
+    for (let course = 0; course < 4; course++) {
+      const y = base - 1 - course * 4
+      if (course % 2 === 0) {
+        // A log across the front, the one behind it hidden by the fire.
+        line(buffer, 5, y, 25, y - 1, log, 3)
+        continue
+      }
+      // Logs running back from the viewer: only their sawn ends show.
+      for (const x of [7, 23]) {
+        disc(
+          buffer,
+          x,
+          y,
+          2.4,
+          2,
+          (px, py) => endGrain[Math.hypot(px + 0.5 - x, py + 0.5 - y) < 1 ? 2 : py < y ? 0 : 1]
+        )
+        line(buffer, x + (x < 15 ? 2 : -2), y - 1, x + (x < 15 ? 4 : -4), y - 2, log, 2)
+      }
+    }
+    setPixel(buffer, 12 + f * 2, base - 2, fire[1])
+    setPixel(buffer, 18 - f, base - 6, fire[2])
     return buffer
   })
-  return {
-    buffer: frames[0],
-    frames: frames.slice(1),
-    shadow: 'medium',
-    glow: { height: 22 }
+  return flickering(frames, 'medium', 14)
+}
+
+// A pot hung from a tripod of poles over a low fire, steam curling up.
+function paintPotFire(): SpriteFrame {
+  const iron = shadesOf('#7d8189', '#4e5258', '#33363b', '#1f2124')
+  const pole = shadesOf('#9a7448', '#6e4f2e', '#4a331d')
+  const steam = hex('#f4f1ea', 170)
+  const frames = [0, 1, 2].map((f) => {
+    const buffer = createBuffer(30, 40)
+    const base = buffer.height - 3
+    line(buffer, 4, base, 15, 5, (k) => pole[k], 2)
+    line(buffer, 26, base, 15, 5, (k) => pole[k + 1], 2)
+    line(buffer, 15, 6, 15, 17, iron[2])
+    line(buffer, 7, base - 1, 22, base - 4, log, 3)
+    line(buffer, 22, base - 1, 8, base - 4, log, 3)
+    flame(buffer, 15, base - 3, 9, 4, f)
+    disc(buffer, 15, 23, 6.5, 5.5, (x) => iron[x < 13 ? 1 : x > 18 ? 3 : 2])
+    rect(buffer, 8, 18, 15, 2, iron[0])
+    rect(buffer, 8, 19, 15, 1, iron[1])
+    setPixel(buffer, 11, 22, iron[0])
+    setPixel(buffer, 11, 23, iron[0])
+    for (let i = 0; i < 3; i++) {
+      const y = 15 - i * 3 - (f % 2)
+      setPixel(buffer, 12 + ((i + f) % 3) * 3, y, steam)
+      setPixel(buffer, 13 + ((i + f) % 3) * 3, y - 1, steam)
+    }
+    return buffer
+  })
+  return flickering(frames, 'medium', 8)
+}
+
+// Fish on skewers leaning in to grill round a small fire.
+function paintFishFire(): SpriteFrame {
+  const scales = shadesOf('#dfe8ec', '#9fb4c2', '#6c8597', '#c4813f')
+  const stick = shadesOf('#b98e5a', '#7c5a34')
+  const fish = (buffer: PixelBuffer, x0: number, y0: number, x1: number, y1: number) => {
+    line(buffer, x0, y0, x1, y1, (k) => stick[k], 1)
+    const cx = Math.round(x0 + (x1 - x0) * 0.68)
+    const cy = Math.round(y0 + (y1 - y0) * 0.68)
+    // Head up, browned on the side that faces the fire.
+    const toFire = x1 < x0 ? -1 : 1
+    disc(buffer, cx, cy, 2.2, 4.2, (x, y) =>
+      (x - cx) * toFire > 0 && y > cy - 2
+        ? scales[3]
+        : scales[y < cy - 1 ? 0 : (x - cx) * toFire < 0 ? 1 : 2]
+    )
+    setPixel(buffer, cx - 2, cy + 5, scales[2])
+    setPixel(buffer, cx + 1, cy + 5, scales[2])
+    rect(buffer, cx - 1, cy + 4, 2, 1, scales[2])
+    setPixel(buffer, cx, cy - 2, hex('#1d2226'))
   }
+  const frames = [0, 1, 2].map((f) => {
+    const buffer = createBuffer(32, 32)
+    const base = buffer.height - 3
+    fish(buffer, 16, base - 8, 17, base - 26)
+    line(buffer, 9, base - 2, 23, base - 5, log, 3)
+    line(buffer, 23, base - 2, 10, base - 5, log, 3)
+    flame(buffer, 16, base - 4, 11, 4, f)
+    fish(buffer, 3, base, 10, base - 19)
+    fish(buffer, 29, base, 22, base - 19)
+    for (const [x, y] of [
+      [7, base - 1],
+      [13, base],
+      [19, base],
+      [25, base - 1]
+    ])
+      boulder(buffer, x, y, 3, 2.5, 951 + x)
+    return buffer
+  })
+  return flickering(frames, 'medium', 10)
 }
 
 // Fireflies drifting over a tuft of grass, each blinking in its own time.
@@ -1844,7 +1984,7 @@ export const decorVariants = {
     paintDaisies()
   ],
   driftwood: [paintDriftwood(0), paintDriftwood(1), paintBough(), paintStump()],
-  torch: [paintTorch()],
+  torch: [paintTorch(), paintTikiTorch(), paintBrazier(), paintCairnTorch()],
   searock: [
     paintReef(0),
     paintReef(1),
@@ -1949,8 +2089,13 @@ export const decorVariants = {
     paintMushrooms('#ffc04d', '#e08a2a', false, 1503)
   ],
   shell: [0, 1, 2, 3].map(paintShell),
-  campfire: [paintCampfire(false), paintCampfire(true)],
-  lantern: [paintLantern(false), paintLantern(true)],
+  campfire: [
+    paintCampfire(false),
+    paintCampfire(true),
+    paintLogCabin(),
+    paintPotFire(),
+    paintFishFire()
+  ],
   fireflies: [1600, 1610, 1620, 1630].map(paintFireflies),
   coral: [
     paintCoral(shadesOf('#ffd9e2', '#ff9fb5', '#e0668a'), 11),
