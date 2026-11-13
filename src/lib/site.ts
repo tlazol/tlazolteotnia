@@ -11,6 +11,9 @@ export function getAbsoluteUrl(pathname: string) {
   return new URL(pathname, siteOrigin).toString()
 }
 
+// Captured from the live island, so it lives outside the per-post images in /images/og.
+export const siteOgImageUrl = getAbsoluteUrl('/images/og-top.png')
+
 export function getBlogPostUrl(slug: string) {
   return getAbsoluteUrl(`/blog/${encodeURIComponent(slug)}`)
 }

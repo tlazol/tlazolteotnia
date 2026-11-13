@@ -25,6 +25,10 @@ export class IslandRoom extends BaseIslandRoom {
   protected override recordWrite(kind: CommitKind, rows: number) {
     writes.push({ kind, rows })
   }
+  override async alarm() {
+    // workerd uses wall time, not our test clock. Run upkeep only through
+    // /__test/alarm so frozen dates cannot trigger alarms between assertions.
+  }
   override async fetch(request: Request) {
     const url = new URL(request.url)
     if (url.pathname === '/__test/sockets') {
@@ -34,7 +38,7 @@ export class IslandRoom extends BaseIslandRoom {
       })
     }
     if (url.pathname === '/__test/alarm') {
-      await this.alarm()
+      await super.alarm()
       return Response.json({ ok: true })
     }
     return super.fetch(request)
