@@ -1179,109 +1179,16 @@ body::after {
   opacity: 0.4;
   cursor: default;
 }
+/* A patch of the ground as the island draws it, two screen pixels to each of
+   its pixels. */
 .island-swatch {
+  box-sizing: content-box;
+  flex: none;
   width: 18px;
   height: 18px;
   border: 2px solid var(--ink);
-  background-size: 6px 6px;
-}
-.island-swatch.is-grass {
-  background-color: #5dbd4b;
-  background-image: linear-gradient(45deg, #4aa843 25%, transparent 25%);
-}
-.island-swatch.is-sand {
-  background-color: #f5e8c0;
-  background-image: linear-gradient(45deg, #e5d19e 25%, transparent 25%);
-}
-.island-swatch.is-path {
-  background-color: #dcbf8f;
-  background-image: linear-gradient(45deg, #c4a172 25%, transparent 25%);
-}
-.island-swatch.is-soil {
-  background-color: #a3714a;
-  background-image: linear-gradient(45deg, #87583a 25%, transparent 25%);
-}
-.island-swatch.is-cobble {
-  background-color: #a9a69e;
-  background-image:
-    linear-gradient(#c0a273 0 1px, transparent 1px), linear-gradient(90deg, #c0a273 0 1px, transparent 1px);
-  background-size: 5px 5px;
-}
-.island-swatch.is-swamp {
-  background-color: #3d9bdc;
-  background-image: linear-gradient(#d8f4fb 0 1px, #2a7fc8 1px 2px, transparent 2px);
-  background-size: 7px 5px;
-  background-repeat: repeat;
-}
-.island-swatch.is-deck {
-  background-color: #cb9159;
-  background-image: linear-gradient(#a87240 0 2px, transparent 2px);
-  background-size: 100% 5px;
-}
-.island-swatch.is-moss {
-  background-color: #4f8f4d;
-  background-image: radial-gradient(#8cc070 0 1px, transparent 1.5px);
-}
-.island-swatch.is-drygrass {
-  background-color: #c8b356;
-  background-image: linear-gradient(45deg, #ad9746 25%, transparent 25%);
-}
-.island-swatch.is-clover {
-  background-color: #5fb548;
-  background-image: radial-gradient(#ffffff 0 1px, transparent 1.5px);
-}
-.island-swatch.is-whitesand {
-  background-color: #fbf5e4;
-  background-image: linear-gradient(45deg, #e8dcc0 25%, transparent 25%);
-}
-.island-swatch.is-blacksand {
-  background-color: #504e58;
-  background-image: linear-gradient(45deg, #3d3b45 25%, transparent 25%);
-}
-.island-swatch.is-clay {
-  background-color: #bf6239;
-  background-image: linear-gradient(45deg, #a04c2c 25%, transparent 25%);
-}
-.island-swatch.is-mud {
-  background-color: #6d5846;
-  background-image: radial-gradient(#a3b6ba 0 1px, #5b666b 1.5px 2.5px, transparent 3px);
-}
-.island-swatch.is-gravel {
-  background-color: #b3ab9a;
-  background-image:
-    linear-gradient(#6d665b 0 1px, transparent 1px), linear-gradient(90deg, #6d665b 0 1px, transparent 1px);
-  background-size: 4px 3px;
-}
-.island-swatch.is-rock {
-  background-color: #8e9387;
-  background-image: linear-gradient(135deg, transparent 45%, #53584f 45% 55%, transparent 55%);
-  background-size: 9px 9px;
-}
-.island-swatch.is-lava {
-  background-color: #3c3638;
-  background-image: linear-gradient(135deg, transparent 45%, #ff7a2e 45% 55%, transparent 55%);
-  background-size: 9px 9px;
-}
-.island-swatch.is-brick {
-  background-color: #b8573f;
-  background-image:
-    linear-gradient(#d9c5a3 0 1px, transparent 1px), linear-gradient(90deg, #d9c5a3 0 1px, transparent 1px);
-  background-size: 7px 4px;
-}
-.island-swatch.is-stepping {
-  background-color: #5dbd4b;
-  background-image: radial-gradient(#c9c4b5 0 2px, #87847d 2.5px 3px, transparent 3.5px);
-  background-size: 7px 7px;
-}
-.island-swatch.is-shallows {
-  background-color: #6fd3d8;
-  background-image: linear-gradient(#f0fdf4 0 1px, #4dbfd0 1px 2px, transparent 2px);
-  background-size: 7px 5px;
-}
-.island-swatch.is-hotspring {
-  background-color: #a3dcd6;
-  background-image: radial-gradient(#ffffff 0 1.5px, transparent 2px);
-  background-size: 6px 6px;
+  background: #2b22361a;
+  image-rendering: pixelated;
 }
 /* The ground and decoration palettes: groups of tiles, scrolling sideways
    when they do not fit. */

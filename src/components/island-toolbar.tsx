@@ -1,37 +1,18 @@
-import { useEffect, useId, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
+import type { PixelBuffer } from '#/lib/island-art'
 import { type EditOptions, type IslandTool, toolNames } from '#/lib/island-edit'
-import { decorVariants } from '#/lib/island-sprites'
 import { type ConnectionState, type EditBlock, editBlock, estimateActor } from '#/lib/island-status'
+import type { ThumbnailRequest, ThumbnailResponse } from '#/lib/island-thumbnails.worker'
 import {
-  BLACKSAND,
-  BRICK,
-  CLAY,
-  CLOVER,
-  COBBLE,
-  DECK,
   type DecorKind,
-  DRYGRASS,
   decorGroups,
   decorKinds,
   decorLooks,
   decorNames,
-  GRASS,
-  GRAVEL,
   groundGroups,
   groundNames,
-  HOTSPRING,
-  LAVA,
   type LandGround,
-  MOSS,
-  MUD,
-  PATH,
-  ROCK,
-  SAND,
-  SHALLOWS,
-  SOIL,
-  STEPPING,
-  SWAMP,
-  WHITESAND
+  landGrounds
 } from '#/lib/island-world'
 import { type IconName, PixelIcon } from './island-icons'
 
@@ -43,52 +24,64 @@ const tools: Array<{ tool: IslandTool; icon: IconName; short: string; key: strin
 ]
 export const toolShortcuts = Object.fromEntries(tools.map(({ key, tool }) => [key, tool]))
 
-const groundSwatch: Record<LandGround, string> = {
-  [GRASS]: 'is-grass',
-  [SAND]: 'is-sand',
-  [SOIL]: 'is-soil',
-  [PATH]: 'is-path',
-  [COBBLE]: 'is-cobble',
-  [SWAMP]: 'is-swamp',
-  [DECK]: 'is-deck',
-  [MOSS]: 'is-moss',
-  [DRYGRASS]: 'is-drygrass',
-  [CLOVER]: 'is-clover',
-  [WHITESAND]: 'is-whitesand',
-  [BLACKSAND]: 'is-blacksand',
-  [CLAY]: 'is-clay',
-  [MUD]: 'is-mud',
-  [GRAVEL]: 'is-gravel',
-  [ROCK]: 'is-rock',
-  [LAVA]: 'is-lava',
-  [BRICK]: 'is-brick',
-  [STEPPING]: 'is-stepping',
-  [SHALLOWS]: 'is-shallows',
-  [HOTSPRING]: 'is-hotspring'
+// Pixels of ground across a swatch; it is shown at two screen pixels each, as
+// the island is at its first zoom.
+const GROUND_SWATCH = 9
+
+type Thumbnails = {
+  grounds: Partial<Record<LandGround, string>>
+  decor: Partial<Record<DecorKind, string[]>>
 }
 
-// Thumbnails of every look of every decoration, drawn from the island's sprites.
-function useDecorThumbnails() {
-  const [thumbnails, setThumbnails] = useState<Partial<Record<DecorKind, string[]>>>({})
+// Pictures of every ground and every look of every decoration, drawn in a
+// worker the way the island draws them. Nothing is drawn until the toolbar is
+// first opened; the decoration picked then comes first.
+function useThumbnails(open: boolean, firstKind: DecorKind) {
+  const [thumbnails, setThumbnails] = useState<Thumbnails>({ grounds: {}, decor: {} })
+  const firstKindRef = useRef(firstKind)
+  firstKindRef.current = firstKind
+  const [started, setStarted] = useState(false)
+  if (open && !started) setStarted(true)
   useEffect(() => {
+    if (!started) return
     const canvas = document.createElement('canvas')
     const context = canvas.getContext('2d')
     if (!context) return
-    const next: Partial<Record<DecorKind, string[]>> = {}
-    for (const kind of decorKinds) {
-      next[kind] = decorVariants[kind].map(({ buffer }) => {
-        canvas.width = buffer.width
-        canvas.height = buffer.height
-        context.putImageData(
-          new ImageData(new Uint8ClampedArray(buffer.data), buffer.width, buffer.height),
-          0,
-          0
-        )
-        return canvas.toDataURL()
-      })
+    const toUrl = ({ width, height, data }: PixelBuffer) => {
+      canvas.width = width
+      canvas.height = height
+      context.putImageData(new ImageData(new Uint8ClampedArray(data), width, height), 0, 0)
+      return canvas.toDataURL()
     }
-    setThumbnails(next)
-  }, [])
+    const worker = new Worker(new URL('../lib/island-thumbnails.worker.ts', import.meta.url), {
+      type: 'module'
+    })
+    worker.onmessage = (event: MessageEvent<ThumbnailResponse>) => {
+      const message = event.data
+      if (message.type === 'grounds') {
+        const grounds = Object.fromEntries(
+          message.grounds.map(([ground, buffer]) => [ground, toUrl(buffer)])
+        )
+        setThumbnails((previous) => ({ ...previous, grounds }))
+      } else if (message.type === 'decor') {
+        const looks = message.looks.map(toUrl)
+        setThumbnails((previous) => ({
+          ...previous,
+          decor: { ...previous.decor, [message.kind]: looks }
+        }))
+      } else {
+        console.error('Palette thumbnails failed:', message.message)
+      }
+    }
+    const first = firstKindRef.current
+    const request: ThumbnailRequest = {
+      grounds: landGrounds,
+      groundSize: GROUND_SWATCH,
+      kinds: [first, ...decorKinds.filter((kind) => kind !== first)]
+    }
+    worker.postMessage(request)
+    return () => worker.terminate()
+  }, [started])
   return thumbnails
 }
 
@@ -110,7 +103,7 @@ export function IslandToolbar({
   // Monotonic milliseconds, the clock the connection uses.
   now: () => number
 }) {
-  const thumbnails = useDecorThumbnails()
+  const { grounds: swatches, decor: thumbnails } = useThumbnails(open, options.decor)
   const [, tick] = useState(0)
   // Countdowns and refills repaint once a second; nothing is sent for them.
   useEffect(() => {
@@ -145,10 +138,11 @@ export function IslandToolbar({
                       aria-pressed={options.ground === ground}
                       onClick={() => onOptions({ ...options, ground })}
                     >
-                      <span
-                        className={`island-swatch ${groundSwatch[ground]}`}
-                        aria-hidden="true"
-                      />
+                      {swatches[ground] ? (
+                        <img className="island-swatch" src={swatches[ground]} alt="" />
+                      ) : (
+                        <span className="island-swatch" aria-hidden="true" />
+                      )}
                       {groundNames[ground]}
                     </button>
                   ))}

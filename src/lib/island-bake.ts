@@ -118,6 +118,21 @@ for (const [ground, ramp] of [
 ] as const)
   groundRamp[ground] = ramp
 
+// The palette slot a ground's texel is drawn in, before light moves it.
+function groundSlot(kind: number, texel: readonly number[]) {
+  return slotOnRamp(texel[0], texel[1], texel[2], groundRamp[kind] ?? 'sand')
+}
+
+// The palette slot of open, flat ground of `kind` at (px, py) in full sun, as
+// the island draws it away from any edge; null where a pool's open water is
+// left to the water shader.
+export function flatGroundSlot(kind: number, px: number, py: number) {
+  const texel = groundTexel(kind, px, py, () => kind, false)
+  if (texel[3] === 0) return null
+  // Full sun on flat ground leaves the color where it is.
+  return stepSlot(groundSlot(kind, texel), lightSteps(shade(0, 0, 1, 1, 1), px, py))
+}
+
 export type PointSet = {
   // Screen column, screen row and depth (in DEPTH_UNIT) of each point.
   position: Int16Array
@@ -684,7 +699,7 @@ export class IslandBaker {
         let far = (9 - z) / SUN[2]
         for (const instance of shading) far = Math.max(far, (instance.hi[2] + 1 - z) / SUN[2])
         const lit = softShadow(scene(shading), wx + nx * 0.3, wy + ny * 0.3, z + nz * 0.3, far)
-        const base = slotOnRamp(texel[0], texel[1], texel[2], groundRamp[kind] ?? 'sand')
+        const base = groundSlot(kind, texel)
         const color = palette[stepSlot(base, lightSteps(shade(nx, ny, nz, ao, lit), sx, sy))]
         positions.push(sx, sy, Math.round((wy + z) * DEPTH_UNIT))
         colors.push(color.r, color.g, color.b)
