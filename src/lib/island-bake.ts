@@ -9,10 +9,11 @@
 // screen exactly where the flat map put it, so tiles are picked as before.
 
 import { groundTexel, isPoolGround, terrainClass } from './island-art'
-import { decorModel, type Model, modelDistance, nearestPart } from './island-models'
+import { decorModel, GLOW_CODE, type Model, modelDistance, nearestPart } from './island-models'
 import {
   bayer,
   lightSteps,
+  type Outline,
   palette,
   type RampName,
   rimSlot,
@@ -222,7 +223,7 @@ export function bakeTemplate(m: Model): Template {
   const slots: number[] = []
   const sways: number[] = []
   const glows: number[] = []
-  const outlined: boolean[] = []
+  const outlines: Outline[] = []
   const distance = (x: number, y: number, z: number) => modelDistance(m, x, y, z)
   const ground = (x: number, y: number, z: number) => Math.min(distance(x, y, z), z)
   const top = Math.max(1, m.hi[2])
@@ -235,13 +236,13 @@ export function bakeTemplate(m: Model): Template {
       if (zTop < zBottom) continue
       let z = zTop
       let found = false
-      for (let i = 0; i < 128; i++) {
+      for (let i = 0; i < 200; i++) {
         const d = distance(X, S + z, z)
         if (d < 0.04) {
           found = true
           break
         }
-        z -= Math.max(d * 0.7, 0.04) / SQRT2
+        z -= Math.max(d * 0.7, 0.1) / SQRT2
         if (z < zBottom) break
       }
       if (!found) continue
@@ -259,17 +260,29 @@ export function bakeTemplate(m: Model): Template {
         ny /= l
         nz /= l
         const ao = occlusion(ground, X, Y, z, nx, ny, nz)
-        const lit = softShadow(distance, X + nx * 0.4, Y + ny * 0.4, z + nz * 0.4, 70)
-        slot = stepSlot(slot, lightSteps(shade(nx, ny, nz, ao, lit), sx, sy))
+        const lit = softShadow(
+          distance,
+          X + nx * 0.4,
+          Y + ny * 0.4,
+          z + nz * 0.4,
+          (m.hi[2] + 1 - z) / SUN[2]
+        )
+        const light = shade(nx, ny, nz, ao, lit)
+        // Drawn as a sign: lit or in shade, nothing between.
+        slot = stepSlot(slot, material.flat ? (light < 0.72 ? -1 : 0) : lightSteps(light, sx, sy))
       }
       hit[(sy - y0 + 1) * width + (sx - x0 + 1)] = xs.length
       xs.push(sx)
       ys.push(sy)
       depths.push(Y + z)
       slots.push(slot)
-      sways.push(m.sway * Math.min(1, Math.max(0, z / top)) ** 2)
-      glows.push(material.glow === 'fire' ? 1 : material.glow === 'firefly' ? 2 : 0)
-      outlined.push(material.outline !== false)
+      if (material.glow === 'flame') {
+        // A flame's tip licks from side to side; its foot stays put.
+        const rise = (z - part.lo[2]) / Math.max(1, part.hi[2] - part.lo[2])
+        sways.push(1.6 * Math.min(1, Math.max(0, rise)) ** 1.5)
+      } else sways.push(m.sway * Math.min(1, Math.max(0, z / top)) ** 2)
+      glows.push(material.glow ? GLOW_CODE[material.glow] : 0)
+      outlines.push(material.outline ?? 'soft')
     }
   }
   // The rim: empty pixels beside a drawn one, a little behind it.
@@ -288,7 +301,7 @@ export function bakeTemplate(m: Model): Template {
         const ny = gy + dy
         if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue
         const index = hit[ny * width + nx]
-        if (index >= 0 && outlined[index] && (best < 0 || depths[index] > depths[best]))
+        if (index >= 0 && outlines[index] !== 'none' && (best < 0 || depths[index] > depths[best]))
           best = index
       }
       if (best >= 0) rim.push(gx + x0 - 1, gy + y0 - 1, best)
@@ -318,10 +331,67 @@ export function bakeTemplate(m: Model): Template {
     template.x[i] = rim[r]
     template.y[i] = rim[r + 1]
     template.depth[i] = depths[source] - 1
-    template.slot[i] = rimSlot(slots[source])
+    template.slot[i] = rimSlot(slots[source], outlines[source])
     template.sway[i] = sways[source]
+    // A drawn flame's line moves with it.
+    if (glows[source] === GLOW_CODE.flame) template.glow[i] = GLOW_CODE.flame
   }
   return template
+}
+
+// How much sun reaches a level plane through a decoration, sampled once per
+// pixel around its foot. The ground under a decoration is all but level, so
+// the island reads its shadow from here instead of marching through the model
+// again for every point it shades.
+// Shadows are soft: a sample every other pixel, blended between, is plenty.
+const SHADOW_STEP = 2
+
+export type ShadowMap = {
+  x0: number
+  y0: number
+  width: number
+  height: number
+  light: Float32Array
+}
+
+export function bakeShadow(m: Model): ShadowMap {
+  const reach = Math.max(0, m.hi[2])
+  const x0 = Math.floor(m.lo[0]) - 2
+  const y0 = Math.floor(m.lo[1]) - 2
+  const width = Math.ceil((m.hi[0] + (-SUN[0] / SUN[2]) * reach + 3 - x0) / SHADOW_STEP) + 1
+  const height = Math.ceil((m.hi[1] + (-SUN[1] / SUN[2]) * reach + 3 - y0) / SHADOW_STEP) + 1
+  const light = new Float32Array(width * height)
+  const distance = (x: number, y: number, z: number) => modelDistance(m, x, y, z)
+  const far = (reach + 1) / SUN[2]
+  for (let j = 0; j < height; j++)
+    for (let i = 0; i < width; i++)
+      light[j * width + i] = softShadow(
+        distance,
+        x0 + i * SHADOW_STEP,
+        y0 + j * SHADOW_STEP,
+        0.3,
+        far
+      )
+  return { x0, y0, width, height, light }
+}
+
+// Sun through a decoration at a point given from its foot: the point is slid
+// along the sun's ray onto the plane the map was made on.
+function shadowLight(map: ShadowMap, x: number, y: number, z: number) {
+  const t = z / SUN[2]
+  const u = (x - SUN[0] * t - map.x0) / SHADOW_STEP
+  const v = (y - SUN[1] * t - map.y0) / SHADOW_STEP
+  const i = Math.floor(u)
+  const j = Math.floor(v)
+  if (i < 0 || j < 0 || i >= map.width - 1 || j >= map.height - 1) return 1
+  const fu = u - i
+  const fv = v - j
+  const at = j * map.width + i
+  const a = map.light[at]
+  const b = map.light[at + 1]
+  const c = map.light[at + map.width]
+  const d = map.light[at + map.width + 1]
+  return a + (b - a) * fu + (c - a) * fv + (a - b - c + d) * fu * fv
 }
 
 // ---- The baker --------------------------------------------------------------------
@@ -330,6 +400,7 @@ type Instance = {
   tile: number
   model: Model
   template: () => Template
+  shadow: () => ShadowMap
   x: number
   y: number
   z: number
@@ -352,6 +423,7 @@ export class IslandBaker {
   readonly heights: Float32Array
   private instances = new Map<number, Instance>()
   private templates = new Map<Model, Template>()
+  private shadows = new Map<Model, ShadowMap>()
   private started = false
 
   constructor(columns: number, rows: number) {
@@ -544,6 +616,7 @@ export class IslandBaker {
       tile,
       model,
       template: () => this.template(model),
+      shadow: () => this.shadow(model),
       x,
       y,
       z,
@@ -558,6 +631,15 @@ export class IslandBaker {
     if (!found) {
       found = bakeTemplate(model)
       this.templates.set(model, found)
+    }
+    return found
+  }
+
+  private shadow(model: Model) {
+    let found = this.shadows.get(model)
+    if (!found) {
+      found = bakeShadow(model)
+      this.shadows.set(model, found)
     }
     return found
   }
@@ -696,9 +778,15 @@ export class IslandBaker {
         ny /= l
         nz /= l
         const ao = occlusion(scene(crowding, above), wx, wy, z, nx, ny, nz)
-        let far = (9 - z) / SUN[2]
-        for (const instance of shading) far = Math.max(far, (instance.hi[2] + 1 - z) / SUN[2])
-        const lit = softShadow(scene(shading), wx + nx * 0.3, wy + ny * 0.3, z + nz * 0.3, far)
+        // The ground's own ledges, then whatever decorations stand in the sun.
+        let lit = softShadow(terrain, wx + nx * 0.3, wy + ny * 0.3, z + nz * 0.3, (9 - z) / SUN[2])
+        for (const instance of shading) {
+          if (lit <= 0) break
+          lit = Math.min(
+            lit,
+            shadowLight(instance.shadow(), wx - instance.x, wy - instance.y, z - instance.z)
+          )
+        }
         const base = groundSlot(kind, texel)
         const color = palette[stepSlot(base, lightSteps(shade(nx, ny, nz, ao, lit), sx, sy))]
         positions.push(sx, sy, Math.round((wy + z) * DEPTH_UNIT))

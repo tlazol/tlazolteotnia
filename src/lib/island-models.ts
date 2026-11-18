@@ -2,7 +2,7 @@
 // its foot at the origin: x east, y south (toward the viewer), z up, in art
 // pixels. Each part knows its distance, its bounds and how it is colored.
 
-import { nearestSlot, type RampName, rampSlot } from './island-palette'
+import { nearestSlot, type Outline, type RampName, rampSlot } from './island-palette'
 import {
   box,
   capsule,
@@ -11,14 +11,16 @@ import {
   hash3,
   noise3,
   roundCone,
-  smin,
   sphere,
   type Vec3
 } from './island-sdf'
 import { type DecorKind, decorLooks } from './island-world'
 
-export type Glow = 'fire' | 'firefly'
-export type Material = { slot: number; glow?: Glow; outline?: boolean }
+// 'flame' is a drawn flame: steady colors, its tip leaning from side to side.
+export type Glow = 'fire' | 'firefly' | 'flame'
+export const GLOW_CODE = { fire: 1, firefly: 2, flame: 3 } as const satisfies Record<Glow, number>
+// `flat` lights a surface in two tones only, as a sign rather than a thing.
+export type Material = { slot: number; glow?: Glow; outline?: Outline; flat?: boolean }
 export type Painter = (x: number, y: number, z: number) => Material
 export type Part = {
   d: (x: number, y: number, z: number) => number
@@ -41,21 +43,29 @@ export type Model = {
 // ---- Materials --------------------------------------------------------------
 
 const materials = new Map<string, Material>()
-function mat(ramp: RampName, step: number, glow?: Glow, outline = true): Material {
-  const key = `${ramp}:${step}:${glow ?? ''}:${outline}`
+function mat(
+  ramp: RampName,
+  step: number,
+  glow?: Glow,
+  outline: Outline = 'soft',
+  flat = false
+): Material {
+  const key = `${ramp}:${step}:${glow ?? ''}:${outline}:${flat}`
   let found = materials.get(key)
   if (!found) {
-    found = { slot: rampSlot(ramp, step), glow, outline }
+    found = { slot: rampSlot(ramp, step), glow, outline, flat }
     materials.set(key, found)
   }
   return found
 }
+// A material for the signlike things: flat light, bold ink line.
+const toon = (ramp: RampName, step: number) => mat(ramp, step, undefined, 'ink', true)
 function hexMat(value: string): Material {
   const n = Number.parseInt(value.slice(1), 16)
   const key = `hex:${value}`
   let found = materials.get(key)
   if (!found) {
-    found = { slot: nearestSlot(n >> 16, (n >> 8) & 255, n & 255), outline: true }
+    found = { slot: nearestSlot(n >> 16, (n >> 8) & 255, n & 255), outline: 'soft' }
     materials.set(key, found)
   }
   return found
@@ -74,13 +84,27 @@ function mottled(ramp: RampName, step: number, seed: number, scale = 2.5, spread
     return n < 0.5 - spread ? dark : n > 0.5 + spread ? light : base
   }
 }
-function fire(): Painter {
-  const hot = mat('fire', 3, 'fire', false)
-  const mid = mat('fire', 2, 'fire', false)
-  const edge = mat('fire', 1, 'fire', false)
+// Leaves as a painter sees them: clumps of light and shade broken by a fine
+// speckle of single leaves, a step or two either side of the base.
+function foliage(ramp: RampName, step: number, seed: number): Painter {
+  const tones = [-2, -1, 0, 1, 2].map((k) => mat(ramp, step + k))
   return (x, y, z) => {
-    const r = Math.hypot(x, y)
-    return r < 0.9 && z > -0.5 ? hot : r < 1.7 ? mid : edge
+    const clump = noise3(x / 4.5, y / 4.5, z / 4.5, seed) - 0.5
+    const leaf = noise3(x / 1.05, y / 1.05, z / 1.05, seed + 17) - 0.5
+    const v = clump * 1.6 + leaf * 1.3
+    return tones[v < -0.42 ? 0 : v < -0.13 ? 1 : v < 0.16 ? 2 : v < 0.42 ? 3 : 4]
+  }
+}
+// Bark in furrows that run along the trunk, with the odd pale ridge.
+function barkOf(seed: number, ramp: RampName = 'trunk', step = 5): Painter {
+  const furrow = mat(ramp, step - 2)
+  const shade = mat(ramp, step - 1)
+  const base = mat(ramp, step)
+  const ridge = mat(ramp, step + 1)
+  return (x, y, z) => {
+    const n =
+      noise3(x / 1.1, y / 1.1, z / 5, seed) * 0.75 + noise3(x / 3, y / 3, z / 3, seed + 3) * 0.25
+    return n < 0.33 ? furrow : n < 0.45 ? shade : n > 0.66 ? ridge : base
   }
 }
 
@@ -163,7 +187,9 @@ function blade(
   width: number,
   thick: number,
   paint: Painter,
-  holes = 0
+  holes = 0,
+  // Leaflets `comb` pixels apart, swept forward from a rib down the middle.
+  comb = 0
 ): Part {
   const cy = Math.cos(yaw)
   const sy = Math.sin(yaw)
@@ -189,6 +215,10 @@ function blade(
         const side = i % 2 ? 1 : -1
         d = Math.max(d, -sphere(u - at, v - side * width * 0.85, w, width * 0.32))
       }
+      if (comb > 0 && Math.abs(v) > width * 0.18) {
+        const f = ((((u - Math.abs(v) * 0.9) / comb) % 1) + 1) % 1
+        if (f < 0.42) d = Math.max(d, Math.min(f, 0.42 - f) * comb * 0.7)
+      }
       return d
     },
     paint,
@@ -196,13 +226,9 @@ function blade(
     hi: [center[0] + reach, center[1] + reach, center[2] + reach]
   }
 }
-// A part with its surface roughened, its bounds grown to match.
-function rough(part: Part, bump: Bump): Part {
-  const [lo, hi] = grow(part.lo, part.hi, bump.amp)
-  return { ...part, d: bumped(part.d, bump), lo, hi }
-}
-// Several parts drawn as one, joined by fillets of size k.
-function merge(parts: Part[], k: number, paint = parts[0].paint): Part {
+// Several parts in one painter, measured as one: only those whose bounds
+// could hold the nearest surface are asked.
+function group(parts: Part[], paint = parts[0].paint): Part {
   const lo: Vec3 = [
     Math.min(...parts.map((p) => p.lo[0])),
     Math.min(...parts.map((p) => p.lo[1])),
@@ -215,9 +241,16 @@ function merge(parts: Part[], k: number, paint = parts[0].paint): Part {
   ]
   return {
     d: (x, y, z) => {
-      let d = parts[0].d(x, y, z)
-      for (let i = 1; i < parts.length; i++) d = smin(d, parts[i].d(x, y, z), k)
-      return d
+      let best = Number.POSITIVE_INFINITY
+      for (const part of parts) {
+        const ox = Math.max(part.lo[0] - x, 0, x - part.hi[0])
+        const oy = Math.max(part.lo[1] - y, 0, y - part.hi[1])
+        const oz = Math.max(part.lo[2] - z, 0, z - part.hi[2])
+        if (best > 0 && ox * ox + oy * oy + oz * oz >= best * best) continue
+        const d = part.d(x, y, z)
+        if (d < best) best = d
+      }
+      return best
     },
     paint,
     lo,
@@ -246,7 +279,7 @@ function limb(points: Vec3[], r1: number, r2: number, paint: Painter): Part[] {
     const t1 = (i + 1) / (points.length - 1)
     parts.push(taper(points[i], points[i + 1], r1 + (r2 - r1) * t0, r1 + (r2 - r1) * t1, paint))
   }
-  return parts
+  return [group(parts, paint)]
 }
 
 function model(
@@ -285,119 +318,286 @@ function random(seed: number) {
 }
 const deg = Math.PI / 180
 
+// Big plants stand in the middle of their tile, so the trunk keeps to it.
+const MID = -6
+
+// A crown of leaf clumps filling an ellipsoid, most of them out at its skin,
+// around a dark heart so the gaps between them show shade, not the ground.
+function crown(
+  c: Vec3,
+  r: Vec3,
+  count: number,
+  clump: number,
+  paint: Painter,
+  heart: Painter,
+  seed: number,
+  squash = 1
+): Part[] {
+  const rand = random(seed)
+  const heartPart = egg(c, [r[0] * 0.7, r[1] * 0.7, r[2] * 0.66], heart, {
+    amp: 1.2,
+    scale: 2.4,
+    seed
+  })
+  // The clumps are one part: a single pass of noise roughens all their edges,
+  // and only clumps that could be nearest are measured.
+  const clumps: Array<{ at: Vec3; size: number }> = []
+  const lo: [number, number, number] = [c[0], c[1], c[2]]
+  const hi: [number, number, number] = [c[0], c[1], c[2]]
+  for (let i = 0; i < count; i++) {
+    // More clumps on the sunlit top and sides than underneath.
+    const a = rand() * Math.PI * 2
+    const up = Math.min(1, -0.55 + rand() * 1.75)
+    const around = Math.sqrt(1 - up * up)
+    const reach = 0.55 + rand() * 0.33
+    const at: Vec3 = [
+      c[0] + Math.cos(a) * around * r[0] * reach,
+      c[1] + Math.sin(a) * around * r[1] * reach,
+      c[2] + up * r[2] * reach
+    ]
+    const size = clump * (0.75 + rand() * 0.5)
+    clumps.push({ at, size })
+    for (let axis = 0; axis < 3; axis++) {
+      lo[axis] = Math.min(lo[axis], at[axis] - size)
+      hi[axis] = Math.max(hi[axis], at[axis] + size)
+    }
+  }
+  const amp = clump * 0.18
+  const [low, high] = grow(lo, hi, amp)
+  const leaves: Part = {
+    d: (x, y, z) => {
+      let best = Number.POSITIVE_INFINITY
+      for (const { at, size } of clumps) {
+        const dx = x - at[0]
+        const dy = y - at[1]
+        const dz = z - at[2]
+        // A sphere round the clump bounds it from below.
+        if (Math.sqrt(dx * dx + dy * dy + dz * dz) - size >= best) continue
+        const d = ellipsoid(dx, dy, dz, size, size, size * squash)
+        if (d < best) best = d
+      }
+      return best + (noise3(x / 1.3, y / 1.3, z / 1.3, seed) - 0.5) * 2 * amp
+    },
+    paint,
+    lo: low,
+    hi: high
+  }
+  return [heartPart, leaves]
+}
+
+// A trunk that flares into roots at its foot, all within half a tile.
+function trunk(
+  top: Vec3,
+  r0: number,
+  r1: number,
+  paint: Painter,
+  seed: number,
+  roots = 5,
+  base: Vec3 = [0, MID, -1]
+): Part[] {
+  const rand = random(seed + 5)
+  const parts: Part[] = [taper(base, top, r0, r1, paint, { amp: 0.3, scale: 1.4, seed })]
+  for (let i = 0; i < roots; i++) {
+    const a = (i / roots) * Math.PI * 2 + rand() * 0.7
+    const reach = Math.min(6.8 - 0.9, r0 + 1.8)
+    parts.push(
+      taper(
+        [base[0] + Math.cos(a) * r0 * 0.4, base[1] + Math.sin(a) * r0 * 0.4, 3 + rand() * 2],
+        [base[0] + Math.cos(a) * reach, base[1] + Math.sin(a) * reach, -0.4],
+        r0 * 0.5,
+        0.9,
+        paint
+      )
+    )
+  }
+  return parts
+}
+
 // ---- Trees ------------------------------------------------------------------
 
-const bark = (seed: number) => mottled('bark', 3, seed, 1.6, 0.18)
 const leaves = (seed: number, ramp: RampName = 'leaf', step = 4) =>
   mottled(ramp, step, seed, 2.2, 0.17)
 
+// A savanna tree: a leaning trunk forks into limbs under a wide, flat roof.
 function acacia(lean: number, flip: boolean, seed: number) {
   const s = flip ? -1 : 1
-  const top: Vec3 = [lean * s * 0.6, 0, 19]
-  const paint = bark(seed)
-  const canopy = leaves(seed + 1)
-  return model(
-    [
-      taper([0, 0, -1], top, 2.6, 1.5, paint),
-      taper(top, [(lean - 9) * s, -1, 28], 1.4, 0.8, paint),
-      taper(top, [(lean + 8) * s, 1, 29], 1.4, 0.8, paint),
-      taper(top, [lean * s * 0.8, -2, 31], 1.2, 0.7, paint),
-      merge(
-        [
-          egg([lean * s, 0, 31], [22, 12, 4.2], canopy),
-          egg([(lean - 6) * s, -2, 34], [12, 8, 3.4], canopy),
-          egg([(lean + 9) * s, 2, 33], [9, 7, 3], canopy)
-        ],
-        3,
-        canopy
-      )
-    ].map((part, i) => (i === 4 ? rough(part, { amp: 1.5, scale: 2.6, seed }) : part)),
-    { sway: 1 }
+  const paint = barkOf(seed)
+  const fork: Vec3 = [lean * s, MID, 24]
+  const parts: Part[] = [...trunk(fork, 3.6, 2.4, paint, seed, 4)]
+  const ends: Vec3[] = [
+    [(lean - 17) * s, MID - 2, 40],
+    [(lean + 15) * s, MID + 1, 42],
+    [lean * s * 1.2 + 2, MID - 5, 45],
+    [(lean - 4) * s, MID + 5, 41]
+  ]
+  for (const end of ends)
+    parts.push(
+      ...limb(curve(fork, [(fork[0] + end[0]) / 2, MID, end[2] - 4], end, 3), 1.9, 0.9, paint)
+    )
+  const canopy = foliage('savanna', 5, seed + 1)
+  const heart = plain(mat('savanna', 2))
+  parts.push(
+    ...crown([lean * s, MID, 45], [31, 9, 4.5], 30, 5.5, canopy, heart, seed + 2, 0.6),
+    ...crown([(lean - 9) * s, MID - 1, 49], [16, 7, 3], 10, 5, canopy, heart, seed + 3, 0.6)
   )
+  return model(parts, { sway: 1 })
 }
 
+// A broad shade tree: thick limbs into a tall, round crown of many clumps.
 function broadleaf(seed: number) {
-  const canopy = leaves(seed + 1)
-  const crown = merge(
-    [
-      ball([0, 0, 27], 11, canopy),
-      ball([-8, 1, 22], 7.5, canopy),
-      ball([8, 0, 23], 8, canopy),
-      ball([2, -3, 33], 7.5, canopy),
-      ball([-3, 4, 22], 7, canopy)
-    ],
-    4,
-    canopy
+  const paint = barkOf(seed)
+  const top: Vec3 = [0.5, MID, 30]
+  const parts: Part[] = [...trunk(top, 4.6, 3, paint, seed, 6)]
+  for (const end of [
+    [-12, MID + 1, 44],
+    [12, MID - 2, 46],
+    [2, MID + 4, 52],
+    [-4, MID - 5, 50]
+  ] as Vec3[])
+    parts.push(...limb(curve(top, [end[0] * 0.4, MID, end[2] - 8], end, 3), 2.4, 1.1, paint))
+  parts.push(
+    ...crown(
+      [0, MID, 54],
+      [25, 19, 19],
+      34,
+      7.5,
+      foliage('oak', 6, seed + 1),
+      plain(mat('oak', 2)),
+      seed + 2
+    )
   )
-  return model(
-    [
-      taper([0, 0, -1], [0, 0, 17], 2.8, 1.8, bark(seed)),
-      taper([0, 0, 14], [-6, 1, 21], 1.2, 0.8, bark(seed)),
-      rough(crown, { amp: 1.7, scale: 2.4, seed })
-    ],
-    { sway: 1 }
-  )
+  return model(parts, { sway: 1 })
 }
 
 function sapling(seed: number) {
+  const paint = barkOf(seed, 'trunk', 6)
   return model(
     [
-      taper([0, 0, -1], [0.5, 0, 12], 1.3, 0.9, bark(seed)),
-      egg([0.5, 0, 15], [6, 5.5, 5.5], leaves(seed + 1, 'leaf', 5), {
-        amp: 1,
-        scale: 2,
-        seed
-      })
+      ...trunk([0.6, MID, 24], 2.2, 1.3, paint, seed, 3),
+      ...limb(curve([0.4, MID, 16], [-3, MID, 20], [-6, MID - 1, 25], 2), 0.9, 0.5, paint),
+      ...crown(
+        [0.5, MID, 30],
+        [12, 9, 11],
+        17,
+        4.6,
+        foliage('oak', 7, seed + 1),
+        plain(mat('oak', 3)),
+        seed + 2
+      )
     ],
     { sway: 1 }
   )
 }
 
-function tiered(seed: number) {
-  const canopy = leaves(seed + 1, 'jungle', 3)
-  const tiers: Part[] = [
-    [16, 14, 3.4],
-    [26, 11.5, 3],
-    [35, 8.5, 2.8],
-    [42, 5, 2.6]
-  ].map(([z, r, h]) =>
-    egg([0, 0, z], [r, r * 0.75, h], canopy, { amp: 1.2, scale: 2.2, seed: seed + z })
-  )
-  return model([taper([0, 0, -1], [0, 0, 42], 2.2, 1, bark(seed)), ...tiers], { sway: 1 })
+// A spruce: skirts of drooping boughs stacked to a spire.
+function conifer(seed: number) {
+  const needles = foliage('pine', 6, seed + 1)
+  const parts: Part[] = [...trunk([0, MID, 76], 3.4, 0.8, barkOf(seed, 'trunk', 4), seed, 5)]
+  const tiers = 10
+  for (let k = 0; k < tiers; k++) {
+    const z0 = 10 + k * 6.5
+    const height = 9.5 - k * 0.3
+    const radius = 20 * (1 - k / (tiers + 0.6)) + 2.5
+    const slope = height / Math.hypot(height, radius)
+    const boughs = 9 + Math.round(radius / 2)
+    const twist = k * 1.7 + seed
+    parts.push({
+      d: (x, y, z) => {
+        const dx = x
+        // Squashed front to back: seen from above, depth reads as height.
+        const dy = (y - MID) / 0.55
+        const q = Math.hypot(dx, dy)
+        const s = (z - z0) / height
+        // The skirt hangs lower at its rim, where the bough tips droop.
+        const tip = 0.5 + 0.5 * Math.cos(Math.atan2(dy, dx) * boughs + twist)
+        const side = (q - radius * (1 - Math.max(0, s)) - tip * 3.4) * slope
+        const under = z0 - 5 * tip * (q / radius) ** 2 - z
+        const bump = (noise3(x / 1.6, y / 1.6, z / 1.6, seed + k) - 0.5) * 1.6
+        return Math.max(side, under, z - z0 - height) + bump
+      },
+      paint: needles,
+      lo: [-radius - 4, MID - radius * 0.55 - 4, z0 - 5],
+      hi: [radius + 4, MID + radius * 0.55 + 4, z0 + height + 1]
+    })
+  }
+  return model(parts, { sway: 1 })
+}
+
+// A frond: a rib that rises and arches over, its leaflets combed along it.
+function frond(
+  top: Vec3,
+  yaw: number,
+  length: number,
+  lift: number,
+  droop: number,
+  width: number,
+  paint: Painter
+): Part[] {
+  const at = (t: number): Vec3 => [
+    top[0] + Math.cos(yaw) * length * t,
+    top[1] + Math.sin(yaw) * length * t * 0.85,
+    top[2] + lift * t * 2 - droop * t * t
+  ]
+  const parts: Part[] = []
+  const segments = 5
+  for (let i = 0; i < segments; i++) {
+    const a = at(i / segments)
+    const b = at((i + 1) / segments)
+    const flat = Math.hypot(b[0] - a[0], b[1] - a[1])
+    const t = (i + 0.5) / segments
+    const half = width * Math.sin(Math.PI * Math.min(0.95, 0.18 + t * 0.85))
+    parts.push(
+      blade(
+        a,
+        Math.atan2(b[1] - a[1], b[0] - a[0]),
+        Math.atan2(b[2] - a[2], flat),
+        Math.hypot(flat, b[2] - a[2]) * 1.3,
+        Math.max(0.7, half),
+        0.45,
+        paint,
+        0,
+        2.1
+      )
+    )
+  }
+  return [group(parts, paint)]
 }
 
 function palm(height: number, leanX: number, leanY: number, fronds: number, seed: number) {
   const rand = random(seed)
-  const top: Vec3 = [leanX, leanY, height]
-  const trunkPaint: Painter = (_x, _y, z) =>
-    Math.floor(z / 2.4) % 2 ? mat('palmBark', 3) : mat('palmBark', 2)
-  const trunk = limb(
-    curve([0, 0, -1], [leanX * 0.05, leanY * 0.05, height * 0.55], top, 6),
-    2.2,
-    1.5,
-    trunkPaint
-  )
-  const frondPaint = leaves(seed, 'palmLeaf', 3)
-  const parts: Part[] = [...trunk]
-  for (let i = 0; i < fronds; i++) {
-    const angle = (i / fronds) * Math.PI * 2 + rand() * 0.5
-    const length = 15 + rand() * 5
-    const lift = 2.5 + rand() * 2
-    const droop = 9 + rand() * 4
-    const points: Vec3[] = []
-    for (let t = 0; t <= 1.001; t += 0.25)
-      points.push([
-        top[0] + Math.cos(angle) * length * t,
-        top[1] + Math.sin(angle) * length * t * 0.85,
-        top[2] + lift * t * 2 - droop * t * t
-      ])
-    parts.push(...limb(points, 2.3, 0.7, frondPaint))
+  const top: Vec3 = [leanX, MID + leanY, height]
+  // Leaf scars ring the trunk, closer together toward the crown.
+  const scar = mat('palmTrunk', 2)
+  const tones = [mat('palmTrunk', 3), mat('palmTrunk', 4), mat('palmTrunk', 5)]
+  const trunkPaint: Painter = (x, y, z) => {
+    const ring = (z * (1 + z / height) + noise3(x, y, z, seed) * 1.6) % 3.4
+    if (ring < 0.65) return scar
+    const n = noise3(x / 1.2, y / 1.2, z / 4, seed + 1)
+    return tones[n < 0.4 ? 0 : n > 0.62 ? 2 : 1]
   }
-  const nut = plain(mat('bark', 2))
-  for (let i = 0; i < 3; i++) {
-    const a = (i / 3) * Math.PI * 2 + 0.6
+  const parts: Part[] = [
+    ...limb(
+      curve([0, MID, -1], [leanX * 0.05, MID + leanY * 0.05, height * 0.55], top, 8),
+      3.4,
+      2.3,
+      trunkPaint
+    ),
+    egg([0, MID, 1.5], [4.6, 4.2, 3], trunkPaint)
+  ]
+  const green = foliage('frond', 5, seed)
+  for (let i = 0; i < fronds; i++) {
+    const yaw = (i / fronds) * Math.PI * 2 + rand() * 0.5
+    parts.push(...frond(top, yaw, 30 + rand() * 8, 4 + rand() * 2.5, 20 + rand() * 6, 4.4, green))
+  }
+  // A couple of old fronds hang dead against the trunk.
+  const dead = mottled('dryGrass', 2, seed + 4, 1.2, 0.25)
+  for (const yaw of [rand() * Math.PI * 2, rand() * Math.PI * 2])
+    parts.push(...frond([top[0], top[1], top[2] - 1.5], yaw, 9, -2, 9, 2.4, dead))
+  const nut = mottled('palmTrunk', 2, seed + 7, 1, 0.2)
+  for (let i = 0; i < 4; i++) {
+    const a = (i / 4) * Math.PI * 2 + 0.6
     parts.push(
-      ball([top[0] + Math.cos(a) * 1.6, top[1] + Math.sin(a) * 1.6 + 1, top[2] - 1.8], 1.4, nut)
+      ball([top[0] + Math.cos(a) * 2.2, top[1] + Math.sin(a) * 2.2 + 1, top[2] - 2.2], 1.8, nut)
     )
   }
   return model(parts, { sway: 2 })
@@ -406,43 +606,42 @@ function palm(height: number, leanX: number, leanY: number, fronds: number, seed
 // ---- Undergrowth -------------------------------------------------------------
 
 function thicket(dark: boolean, seed: number) {
-  const canopy = dark ? leaves(seed, 'jungle', 3) : leaves(seed, 'leaf', 4)
-  const body = merge(
-    [
-      ball([0, 0, 6], 7, canopy),
-      ball([-6.5, 1, 4.5], 5.5, canopy),
-      ball([6.5, 0, 4.5], 5.5, canopy),
-      ball([1, -3, 9.5], 5, canopy)
-    ],
-    3,
-    canopy
-  )
-  const parts: Part[] = [rough(body, { amp: 1.3, scale: 2, seed })]
-  const berry = plain(mat('red', 3))
+  const canopy = dark ? foliage('pine', 6, seed) : foliage('oak', 6, seed)
+  const heart = plain(dark ? mat('pine', 2) : mat('oak', 2))
+  const parts: Part[] = crown([0, -2, 7], [12, 7, 7], 14, 4.2, canopy, heart, seed)
+  const berry = plain(mat('red', 2))
+  const shine = plain(mat('red', 4))
   const rand = random(seed + 7)
   if (dark)
-    for (let i = 0; i < 6; i++) {
-      const a = rand() * Math.PI - Math.PI * 0.1
-      parts.push(ball([Math.cos(a) * 7, Math.sin(a) * 4 + 3, 4 + rand() * 6], 0.9, berry))
+    for (let i = 0; i < 9; i++) {
+      const a = rand() * Math.PI - Math.PI * 0.05
+      const at: Vec3 = [Math.cos(a) * 10, Math.sin(a) * 6 - 1, 4 + rand() * 7]
+      parts.push(ball(at, 0.85, berry), ball([at[0] - 0.4, at[1] + 0.5, at[2] + 0.5], 0.35, shine))
     }
   return model(parts, { sway: 1 })
 }
 
 function shrub(flowering: boolean, seed: number) {
-  const parts: Part[] = [
-    egg([0, 0, 5.5], [8, 6.5, 6], leaves(seed, 'palmLeaf', 3), { amp: 1.2, scale: 1.8, seed })
-  ]
+  const parts: Part[] = crown(
+    [0, -1, 6],
+    [9, 6, 6],
+    11,
+    3.6,
+    foliage('frond', 5, seed),
+    plain(mat('frond', 1)),
+    seed
+  )
   if (flowering) {
     const rand = random(seed)
-    const petal = plain(mat('bloom', 2))
-    for (let i = 0; i < 9; i++) {
+    const petals = [plain(mat('bloom', 2)), plain(mat('bloom', 3)), plain(mat('coral', 3))]
+    for (let i = 0; i < 14; i++) {
       const a = rand() * Math.PI * 2
-      const up = 0.3 + rand() * 0.7
+      const up = 0.2 + rand() * 0.8
       parts.push(
         ball(
-          [Math.cos(a) * 7 * (1 - up * 0.5), Math.sin(a) * 5.5 * (1 - up * 0.5), 5.5 + up * 5.5],
-          1,
-          petal
+          [Math.cos(a) * 9 * (1 - up * 0.45), Math.sin(a) * 6 * (1 - up * 0.45) - 1, 6 + up * 6.5],
+          0.75,
+          petals[i % 3]
         )
       )
     }
@@ -517,10 +716,10 @@ function flowers(look: number, seed: number) {
 
 // ---- Wood --------------------------------------------------------------------
 
-const wood = (seed: number) => mottled('deadWood', 3, seed, 1.4, 0.2)
+const wood = (seed: number) => barkOf(seed, 'deadWood', 4)
 
 function driftwood(look: number, seed: number) {
-  const paint = wood(seed)
+  const paint = barkOf(seed, 'deadWood', 4)
   if (look === 0)
     return model([
       taper([-10, 1, 1.6], [10, -1, 1.4], 2.4, 1.6, paint),
@@ -531,6 +730,7 @@ function driftwood(look: number, seed: number) {
     taper([-6, 4, 1.3], [7, -3, 3], 1.5, 1.1, paint)
   ])
 }
+
 function bough(seed: number) {
   const paint = wood(seed)
   return model([
@@ -573,8 +773,8 @@ function stump(seed: number) {
 
 function deadTree(seed: number, height: number, spread: number) {
   const rand = random(seed)
-  const paint = mottled('deadWood', 3, seed, 1.5, 0.2)
-  const parts: Part[] = [taper([0, 0, -1], [0, 0, height], 2.6, 1.3, paint)]
+  const paint = barkOf(seed, 'deadWood', 4)
+  const parts: Part[] = [...trunk([0, MID, height], 3.6, 1.6, paint, seed, 5)]
   const branch = (
     from: Vec3,
     yaw: number,
@@ -585,49 +785,63 @@ function deadTree(seed: number, height: number, spread: number) {
   ) => {
     const to: Vec3 = [
       from[0] + Math.cos(yaw) * length * spread,
-      from[1] + Math.sin(yaw) * length * spread * 0.6,
+      from[1] + Math.sin(yaw) * length * spread * 0.45,
       from[2] + rise
     ]
-    parts.push(taper(from, to, r, r * 0.6, paint))
+    parts.push(
+      ...limb(
+        curve(from, [(from[0] + to[0]) / 2, (from[1] + to[1]) / 2, to[2] - rise * 0.15], to, 2),
+        r,
+        r * 0.6,
+        paint
+      )
+    )
     if (depth > 0)
-      for (const turn of [-0.6, 0.6])
-        branch(to, yaw + turn + (rand() - 0.5) * 0.5, rise * 0.6, length * 0.6, r * 0.6, depth - 1)
+      for (const turn of [-0.55, 0.6])
+        branch(to, yaw + turn + (rand() - 0.5) * 0.5, rise * 0.65, length * 0.6, r * 0.6, depth - 1)
   }
-  branch([0, 0, height * 0.55], Math.PI + 0.3, height * 0.35, 10, 1.3, 1)
-  branch([0, 0, height * 0.75], -0.2, height * 0.3, 9, 1.2, 1)
-  branch([0, 0, height], -Math.PI / 2 + (rand() - 0.5), height * 0.25, 6, 1, 1)
+  branch([0, MID, height * 0.5], Math.PI + 0.3, height * 0.3, 15, 1.7, 2)
+  branch([0, MID, height * 0.72], -0.2, height * 0.28, 14, 1.5, 2)
+  branch([0, MID, height], -Math.PI / 2 + (rand() - 0.5), height * 0.22, 9, 1.2, 1)
   return model(parts, { sway: 1 })
 }
 
 function mangrove(seed: number, roots: number, lean: number) {
   const rand = random(seed)
-  const paint = bark(seed)
+  const paint = barkOf(seed, 'trunk', 5)
   const parts: Part[] = []
-  for (let i = 0; i < roots; i++) {
-    const a = (i / roots) * Math.PI * 2 + rand() * 0.6
-    const foot: Vec3 = [Math.cos(a) * (7 + rand() * 2), Math.sin(a) * (5 + rand() * 1.5), -1]
+  // Stilt roots arch out from the trunk and down into the water.
+  for (let i = 0; i < roots + 2; i++) {
+    const a = (i / (roots + 2)) * Math.PI * 2 + rand() * 0.5
+    const foot: Vec3 = [Math.cos(a) * (9 + rand() * 3), MID + Math.sin(a) * (5 + rand() * 2), -1]
     parts.push(
       ...limb(
-        curve(foot, [foot[0] * 0.8, foot[1] * 0.8, 8], [lean * 0.3, 0, 9], 4),
+        curve(foot, [foot[0] * 0.9, MID + (foot[1] - MID) * 0.9, 12], [lean * 0.3, MID, 13], 4),
         0.9,
-        1.4,
+        1.6,
         paint
       )
     )
   }
-  parts.push(taper([lean * 0.3, 0, 8], [lean, 0, 19], 2, 1.4, paint))
-  const canopy = leaves(seed + 3, 'jungle', 3)
-  const crown = merge(
-    [
-      ball([lean, 0, 23], 8, canopy),
-      ball([lean - 7, 1, 21], 6, canopy),
-      ball([lean + 7, -1, 21], 6, canopy),
-      ball([lean + 1, -3, 27], 5.5, canopy)
-    ],
-    3,
-    canopy
+  parts.push(
+    ...limb(
+      curve([lean * 0.3, MID, 11], [lean * 0.5, MID, 20], [lean, MID, 28], 3),
+      2.6,
+      1.8,
+      paint
+    )
   )
-  parts.push(rough(crown, { amp: 1.4, scale: 2.2, seed }))
+  parts.push(
+    ...crown(
+      [lean, MID, 36],
+      [22, 13, 10],
+      22,
+      5.5,
+      foliage('pine', 6, seed + 3),
+      plain(mat('pine', 2)),
+      seed + 4
+    )
+  )
   return model(parts, { sway: 1 })
 }
 
@@ -659,26 +873,28 @@ function bamboo(stalks: Array<[number, number, number]>, seed: number) {
 function banana(leafCount: number, height: number, bunch: boolean, seed: number) {
   const rand = random(seed)
   const parts: Part[] = [
-    taper([0, 0, -1], [0, 0, height], 2.8, 1.8, mottled('bamboo', 2, seed, 2, 0.2))
+    taper([0, MID, -1], [0, MID, height], 3.4, 2.2, mottled('bamboo', 2, seed, 2, 0.2))
   ]
-  const leaf = leaves(seed, 'leaf', 4)
+  const leaf = foliage('frond', 5, seed)
+  const top: Vec3 = [0, MID, height - 1]
   for (let i = 0; i < leafCount; i++) {
     const yaw = (i / leafCount) * Math.PI * 2 + rand() * 0.5
     // Each leaf rises from the crown, then arches over and hangs.
-    const rise = 6 + rand() * 2
+    const rise = 8 + rand() * 3
     const pitch = (35 + rand() * 15) * deg
     const bend: Vec3 = [
       Math.cos(yaw) * Math.cos(pitch) * rise,
-      Math.sin(yaw) * Math.cos(pitch) * rise,
-      height - 1 + Math.sin(pitch) * rise
+      MID + Math.sin(yaw) * Math.cos(pitch) * rise,
+      top[2] + Math.sin(pitch) * rise
     ]
-    parts.push(blade([0, 0, height - 1], yaw, pitch, rise + 1, 3.4, 0.7, leaf))
-    parts.push(blade(bend, yaw, -(20 + rand() * 20) * deg, 9 + rand() * 4, 4.2, 0.7, leaf))
+    parts.push(blade(top, yaw, pitch, rise + 1, 4.2, 0.6, leaf))
+    // Wind tears the broad blades into strips.
+    parts.push(blade(bend, yaw, -(20 + rand() * 20) * deg, 12 + rand() * 5, 5.2, 0.6, leaf, 0, 3.4))
   }
   if (bunch) {
-    const fruit = plain(mat('yellow', 3))
-    for (let i = 0; i < 4; i++)
-      parts.push(ball([2.6, 2.4, height - 4 - i * 1.4], 1.4 - i * 0.15, fruit))
+    const fruit = mottled('yellow', 2, seed, 1, 0.2)
+    for (let i = 0; i < 5; i++)
+      parts.push(ball([3.2, MID + 3, height - 5 - i * 1.6], 1.8 - i * 0.18, fruit))
   }
   return model(parts, { sway: 1 })
 }
@@ -753,24 +969,61 @@ function cactus(look: number, seed: number) {
 
 // ---- Stone ---------------------------------------------------------------------
 
+// Weathered stone: grain, the odd dark crack, lichen in patches, and weed at
+// the waterline when wet.
 function stone(seed: number, wet: boolean, step = 4): Painter {
-  const rock = mottled('rock', step, seed, 2.2, 0.18)
-  const lichen = mat('lichen', 1)
+  const dark = mat('rock', step - 2)
+  const tones = [mat('rock', step - 1), mat('rock', step), mat('rock', step + 1)]
+  const lichen = [mat('lichen', 0), mat('lichen', 1)]
   const weed = mat('moss', 3)
   return (x, y, z) => {
-    if (wet && z < 1.4) return weed
-    if (noise3(x / 2, y / 2, z / 2, seed + 9) > 0.78) return lichen
-    return rock(x, y, z)
+    if (wet && z < 1.4 + noise3(x, y, 0, seed) * 1.2) return weed
+    const crack = Math.abs(noise3(x / 4, y / 4, z / 4, seed + 5) - 0.5)
+    if (crack < 0.018) return dark
+    const patch = noise3(x / 2.2, y / 2.2, z / 2.2, seed + 9)
+    if (patch > 0.74 && z > 2) return lichen[patch > 0.82 ? 1 : 0]
+    const grain =
+      noise3(x / 1.1, y / 1.1, z / 1.1, seed) * 0.6 + noise3(x / 3, y / 3, z / 3, seed + 1) * 0.4
+    return tones[grain < 0.42 ? 0 : grain > 0.6 ? 2 : 1]
+  }
+}
+
+// A rock with broken faces: an ellipsoid cut by a few planes, then pitted.
+function slab(c: Vec3, r: Vec3, paint: Painter, seed: number): Part {
+  const rand = random(seed)
+  const cuts: Array<[number, number, number, number]> = []
+  for (let i = 0; i < 6; i++) {
+    const a = rand() * Math.PI * 2
+    const up = i === 0 ? 0.95 : -0.1 + rand() * 0.8
+    const around = Math.sqrt(1 - up * up)
+    const n: Vec3 = [Math.cos(a) * around, Math.sin(a) * around, up]
+    // How far the face sits out along its normal, as a share of the reach.
+    const reach = Math.hypot(n[0] * r[0], n[1] * r[1], n[2] * r[2])
+    cuts.push([n[0], n[1], n[2], reach * (0.72 + rand() * 0.18)])
+  }
+  return {
+    d: (x, y, z) => {
+      const px = x - c[0]
+      const py = y - c[1]
+      const pz = z - c[2]
+      let d = ellipsoid(px, py, pz, r[0], r[1], r[2])
+      for (const [nx, ny, nz, off] of cuts) d = Math.max(d, px * nx + py * ny + pz * nz - off)
+      return d + (noise3(x / 1.8, y / 1.8, z / 1.8, seed) - 0.5) * 0.9
+    },
+    paint,
+    lo: [c[0] - r[0] - 0.5, c[1] - r[1] - 0.5, c[2] - r[2] - 0.5],
+    hi: [c[0] + r[0] + 0.5, c[1] + r[1] + 0.5, c[2] + r[2] + 0.5]
   }
 }
 
 function rockPile(seed: number, wet: boolean, pieces: Array<[Vec3, Vec3]>) {
-  const paint = stone(seed, wet)
+  const paint = stone(seed, wet, 5)
   return model(
-    pieces.map(([c, r], i) => egg(c, r, paint, { amp: 0.9, scale: 3, seed: seed + i })),
+    pieces.map(([c, r], i) => slab(c, r, paint, seed + i * 13)),
     { bob: 0 }
   )
 }
+
 function boulderModel(seed: number, wet: boolean) {
   return rockPile(seed, wet, [
     [
@@ -800,12 +1053,13 @@ function stonesModel(seed: number, wet: boolean) {
   ])
 }
 function spireModel(seed: number, wet: boolean) {
-  const paint = stone(seed, wet, 3)
+  const paint = stone(seed, wet, 4)
   return model([
-    taper([0, 0, -1], [1.5, -1, 26], 6.5, 1.5, paint, { amp: 0.9, scale: 2.5, seed }),
-    egg([5, 2, 1], [3.5, 3, 3], paint, { amp: 0.6, seed: seed + 1 })
+    taper([0, 0, -1], [1.5, -1, 26], 6.5, 1.5, paint, { amp: 1.1, scale: 2.2, seed }),
+    slab([5, 2, 1.5], [3.8, 3, 3.2], paint, seed + 1)
   ])
 }
+
 function rockModel(look: number, seed: number) {
   if (look === 0)
     return rockPile(seed, false, [
@@ -830,7 +1084,7 @@ function rockModel(look: number, seed: number) {
   ])
 }
 function reef(look: number, seed: number) {
-  const paint = stone(seed, true, 3)
+  const paint = stone(seed, true, 4)
   const pieces: Array<[Vec3, Vec3]> =
     look === 0
       ? [
@@ -857,9 +1111,7 @@ function reef(look: number, seed: number) {
             [3, 2.5, 2]
           ]
         ]
-  return model(
-    pieces.map(([c, r], i) => egg(c, r, paint, { amp: 0.8, scale: 2.5, seed: seed + i }))
-  )
+  return model(pieces.map(([c, r], i) => slab(c, r, paint, seed + i * 7)))
 }
 
 const dressed = (seed: number) => {
@@ -976,131 +1228,222 @@ function shellModel(look: number) {
   ])
 }
 
-function fireParts(at: Vec3, size: number): Part[] {
-  return [egg([at[0], at[1], at[2] + size * 1.2], [size * 0.8, size * 0.8, size * 1.6], fire())]
+// A flame drawn as a sign: a teardrop with a hotter teardrop inside it and a
+// white-hot heart, each a little nearer the viewer so it shows in front.
+function fireParts(at: Vec3, size: number, lean = 0): Part[] {
+  const layer = (step: number, scale: number, forward: number): Part => {
+    const s = size * scale
+    // Forward and up by the same amount: the same place on screen, but nearer.
+    const base: Vec3 = [at[0], at[1] + forward, at[2] + forward + s * 0.95]
+    const tip: Vec3 = [base[0] + lean * scale, base[1], base[2] + s * 1.9]
+    return taper(base, tip, s, s * 0.08, plain(mat('flame', step, 'flame', 'ramp')))
+  }
+  return [
+    layer(1, 1, 0),
+    layer(2, 0.72, size * 0.5),
+    layer(3, 0.45, size * 0.9),
+    layer(4, 0.2, size * 1.15)
+  ]
+}
+
+// Two embers that drift up and wink out.
+function embers(at: Vec3, seed: number): Part[] {
+  const rand = random(seed)
+  const glow = plain(mat('flame', 3, 'firefly', 'none'))
+  return [0, 1].map(() =>
+    ball([at[0] + (rand() - 0.5) * 7, at[1] + 1, at[2] + 4 + rand() * 4], 0.6, glow)
+  )
+}
+
+// A chunky log, rounded at the ends, its cut faces showing rings.
+function cuteLog(a: Vec3, b: Vec3, r: number): Part {
+  const bark0 = toon('cuteLog', 2)
+  const bark1 = toon('cuteLog', 3)
+  const ring = toon('cuteRing', 1)
+  const core = toon('cuteRing', 2)
+  const ax = b[0] - a[0]
+  const ay = b[1] - a[1]
+  const az = b[2] - a[2]
+  const l2 = ax * ax + ay * ay + az * az
+  return {
+    ...stick(a, b, r, plain(bark0)),
+    paint: (x, y, z) => {
+      const t = ((x - a[0]) * ax + (y - a[1]) * ay + (z - a[2]) * az) / l2
+      if (t < 0 || t > 1) {
+        const end = t < 0 ? a : b
+        return Math.hypot(x - end[0], y - end[1], z - end[2]) < r * 0.45 ? ring : core
+      }
+      return Math.floor(t * 6) % 2 ? bark0 : bark1
+    }
+  }
+}
+
+// A plump stone with a shine on top.
+function cuteStone(c: Vec3, r: Vec3, tone = 2): Part {
+  const body = toon('cuteStone', tone)
+  const shine = toon('cuteStone', tone + 2)
+  return egg(c, r, (x, y, z) =>
+    z > c[2] + r[2] * 0.55 && x < c[0] && y < c[1] + r[1] * 0.2 ? shine : body
+  )
 }
 
 function torch(look: number, seed: number) {
-  if (look === 0)
+  const C = -4
+  if (look === 0) {
+    const wrap = toon('cuteRing', 1)
     return model(
       [
-        taper([0, 0, -1], [0, 0, 18], 1.1, 0.9, bark(seed)),
-        egg([0, 0, 18.5], [1.6, 1.6, 1.3], plain(mat('rust', 1))),
-        ...fireParts([0, 0, 19], 1.6)
+        cuteLog([0, C, -1], [0, C, 13], 1.5),
+        egg([0, C, 13.5], [2.6, 2.6, 2], (_x, _y, z) =>
+          Math.floor(z) % 2 ? wrap : toon('tan', 3)
+        ),
+        ...fireParts([0, C, 14], 3),
+        ...embers([0, C, 22], seed)
       ],
       { glow: { height: 22 } }
     )
+  }
   if (look === 1) {
-    const carved: Painter = (_x, _y, z) => (Math.floor(z / 3) % 2 ? mat('tan', 2) : mat('bark', 3))
-    return model(
-      [
-        taper([0, 0, -1], [0, 0, 19], 1.8, 1.4, carved),
-        egg([0, 0, 20.5], [3, 3, 1.6], plain(mat('bark', 2))),
-        ...fireParts([0, 0, 21], 2.2)
-      ],
-      { glow: { height: 25 } }
+    // A carved post: stacked blocks, a bowl, and the flame above.
+    const parts: Part[] = []
+    for (let k = 0; k < 3; k++)
+      parts.push(
+        block(
+          [0, C, 2.3 + k * 4.4],
+          [3 - k * 0.3, 2.6 - k * 0.3, 2],
+          plain(toon(k % 2 ? 'cuteLog' : 'cuteRing', k % 2 ? 2 : 1)),
+          1
+        )
+      )
+    parts.push(
+      egg([0, C, 15], [4, 3.4, 1.8], plain(toon('cuteLog', 2))),
+      ...fireParts([0, C, 15.5], 3.4),
+      ...embers([0, C, 24], seed)
     )
+    return model(parts, { glow: { height: 24 } })
   }
   if (look === 2) {
-    const iron = plain(mat('steel', 2))
+    const iron = plain(toon('steel', 3))
     return model(
       [
-        stick([-3.5, 1.5, 0], [0, 0, 9], 0.6, iron),
-        stick([3.5, 1.5, 0], [0, 0, 9], 0.6, iron),
-        stick([0, -3.5, 0], [0, 0, 9], 0.6, iron),
+        stick([-3.5, C + 1.5, 0], [0, C, 8], 0.8, iron),
+        stick([3.5, C + 1.5, 0], [0, C, 8], 0.8, iron),
+        stick([0, C - 3.5, 0], [0, C, 8], 0.8, iron),
         {
-          d: (x, y, z) => Math.max(ellipsoid(x, y, z - 10.5, 4.6, 4.6, 2.4), z - 11.2),
-          paint: plain(mat('steel', 3)),
-          lo: [-5, -5, 8],
-          hi: [5, 5, 12]
+          d: (x, y, z) => Math.max(ellipsoid(x, y - C, z - 10, 5, 4.4, 2.8), z - 10.8),
+          paint: (_x, _y, z) => (z > 10.2 ? toon('steel', 4) : toon('steel', 3)),
+          lo: [-5.5, C - 5, 7],
+          hi: [5.5, C + 5, 11]
         },
-        ...fireParts([0, 0, 11], 2.6)
+        ...fireParts([0, C, 10], 3.6),
+        ...embers([0, C, 19], seed)
       ],
-      { glow: { height: 15 } }
+      { glow: { height: 19 } }
     )
   }
-  const paint = stone(seed, false)
   return model(
     [
-      egg([0, 0, 2.5], [4.6, 4, 3], paint),
-      egg([0.5, 0, 7.5], [3.6, 3.2, 2.6], paint),
-      egg([0, 0, 11.5], [2.6, 2.4, 2], paint),
-      ...fireParts([0, 0, 13], 1.8)
+      cuteStone([0, C, 2.6], [5, 4.2, 3], 1),
+      cuteStone([0.4, C, 7.6], [3.8, 3.3, 2.4], 2),
+      cuteStone([0, C, 11.4], [2.8, 2.5, 2], 1),
+      ...fireParts([0, C, 13], 2.6),
+      ...embers([0, C, 20], seed)
     ],
-    { glow: { height: 17 } }
+    { glow: { height: 20 } }
   )
 }
 
 function campfire(look: number, seed: number) {
-  const logs = wood(seed)
+  const C = -5
   const parts: Part[] = []
   const ring = (radius: number) => {
-    const paint = stone(seed, false)
-    for (let i = 0; i < 9; i++) {
-      const a = (i / 9) * Math.PI * 2
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2 + 0.2
+      // Every other stone a shade darker, so each reads on its own.
       parts.push(
-        egg([Math.cos(a) * radius, Math.sin(a) * radius * 0.75, 0.8], [1.9, 1.6, 1.6], paint)
+        cuteStone(
+          [Math.cos(a) * radius, C + Math.sin(a) * radius * 0.62, 1.2],
+          [2.2, 1.8, 1.8],
+          1 + (i % 2)
+        )
       )
     }
   }
-  const teepee = (r: number, h: number) => {
-    for (let i = 0; i < 4; i++) {
-      const a = (i / 4) * Math.PI * 2 + 0.4
-      parts.push(taper([Math.cos(a) * r, Math.sin(a) * r * 0.8, 0.5], [0, 0, h], 1, 0.6, logs))
-    }
+  // Two logs crossed under the flame.
+  const crossed = () => {
+    parts.push(cuteLog([-4.5, C - 1.5, 1.4], [4.5, C + 1.5, 1.4], 1.4))
+    parts.push(cuteLog([-4, C + 2, 1.6], [4, C - 2, 2.6], 1.4))
   }
   if (look === 0 || look === 1) {
-    ring(6)
-    teepee(4, 5)
-    parts.push(...fireParts([0, 0, 1.5], look ? 2.4 : 2))
+    ring(6.5)
+    crossed()
+    const size = look ? 3.6 : 3.1
+    parts.push(
+      ...fireParts([0, C + 0.5, 2], size),
+      // Two little tongues either side of the big one.
+      ...fireParts([-4.2, C + 1, 1.4], size * 0.55, -1.6),
+      ...fireParts([4.2, C + 1, 1.4], size * 0.55, 1.6),
+      ...embers([0, C, 12], seed)
+    )
     if (look === 1) {
-      parts.push(taper([-11, 4, 1.5], [-7, -3, 1.5], 1.8, 1.8, logs))
-      parts.push(taper([8, -3, 1.5], [11, 4, 1.5], 1.8, 1.8, logs))
+      parts.push(cuteLog([-14, C + 3, 1.8], [-10, C - 5, 1.8], 2))
+      parts.push(cuteLog([10, C - 5, 1.8], [14, C + 3, 1.8], 2))
     }
-    return model(parts, { glow: { height: look ? 8 : 7 } })
+    return model(parts, { glow: { height: look ? 13 : 11 } })
   }
   if (look === 2) {
-    for (let k = 0; k < 4; k++) {
-      const z = 0.9 + k * 1.6
-      const along = k % 2 === 0
+    // Logs stacked like a little cabin, the flame on top.
+    for (let k = 0; k < 3; k++) {
+      const z = 1.3 + k * 2.3
       for (const side of [-1, 1])
         parts.push(
-          along
-            ? taper([-5, side * 3.6, z], [5, side * 3.6, z], 1, 1, logs)
-            : taper([side * 3.6, -5, z], [side * 3.6, 5, z], 1, 1, logs)
+          k % 2 === 0
+            ? cuteLog([-5, C + side * 3.4, z], [5, C + side * 3.4, z], 1.25)
+            : cuteLog([side * 3.4, C - 5, z], [side * 3.4, C + 5, z], 1.25)
         )
     }
-    parts.push(...fireParts([0, 0, 5], 2.4))
-    return model(parts, { glow: { height: 11 } })
+    parts.push(...fireParts([0, C, 7], 3.3), ...embers([0, C, 18], seed))
+    return model(parts, { glow: { height: 16 } })
   }
-  ring(5.5)
-  parts.push(...fireParts([0, 0, 1], 1.8))
+  ring(6)
+  parts.push(...fireParts([0, C + 0.5, 1.2], 2.7))
   if (look === 3) {
-    const iron = plain(mat('steel', 2))
-    parts.push(stick([-5, 2, 0], [0, 0, 13], 0.5, iron))
-    parts.push(stick([5, 2, 0], [0, 0, 13], 0.5, iron))
-    parts.push(stick([0, -5, 0], [0, 0, 13], 0.5, iron))
-    parts.push({
-      d: (x, y, z) => Math.max(ellipsoid(x, y, z - 8, 3.4, 3.4, 3), z - 9.6),
-      paint: plain(mat('steel', 3)),
-      lo: [-4, -4, 4],
-      hi: [4, 4, 10]
-    })
-    return model(parts, { glow: { height: 6 } })
+    // A round pot over the fire, steam curling from its lid.
+    const leg = plain(toon('cuteLog', 2))
+    parts.push(
+      stick([-6.5, C + 2, 0], [0, C, 16], 0.7, leg),
+      stick([6.5, C + 2, 0], [0, C, 16], 0.7, leg),
+      stick([0, C - 5, 0], [0, C, 16], 0.7, leg),
+      egg([0, C, 9.5], [4.4, 4, 3.4], (_x, _y, z) =>
+        z > 11.2 ? toon('steel', 4) : toon('steel', 3)
+      ),
+      ball([0, C, 13.2], 0.9, plain(toon('cuteStone', 3)))
+    )
+    return model(parts, { glow: { height: 8 } })
   }
-  const fish = plain(mat('puddle', 3))
+  // Fish on skewers, leaning in to cook.
+  const stickPaint = plain(toon('cuteLog', 3))
   for (const a of [0.5, 2.6, 4.4]) {
-    const foot: Vec3 = [Math.cos(a) * 7, Math.sin(a) * 5, 0]
-    const top: Vec3 = [Math.cos(a) * 3.5, Math.sin(a) * 2.5, 8]
-    parts.push(stick(foot, top, 0.5, plain(mat('bark', 3))))
-    parts.push(egg([top[0], top[1], top[2] - 1.5], [1.2, 1.2, 2.4], fish))
+    const foot: Vec3 = [Math.cos(a) * 8, C + Math.sin(a) * 5, 0]
+    const top: Vec3 = [Math.cos(a) * 3.5, C + Math.sin(a) * 2.2, 10]
+    parts.push(stick(foot, top, 0.55, stickPaint))
+    parts.push(
+      egg([top[0], top[1], top[2] - 1.6], [1.4, 1.2, 2.8], (_x, _y, z) =>
+        z > top[2] - 0.2
+          ? toon('cuteStone', 3)
+          : z < top[2] - 3.4
+            ? toon('cuteRing', 0)
+            : toon('blue', 3)
+      )
+    )
   }
-  return model(parts, { glow: { height: 6 } })
+  parts.push(...embers([0, C, 11], seed))
+  return model(parts, { glow: { height: 8 } })
 }
 
 function fireflies(seed: number) {
   const rand = random(seed)
-  const glow = plain(mat('firefly', 2, 'firefly', false))
+  const glow = plain(mat('firefly', 2, 'firefly', 'none'))
   const parts: Part[] = []
   for (let i = 0; i < 6; i++)
     parts.push(ball([(rand() - 0.5) * 20, (rand() - 0.5) * 12, 4 + rand() * 12], 0.7, glow))
@@ -1133,14 +1476,14 @@ const makers: Record<DecorKind, Array<() => Model>> = {
     () => acacia(3, true, 501),
     () => broadleaf(520),
     () => sapling(530),
-    () => tiered(540)
+    () => conifer(540)
   ],
   palm: [
-    () => palm(42, 4, -1, 7, 610),
-    () => palm(48, -5, 0, 8, 620),
-    () => palm(36, 7, 1, 6, 630),
-    () => palm(52, -2, -2, 8, 640),
-    () => palm(40, -7, 1, 7, 650)
+    () => palm(66, 6, -1, 10, 610),
+    () => palm(76, -8, 0, 11, 620),
+    () => palm(56, 10, 1, 9, 630),
+    () => palm(82, -3, -2, 11, 640),
+    () => palm(62, -10, 1, 10, 650)
   ],
   bush: [
     () => thicket(false, 700),
@@ -1328,6 +1671,10 @@ export function nearestPart(m: Model, x: number, y: number, z: number) {
   let best = Number.POSITIVE_INFINITY
   let found = m.parts[0]
   for (const part of m.parts) {
+    const ox = Math.max(part.lo[0] - x, 0, x - part.hi[0])
+    const oy = Math.max(part.lo[1] - y, 0, y - part.hi[1])
+    const oz = Math.max(part.lo[2] - z, 0, z - part.hi[2])
+    if (ox * ox + oy * oy + oz * oz > best * best && best > 0) continue
     const d = part.d(x, y, z)
     if (d < best) {
       best = d

@@ -124,14 +124,22 @@ export function noise3(x: number, y: number, z: number, seed = 0) {
   const sx = fx * fx * (3 - 2 * fx)
   const sy = fy * fy * (3 - 2 * fy)
   const sz = fz * fz * (3 - 2 * fz)
-  const lerp = (a: number, b: number, t: number) => a + (b - a) * t
-  const layer = (z1: number) =>
-    lerp(
-      lerp(hash3(x0, y0, z1, seed), hash3(x0 + 1, y0, z1, seed), sx),
-      lerp(hash3(x0, y0 + 1, z1, seed), hash3(x0 + 1, y0 + 1, z1, seed), sx),
-      sy
-    )
-  return lerp(layer(z0), layer(z0 + 1), sz)
+  // Written out rather than through small helpers: this runs millions of times.
+  const a0 = hash3(x0, y0, z0, seed)
+  const b0 = hash3(x0 + 1, y0, z0, seed)
+  const c0 = hash3(x0, y0 + 1, z0, seed)
+  const d0 = hash3(x0 + 1, y0 + 1, z0, seed)
+  const a1 = hash3(x0, y0, z0 + 1, seed)
+  const b1 = hash3(x0 + 1, y0, z0 + 1, seed)
+  const c1 = hash3(x0, y0 + 1, z0 + 1, seed)
+  const d1 = hash3(x0 + 1, y0 + 1, z0 + 1, seed)
+  const top0 = a0 + (b0 - a0) * sx
+  const bottom0 = c0 + (d0 - c0) * sx
+  const top1 = a1 + (b1 - a1) * sx
+  const bottom1 = c1 + (d1 - c1) * sx
+  const layer0 = top0 + (bottom0 - top0) * sy
+  const layer1 = top1 + (bottom1 - top1) * sy
+  return layer0 + (layer1 - layer0) * sz
 }
 
 export { hash3 }

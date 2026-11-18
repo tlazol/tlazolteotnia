@@ -495,8 +495,12 @@ void main() {
   float gust = sin(uTime * 1.1 + phase) + 0.45 * sin(uTime * 2.7 + phase * 1.9);
   float lean = floor(gust * aAnim.x * 0.7 + 0.5);
   float bob = floor(sin(uTime * 1.7 + phase * 37.0) * aAnim.y + 0.5);
+  if (vGlow > 2.5) {
+    // A drawn flame: its tip leans one way, then the other, in whole pixels.
+    lean = floor(sin(uTime * 5.0 + phase * 13.0) * aAnim.x + 0.5);
+  }
   vec2 screen = position.xy + vec2(lean, bob);
-  if (vGlow > 1.5) {
+  if (vGlow > 1.5 && vGlow < 2.5) {
     float s = seedOf(position.xy + 3.1) * 6.283;
     screen += floor(vec2(sin(uTime * 0.6 + s) * 2.6, cos(uTime * 0.8 + s * 1.3) * 1.8) + 0.5);
   }
@@ -516,7 +520,10 @@ float flicker(float seed, float tick) {
 void main() {
   if (uGlowOnly > 0.5 && vGlow < 0.5) discard;
   vec3 col = vColor;
-  if (vGlow > 1.5) {
+  if (vGlow > 2.5) {
+    // A drawn flame keeps its colors and only breathes a little brighter.
+    if (sin(uTime * 3.1 + vSeed * 0.5) > 0.6) col = mix(col, ${vec3Of('#fff4bd')}, 0.18);
+  } else if (vGlow > 1.5) {
     // A firefly glows and fades on its own beat.
     if (sin(uTime * 2.3 + vSeed * 40.0) < -0.35) discard;
   } else if (vGlow > 0.5) {

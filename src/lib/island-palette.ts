@@ -55,6 +55,28 @@ export const ramps = {
   deadWood: ['#2e2622', '#4a3e37', '#695a51', '#8a7b70', '#ac9e92', '#cfc3b6'],
   jungle: ['#0b2e1e', '#125030', '#1b6e3c', '#2a8e48', '#46ae5c', '#7ed07e'],
   cactus: ['#183d24', '#265e33', '#377f40', '#4f9f4f', '#76bd66', '#a6dc8c'],
+  // Plants drawn true to life: muted, with long ramps for leaf-by-leaf light.
+  oak: [
+    '#13241a',
+    '#1c3420',
+    '#28472a',
+    '#365c31',
+    '#47723a',
+    '#5c8a43',
+    '#77a24f',
+    '#97ba5f',
+    '#bfd27c'
+  ],
+  pine: ['#0f1d1a', '#162a23', '#1f3a2c', '#2a4b37', '#365d42', '#467050', '#5b8661', '#77a077'],
+  savanna: ['#1f2414', '#2d351b', '#3e4923', '#525e2c', '#677536', '#7f8c43', '#9ca456', '#bcbd72'],
+  frond: ['#132117', '#1c321d', '#284625', '#365c2e', '#477238', '#5c8943', '#77a152', '#9bbb6a'],
+  trunk: ['#1f1712', '#2e231b', '#3f3125', '#544231', '#6b5640', '#846d53', '#9f8869', '#bba788'],
+  palmTrunk: ['#2a2219', '#3d3226', '#524435', '#6a5a46', '#837259', '#9d8d73', '#bbab90'],
+  // Small fires drawn as signs: a few flat, bright colors in a bold line.
+  flame: ['#b5301f', '#ec5a2a', '#ff9530', '#ffd04a', '#fff4bd'],
+  cuteStone: ['#4f4a4c', '#817a7a', '#aea7a3', '#d8d2cb', '#f4f0ea'],
+  cuteLog: ['#4e2c1b', '#80492a', '#ab6a3b', '#d08f55', '#ecbe85'],
+  cuteRing: ['#a8723f', '#d9a463', '#f4d29a'],
   // Stone and things people made.
   relic: ['#2a2730', '#423d4a', '#5d5766', '#7c7586', '#9d96a6', '#c0bac8', '#dedae3'],
   rust: ['#3b1f12', '#6b3a1f', '#9a5a2c'],
@@ -152,8 +174,15 @@ export function rampSlot(name: RampName, step: number) {
   return slots[Math.max(0, Math.min(slots.length - 1, step))]
 }
 
-// The darkest color of the ramp a slot belongs to: an outline that keeps the hue.
-export function rimSlot(slot: number) {
+// How a silhouette is edged: a few steps darker than the color beside it, as
+// a painter would shade a turning edge ('soft'), the darkest of its ramp
+// ('ramp'), a bold ink line ('ink'), or not at all.
+export type Outline = 'soft' | 'ramp' | 'ink' | 'none'
+
+// The color of the rim beside a point of `slot`.
+export function rimSlot(slot: number, outline: Outline = 'ramp') {
+  if (outline === 'ink') return rampSlot('ink', 0)
+  if (outline === 'soft') return stepSlot(slot, -2)
   const slots = rampSlots[palette[slot].ramp]
   return slots[0]
 }

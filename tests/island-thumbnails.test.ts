@@ -15,7 +15,8 @@ describe('palette thumbnails', () => {
         expect(drawn).toBe(bakeTemplate(decorModel(kind, look)).count)
         expect(thumbnail.data.length).toBe(thumbnail.width * thumbnail.height * 4)
       }
-  })
+    // Bakes every look twice over, the big trees too: slow beside the others.
+  }, 30_000)
 
   it('fill every ground swatch, pools with their water', () => {
     for (const ground of landGrounds) {

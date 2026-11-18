@@ -6,7 +6,7 @@ import {
   IslandBaker,
   REFERENCE_HEIGHT
 } from '../src/lib/island-bake'
-import { decorModel, modelDistance, modelLookCount } from '../src/lib/island-models'
+import { decorModel, GLOW_CODE, modelDistance, modelLookCount } from '../src/lib/island-models'
 import {
   lightSteps,
   nearestSlot,
@@ -89,9 +89,29 @@ describe('decoration models', () => {
   })
 
   it('stand on their foot', () => {
+    // Big plants root in the middle of their tile, half a tile behind the foot.
     const palm = decorModel('palm', 0)
-    expect(modelDistance(palm, 0, 0, 5)).toBeLessThan(0)
-    expect(modelDistance(palm, 0, 0, -6)).toBeGreaterThan(0)
+    expect(modelDistance(palm, 0, -6, 5)).toBeLessThan(0)
+    expect(modelDistance(palm, 0, -6, -6)).toBeGreaterThan(0)
+  })
+
+  it('keep tree trunks within their tile', () => {
+    for (const kind of ['tree', 'palm', 'deadtree'] as const)
+      for (let look = 0; look < decorLooks[kind]; look++) {
+        const model = decorModel(kind, look)
+        // Just above the roots, nothing reaches past the tile's edges.
+        for (let x = -12; x <= 12; x += 0.5)
+          for (let y = -18; y <= 6; y += 0.5) {
+            const inside = Math.abs(x) < 8 && y > -14 && y < 2
+            if (!inside) expect(modelDistance(model, x, y, 2), `${kind} ${look}`).toBeGreaterThan(0)
+          }
+      }
+  })
+
+  it('draw small fires as signs: bold lines around flat colors', () => {
+    const template = bakeTemplate(decorModel('campfire', 0))
+    const flame = template.glow.filter((glow) => glow === GLOW_CODE.flame).length
+    expect(flame).toBeGreaterThan(20)
   })
 
   it('give flames and fireflies glowing points', () => {
