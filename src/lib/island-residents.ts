@@ -122,6 +122,15 @@ export type ResidentDesign = {
 
 // Hand-picked looks for the newest regulars.
 const designOverrides: Record<string, Partial<ResidentDesign>> = {
+  'anti-poem-skill': {
+    hair: 'bob',
+    accessory: 'beret',
+    outfit: 'coat',
+    hairColor: '#3a2c3c',
+    top: '#f4f0e6',
+    bottom: '#4a4458',
+    accent: '#e0574f'
+  },
   'gpt-sol-luna-coding-workflow': {
     hair: 'long',
     accessory: 'headphones',

@@ -97,6 +97,7 @@ describe('blog post parser', () => {
     expect(
       sortBlogPostsNewestFirst(posts.filter((post) => !post.draft)).map((post) => post.slug)
     ).toEqual([
+      'anti-poem-skill',
       'gpt-sol-luna-coding-workflow',
       'understanding-harnesses-again',
       'skills-inventory',
