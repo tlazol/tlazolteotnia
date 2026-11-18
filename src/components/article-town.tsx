@@ -96,6 +96,8 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
         button.dataset.dragging = String(position.dragging)
         button.style.width = `${boxWidth}px`
         button.style.height = `${boxHeight}px`
+        // Keep the badge above the sprite, independent of the minimum hit area.
+        button.style.setProperty('--resident-height', `${position.height}px`)
         button.style.transform = `translate(${left}px, ${top}px)`
         const visible = inView && !currentEditorOpen
         button.style.visibility = visible ? 'visible' : 'hidden'
