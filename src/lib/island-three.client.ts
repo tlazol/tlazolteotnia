@@ -1,15 +1,21 @@
 import {
   AdditiveBlending,
   AlwaysStencilFunc,
+  BufferAttribute,
+  BufferGeometry,
   CanvasTexture,
   Color,
   CustomBlending,
   DataTexture,
+  DoubleSide,
   DstColorFactor,
   EqualStencilFunc,
   GreaterDepth,
+  Group,
   InstancedMesh,
+  LessEqualDepth,
   LinearFilter,
+  LinearSRGBColorSpace,
   type Material,
   Matrix4,
   Mesh,
@@ -18,14 +24,15 @@ import {
   NoColorSpace,
   OrthographicCamera,
   PlaneGeometry,
+  Points,
   RedFormat,
   ReplaceStencilOp,
   Scene,
   ShaderMaterial,
-  SRGBColorSpace,
   type Texture,
   UnsignedByteType,
   WebGLRenderer,
+  WebGLRenderTarget,
   ZeroFactor
 } from 'three'
 import {
@@ -35,19 +42,19 @@ import {
   islandPalette,
   outline,
   type PixelBuffer,
-  paintTerrain,
   SHORE_CELL,
   SHORE_RANGE,
   setPixel,
   updateShoreField
 } from './island-art'
+import { type BakedChunk, DEPTH_UNIT, REFERENCE_HEIGHT } from './island-bake'
+import type { BakeRequest, BakeResponse } from './island-bake.worker'
 import { clampView, type IslandView, WORLD_HEIGHT, WORLD_WIDTH } from './island-camera'
 import { daylightNow } from './island-daylight'
 import {
   dropResident,
   facings,
   paintResidentSheet,
-  RESIDENT_FOOT_PAD,
   RESIDENT_FRAME,
   RESIDENT_FRAMES,
   RESIDENT_SCALE,
@@ -59,24 +66,14 @@ import {
   stepResidents
 } from './island-residents'
 import {
-  decorVariants,
   GULL_FRAME,
   paintFishSchool,
   paintGull,
   paintShadow,
   paintTurtle,
-  type ShadowSize,
-  type SpriteFrame,
   shadowSizes
 } from './island-sprites'
-import {
-  decorKindOf,
-  decorLookAt,
-  EDIT_MARGIN,
-  hash2,
-  type IslandWorld,
-  TILE_SIZE
-} from './island-world'
+import { EDIT_MARGIN, hash2, type IslandWorld, TILE_SIZE } from './island-world'
 import type { SceneSize } from './scene-math'
 
 export type ResidentScreen = {
@@ -95,20 +92,41 @@ export type ResidentScreen = {
 export type CursorTile = { x: number; y: number; allowed: boolean }
 export type IslandCursor = { tiles: CursorTile[]; soft: boolean; center: { x: number; y: number } }
 
-const CHUNK = 256
-const Z = {
-  water: -10,
-  swimmer: -5,
-  terrain: 0,
-  grid: 0.3,
-  shadow: 0.5,
-  flat: 0.55,
-  ring: 0.6,
-  sprite: 1,
-  cursor: 5,
-  sky: 20
-}
-const spriteZ = (footY: number) => Z.sprite + footY / 4000
+// The whole scene is drawn one art pixel to one pixel into a small image,
+// which is then scaled up to the screen without smoothing.
+//
+// Things on the island live in world coordinates (x east, y south, z up) under
+// a group that projects them: x stays, y - z becomes the screen row, and y + z
+// orders them front to back. Points carry their screen position already.
+// Overlays (clouds, cursor, gulls, the time of day) are drawn flat in screen
+// coordinates, above everything.
+const DEPTH_SCALE = 0.01
+const DEPTH_BASE = -30
+const Z = { grid: 0.3, cursor: 5, sky: 20 }
+
+const OBLIQUE = new Matrix4().set(
+  1,
+  0,
+  0,
+  0,
+  0,
+  -1,
+  1,
+  -REFERENCE_HEIGHT,
+  0,
+  DEPTH_SCALE,
+  DEPTH_SCALE,
+  DEPTH_BASE,
+  0,
+  0,
+  0,
+  1
+)
+
+// Colors go into the small image exactly as they are written; nothing is
+// converted between color spaces on the way.
+const rawColor = (value: string) =>
+  new Color().setHex(Number.parseInt(value.slice(1), 16), LinearSRGBColorSpace)
 
 function textureFrom(buffer: PixelBuffer) {
   const canvas = document.createElement('canvas')
@@ -128,11 +146,11 @@ function pixelTexture<T extends Texture>(texture: T) {
   texture.magFilter = NearestFilter
   texture.minFilter = NearestFilter
   texture.generateMipmaps = false
-  texture.colorSpace = SRGBColorSpace
+  texture.colorSpace = NoColorSpace
   return texture
 }
 
-// Instanced sprites keyed by an id (tile index or resident index). Adding and
+// Instanced flat sprites keyed by an id, in screen coordinates. Adding and
 // removing touches only that instance; capacity grows by doubling.
 class SpriteLayer {
   mesh: InstancedMesh
@@ -159,7 +177,7 @@ class SpriteLayer {
     return mesh
   }
   // Places the sprite with its bottom-center at (x, y) in art pixels.
-  set(key: number, x: number, y: number, z: number, flip = false) {
+  set(key: number, x: number, y: number, z: number) {
     let slot = this.slots.get(key)
     if (slot === undefined) {
       slot = this.keys.length
@@ -179,8 +197,7 @@ class SpriteLayer {
     }
     const left = Math.round(x) - Math.floor(this.width / 2)
     const top = Math.round(y) - this.height
-    this.matrix.makeScale(flip ? -1 : 1, 1, 1)
-    this.matrix.setPosition(left + this.width / 2, -(top + this.height / 2), z)
+    this.matrix.makeTranslation(left + this.width / 2, -(top + this.height / 2), z)
     this.mesh.setMatrixAt(slot, this.matrix)
     this.mesh.instanceMatrix.needsUpdate = true
   }
@@ -208,12 +225,22 @@ class SpriteLayer {
   }
 }
 
-const waterVertex = /* glsl */ `
+// A flat plane in screen coordinates, at the reference height.
+const screenVertex = /* glsl */ `
 varying vec2 vWorld;
 void main() {
   vec4 world = modelMatrix * vec4(position, 1.0);
   vWorld = vec2(world.x, -world.y);
   gl_Position = projectionMatrix * viewMatrix * world;
+}
+`
+
+// A flat plane lying in the world: its own coordinates are the world's.
+const groundVertex = /* glsl */ `
+varying vec2 vWorld;
+void main() {
+  vWorld = position.xy;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
 }
 `
 
@@ -250,7 +277,7 @@ float bayer4(vec2 a) {
 
 // The sea: depth bands dithered into each other from pale lagoon to deep blue,
 // reef patches and moving light on the shallows, surf rolling onto the shore.
-// Lakes, shallows and hot springs show through the terrain too, as clear fresh
+// Lakes, shallows and hot springs show between their banks too, as clear fresh
 // water under the same ripples.
 const waterFragment = /* glsl */ `
 uniform sampler2D uShore;
@@ -420,40 +447,86 @@ void main() {
 }
 `
 
-// Decoration sprites: cut-out pixels that can lean with the wind row by row
-// (so the art stays on the pixel grid) or bob on the water.
-const spriteVertex = /* glsl */ `
-varying vec2 vUv;
-varying float vPhase;
+// Baked points: one pixel each, already lit and colored. Positions are the
+// screen column, screen row and depth.
+const pointHead = /* glsl */ `
+attribute vec3 aColor;
+varying vec3 vColor;
+vec4 place(vec2 screen, float depth) {
+  return projectionMatrix * viewMatrix * vec4(
+    screen.x + 0.5,
+    -(screen.y + 0.5),
+    depth / ${DEPTH_UNIT.toFixed(1)} * ${DEPTH_SCALE.toFixed(4)} + ${DEPTH_BASE.toFixed(1)},
+    1.0
+  );
+}
+`
+const terrainVertex = /* glsl */ `
+${pointHead}
 void main() {
-  vUv = uv;
-  #ifdef USE_INSTANCING
-  mat4 placed = modelMatrix * instanceMatrix;
-  #else
-  mat4 placed = modelMatrix;
-  #endif
-  vPhase = placed[3].x * 0.021 + placed[3].y * 0.013;
-  gl_Position = projectionMatrix * viewMatrix * placed * vec4(position, 1.0);
+  vColor = aColor;
+  gl_Position = place(position.xy, position.z);
+  gl_PointSize = 1.0;
+}
+`
+const pointFragment = /* glsl */ `
+varying vec3 vColor;
+void main() {
+  gl_FragColor = vec4(vColor, 1.0);
 }
 `
 
-const spriteFragment = /* glsl */ `
-uniform sampler2D map;
-uniform vec2 uSize;
+// Decoration points also lean with the wind row by row (so they stay on the
+// pixel grid), bob on the water, flicker as flames or drift as fireflies.
+const decorVertex = /* glsl */ `
+${pointHead}
 uniform float uTime;
-uniform float uSway;
-uniform float uBob;
-varying vec2 vUv;
-varying float vPhase;
+attribute vec4 aAnim;
+varying float vGlow;
+varying float vSeed;
+float seedOf(vec2 p) {
+  return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
+}
 void main() {
-  float gust = sin(uTime * 1.1 + vPhase) + 0.45 * sin(uTime * 2.7 + vPhase * 1.9);
-  float lean = floor(gust * uSway * vUv.y * vUv.y * 0.7 + 0.5);
-  float bob = floor(sin(uTime * 1.7 + vPhase * 37.0) * uBob + 0.5);
-  vec2 uv = vUv + vec2(lean / uSize.x, bob / uSize.y);
-  if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) discard;
-  vec4 texel = texture2D(map, uv);
-  if (texel.a < 0.5) discard;
-  gl_FragColor = vec4(texel.rgb, 1.0);
+  vColor = aColor;
+  vGlow = aAnim.z;
+  vSeed = seedOf(position.xy);
+  float phase = aAnim.w;
+  float gust = sin(uTime * 1.1 + phase) + 0.45 * sin(uTime * 2.7 + phase * 1.9);
+  float lean = floor(gust * aAnim.x * 0.7 + 0.5);
+  float bob = floor(sin(uTime * 1.7 + phase * 37.0) * aAnim.y + 0.5);
+  vec2 screen = position.xy + vec2(lean, bob);
+  if (vGlow > 1.5) {
+    float s = seedOf(position.xy + 3.1) * 6.283;
+    screen += floor(vec2(sin(uTime * 0.6 + s) * 2.6, cos(uTime * 0.8 + s * 1.3) * 1.8) + 0.5);
+  }
+  gl_Position = place(screen, position.z);
+  gl_PointSize = 1.0;
+}
+`
+const decorFragment = /* glsl */ `
+uniform float uTime;
+uniform float uGlowOnly;
+varying vec3 vColor;
+varying float vGlow;
+varying float vSeed;
+float flicker(float seed, float tick) {
+  return fract(sin(seed * 91.7 + tick * 47.3) * 43758.5453);
+}
+void main() {
+  if (uGlowOnly > 0.5 && vGlow < 0.5) discard;
+  vec3 col = vColor;
+  if (vGlow > 1.5) {
+    // A firefly glows and fades on its own beat.
+    if (sin(uTime * 2.3 + vSeed * 40.0) < -0.35) discard;
+  } else if (vGlow > 0.5) {
+    // Flames lick up and die back in steps, like the drawn frames they replace.
+    float h = flicker(vSeed, floor(uTime * 7.0));
+    if (h < 0.14) discard;
+    if (h > 0.78) col = mix(col, ${vec3Of('#fff3b0')}, 0.6);
+    else if (h < 0.3) col = mix(col, ${vec3Of('#c2410c')}, 0.5);
+  }
+  gl_FragColor = vec4(col, 1.0);
 }
 `
 
@@ -479,6 +552,26 @@ void main() {
   if ((vertical && mod(floor(p.y / 4.0), 2.0) == 0.0) || (horizontal && mod(floor(p.x / 4.0), 2.0) == 0.0)) a = max(a, 0.55);
   if (a <= 0.0) discard;
   gl_FragColor = vec4(1.0, 1.0, 1.0, a);
+}
+`
+
+// Scales the small image up to the screen, each art pixel a block of whole
+// device pixels; the offset keeps panning smooth below one art pixel.
+const blitVertex = /* glsl */ `
+void main() {
+  gl_Position = vec4(position.xy, 0.0, 1.0);
+}
+`
+const blitFragment = /* glsl */ `
+uniform sampler2D uImage;
+uniform vec2 uSize;
+uniform vec2 uOffset;
+uniform float uScale;
+uniform float uCanvasHeight;
+void main() {
+  vec2 device = vec2(gl_FragCoord.x, uCanvasHeight - gl_FragCoord.y);
+  vec2 art = floor(uOffset + device * uScale + 0.0001) + 0.5;
+  gl_FragColor = texture2D(uImage, vec2(art.x / uSize.x, 1.0 - art.y / uSize.y));
 }
 `
 
@@ -586,17 +679,53 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
   const renderer = new WebGLRenderer({ canvas, antialias: false, alpha: false, stencil: true })
   const pixelRatio = Math.min(window.devicePixelRatio || 1, 2)
   renderer.setPixelRatio(pixelRatio)
-  renderer.setClearColor(new Color(islandPalette.deep))
+  renderer.setClearColor(rawColor(islandPalette.deep))
   const scene = new Scene()
   const camera = new OrthographicCamera(0, 1, 0, -1, 0.1, 100)
   camera.position.z = 50
+  const ground = new Group()
+  ground.matrixAutoUpdate = false
+  ground.matrix.copy(OBLIQUE)
+  scene.add(ground)
   const disposables: Array<{ dispose: () => void }> = []
   const track = <T extends { dispose: () => void }>(item: T) => {
     disposables.push(item)
     return item
   }
 
-  // Sea.
+  // The small image and the pass that scales it up.
+  const target = track(
+    new WebGLRenderTarget(1, 1, {
+      depthBuffer: true,
+      stencilBuffer: true,
+      magFilter: NearestFilter,
+      minFilter: NearestFilter,
+      generateMipmaps: false
+    })
+  )
+  target.texture.colorSpace = NoColorSpace
+  const blitMaterial = track(
+    new ShaderMaterial({
+      vertexShader: blitVertex,
+      fragmentShader: blitFragment,
+      uniforms: {
+        uImage: { value: target.texture },
+        uSize: { value: [1, 1] },
+        uOffset: { value: [0, 0] },
+        uScale: { value: 1 },
+        uCanvasHeight: { value: 1 }
+      },
+      depthTest: false,
+      depthWrite: false
+    })
+  )
+  const blitScene = new Scene()
+  const blit = new Mesh(track(new PlaneGeometry(2, 2)), blitMaterial)
+  blit.frustumCulled = false
+  blitScene.add(blit)
+  const blitCamera = new OrthographicCamera(-1, 1, 1, -1, 0, 1)
+
+  // Sea, lying at height 0 in the world.
   const field = createShoreField(world)
   updateShoreField(world, field)
   const shoreTexture = track(
@@ -617,8 +746,9 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
   lakeTexture.needsUpdate = true
   const waterMaterial = track(
     new ShaderMaterial({
-      vertexShader: waterVertex,
+      vertexShader: groundVertex,
       fragmentShader: waterFragment,
+      side: DoubleSide,
       uniforms: {
         uShore: { value: shoreTexture },
         uLake: { value: lakeTexture },
@@ -630,18 +760,18 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
     })
   )
   const seaSize = 6000
-  const water = new Mesh(
-    track(new PlaneGeometry(WORLD_WIDTH + seaSize, WORLD_HEIGHT + seaSize)),
-    waterMaterial
-  )
-  water.position.set(WORLD_WIDTH / 2, -WORLD_HEIGHT / 2, Z.water)
-  scene.add(water)
+  const seaGeometry = track(new PlaneGeometry(WORLD_WIDTH + seaSize, WORLD_HEIGHT + seaSize))
+  seaGeometry.translate(WORLD_WIDTH / 2, WORLD_HEIGHT / 2, 0)
+  const water = new Mesh(seaGeometry, waterMaterial)
+  water.frustumCulled = false
+  ground.add(water)
   const clock = { value: 0 }
+  const skyGeometry = track(new PlaneGeometry(WORLD_WIDTH + seaSize, WORLD_HEIGHT + seaSize))
   const clouds = new Mesh(
-    water.geometry,
+    skyGeometry,
     track(
       new ShaderMaterial({
-        vertexShader: waterVertex,
+        vertexShader: screenVertex,
         fragmentShader: cloudFragment,
         uniforms: { uTime: clock },
         transparent: true,
@@ -652,6 +782,7 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
   )
   clouds.position.set(WORLD_WIDTH / 2, -WORLD_HEIGHT / 2, Z.sky)
   clouds.renderOrder = 20
+  clouds.frustumCulled = false
   scene.add(clouds)
 
   // Time of day: everything drawn so far is multiplied by the hour's color.
@@ -665,9 +796,10 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
       depthWrite: false
     })
   )
-  const tint = new Mesh(water.geometry, tintMaterial)
+  const tint = new Mesh(skyGeometry, tintMaterial)
   tint.position.set(WORLD_WIDTH / 2, -WORLD_HEIGHT / 2, Z.sky)
   tint.renderOrder = 24
+  tint.frustumCulled = false
   scene.add(tint)
   const glowLayer = (look: typeof GLOW | typeof SOFT_GLOW) => {
     const material = track(
@@ -698,59 +830,158 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
     if (now - lightChecked < 15_000) return
     lightChecked = now
     const light = daylightNow()
-    tintMaterial.color.setRGB(...light.tint, SRGBColorSpace)
+    tintMaterial.color.setRGB(...light.tint, LinearSRGBColorSpace)
     tint.visible = light.tint.some((channel) => channel < 0.999)
     glow = light.glow
   }
 
-  // Terrain, painted into canvas chunks so an edit repaints only nearby pixels.
-  const chunkGeometry = track(new PlaneGeometry(CHUNK, CHUNK))
-  const chunks: Array<{
-    x: number
-    y: number
-    context: CanvasRenderingContext2D
-    texture: CanvasTexture
-  }> = []
-  for (let cy = 0; cy < Math.ceil(WORLD_HEIGHT / CHUNK); cy++) {
-    for (let cx = 0; cx < Math.ceil(WORLD_WIDTH / CHUNK); cx++) {
-      const chunkCanvas = document.createElement('canvas')
-      chunkCanvas.width = CHUNK
-      chunkCanvas.height = CHUNK
-      const context = chunkCanvas.getContext('2d')
-      if (!context) throw new Error('2D canvas unavailable')
-      const texture = track(pixelTexture(new CanvasTexture(chunkCanvas)))
-      const material = track(
-        new MeshBasicMaterial({ map: texture, transparent: true, depthWrite: false })
-      )
-      const mesh = new Mesh(chunkGeometry, material)
-      mesh.position.set(cx * CHUNK + CHUNK / 2, -(cy * CHUNK + CHUNK / 2), Z.terrain)
-      scene.add(mesh)
-      chunks.push({ x: cx * CHUNK, y: cy * CHUNK, context, texture })
-    }
+  // The island's points, baked off the main thread chunk by chunk. Heights come
+  // back with them, so residents and their shadows can stand on the ground.
+  const heights = new Float32Array(WORLD_WIDTH * WORLD_HEIGHT)
+  const heightAt = (x: number, y: number) => {
+    const px = Math.max(0, Math.min(WORLD_WIDTH - 1, Math.floor(x)))
+    const py = Math.max(0, Math.min(WORLD_HEIGHT - 1, Math.floor(y)))
+    return heights[py * WORLD_WIDTH + px]
   }
-  function paintRegion(x0: number, y0: number, x1: number, y1: number) {
-    for (const chunk of chunks) {
-      const left = Math.max(x0, chunk.x)
-      const top = Math.max(y0, chunk.y)
-      const right = Math.min(x1, chunk.x + CHUNK)
-      const bottom = Math.min(y1, chunk.y + CHUNK)
-      if (right <= left || bottom <= top) continue
-      const buffer = createBuffer(right - left, bottom - top)
-      paintTerrain(world, buffer, left, top, buffer.width, buffer.height)
-      chunk.context.putImageData(
-        new ImageData(buffer.data as Uint8ClampedArray<ArrayBuffer>, buffer.width, buffer.height),
-        left - chunk.x,
-        top - chunk.y
-      )
-      chunk.texture.needsUpdate = true
+  const uniformsTime = { value: 0 }
+  const terrainMaterial = track(
+    new ShaderMaterial({ vertexShader: terrainVertex, fragmentShader: pointFragment })
+  )
+  const decorMaterial = track(
+    stampStencil(
+      new ShaderMaterial({
+        vertexShader: decorVertex,
+        fragmentShader: decorFragment,
+        uniforms: { uTime: uniformsTime, uGlowOnly: { value: 0 } }
+      }),
+      BEHIND_DECOR
+    )
+  )
+  // Flames and fireflies again after the time of day darkens the rest.
+  const flameMaterial = track(
+    new ShaderMaterial({
+      vertexShader: decorVertex,
+      fragmentShader: decorFragment,
+      uniforms: { uTime: uniformsTime, uGlowOnly: { value: 1 } },
+      transparent: true,
+      depthWrite: false,
+      depthFunc: LessEqualDepth
+    })
+  )
+  const chunks = new Map<
+    number,
+    { objects: Points[]; geometries: BufferGeometry[]; glowTiles: number[] }
+  >()
+  function dropChunk(index: number) {
+    const chunk = chunks.get(index)
+    if (!chunk) return
+    for (const object of chunk.objects) scene.remove(object)
+    for (const geometry of chunk.geometries) geometry.dispose()
+    for (const tile of chunk.glowTiles) {
+      glows.remove(tile)
+      softGlows.remove(tile)
     }
+    chunks.delete(index)
   }
-  paintRegion(0, 0, WORLD_WIDTH, WORLD_HEIGHT)
+  function placeChunk(baked: BakedChunk) {
+    dropChunk(baked.index)
+    const objects: Points[] = []
+    const geometries: BufferGeometry[] = []
+    const add = (geometry: BufferGeometry, material: Material, renderOrder = 0) => {
+      const points = new Points(geometry, material)
+      points.frustumCulled = false
+      points.renderOrder = renderOrder
+      scene.add(points)
+      objects.push(points)
+    }
+    if (baked.terrain.color.length) {
+      const geometry = new BufferGeometry()
+      geometry.setAttribute('position', new BufferAttribute(baked.terrain.position, 3))
+      geometry.setAttribute('aColor', new BufferAttribute(baked.terrain.color, 3, true))
+      geometries.push(geometry)
+      add(geometry, terrainMaterial)
+    }
+    if (baked.decor.color.length) {
+      const geometry = new BufferGeometry()
+      geometry.setAttribute('position', new BufferAttribute(baked.decor.position, 3))
+      geometry.setAttribute('aColor', new BufferAttribute(baked.decor.color, 3, true))
+      geometry.setAttribute('aAnim', new BufferAttribute(baked.decor.anim, 4))
+      geometries.push(geometry)
+      add(geometry, decorMaterial)
+      if (baked.decor.anim.some((value, i) => i % 4 === 2 && value > 0))
+        add(geometry, flameMaterial, 25)
+    }
+    for (const light of baked.glows) {
+      const look = light.soft ? SOFT_GLOW : GLOW
+      ;(light.soft ? softGlows : glows).set(light.tile, light.x, light.y + look.height / 2, Z.sky)
+    }
+    chunks.set(baked.index, { objects, geometries, glowTiles: baked.glows.map((g) => g.tile) })
+  }
+
+  let bakeSerial = 0
+  let baking = false
+  let stale = false
+  let resolveReady: () => void = () => {}
+  let rejectReady: (error: unknown) => void = () => {}
+  const ready = new Promise<void>((resolve, reject) => {
+    resolveReady = resolve
+    rejectReady = reject
+  })
+  // Kept from rejecting unhandled when nobody waits for it.
+  ready.catch(() => {})
+  const baker = new Worker(new URL('./island-bake.worker.ts', import.meta.url), {
+    type: 'module'
+  })
+  function requestBake() {
+    if (baking) {
+      stale = true
+      return
+    }
+    baking = true
+    stale = false
+    const request: BakeRequest = {
+      serial: ++bakeSerial,
+      columns: world.columns,
+      rows: world.rows,
+      ground: world.ground.slice(),
+      decor: world.decor.slice()
+    }
+    baker.postMessage(request, [request.ground.buffer, request.decor.buffer])
+  }
+  baker.onmessage = (event: MessageEvent<BakeResponse>) => {
+    if (disposed) return
+    const message = event.data
+    if (message.type === 'error') {
+      rejectReady(new Error(message.message))
+      fail(new Error(message.message))
+      return
+    }
+    if (message.type === 'heights') {
+      const { rect } = message
+      for (let y = 0; y < rect.height; y++)
+        heights.set(
+          message.heights.subarray(y * rect.width, (y + 1) * rect.width),
+          (rect.y + y) * WORLD_WIDTH + rect.x
+        )
+    } else if (message.type === 'chunk') placeChunk(message.chunk)
+    else {
+      baking = false
+      resolveReady()
+      if (stale) requestBake()
+    }
+    wake()
+  }
+  baker.onerror = (event) => {
+    event.preventDefault()
+    rejectReady(new Error('Island baker failed'))
+    fail(new Error('Island baker failed'))
+  }
+  requestBake()
 
   // Editing aids: corner dots near the cursor and the edge of the editable area.
   const gridMaterial = track(
     new ShaderMaterial({
-      vertexShader: waterVertex,
+      vertexShader: screenVertex,
       fragmentShader: gridFragment,
       transparent: true,
       depthWrite: false,
@@ -768,122 +999,12 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
   grid.visible = false
   scene.add(grid)
 
-  // Sprites share one material per texture; transparency is cut out so depth
-  // orders overlapping sprites by their feet.
-  const rawTexture = (buffer: PixelBuffer) => {
-    const texture = track(textureFrom(buffer))
-    texture.colorSpace = NoColorSpace
-    return texture
-  }
-  const animated: Array<{ material: ShaderMaterial; textures: Texture[] }> = []
-  const spriteMaterial = (frame: SpriteFrame) => {
-    const textures = [frame.buffer, ...(frame.frames ?? [])].map(rawTexture)
-    const material = track(
-      new ShaderMaterial({
-        vertexShader: spriteVertex,
-        fragmentShader: spriteFragment,
-        uniforms: {
-          map: { value: textures[0] },
-          uSize: { value: [frame.buffer.width, frame.buffer.height] },
-          uTime: clock,
-          uSway: { value: frame.sway ?? 0 },
-          uBob: { value: frame.bob ?? 0 }
-        }
-      })
-    )
-    if (textures.length > 1) animated.push({ material, textures })
-    // Flat things never hide a resident, so they leave no stencil mark.
-    return frame.flat ? material : stampStencil(material, BEHIND_DECOR)
-  }
-  const shadowLayers = Object.fromEntries(
-    (Object.keys(shadowSizes) as ShadowSize[]).map((size) => {
-      const buffer = paintShadow(size)
-      const material = track(
-        new MeshBasicMaterial({
-          map: track(textureFrom(buffer)),
-          transparent: true,
-          depthWrite: false
-        })
-      )
-      return [
-        size,
-        new SpriteLayer(
-          scene,
-          track(new PlaneGeometry(buffer.width, buffer.height)),
-          material,
-          buffer.width,
-          buffer.height
-        )
-      ]
-    })
-  ) as Record<ShadowSize, SpriteLayer>
-
-  const decorLayers = new Map<
-    string,
-    { layer: SpriteLayer; shadow: ShadowSize | null; flat: boolean; glow: SpriteFrame['glow'] }
-  >()
-  for (const [kind, frames] of Object.entries(decorVariants)) {
-    frames.forEach((frame: SpriteFrame, variant) => {
-      const layer = new SpriteLayer(
-        scene,
-        track(new PlaneGeometry(frame.buffer.width, frame.buffer.height)),
-        spriteMaterial(frame),
-        frame.buffer.width,
-        frame.buffer.height
-      )
-      decorLayers.set(`${kind}:${variant}`, {
-        layer,
-        shadow: frame.shadow,
-        flat: frame.flat === true,
-        glow: frame.glow
-      })
-    })
-  }
-  const placedDecor = new Map<number, string>()
-  function syncDecor(index: number) {
-    const x = index % world.columns
-    const y = Math.floor(index / world.columns)
-    const code = world.decor[index]
-    const kind = decorKindOf(code)
-    const key = kind ? `${kind}:${decorLookAt(code, x, y)}` : null
-    const previous = placedDecor.get(index)
-    if (previous === key) return
-    if (previous) {
-      const entry = decorLayers.get(previous)
-      entry?.layer.remove(index)
-      if (entry?.shadow) shadowLayers[entry.shadow].remove(index)
-      glows.remove(index)
-      softGlows.remove(index)
-      placedDecor.delete(index)
-    }
-    if (!key) return
-    const entry = decorLayers.get(key)
-    if (!entry) return
-    const footX = x * TILE_SIZE + TILE_SIZE / 2
-    const footY = y * TILE_SIZE + TILE_SIZE - 2
-    // Sorted by the tile's middle: residents beside the trunk stand in front of
-    // it, residents on the tiles behind it pass under the canopy.
-    entry.layer.set(
-      index,
-      footX,
-      footY + 1,
-      entry.flat ? Z.flat : spriteZ(y * TILE_SIZE + TILE_SIZE / 2)
-    )
-    if (entry.shadow) shadowLayers[entry.shadow].set(index, footX, footY + 2, Z.shadow)
-    // Centered on the flame.
-    if (entry.glow) {
-      const look = entry.glow.soft ? SOFT_GLOW : GLOW
-      const lights = entry.glow.soft ? softGlows : glows
-      lights.set(index, footX, footY - entry.glow.height + look.height / 2, Z.sky)
-    }
-    placedDecor.set(index, key)
-  }
-  for (let index = 0; index < world.decor.length; index++) syncDecor(index)
-
-  // Residents: one sheet texture each, cut into frames by UV offset.
+  // Residents: one sheet texture each, cut into frames by UV offset, standing
+  // upright in the world so trees and ledges hide them as they should.
   const residentWidth = RESIDENT_FRAME.width * RESIDENT_SCALE
   const residentHeight = RESIDENT_FRAME.height * RESIDENT_SCALE
   const residentGeometry = track(new PlaneGeometry(residentWidth, residentHeight))
+  residentGeometry.rotateX(Math.PI / 2)
   const residentMeshes = residents.map((resident) => {
     const design = designs.get(resident.slug)
     const buffer = design
@@ -895,7 +1016,9 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
       map.repeat.set(1 / RESIDENT_FRAMES, 1 / facings.length)
     const mesh = new Mesh(
       residentGeometry,
-      track(stampStencil(new MeshBasicMaterial({ map: texture, alphaTest: 0.5 }), 0))
+      track(
+        stampStencil(new MeshBasicMaterial({ map: texture, alphaTest: 0.5, side: DoubleSide }), 0)
+      )
     )
     // Drawn after everything else, only where the resident is behind decoration.
     const silhouette = new Mesh(
@@ -905,6 +1028,7 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
           vertexShader: silhouetteVertex,
           fragmentShader: silhouetteFragment,
           uniforms: { map: { value: texture }, uvTransform: { value: texture.matrix } },
+          side: DoubleSide,
           transparent: true,
           depthWrite: false,
           depthFunc: GreaterDepth,
@@ -916,36 +1040,38 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
     )
     silhouette.renderOrder = 5
     mesh.add(silhouette)
-    scene.add(mesh)
+    ground.add(mesh)
     return { mesh, texture, swimTexture, silhouette }
   })
-  const residentShadows = new SpriteLayer(
-    scene,
-    track(new PlaneGeometry(...shadowSizes.small)),
-    shadowLayers.small.mesh.material as Material,
-    shadowSizes.small[0],
-    shadowSizes.small[1],
-    Math.max(4, residents.length)
-  )
-  const ringTexture = track(textureFrom(ringBuffer()))
-  const makeRing = (color: string) => {
+  // Flat things lying on the ground: shadows and selection rings.
+  // The world's y runs south, so a flat picture is flipped to keep its top north.
+  const flatGeometry = (buffer: PixelBuffer) =>
+    track(new PlaneGeometry(buffer.width, buffer.height)).scale(1, -1, 1)
+  const flatMesh = (buffer: PixelBuffer, color?: string, opacity = 1) => {
     const mesh = new Mesh(
-      track(new PlaneGeometry(18, 8)),
+      flatGeometry(buffer),
       track(
         new MeshBasicMaterial({
-          map: ringTexture,
+          map: track(textureFrom(buffer)),
           transparent: true,
           depthWrite: false,
-          color: new Color(color)
+          opacity,
+          side: DoubleSide,
+          ...(color ? { color: rawColor(color) } : {})
         })
       )
     )
-    mesh.visible = false
-    scene.add(mesh)
+    mesh.frustumCulled = false
+    ground.add(mesh)
     return mesh
   }
-  const selectedRing = makeRing('#ffe66b')
-  const focusRing = makeRing('#ffffff')
+  const shadowBuffer = paintShadow('small')
+  const residentShadows = residents.map(() => flatMesh(shadowBuffer))
+  const ring = ringBuffer()
+  const selectedRing = flatMesh(ring, '#ffe66b')
+  const focusRing = flatMesh(ring, '#ffffff')
+  selectedRing.visible = false
+  focusRing.visible = false
 
   // Wildlife: gulls crossing overhead with their shadows, fish and turtles
   // circling in the shallows. None of it is saved or editable.
@@ -963,7 +1089,7 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
   )
   const gullShadowMaterial = track(
     new MeshBasicMaterial({
-      map: track(textureFrom(paintShadow('small'))),
+      map: track(textureFrom(shadowBuffer)),
       transparent: true,
       depthTest: false,
       depthWrite: false
@@ -1002,14 +1128,15 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
     opacity: number,
     seed: number
   ) => {
-    const geometry = track(new PlaneGeometry(buffer.width, buffer.height))
+    const geometry = flatGeometry(buffer)
     const material = track(
       new MeshBasicMaterial({
         map: track(textureFrom(buffer)),
         transparent: true,
         depthWrite: false,
         opacity,
-        color: new Color(color)
+        side: DoubleSide,
+        color: rawColor(color)
       })
     )
     for (let i = 0, found = 0; i < 400 && found < count; i++) {
@@ -1019,7 +1146,8 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
       if (depth < 26 || depth > 70) continue
       if (swimmers.some((other) => Math.hypot(other.x - x, other.y - y) < 150)) continue
       const mesh = new Mesh(geometry, material)
-      scene.add(mesh)
+      mesh.frustumCulled = false
+      ground.add(mesh)
       swimmers.push({
         mesh,
         x,
@@ -1055,7 +1183,7 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
       const x = Math.round(swimmer.x + Math.cos(angle) * swimmer.radius * 1.6)
       const y = Math.round(swimmer.y + Math.sin(angle) * swimmer.radius)
       swimmer.mesh.visible = fieldDistance(x, y) > 9
-      swimmer.mesh.position.set(x, -y, Z.swimmer)
+      swimmer.mesh.position.set(x, y + 0.05, 0.05)
       swimmer.mesh.scale.x = Math.sin(angle) * swimmer.speed > 0 ? -1 : 1
     }
   }
@@ -1105,23 +1233,42 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
     const left = Math.round((view.x - size.width / 2 / view.zoom) * unit) / unit
     const top = Math.round((view.y - size.height / 2 / view.zoom) * unit) / unit
     origin = { left, top }
-    camera.left = left
-    camera.right = left + size.width / view.zoom
-    camera.top = -top
-    camera.bottom = -(top + size.height / view.zoom)
+    // The small image starts on a whole art pixel; the scale-up shifts it by
+    // the rest.
+    const imageLeft = Math.floor(left)
+    const imageTop = Math.floor(top)
+    const imageWidth = Math.ceil(size.width / view.zoom) + 2
+    const imageHeight = Math.ceil(size.height / view.zoom) + 2
+    if (target.width !== imageWidth || target.height !== imageHeight)
+      target.setSize(imageWidth, imageHeight)
+    camera.left = imageLeft
+    camera.right = imageLeft + imageWidth
+    camera.top = -imageTop
+    camera.bottom = -(imageTop + imageHeight)
     camera.updateProjectionMatrix()
+    blitMaterial.uniforms.uSize.value = [imageWidth, imageHeight]
+    blitMaterial.uniforms.uOffset.value = [left - imageLeft, top - imageTop]
+    blitMaterial.uniforms.uScale.value = 1 / unit
+    blitMaterial.uniforms.uCanvasHeight.value = renderer.domElement.height
   }
+
+  // How far a resident stands above the reference height on screen.
+  const lift = (resident: Resident) =>
+    residentIsSwimming(world, resident) && dragged?.resident !== resident
+      ? -REFERENCE_HEIGHT
+      : Math.round(heightAt(resident.x, resident.y - 1)) - REFERENCE_HEIGHT
 
   function project(): ResidentScreen[] {
     return residents.map((resident) => {
+      const up = lift(resident)
       const x = Math.round(resident.x + resident.offsetX)
-      const y = Math.round(resident.y + resident.offsetY)
+      const y = Math.round(resident.y + resident.offsetY) - up
       return {
         slug: resident.slug,
         x: (x - origin.left) * view.zoom,
         y: (y - origin.top) * view.zoom,
         bubbleX: (resident.x + resident.offsetX - view.x) * view.zoom + size.width / 2,
-        bubbleY: (resident.y + resident.offsetY - view.y) * view.zoom + size.height / 2,
+        bubbleY: (resident.y + resident.offsetY - up - view.y) * view.zoom + size.height / 2,
         width: residentWidth * view.zoom,
         height: residentHeight * view.zoom,
         swimming: residentIsSwimming(world, resident) && dragged?.resident !== resident,
@@ -1143,33 +1290,30 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
       texture.updateMatrix()
       const footX = Math.round(resident.x)
       const footY = Math.round(resident.y)
-      // Keep the shoes where the full-size art put them and shrink upward.
-      const sole = footY + 1 - RESIDENT_FOOT_PAD
+      const base = lift(resident) + REFERENCE_HEIGHT
+      const isDragged = dragged?.resident === resident
+      // Upright just in front of the foot; the art's shoes rest on the ground.
       mesh.position.set(
         footX + Math.round(resident.offsetX),
-        -(
-          sole +
-          Math.round(resident.offsetY) -
-          residentHeight / 2 +
-          RESIDENT_FOOT_PAD * RESIDENT_SCALE
-        ),
-        spriteZ(footY)
+        footY + 1,
+        base + residentHeight / 2 - Math.round(resident.offsetY) + (isDragged ? 5 : 0)
       )
       mesh.scale.x = resident.flip ? -1 : 1
-      mesh.rotation.z = resident.tilt
-      if (swimming) residentShadows.remove(i)
-      else residentShadows.set(i, footX, footY + 2, Z.shadow)
-      if (dragged?.resident === resident) {
-        mesh.position.y += 5
-        mesh.position.z = Z.cursor + 1
-      }
+      mesh.rotation.y = -resident.tilt
+      mesh.material.depthTest = !isDragged
+      mesh.renderOrder = isDragged ? 31 : 0
+      // Raised a little toward the viewer (y and z together) so they lie over
+      // the ground without moving on screen.
+      const shadow = residentShadows[i]
+      shadow.visible = !swimming
+      shadow.position.set(footX, footY + 2 - shadowBuffer.height / 2 + 0.3, base + 0.3)
       for (const [ring, slug] of [
         [selectedRing, selected],
         [focusRing, focused !== selected ? focused : null]
       ] as const) {
         if (slug !== resident.slug) continue
         ring.visible = true
-        ring.position.set(footX, -(footY - 1), Z.ring)
+        ring.position.set(footX, footY - 1 + 0.4, base + 0.4)
       }
     })
     if (!selected || !residents.some((r) => r.slug === selected)) selectedRing.visible = false
@@ -1212,19 +1356,20 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
       }
       waterMaterial.uniforms.uTime.value = time
       clock.value = time
-      const tick = Math.floor(time * 7)
-      for (const { material, textures } of animated)
-        material.uniforms.map.value = textures[tick % textures.length]
+      uniformsTime.value = time
       updateDaylight(now)
       glows.mesh.visible = glow > 0.01
       // The firelight wavers in steps, like the flames.
-      glowMaterial.opacity = glow * (0.86 + 0.14 * Math.sin(tick * 2.4))
+      glowMaterial.opacity = glow * (0.86 + 0.14 * Math.sin(Math.floor(time * 7) * 2.4))
       softGlows.mesh.visible = glows.mesh.visible
       // Fireflies pulse slowly instead.
       softGlowMaterial.opacity = glow * (0.6 + 0.3 * Math.sin(time * 1.6))
       placeWildlife(still ? 0 : dt)
       placeResidents()
+      renderer.setRenderTarget(target)
       renderer.render(scene, camera)
+      renderer.setRenderTarget(null)
+      renderer.render(blitScene, blitCamera)
       onFrame(project(), view)
       if (!still) frame = requestAnimationFrame(draw)
     } catch (error) {
@@ -1252,6 +1397,8 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
   canvas.addEventListener('webglcontextlost', contextLost)
 
   return {
+    // Settles once the whole island has been baked the first time.
+    ready,
     setView(next: IslandView, nextSize: SceneSize) {
       if (failed || disposed || !nextSize.width || !nextSize.height) return
       view = next
@@ -1262,7 +1409,7 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
       placeCamera()
       wake()
     },
-    // Repaints only the tiles touched by an edit (and the pixels they blend into).
+    // Bakes again the chunks an edit touches, and updates the sea around them.
     updateTiles(indices: number[]) {
       if (!indices.length || failed || disposed) return
       let minX = Infinity
@@ -1276,15 +1423,8 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
         minY = Math.min(minY, y)
         maxX = Math.max(maxX, x)
         maxY = Math.max(maxY, y)
-        syncDecor(index)
       }
       try {
-        paintRegion(
-          (minX - 1) * TILE_SIZE,
-          (minY - 1) * TILE_SIZE,
-          (maxX + 2) * TILE_SIZE,
-          (maxY + 2) * TILE_SIZE + 8
-        )
         const cells = TILE_SIZE / SHORE_CELL
         // A whole-island change (reset) only needs one pass.
         updateShoreField(
@@ -1298,6 +1438,7 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
         shoreTexture.needsUpdate = true
         lakeTexture.needsUpdate = true
         settleResidents(world, residents)
+        requestBake()
       } catch (error) {
         fail(error)
       }
@@ -1315,8 +1456,8 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
             Z.cursor
           )
         })
-        cursorLayers[0].material.color.set(cursor.soft ? '#c9d6e3' : '#fff6bf')
-        cursorLayers[1].material.color.set('#ff5b5b')
+        cursorLayers[0].material.color.copy(rawColor(cursor.soft ? '#c9d6e3' : '#fff6bf'))
+        cursorLayers[1].material.color.copy(rawColor('#ff5b5b'))
         gridMaterial.uniforms.uCursor.value = [
           cursor.center.x * TILE_SIZE + TILE_SIZE / 2,
           cursor.center.y * TILE_SIZE + TILE_SIZE / 2
@@ -1375,15 +1516,14 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
       disposed = true
       cancelAnimationFrame(frame)
       clearInterval(lightTimer)
+      baker.terminate()
       document.removeEventListener('visibilitychange', visibility)
       reducedMotion.removeEventListener('change', wake)
       canvas.removeEventListener('webglcontextlost', contextLost)
-      for (const layer of Object.values(shadowLayers)) layer.dispose()
-      for (const { layer } of decorLayers.values()) layer.dispose()
+      for (const index of [...chunks.keys()]) dropChunk(index)
       for (const { layer } of cursorLayers) layer.dispose()
       glows.dispose()
       softGlows.dispose()
-      residentShadows.dispose()
       for (const item of disposables) item.dispose()
       renderer.dispose()
     }

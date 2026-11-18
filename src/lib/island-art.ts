@@ -330,10 +330,6 @@ export function paintTerrain(
       const px = x0 + x
       const py = y0 + y
       const kind = at(x, y)
-      const sand = sands[kind]
-      const green = greens[kind]
-      const solid = solids[kind]
-      const pool = pools[kind]
       let color: Rgba = transparent
       if (kind === WATER) {
         const under = deckAbove(x, y)
@@ -345,86 +341,110 @@ export function paintTerrain(
         } else if (at(x, y - 1) !== WATER) color = c.face
         else if (at(x, y - 2) !== WATER) color = c.faceDark
         else if (at(x, y - 3) !== WATER || at(x, y - 4) !== WATER) color = lipShadow
-      } else if (sand) {
-        const below = at(x, y + 1)
-        const wet = (d: number) =>
-          at(x - d, y) === WATER || at(x + d, y) === WATER || at(x, y - d) === WATER
-        if (below === WATER) color = sand.light
-        else if (wet(1) || wet(2)) color = sand.wet
-        else if (wet(3) && (px + py) % 2 === 0) color = sand.wet
-        else if (isGreen(at(x, y - 1)) || isGreen(at(x, y - 2))) color = sand.dark
-        else if (at(x, y - 1) === DECK) color = sand.dark
-        else color = sand.pixel(px, py)
-      } else if (green) {
-        // Greens shade their rim only where the green ends, not against each other.
-        if (!isGreen(at(x, y + 1))) color = green.deep
-        else if (!isGreen(at(x, y + 2))) color = green.edge
-        else if (!isGreen(at(x - 1, y)) || !isGreen(at(x + 1, y))) color = green.edge
-        else if (!isGreen(at(x, y - 1))) color = green.pale
-        else color = green.pixel(px, py)
-      } else if (kind === DECK) {
-        const row = Math.floor(py / 5)
-        const boardX = (((px + (row % 2 ? 9 : 0)) % 22) + 22) % 22
-        const boardY = ((py % 5) + 5) % 5
-        const grain = Math.sin(px * 0.32 + valueNoise(px / 12, row, 75) * 5 + boardY * 1.8)
-        if (at(x, y + 1) !== DECK || at(x - 1, y) !== DECK || at(x + 1, y) !== DECK)
-          color = c.deckEdge
-        else if (at(x, y - 1) !== DECK) color = c.deckLight
-        else if ((at(x - 2, y) !== DECK || at(x + 2, y) !== DECK) && ((py % 16) + 16) % 16 < 3)
-          color = c.post
-        else if (boardY === 4 || boardX === 0) color = c.deckEdge
-        else if ((boardX === 2 || boardX === 20) && boardY === 1) color = c.post
-        else if (boardY === 0) color = c.deckLight
-        else if (grain > 0.9) color = c.deckDark
-        else if (grain < -0.8 || hash2(Math.floor(px / 22), row, 73) < 0.18) color = c.deckLight
-        else color = c.deck
-      } else if (solid) {
-        if (at(x, y + 1) !== kind) color = solid.edge
-        else if (at(x - 1, y) !== kind || at(x + 1, y) !== kind) color = solid.dark
-        else if (at(x, y - 1) !== kind) color = solid.light
-        else color = solid.pixel(px, py)
-      } else if (kind === COBBLE) {
-        // The paving frays at its edges, where sand has crept in over the stones.
-        const frayed = (d: number) =>
-          at(x, y + d) !== COBBLE ||
-          at(x, y - d) !== COBBLE ||
-          at(x - d, y) !== COBBLE ||
-          at(x + d, y) !== COBBLE
-        if (frayed(1)) color = c.cobbleGap
-        else if (hash2(px >> 1, py >> 1, 107) < (frayed(2) ? 0.15 : frayed(3) ? 0.04 : 0))
-          color = hash2(px, py, 108) < 0.25 ? c.cobbleSandDark : c.cobbleSand
-        else color = cobblePixel(px, py)
-      } else if (pool) {
-        // Clear water lying below its banks: the bank's shadow along the top,
-        // pale shallows lapping the rest of the rim.
-        const bank = (d: number) =>
-          at(x - d, y) !== kind || at(x + d, y) !== kind || at(x, y + d) !== kind
-        if (at(x, y - 1) !== kind) color = pool.bank
-        else if (at(x, y - 2) !== kind || at(x, y - 3) !== kind) color = pool.deep
-        else if (bank(1)) color = pool.shine
-        else if (bank(2) || (bank(3) && (px + py) % 2 === 0)) color = pool.shallow
-        else {
-          color = pool.pixel(px, py)
-          // The shader takes over only in cells the shore field knows as this water.
-          const cell = (v: number) => Math.floor(v / SHORE_CELL) * SHORE_CELL + 1
-          if (color === transparent && at(x + cell(px) - px, y + cell(py) - py) !== kind)
-            color = pool.base
-        }
-      } else {
-        const speck = hash2(px, py, 51)
-        if (at(x, y + 1) !== PATH || at(x - 1, y) !== PATH || at(x + 1, y) !== PATH)
-          color = c.pathEdge
-        else if (at(x, y - 1) !== PATH) color = c.pathDark
-        else if (speck < 0.03) color = c.pathLight
-        else if (hash2(px, py - 1, 51) < 0.03) color = c.pathDark
-        else {
-          const tone = valueNoise(px / 8, py / 8, 61) + ((px + py) % 2 ? 0.02 : -0.02)
-          color = tone > 0.72 ? c.pathLight : tone < 0.26 ? c.pathDark : c.path
-        }
-      }
+      } else color = groundTexel(kind, px, py, (dx, dy) => at(x + dx, y + dy), true)
       setPixel(buffer, bx + x, by + y, color)
     }
   }
+}
+
+// The color of one land pixel of `kind` at (px, py); `near(dx, dy)` gives the
+// ground class of the pixel that far away. With `rims` the edges are shaded as
+// flat art needs; without, only what belongs to the ground itself is drawn
+// (wet sand, frayed paving, board ends), for scenes that light their own relief.
+// Open pool water comes back transparent.
+export function groundTexel(
+  kind: number,
+  px: number,
+  py: number,
+  near: (dx: number, dy: number) => number,
+  rims: boolean
+): Rgba {
+  const sand = sands[kind]
+  const green = greens[kind]
+  const solid = solids[kind]
+  const pool = pools[kind]
+  if (sand) {
+    const wet = (d: number) =>
+      near(-d, 0) === WATER || near(d, 0) === WATER || near(0, -d) === WATER
+    if (rims && near(0, 1) === WATER) return sand.light
+    if (wet(1) || wet(2)) return sand.wet
+    if (wet(3) && (px + py) % 2 === 0) return sand.wet
+    if (rims && (isGreen(near(0, -1)) || isGreen(near(0, -2)))) return sand.dark
+    if (rims && near(0, -1) === DECK) return sand.dark
+    return sand.pixel(px, py)
+  }
+  if (green) {
+    if (!rims) return green.pixel(px, py)
+    // Greens shade their rim only where the green ends, not against each other.
+    if (!isGreen(near(0, 1))) return green.deep
+    if (!isGreen(near(0, 2))) return green.edge
+    if (!isGreen(near(-1, 0)) || !isGreen(near(1, 0))) return green.edge
+    if (!isGreen(near(0, -1))) return green.pale
+    return green.pixel(px, py)
+  }
+  if (kind === DECK) {
+    const row = Math.floor(py / 5)
+    const boardX = (((px + (row % 2 ? 9 : 0)) % 22) + 22) % 22
+    const boardY = ((py % 5) + 5) % 5
+    const grain = Math.sin(px * 0.32 + valueNoise(px / 12, row, 75) * 5 + boardY * 1.8)
+    if (near(0, 1) !== DECK || near(-1, 0) !== DECK || near(1, 0) !== DECK) return c.deckEdge
+    if (rims && near(0, -1) !== DECK) return c.deckLight
+    if ((near(-2, 0) !== DECK || near(2, 0) !== DECK) && ((py % 16) + 16) % 16 < 3) return c.post
+    if (boardY === 4 || boardX === 0) return c.deckEdge
+    if ((boardX === 2 || boardX === 20) && boardY === 1) return c.post
+    if (boardY === 0) return c.deckLight
+    if (grain > 0.9) return c.deckDark
+    if (grain < -0.8 || hash2(Math.floor(px / 22), row, 73) < 0.18) return c.deckLight
+    return c.deck
+  }
+  if (solid) {
+    if (!rims) return solid.pixel(px, py)
+    if (near(0, 1) !== kind) return solid.edge
+    if (near(-1, 0) !== kind || near(1, 0) !== kind) return solid.dark
+    if (near(0, -1) !== kind) return solid.light
+    return solid.pixel(px, py)
+  }
+  if (kind === COBBLE) {
+    // The paving frays at its edges, where sand has crept in over the stones.
+    const frayed = (d: number) =>
+      near(0, d) !== COBBLE ||
+      near(0, -d) !== COBBLE ||
+      near(-d, 0) !== COBBLE ||
+      near(d, 0) !== COBBLE
+    if (frayed(1)) return c.cobbleGap
+    if (hash2(px >> 1, py >> 1, 107) < (frayed(2) ? 0.15 : frayed(3) ? 0.04 : 0))
+      return hash2(px, py, 108) < 0.25 ? c.cobbleSandDark : c.cobbleSand
+    return cobblePixel(px, py)
+  }
+  if (pool) {
+    if (!rims) return pool.pixel(px, py)
+    // Clear water lying below its banks: the bank's shadow along the top,
+    // pale shallows lapping the rest of the rim.
+    const bank = (d: number) => near(-d, 0) !== kind || near(d, 0) !== kind || near(0, d) !== kind
+    if (near(0, -1) !== kind) return pool.bank
+    if (near(0, -2) !== kind || near(0, -3) !== kind) return pool.deep
+    if (bank(1)) return pool.shine
+    if (bank(2) || (bank(3) && (px + py) % 2 === 0)) return pool.shallow
+    const color = pool.pixel(px, py)
+    // The shader takes over only in cells the shore field knows as this water.
+    const cell = (v: number) => Math.floor(v / SHORE_CELL) * SHORE_CELL + 1
+    if (color === transparent && near(cell(px) - px, cell(py) - py) !== kind) return pool.base
+    return color
+  }
+  if (kind === WATER) return transparent
+  const speck = hash2(px, py, 51)
+  if (rims && (near(0, 1) !== PATH || near(-1, 0) !== PATH || near(1, 0) !== PATH))
+    return c.pathEdge
+  if (rims && near(0, -1) !== PATH) return c.pathDark
+  if (speck < 0.03) return c.pathLight
+  if (hash2(px, py - 1, 51) < 0.03) return c.pathDark
+  const tone = valueNoise(px / 8, py / 8, 61) + ((px + py) % 2 ? 0.02 : -0.02)
+  return tone > 0.72 ? c.pathLight : tone < 0.26 ? c.pathDark : c.path
+}
+
+// Whether the ground is open water lying on the land (lake, shallows, spring).
+export function isPoolGround(kind: number) {
+  return pools[kind] !== undefined
 }
 
 type SandTones = { base: Rgba; light: Rgba; dark: Rgba }

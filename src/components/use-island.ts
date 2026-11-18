@@ -258,7 +258,10 @@ export function useIsland({
           onFailure: fail
         })
         renderer.current.setView(view.current, sizeRef.current)
-        setStatus('ready')
+        // The island shows once its points are baked; the loading scene stays till then.
+        return renderer.current.ready.then(() => {
+          if (!cancelled) setStatus('ready')
+        })
       })
       .catch((error) => {
         if (cancelled) return
