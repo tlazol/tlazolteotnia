@@ -47,7 +47,13 @@ import {
   setPixel,
   updateShoreField
 } from './island-art'
-import { type BakedChunk, DEPTH_UNIT, REFERENCE_HEIGHT } from './island-bake'
+import {
+  BAKE_CHUNK,
+  type BakedChunk,
+  DEPTH_UNIT,
+  isViewportBaked,
+  REFERENCE_HEIGHT
+} from './island-bake'
 import type { BakeRequest, BakeResponse } from './island-bake.worker'
 import { clampView, type IslandView, WORLD_HEIGHT, WORLD_WIDTH } from './island-camera'
 import { daylightNow } from './island-daylight'
@@ -939,6 +945,32 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
   const baker = new Worker(new URL('./island-bake.worker.ts', import.meta.url), {
     type: 'module'
   })
+  function bakeViewport() {
+    return size.width && size.height
+      ? {
+          left: view.x - size.width / view.zoom / 2 - 64,
+          top: view.y - size.height / view.zoom / 2 - 64,
+          right: view.x + size.width / view.zoom / 2 + 64,
+          bottom: view.y + size.height / view.zoom / 2 + 64
+        }
+      : undefined
+  }
+  let initialReady = false
+  let receivedHeights = false
+  function resolveVisible() {
+    if (initialReady || !receivedHeights) return
+    if (
+      isViewportBaked(
+        chunks,
+        Math.ceil(WORLD_WIDTH / BAKE_CHUNK),
+        Math.ceil(WORLD_HEIGHT / BAKE_CHUNK),
+        bakeViewport()
+      )
+    ) {
+      initialReady = true
+      resolveReady()
+    }
+  }
   function requestBake() {
     if (baking) {
       stale = true
@@ -951,7 +983,8 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
       columns: world.columns,
       rows: world.rows,
       ground: world.ground.slice(),
-      decor: world.decor.slice()
+      decor: world.decor.slice(),
+      viewport: bakeViewport()
     }
     baker.postMessage(request, [request.ground.buffer, request.decor.buffer])
   }
@@ -964,15 +997,19 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
       return
     }
     if (message.type === 'heights') {
+      receivedHeights = true
       const { rect } = message
       for (let y = 0; y < rect.height; y++)
         heights.set(
           message.heights.subarray(y * rect.width, (y + 1) * rect.width),
           (rect.y + y) * WORLD_WIDTH + rect.x
         )
-    } else if (message.type === 'chunk') placeChunk(message.chunk)
-    else {
+    } else if (message.type === 'chunk') {
+      placeChunk(message.chunk)
+      resolveVisible()
+    } else {
       baking = false
+      initialReady = true
       resolveReady()
       if (stale) requestBake()
     }
@@ -983,7 +1020,10 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
     rejectReady(new Error('Island baker failed'))
     fail(new Error('Island baker failed'))
   }
-  requestBake()
+  // setView runs immediately after construction; use that actual viewport.
+  queueMicrotask(() => {
+    if (!disposed) requestBake()
+  })
 
   // Editing aids: corner dots near the cursor and the edge of the editable area.
   const gridMaterial = track(
@@ -1404,7 +1444,7 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
   canvas.addEventListener('webglcontextlost', contextLost)
 
   return {
-    // Settles once the whole island has been baked the first time.
+    // Settles when the initial viewport and its surrounding margin are baked.
     ready,
     setView(next: IslandView, nextSize: SceneSize) {
       if (failed || disposed || !nextSize.width || !nextSize.height) return
@@ -1414,6 +1454,7 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
         renderer.setSize(size.width, size.height, false)
       }
       placeCamera()
+      resolveVisible()
       wake()
     },
     // Bakes again the chunks an edit touches, and updates the sea around them.

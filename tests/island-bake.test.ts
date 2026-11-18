@@ -1,9 +1,12 @@
+import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
 import {
   BAKE_CHUNK,
   bakeTemplate,
   DEPTH_UNIT,
   IslandBaker,
+  isViewportBaked,
+  prioritizeChunks,
   REFERENCE_HEIGHT
 } from '../src/lib/island-bake'
 import { decorModel, GLOW_CODE, modelDistance, modelLookCount } from '../src/lib/island-models'
@@ -126,7 +129,86 @@ describe('decoration models', () => {
   })
 })
 
+describe('initial viewport baking', () => {
+  it('prioritizes intersecting chunks and still bakes the entire island', () => {
+    const chunks = [0, 1, 2, 3, 4, 5, 6, 7, 8]
+    expect(
+      prioritizeChunks(chunks, 3, {
+        left: 128,
+        top: 128,
+        right: 256,
+        bottom: 256
+      })
+    ).toEqual({ chunks: [4, 0, 1, 2, 3, 5, 6, 7, 8], visibleCount: 1 })
+    expect(chunks).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8])
+  })
+
+  it('waits for the current viewport after a resize or camera change', () => {
+    const available = new Set([4])
+    const initial = { left: 128, top: 128, right: 256, bottom: 256 }
+    expect(isViewportBaked(available, 3, 3, initial)).toBe(true)
+    const resized = { ...initial, right: 300, bottom: 300 }
+    expect(isViewportBaked(available, 3, 3, resized)).toBe(false)
+    for (const index of [5, 7, 8]) available.add(index)
+    expect(isViewportBaked(available, 3, 3, resized)).toBe(true)
+    expect(isViewportBaked(available, 3, 3, { ...initial, left: 0 })).toBe(false)
+    expect(isViewportBaked(available, 3, 3)).toBe(false)
+  })
+
+  it('includes partially visible chunks and falls back when no viewport is available', () => {
+    const chunks = [0, 1, 2, 3]
+    expect(
+      prioritizeChunks(chunks, 2, {
+        left: 127,
+        top: 127,
+        right: 129,
+        bottom: 129
+      })
+    ).toEqual({ chunks, visibleCount: 4 })
+    expect(prioritizeChunks(chunks, 2)).toEqual({ chunks, visibleCount: 4 })
+    expect(
+      prioritizeChunks(chunks, 2, {
+        left: -256,
+        top: -256,
+        right: -128,
+        bottom: -128
+      })
+    ).toEqual({ chunks, visibleCount: 0 })
+  })
+})
+
 describe('island baker', () => {
+  it('preserves the complete scene when pruning lighting candidates', () => {
+    const world = createDefaultIsland()
+    const baker = new IslandBaker(world.columns, world.rows)
+    const change = baker.update(world.ground, world.decor)
+    const hash = createHash('sha256')
+    for (const index of change?.chunks ?? []) {
+      const chunk = baker.bakeChunk(index)
+      for (const points of [chunk.terrain, chunk.decor]) {
+        hash.update(new Uint8Array(points.position.buffer))
+        hash.update(new Uint8Array(points.color.buffer))
+      }
+      hash.update(new Uint8Array(chunk.decor.anim.buffer))
+    }
+    // Captured from the original full lighting calculation before optimization.
+    expect(hash.digest('hex')).toBe(
+      '3a7dbaa766b0ae6c2c2164f36d1b444391dbe2b1a4ab73e63fec106cb6e2e7c9'
+    )
+  }, 15_000)
+
+  it('interpolates heights at centers, between columns, and outside the island', () => {
+    const baker = new IslandBaker(1, 1)
+    baker.heights.set([2, 4], 0)
+    baker.heights.set([6, 8], TILE_SIZE)
+    expect(baker.heightAt(0.5, 0.5)).toBe(2)
+    expect(baker.heightAt(0.5, 1)).toBe(4)
+    expect(baker.heightAt(1, 1)).toBe(5)
+    expect(baker.heightAt(-0.5, 0.5)).toBe(0)
+    expect(baker.heightAt(0, 0.5)).toBe(1)
+    expect(baker.heightAt(TILE_SIZE + 0.5, TILE_SIZE + 0.5)).toBe(0)
+  })
+
   it('raises grass above sand, sand above the sea, and decks on stilts', () => {
     const world = createIsland(12, 12)
     for (let y = 2; y < 10; y++) for (let x = 2; x < 10; x++) world.ground[y * 12 + x] = SAND

@@ -586,15 +586,23 @@ export class IslandBaker {
     const iy = Math.floor(v)
     const fx = u - ix
     const fy = v - iy
-    const at = (px: number, py: number) =>
-      px < 0 || py < 0 || px >= this.width || py >= this.height
-        ? 0
-        : this.heights[py * this.width + px]
-    const a = at(ix, iy)
-    const b = at(ix + 1, iy)
-    const c = at(ix, iy + 1)
-    const d = at(ix + 1, iy + 1)
+    const a = this.heightPixelAt(ix, iy)
+    // Terrain samples often land exactly on a pixel center or column.
+    // Avoid fetching and interpolating heights that have zero weight.
+    if (fx === 0) {
+      if (fy === 0) return a
+      return a + (this.heightPixelAt(ix, iy + 1) - a) * fy
+    }
+    const b = this.heightPixelAt(ix + 1, iy)
+    const c = this.heightPixelAt(ix, iy + 1)
+    const d = this.heightPixelAt(ix + 1, iy + 1)
     return a + (b - a) * fx + (c - a) * fy + (a - b - c + d) * fx * fy
+  }
+
+  private heightPixelAt(x: number, y: number) {
+    return x < 0 || y < 0 || x >= this.width || y >= this.height
+      ? 0
+      : this.heights[y * this.width + x]
   }
 
   private placeInstance(tile: number) {
@@ -682,7 +690,25 @@ export class IslandBaker {
     const sampleZ = new Float32Array(width * rows)
     const sampleKind = new Uint8Array(width * rows)
     const sampleRow = new Int32Array(width * rows)
-    const neighbors = this.neighbors(X0, Y0, X1, Y1)
+    // A chunk can contain many trees, but each pixel is affected only by
+    // decorations near its tile. Reuse these small candidate lists per tile.
+    const tileNeighbors = new Map<number, Instance[]>()
+    const neighborsAt = (x: number, y: number) => {
+      const tx = Math.floor(x / TILE_SIZE)
+      const ty = Math.floor(y / TILE_SIZE)
+      const key = ty * this.columns + tx
+      let near = tileNeighbors.get(key)
+      if (!near) {
+        near = this.neighbors(
+          tx * TILE_SIZE,
+          ty * TILE_SIZE,
+          (tx + 1) * TILE_SIZE,
+          (ty + 1) * TILE_SIZE
+        )
+        tileNeighbors.set(key, near)
+      }
+      return near
+    }
     for (let x = X0; x < X1; x++) {
       for (let y = Y0; y < Y1; y++) {
         const k0 = this.classAt(x, y)
@@ -728,6 +754,22 @@ export class IslandBaker {
     // wants the plain height above the ground.
     const terrain = (x: number, y: number, z: number) => (z - this.heightAt(x, y)) * 0.5
     const above = (x: number, y: number, z: number) => z - this.heightAt(x, y)
+    const shading: Instance[] = []
+    const crowding: Instance[] = []
+    let texelX = 0
+    let texelY = 0
+    const texelNeighbor = (dx: number, dy: number) => this.classAt(texelX + dx, texelY + dy)
+    const crowdedGround = (px: number, py: number, pz: number) => {
+      let d = above(px, py, pz)
+      for (const instance of crowding) {
+        if (boxDistance(px, py, pz, instance.lo, instance.hi) >= d) continue
+        d = Math.min(
+          d,
+          modelDistance(instance.model, px - instance.x, py - instance.y, pz - instance.z)
+        )
+      }
+      return d
+    }
     for (let row = 0; row < rows; row++) {
       for (let col = 0; col < width; col++) {
         const slot = row * width + col
@@ -741,34 +783,18 @@ export class IslandBaker {
         const ty = sampleRow[slot]
         // Tops show the ground's own pattern; faces run it down the screen.
         const face = wy - 0.5 !== ty
-        const texel = groundTexel(
-          kind,
-          sx,
-          face ? sy : ty,
-          (dx, dy) => this.classAt(sx + dx, ty + dy),
-          false
-        )
+        texelX = sx
+        texelY = ty
+        const texel = groundTexel(kind, sx, face ? sy : ty, texelNeighbor, false)
         if (texel[3] === 0) continue
         // Decorations close enough to shade this point.
-        const shading: Instance[] = []
-        const crowding: Instance[] = []
+        shading.length = 0
+        crowding.length = 0
+        const neighbors = neighborsAt(wx, wy)
         for (const instance of neighbors) {
           if (rayHitsBox(wx, wy, z, instance.lo, instance.hi)) shading.push(instance)
           if (boxDistance(wx, wy, z, instance.lo, instance.hi) < 6) crowding.push(instance)
         }
-        const scene =
-          (list: Instance[], ground = terrain) =>
-          (px: number, py: number, pz: number) => {
-            let d = ground(px, py, pz)
-            for (const instance of list) {
-              if (boxDistance(px, py, pz, instance.lo, instance.hi) >= d) continue
-              d = Math.min(
-                d,
-                modelDistance(instance.model, px - instance.x, py - instance.y, pz - instance.z)
-              )
-            }
-            return d
-          }
         const e = 0.5
         let nx = this.heightAt(wx - e, wy) - this.heightAt(wx + e, wy)
         let ny = this.heightAt(wx, wy - e) - this.heightAt(wx, wy + e)
@@ -777,7 +803,7 @@ export class IslandBaker {
         nx /= l
         ny /= l
         nz /= l
-        const ao = occlusion(scene(crowding, above), wx, wy, z, nx, ny, nz)
+        const ao = occlusion(crowdedGround, wx, wy, z, nx, ny, nz)
         // The ground's own ledges, then whatever decorations stand in the sun.
         let lit = softShadow(terrain, wx + nx * 0.3, wy + ny * 0.3, z + nz * 0.3, (9 - z) / SUN[2])
         for (const instance of shading) {
@@ -881,3 +907,42 @@ function boxDistance(
 }
 
 export { bayer }
+
+// Bake the visible area first, including the caller's margin for tall scenery.
+export function prioritizeChunks(
+  chunks: number[],
+  columns: number,
+  viewport?: { left: number; top: number; right: number; bottom: number }
+) {
+  if (!viewport) return { chunks, visibleCount: chunks.length }
+  const visible: number[] = []
+  const rest: number[] = []
+  for (const index of chunks) {
+    const x = (index % columns) * BAKE_CHUNK
+    const y = Math.floor(index / columns) * BAKE_CHUNK
+    const intersects =
+      x < viewport.right &&
+      x + BAKE_CHUNK > viewport.left &&
+      y < viewport.bottom &&
+      y + BAKE_CHUNK > viewport.top
+    ;(intersects ? visible : rest).push(index)
+  }
+  return { chunks: [...visible, ...rest], visibleCount: visible.length }
+}
+
+// Recheck the current viewport: it may have changed since the worker started.
+export function isViewportBaked(
+  available: { has(index: number): boolean },
+  columns: number,
+  rows: number,
+  viewport?: { left: number; top: number; right: number; bottom: number }
+) {
+  if (!viewport) return false
+  const x0 = Math.max(0, Math.floor(viewport.left / BAKE_CHUNK))
+  const y0 = Math.max(0, Math.floor(viewport.top / BAKE_CHUNK))
+  const x1 = Math.min(columns, Math.ceil(viewport.right / BAKE_CHUNK))
+  const y1 = Math.min(rows, Math.ceil(viewport.bottom / BAKE_CHUNK))
+  for (let y = y0; y < y1; y++)
+    for (let x = x0; x < x1; x++) if (!available.has(y * columns + x)) return false
+  return true
+}
