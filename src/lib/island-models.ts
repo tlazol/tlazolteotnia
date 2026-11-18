@@ -14,7 +14,7 @@ import {
   sphere,
   type Vec3
 } from './island-sdf'
-import { type DecorKind, decorLooks } from './island-world'
+import { type DecorKind, decorLooks, decorScale } from './island-world'
 
 // 'flame' is a drawn flame: steady colors, its tip leaning from side to side.
 export type Glow = 'fire' | 'firefly' | 'flame'
@@ -38,6 +38,9 @@ export type Model = {
   // Bounds of all parts together.
   lo: Vec3
   hi: Vec3
+  // A model grown from another by `scale` about (0, `middle`, 0). Shadows
+  // look the same at any size, so they can be marched on the smaller one.
+  grown?: { from: Model; scale: number; middle: number }
 }
 
 // ---- Materials --------------------------------------------------------------
@@ -1677,13 +1680,40 @@ const makers: Record<DecorKind, Array<() => Model>> = {
   buoy: [() => buoy('#e5483f', '#fbf6ea'), () => buoy('#f2c230', '#3d424b')]
 }
 
+// A model grown by `s` about the middle of its tile, where a big plant's trunk
+// stands, so the trunk stays put and only the tree around it gets bigger.
+function scaled(m: Model, s: number): Model {
+  if (s === 1) return m
+  const grow = (v: Vec3): Vec3 => [v[0] * s, MID + (v[1] - MID) * s, v[2] * s]
+  const parts = m.parts.map(
+    (p): Part => ({
+      d: (x, y, z) => p.d(x / s, MID + (y - MID) / s, z / s) * s,
+      paint: (x, y, z) => p.paint(x / s, MID + (y - MID) / s, z / s),
+      lo: grow(p.lo),
+      hi: grow(p.hi)
+    })
+  )
+  return {
+    ...m,
+    parts,
+    sway: m.sway * s,
+    lo: grow(m.lo),
+    hi: grow(m.hi),
+    grown: { from: m, scale: s, middle: MID }
+  }
+}
+
 const built = new Map<string, Model>()
-export function decorModel(kind: DecorKind, look: number): Model {
-  const key = `${kind}:${look}`
+// `size` grows the model by decorScale(size); 0 is the model as drawn.
+export function decorModel(kind: DecorKind, look: number, size = 0): Model {
+  const key = `${kind}:${look}:${size}`
   let found = built.get(key)
   if (!found) {
-    const make = makers[kind][Math.max(0, Math.min(decorLooks[kind] - 1, look))]
-    found = make()
+    if (size > 0) found = scaled(decorModel(kind, look), decorScale(size))
+    else {
+      const make = makers[kind][Math.max(0, Math.min(decorLooks[kind] - 1, look))]
+      found = make()
+    }
     built.set(key, found)
   }
   return found

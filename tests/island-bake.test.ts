@@ -26,9 +26,11 @@ import {
   decorCode,
   decorKinds,
   decorLooks,
+  decorSizeAt,
   GRASS,
   SAND,
-  TILE_SIZE
+  TILE_SIZE,
+  TREE_SIZES
 } from '../src/lib/island-world'
 
 describe('distance functions', () => {
@@ -89,6 +91,31 @@ describe('decoration models', () => {
         for (const slot of template.slot) expect(slot).toBeLessThan(palette.length)
       }
     }
+  })
+
+  it('grow trees up to twice their size, never alike beside each other', () => {
+    const tree = decorCode('tree')
+    for (let look = 0; look < decorLooks.tree; look++) {
+      const drawn = decorModel('tree', look)
+      const biggest = decorModel('tree', look, TREE_SIZES - 1)
+      expect(biggest.hi[2] / drawn.hi[2]).toBeCloseTo(2)
+      // Grown about the middle of the tile, so the trunk stays where it was.
+      for (const [x, y, z] of [
+        [0, -6, 5],
+        [3, -4, 20],
+        [-8, -9, 40]
+      ])
+        expect(modelDistance(biggest, x * 2, -6 + (y + 6) * 2, z * 2)).toBeCloseTo(
+          modelDistance(drawn, x, y, z) * 2
+        )
+    }
+    for (let y = 0; y < 12; y++)
+      for (let x = 0; x < 12; x++)
+        for (let dy = -1; dy <= 1; dy++)
+          for (let dx = -1; dx <= 1; dx++)
+            if (dx || dy)
+              expect(decorSizeAt(tree, x, y)).not.toBe(decorSizeAt(tree, x + dx, y + dy))
+    expect(decorSizeAt(decorCode('palm'), 3, 4)).toBe(0)
   })
 
   it('stand on their foot', () => {
@@ -193,7 +220,7 @@ describe('island baker', () => {
     }
     // Captured from the original full lighting calculation before optimization.
     expect(hash.digest('hex')).toBe(
-      '3a7dbaa766b0ae6c2c2164f36d1b444391dbe2b1a4ab73e63fec106cb6e2e7c9'
+      '923fada4bbe484e548de0124093992b0f2db2cfb8681a730d4064103d805777b'
     )
   }, 15_000)
 

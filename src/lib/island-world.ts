@@ -230,6 +230,18 @@ export function decorLookAt(code: number, x: number, y: number): number | null {
   if (!kind) return null
   return decorLookOf(code) ?? Math.floor(hash2(x, y, 211) * decorLooks[kind])
 }
+// Trees grow to one of TREE_SIZES sizes, from as drawn up to twice that. The
+// size comes from the tile's position, (x + 2y) mod 5 shuffled, so no two
+// trees among a tile and its eight neighbours are ever the same size.
+export const TREE_SIZES = 5
+const treeSizeOrder = [2, 4, 0, 3, 1]
+export function decorSizeAt(code: number, x: number, y: number) {
+  if (decorKindOf(code) !== 'tree') return 0
+  return treeSizeOrder[(((x + 2 * y) % TREE_SIZES) + TREE_SIZES) % TREE_SIZES]
+}
+export function decorScale(size: number) {
+  return 1 + size / (TREE_SIZES - 1)
+}
 export function isDecorCode(code: number) {
   if (!Number.isSafeInteger(code) || code < 0 || code > 0xff) return false
   const look = decorLookOf(code)

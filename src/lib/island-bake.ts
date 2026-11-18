@@ -31,6 +31,7 @@ import {
   decorInfo,
   decorKindOf,
   decorLookAt,
+  decorSizeAt,
   GRASS,
   GRAVEL,
   GROUND_COUNT,
@@ -188,6 +189,22 @@ function softShadow(
   return Math.max(0, Math.min(1, result))
 }
 
+// Sun reaching a point of a model through the model itself. Soft shadow is
+// min(5h / t), unchanged when everything grows alike, so a grown model's
+// shadow is marched on the model it grew from in far fewer steps.
+function modelShadow(m: Model, x: number, y: number, z: number, far: number) {
+  const grown = m.grown
+  if (!grown) return softShadow((x, y, z) => modelDistance(m, x, y, z), x, y, z, far)
+  const { from, scale, middle } = grown
+  return softShadow(
+    (x, y, z) => modelDistance(from, x, y, z),
+    x / scale,
+    middle + (y - middle) / scale,
+    z / scale,
+    far / scale
+  )
+}
+
 function occlusion(
   distance: (x: number, y: number, z: number) => number,
   px: number,
@@ -205,6 +222,20 @@ function occlusion(
     weight *= 0.6
   }
   return Math.max(0, Math.min(1, 1 - occluded * 0.16))
+}
+
+// modelDistance over some of a model's parts.
+function partsDistance(parts: Model['parts'], x: number, y: number, z: number) {
+  let best = Number.POSITIVE_INFINITY
+  for (const part of parts) {
+    const ox = Math.max(part.lo[0] - x, 0, x - part.hi[0])
+    const oy = Math.max(part.lo[1] - y, 0, y - part.hi[1])
+    const oz = Math.max(part.lo[2] - z, 0, z - part.hi[2])
+    if (ox * ox + oy * oy + oz * oz >= best * best && best > 0) continue
+    const d = part.d(x, y, z)
+    if (d < best) best = d
+  }
+  return best
 }
 
 // Samples a model's surface once per screen pixel, lights each point and adds
@@ -227,17 +258,39 @@ export function bakeTemplate(m: Model): Template {
   const distance = (x: number, y: number, z: number) => modelDistance(m, x, y, z)
   const ground = (x: number, y: number, z: number) => Math.min(distance(x, y, z), z)
   const top = Math.max(1, m.hi[2])
+  // A ray only meets the parts whose bounds it passes through, so it marches
+  // just those, over just the stretch where it is inside one: most rays miss,
+  // and a part it cannot reach must not shorten its steps. A hair of slack
+  // keeps the surface a ray grazes.
+  const slack = 0.05
+  const column: Model['parts'] = []
+  const along: Model['parts'] = []
   for (let sx = x0; sx < x1; sx++) {
+    const X = sx + 0.5
+    column.length = 0
+    for (const part of m.parts)
+      if (X >= part.lo[0] - slack && X <= part.hi[0] + slack) column.push(part)
     for (let sy = y0; sy < y1; sy++) {
-      const X = sx + 0.5
       const S = sy + 0.5
-      const zTop = Math.min(m.hi[2], m.hi[1] - S)
-      const zBottom = Math.max(m.lo[2], m.lo[1] - S, -0.5)
+      along.length = 0
+      let zTop = Number.NEGATIVE_INFINITY
+      let zBottom = Number.POSITIVE_INFINITY
+      for (const part of column) {
+        // On this ray y = S + z: inside the part's bounds for these z.
+        const high = Math.min(part.hi[2], part.hi[1] - S) + slack
+        const low = Math.max(part.lo[2], part.lo[1] - S) - slack
+        if (high < low) continue
+        along.push(part)
+        zTop = Math.max(zTop, high)
+        zBottom = Math.min(zBottom, low)
+      }
+      zTop = Math.min(zTop, m.hi[2], m.hi[1] - S)
+      zBottom = Math.max(zBottom, m.lo[2], m.lo[1] - S, -0.5)
       if (zTop < zBottom) continue
       let z = zTop
       let found = false
       for (let i = 0; i < 200; i++) {
-        const d = distance(X, S + z, z)
+        const d = partsDistance(along, X, S + z, z)
         if (d < 0.04) {
           found = true
           break
@@ -260,8 +313,8 @@ export function bakeTemplate(m: Model): Template {
         ny /= l
         nz /= l
         const ao = occlusion(ground, X, Y, z, nx, ny, nz)
-        const lit = softShadow(
-          distance,
+        const lit = modelShadow(
+          m,
           X + nx * 0.4,
           Y + ny * 0.4,
           z + nz * 0.4,
@@ -361,17 +414,10 @@ export function bakeShadow(m: Model): ShadowMap {
   const width = Math.ceil((m.hi[0] + (-SUN[0] / SUN[2]) * reach + 3 - x0) / SHADOW_STEP) + 1
   const height = Math.ceil((m.hi[1] + (-SUN[1] / SUN[2]) * reach + 3 - y0) / SHADOW_STEP) + 1
   const light = new Float32Array(width * height)
-  const distance = (x: number, y: number, z: number) => modelDistance(m, x, y, z)
   const far = (reach + 1) / SUN[2]
   for (let j = 0; j < height; j++)
     for (let i = 0; i < width; i++)
-      light[j * width + i] = softShadow(
-        distance,
-        x0 + i * SHADOW_STEP,
-        y0 + j * SHADOW_STEP,
-        0.3,
-        far
-      )
+      light[j * width + i] = modelShadow(m, x0 + i * SHADOW_STEP, y0 + j * SHADOW_STEP, 0.3, far)
   return { x0, y0, width, height, light }
 }
 
@@ -479,16 +525,33 @@ export class IslandBaker {
     const hx1 = Math.min(this.width, px1 + 2)
     const hy1 = Math.min(this.height, py1 + 2)
     this.computeHeights(hx0, hy0, hx1, hy1)
-    for (let y = Math.max(0, minY - 2); y <= Math.min(this.rows - 1, maxY + 2); y++)
-      for (let x = Math.max(0, minX - 2); x <= Math.min(this.columns - 1, maxX + 2); x++)
-        this.placeInstance(y * this.columns + x)
     // Points depend on heights nearby, and on decorations whose shadows fall
-    // to the south-east of them.
+    // to the south-east of them. A tall tree that comes, goes or moves up or
+    // down reaches further, over all it shades.
+    let ex0 = hx0 - 48
+    let ey0 = hy0 - 48
+    let ex1 = hx1 + 80
+    let ey1 = hy1 + 80
+    const reach = (instance: Instance | undefined) => {
+      if (!instance) return
+      const tall = instance.hi[2] - instance.z
+      ex0 = Math.min(ex0, instance.lo[0] - 8)
+      ey0 = Math.min(ey0, instance.lo[1] - 8)
+      ex1 = Math.max(ex1, instance.hi[0] + (-SUN[0] / SUN[2]) * tall + 8)
+      ey1 = Math.max(ey1, instance.hi[1] + (-SUN[1] / SUN[2]) * tall + 8)
+    }
+    for (let y = Math.max(0, minY - 2); y <= Math.min(this.rows - 1, maxY + 2); y++)
+      for (let x = Math.max(0, minX - 2); x <= Math.min(this.columns - 1, maxX + 2); x++) {
+        const tile = y * this.columns + x
+        reach(this.instances.get(tile))
+        this.placeInstance(tile)
+        reach(this.instances.get(tile))
+      }
     const chunks: number[] = []
-    const cx0 = Math.max(0, Math.floor((hx0 - 48) / BAKE_CHUNK))
-    const cy0 = Math.max(0, Math.floor((hy0 - 48) / BAKE_CHUNK))
-    const cx1 = Math.min(this.chunkColumns - 1, Math.floor((hx1 + 80) / BAKE_CHUNK))
-    const cy1 = Math.min(this.chunkRows - 1, Math.floor((hy1 + 80) / BAKE_CHUNK))
+    const cx0 = Math.max(0, Math.floor(ex0 / BAKE_CHUNK))
+    const cy0 = Math.max(0, Math.floor(ey0 / BAKE_CHUNK))
+    const cx1 = Math.min(this.chunkColumns - 1, Math.floor(ex1 / BAKE_CHUNK))
+    const cy1 = Math.min(this.chunkRows - 1, Math.floor(ey1 / BAKE_CHUNK))
     for (let cy = cy0; cy <= cy1; cy++)
       for (let cx = cx0; cx <= cx1; cx++) chunks.push(cy * this.chunkColumns + cx)
     return { chunks, rect: { x: hx0, y: hy0, width: hx1 - hx0, height: hy1 - hy0 } }
@@ -613,7 +676,7 @@ export class IslandBaker {
     const tx = tile % this.columns
     const ty = Math.floor(tile / this.columns)
     const look = decorLookAt(code, tx, ty) ?? 0
-    const model = decorModel(kind, look)
+    const model = decorModel(kind, look, decorSizeAt(code, tx, ty))
     const water = decorInfo[kind].on === 'water'
     const x = tx * TILE_SIZE + TILE_SIZE / 2
     const y = ty * TILE_SIZE + TILE_SIZE - 2
