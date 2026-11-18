@@ -9,6 +9,8 @@ export function getRouter() {
     // Hydration scripts capture the nonce before the stream handler runs.
     ssr: { nonce: getGlobalStartContext()?.nonce },
     scrollRestoration: true,
+    // Articles scroll inside the modal, so reset that panel on new navigation too.
+    scrollToTopSelectors: ['.post-modal__panel'],
     defaultPreload: 'intent'
   })
 
