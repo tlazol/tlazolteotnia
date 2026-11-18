@@ -14,16 +14,12 @@
   --bg: #101114;
   --panel: #191b21;
   --panel-strong: #22252d;
-  --rail: rgba(1, 5, 4, 0.82);
-  --sidebar: rgba(6, 16, 10, 0.76);
-  --chat: rgba(2, 8, 5, 0.7);
   --hover: rgba(112, 247, 255, 0.07);
   --text: #dedee5;
   --text-strong: #f4f4f7;
   --muted: #a6a5af;
   --dim: #92919b;
   --line: #303139;
-  --line-strong: #2bd66f;
   --green: #31ff80;
   --green-soft: #9cffbf;
   --blue: #2dacf9;
@@ -34,14 +30,6 @@
   --amber: #f4c95d;
   --danger: #ff6b6b;
   --post-accent: var(--green);
-  --spectrum: linear-gradient(
-    90deg,
-    var(--blue),
-    var(--red),
-    var(--pink),
-    var(--yellow),
-    var(--green)
-  );
 }
 
 body {
@@ -56,11 +44,6 @@ body {
 :root,
 [data-post-accent] {
   --post-accent-soft: color-mix(in srgb, var(--post-accent) 58%, white);
-  --post-accent-muted: color-mix(
-    in srgb,
-    var(--post-accent) 76%,
-    var(--muted)
-  );
   --post-accent-wash: color-mix(
     in srgb,
     var(--post-accent) 8%,

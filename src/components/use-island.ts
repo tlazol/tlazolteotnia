@@ -423,4 +423,3 @@ export function useIsland({
     edits
   }
 }
-export type IslandScene = ReturnType<typeof useIsland>

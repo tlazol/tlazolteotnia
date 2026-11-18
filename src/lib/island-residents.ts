@@ -225,8 +225,6 @@ export function designResidents(posts: Array<{ slug: string; date: string }>) {
 // Tiny two-head-tall residents drawn at 1:1 so every pixel stays crisp.
 export const RESIDENT_FRAME = { width: 18, height: 19 } as const
 export const RESIDENT_SCALE = 1
-// Rows below the shoes in each frame; the sprite scales around this foot line.
-export const RESIDENT_FOOT_PAD = 2
 export type Facing = 'down' | 'up' | 'side'
 export const facings: Facing[] = ['down', 'up', 'side']
 // Columns: idle, left step, right step.

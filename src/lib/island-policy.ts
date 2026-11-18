@@ -39,8 +39,6 @@ export const SYNC_INTERVAL_MS = 5_000
 export const SYNC_INTERVAL_TOLERANCE_MS = 1_000
 export const INITIAL_SNAPSHOT_TIMEOUT_MS = 10_000
 export const RESPONSE_TIMEOUT_MS = 10_000
-export const SESSION_REQUESTS_PER_MINUTE = 10
-export const CONNECT_REQUESTS_PER_MINUTE = 30
 
 // ---- Reconnecting --------------------------------------------------------------
 export const PENALTY_RETRY_MS = 60_000

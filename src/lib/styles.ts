@@ -9,20 +9,6 @@ export const siteShellClassName =
 
 export const headingResetClassName = 'm-0 font-bold tracking-normal'
 
-export const terminalLabelClassName =
-  "m-0 mb-3.5 text-[0.78rem] font-bold leading-[1.4] text-[var(--green)] uppercase before:mr-[0.5ch] before:text-[var(--yellow)] before:content-['$']"
-
-export const textLinkClassName = [
-  'inline-flex max-w-full items-center gap-[0.28em] px-0 pt-0.5 pb-[5px] text-[0.9rem] leading-[1.35] font-bold text-[var(--green-soft)] underline decoration-[rgba(156,255,191,0.42)] decoration-dashed decoration-1 underline-offset-[0.28em] transition-[color,text-decoration-color,transform] duration-[160ms] ease-out [overflow-wrap:anywhere]',
-  'hover:-translate-y-px hover:text-[var(--green)] hover:decoration-[rgba(49,255,128,0.9)] focus-visible:-translate-y-px focus-visible:text-[var(--green)] focus-visible:decoration-[rgba(49,255,128,0.9)]',
-  '[&_svg]:size-[0.78em] [&_svg]:shrink-0 [&_svg]:text-[var(--green)]'
-].join(' ')
-
-export const tagPillClassName = [
-  'inline-flex max-w-full items-center gap-1 rounded-full border border-[color-mix(in_srgb,var(--post-accent)_28%,var(--line))] py-1 pr-[9px] pl-[7px] text-[0.75rem] leading-[1.35] font-bold text-[var(--post-accent)] [background:linear-gradient(180deg,color-mix(in_srgb,var(--post-accent)_8%,transparent),transparent),color-mix(in_srgb,var(--post-accent)_4%,transparent)] [overflow-wrap:anywhere]',
-  '[&_svg]:size-[0.72em] [&_svg]:shrink-0 [&_svg]:text-[var(--post-accent-soft)]'
-].join(' ')
-
 export const markdownBodyClassName = [
   'markdown-body py-[30px] pb-2.5 text-base leading-[1.85] text-[var(--text)] [overflow-wrap:anywhere]',
   '[&>*]:max-w-[720px]',

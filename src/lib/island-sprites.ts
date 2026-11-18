@@ -12,7 +12,7 @@ import { type DecorKind, hash2, valueNoise } from './island-world'
 
 // ---- Decorations ----------------------------------------------------------
 
-// Trees and rocks stand taller than residents (a resident is 20×28): the trunk
+// Trees and rocks stand taller than residents: the trunk
 // or base fills one tile and blocks walking, while canopies spread over the
 // tiles behind it so residents can walk round the back.
 export type ShadowSize = 'small' | 'medium' | 'large' | 'huge'
@@ -145,10 +145,6 @@ function clump(
 }
 
 // ---- Trees ------------------------------------------------------------------
-
-// Trees and rocks stand taller than residents (a resident is 20×28): the trunk
-// or base fills one tile and blocks walking, while canopies spread over the
-// tiles behind it so residents can walk round the back.
 
 // An open, wind-shaped crown on angled limbs; `fruit` hangs a few in it.
 function paintAcacia(lean: number, seed: number, fruit: boolean): SpriteFrame {

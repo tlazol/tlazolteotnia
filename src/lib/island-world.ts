@@ -214,7 +214,6 @@ export const decorLooks = {
 // position pick the look.
 const LOOK_SHIFT = 5
 const KIND_MASK = (1 << LOOK_SHIFT) - 1
-export const MAX_DECOR_LOOKS = (0xff >> LOOK_SHIFT) - 1
 export function decorCode(kind: DecorKind, look?: number | null) {
   const base = storedDecorKinds.indexOf(kind) + 1
   return look == null ? base : base | ((look + 1) << LOOK_SHIFT)
