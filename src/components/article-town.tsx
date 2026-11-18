@@ -64,7 +64,7 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
   const [panTool, setPanTool] = useState(false)
   const [spaceHeld, setSpaceHeld] = useState(false)
   const [dragging, setDragging] = useState(false)
-  const [activeSlug, setActiveSlug] = useState<string | null>(() => openSlug ?? newestSlug ?? null)
+  const [activeSlug, setActiveSlug] = useState<string | null>(() => openSlug ?? null)
   const [cursor, setCursor] = useState<CursorInfo>(null)
   const [coarse, setCoarse] = useState(false)
   const menuToggle = useRef<HTMLButtonElement>(null)

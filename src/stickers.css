@@ -911,6 +911,12 @@ body::after {
   max-width: min(720px, calc(100vw - 24px));
   translate: -50% 100%;
   transition: translate 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+  /* White rim traced around the joined tab + toolbar silhouette, outside their
+     black border, so the pair reads as one piece against the map. */
+  filter:
+    drop-shadow(2px 0 0 #fff)
+    drop-shadow(-2px 0 0 #fff)
+    drop-shadow(0 -2px 0 #fff);
 }
 .island-drawer.is-open {
   translate: -50% 0;
@@ -935,13 +941,54 @@ body::after {
 .island-drawer:not(.is-open) .island-editor-toggle {
   padding-bottom: calc(4px + env(safe-area-inset-bottom));
 }
+.island-editor-toggle {
+  /* The tab color-cycles stair-stepped diagonal rainbow bands, pixel-art
+     style, flowing from top left to bottom right so the editor is easy to
+     find. The 42x42 tile of 3px cells colors cell (x, y) by ((x + y) % 42) / 6, so
+     bands are six cells thick; shifting it right one cell per step moves every band
+     down-right. */
+  background: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 42 42' shape-rendering='crispEdges'><path fill='%23ff8080' d='M0 0h6v1h-6zM0 1h5v1h-5zM41 1h1v1h-1zM0 2h4v1h-4zM40 2h2v1h-2zM0 3h3v1h-3zM39 3h3v1h-3zM0 4h2v1h-2zM38 4h4v1h-4zM0 5h1v1h-1zM37 5h5v1h-5zM36 6h6v1h-6zM35 7h6v1h-6zM34 8h6v1h-6zM33 9h6v1h-6zM32 10h6v1h-6zM31 11h6v1h-6zM30 12h6v1h-6zM29 13h6v1h-6zM28 14h6v1h-6zM27 15h6v1h-6zM26 16h6v1h-6zM25 17h6v1h-6zM24 18h6v1h-6zM23 19h6v1h-6zM22 20h6v1h-6zM21 21h6v1h-6zM20 22h6v1h-6zM19 23h6v1h-6zM18 24h6v1h-6zM17 25h6v1h-6zM16 26h6v1h-6zM15 27h6v1h-6zM14 28h6v1h-6zM13 29h6v1h-6zM12 30h6v1h-6zM11 31h6v1h-6zM10 32h6v1h-6zM9 33h6v1h-6zM8 34h6v1h-6zM7 35h6v1h-6zM6 36h6v1h-6zM5 37h6v1h-6zM4 38h6v1h-6zM3 39h6v1h-6zM2 40h6v1h-6zM1 41h6v1h-6z'/><path fill='%23ffb54d' d='M6 0h6v1h-6zM5 1h6v1h-6zM4 2h6v1h-6zM3 3h6v1h-6zM2 4h6v1h-6zM1 5h6v1h-6zM0 6h6v1h-6zM0 7h5v1h-5zM41 7h1v1h-1zM0 8h4v1h-4zM40 8h2v1h-2zM0 9h3v1h-3zM39 9h3v1h-3zM0 10h2v1h-2zM38 10h4v1h-4zM0 11h1v1h-1zM37 11h5v1h-5zM36 12h6v1h-6zM35 13h6v1h-6zM34 14h6v1h-6zM33 15h6v1h-6zM32 16h6v1h-6zM31 17h6v1h-6zM30 18h6v1h-6zM29 19h6v1h-6zM28 20h6v1h-6zM27 21h6v1h-6zM26 22h6v1h-6zM25 23h6v1h-6zM24 24h6v1h-6zM23 25h6v1h-6zM22 26h6v1h-6zM21 27h6v1h-6zM20 28h6v1h-6zM19 29h6v1h-6zM18 30h6v1h-6zM17 31h6v1h-6zM16 32h6v1h-6zM15 33h6v1h-6zM14 34h6v1h-6zM13 35h6v1h-6zM12 36h6v1h-6zM11 37h6v1h-6zM10 38h6v1h-6zM9 39h6v1h-6zM8 40h6v1h-6zM7 41h6v1h-6z'/><path fill='%23ffe66b' d='M12 0h6v1h-6zM11 1h6v1h-6zM10 2h6v1h-6zM9 3h6v1h-6zM8 4h6v1h-6zM7 5h6v1h-6zM6 6h6v1h-6zM5 7h6v1h-6zM4 8h6v1h-6zM3 9h6v1h-6zM2 10h6v1h-6zM1 11h6v1h-6zM0 12h6v1h-6zM0 13h5v1h-5zM41 13h1v1h-1zM0 14h4v1h-4zM40 14h2v1h-2zM0 15h3v1h-3zM39 15h3v1h-3zM0 16h2v1h-2zM38 16h4v1h-4zM0 17h1v1h-1zM37 17h5v1h-5zM36 18h6v1h-6zM35 19h6v1h-6zM34 20h6v1h-6zM33 21h6v1h-6zM32 22h6v1h-6zM31 23h6v1h-6zM30 24h6v1h-6zM29 25h6v1h-6zM28 26h6v1h-6zM27 27h6v1h-6zM26 28h6v1h-6zM25 29h6v1h-6zM24 30h6v1h-6zM23 31h6v1h-6zM22 32h6v1h-6zM21 33h6v1h-6zM20 34h6v1h-6zM19 35h6v1h-6zM18 36h6v1h-6zM17 37h6v1h-6zM16 38h6v1h-6zM15 39h6v1h-6zM14 40h6v1h-6zM13 41h6v1h-6z'/><path fill='%237fe08c' d='M18 0h6v1h-6zM17 1h6v1h-6zM16 2h6v1h-6zM15 3h6v1h-6zM14 4h6v1h-6zM13 5h6v1h-6zM12 6h6v1h-6zM11 7h6v1h-6zM10 8h6v1h-6zM9 9h6v1h-6zM8 10h6v1h-6zM7 11h6v1h-6zM6 12h6v1h-6zM5 13h6v1h-6zM4 14h6v1h-6zM3 15h6v1h-6zM2 16h6v1h-6zM1 17h6v1h-6zM0 18h6v1h-6zM0 19h5v1h-5zM41 19h1v1h-1zM0 20h4v1h-4zM40 20h2v1h-2zM0 21h3v1h-3zM39 21h3v1h-3zM0 22h2v1h-2zM38 22h4v1h-4zM0 23h1v1h-1zM37 23h5v1h-5zM36 24h6v1h-6zM35 25h6v1h-6zM34 26h6v1h-6zM33 27h6v1h-6zM32 28h6v1h-6zM31 29h6v1h-6zM30 30h6v1h-6zM29 31h6v1h-6zM28 32h6v1h-6zM27 33h6v1h-6zM26 34h6v1h-6zM25 35h6v1h-6zM24 36h6v1h-6zM23 37h6v1h-6zM22 38h6v1h-6zM21 39h6v1h-6zM20 40h6v1h-6zM19 41h6v1h-6z'/><path fill='%236cc8ff' d='M24 0h6v1h-6zM23 1h6v1h-6zM22 2h6v1h-6zM21 3h6v1h-6zM20 4h6v1h-6zM19 5h6v1h-6zM18 6h6v1h-6zM17 7h6v1h-6zM16 8h6v1h-6zM15 9h6v1h-6zM14 10h6v1h-6zM13 11h6v1h-6zM12 12h6v1h-6zM11 13h6v1h-6zM10 14h6v1h-6zM9 15h6v1h-6zM8 16h6v1h-6zM7 17h6v1h-6zM6 18h6v1h-6zM5 19h6v1h-6zM4 20h6v1h-6zM3 21h6v1h-6zM2 22h6v1h-6zM1 23h6v1h-6zM0 24h6v1h-6zM0 25h5v1h-5zM41 25h1v1h-1zM0 26h4v1h-4zM40 26h2v1h-2zM0 27h3v1h-3zM39 27h3v1h-3zM0 28h2v1h-2zM38 28h4v1h-4zM0 29h1v1h-1zM37 29h5v1h-5zM36 30h6v1h-6zM35 31h6v1h-6zM34 32h6v1h-6zM33 33h6v1h-6zM32 34h6v1h-6zM31 35h6v1h-6zM30 36h6v1h-6zM29 37h6v1h-6zM28 38h6v1h-6zM27 39h6v1h-6zM26 40h6v1h-6zM25 41h6v1h-6z'/><path fill='%23a08cff' d='M30 0h6v1h-6zM29 1h6v1h-6zM28 2h6v1h-6zM27 3h6v1h-6zM26 4h6v1h-6zM25 5h6v1h-6zM24 6h6v1h-6zM23 7h6v1h-6zM22 8h6v1h-6zM21 9h6v1h-6zM20 10h6v1h-6zM19 11h6v1h-6zM18 12h6v1h-6zM17 13h6v1h-6zM16 14h6v1h-6zM15 15h6v1h-6zM14 16h6v1h-6zM13 17h6v1h-6zM12 18h6v1h-6zM11 19h6v1h-6zM10 20h6v1h-6zM9 21h6v1h-6zM8 22h6v1h-6zM7 23h6v1h-6zM6 24h6v1h-6zM5 25h6v1h-6zM4 26h6v1h-6zM3 27h6v1h-6zM2 28h6v1h-6zM1 29h6v1h-6zM0 30h6v1h-6zM0 31h5v1h-5zM41 31h1v1h-1zM0 32h4v1h-4zM40 32h2v1h-2zM0 33h3v1h-3zM39 33h3v1h-3zM0 34h2v1h-2zM38 34h4v1h-4zM0 35h1v1h-1zM37 35h5v1h-5zM36 36h6v1h-6zM35 37h6v1h-6zM34 38h6v1h-6zM33 39h6v1h-6zM32 40h6v1h-6zM31 41h6v1h-6z'/><path fill='%23f59ae0' d='M36 0h6v1h-6zM35 1h6v1h-6zM34 2h6v1h-6zM33 3h6v1h-6zM32 4h6v1h-6zM31 5h6v1h-6zM30 6h6v1h-6zM29 7h6v1h-6zM28 8h6v1h-6zM27 9h6v1h-6zM26 10h6v1h-6zM25 11h6v1h-6zM24 12h6v1h-6zM23 13h6v1h-6zM22 14h6v1h-6zM21 15h6v1h-6zM20 16h6v1h-6zM19 17h6v1h-6zM18 18h6v1h-6zM17 19h6v1h-6zM16 20h6v1h-6zM15 21h6v1h-6zM14 22h6v1h-6zM13 23h6v1h-6zM12 24h6v1h-6zM11 25h6v1h-6zM10 26h6v1h-6zM9 27h6v1h-6zM8 28h6v1h-6zM7 29h6v1h-6zM6 30h6v1h-6zM5 31h6v1h-6zM4 32h6v1h-6zM3 33h6v1h-6zM2 34h6v1h-6zM1 35h6v1h-6zM0 36h6v1h-6zM0 37h5v1h-5zM41 37h1v1h-1zM0 38h4v1h-4zM40 38h2v1h-2zM0 39h3v1h-3zM39 39h3v1h-3zM0 40h2v1h-2zM38 40h4v1h-4zM0 41h1v1h-1zM37 41h5v1h-5z'/></svg>")
+    0 0 / 126px 126px;
+  image-rendering: pixelated;
+  border-color: #000;
+  animation: island-editor-rainbow 4.2s steps(42) infinite;
+}
+/* Hard 1px white outline in eight directions keeps the label pixel-crisp. */
+.island-editor-toggle button span {
+  color: #000;
+  text-shadow:
+    -1px -1px 0 #fff,
+    0 -1px 0 #fff,
+    1px -1px 0 #fff,
+    -1px 0 0 #fff,
+    1px 0 0 #fff,
+    -1px 1px 0 #fff,
+    0 1px 0 #fff,
+    1px 1px 0 #fff;
+}
+.island-editor-toggle button:hover:not(:disabled) {
+  background: #ffffff66;
+}
+/* While editing, the tab looks the same as when closed: no pick fill or frame. */
+.island-editor-toggle button[aria-expanded="true"] {
+  border-color: transparent;
+  background: transparent;
+}
+.island-editor-toggle button[aria-expanded="true"]:hover:not(:disabled) {
+  background: #ffffff66;
+}
+@keyframes island-editor-rainbow {
+  to {
+    background-position: 126px 0;
+  }
+}
 .island-toolbar {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 8px;
   padding: 10px;
   padding-bottom: max(10px, env(safe-area-inset-bottom));
-  border: 3px solid var(--ink);
+  border: 3px solid #000;
   border-bottom: 0;
   border-radius: 6px 6px 0 0;
   background: var(--paper);
@@ -1385,6 +1432,7 @@ body::after {
   .island-loading__boat-frames,
   .island-loading__dots i,
   .island-resident__new,
+  .island-editor-toggle,
   .island-connection.is-busy .pixel-icon,
   .island-tool.is-pending::after {
     animation: none;
