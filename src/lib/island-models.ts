@@ -331,10 +331,13 @@ function crown(
   paint: Painter,
   heart: Painter,
   seed: number,
-  squash = 1
+  squash = 1,
+  // How much of the crown the dark heart fills: less for an airy crown, whose
+  // limbs show between the clumps.
+  hollow = 0.7
 ): Part[] {
   const rand = random(seed)
-  const heartPart = egg(c, [r[0] * 0.7, r[1] * 0.7, r[2] * 0.66], heart, {
+  const heartPart = egg(c, [r[0] * hollow, r[1] * hollow, r[2] * hollow * 0.95], heart, {
     amp: 1.2,
     scale: 2.4,
     seed
@@ -489,38 +492,76 @@ function sapling(seed: number) {
   )
 }
 
-// A spruce: skirts of drooping boughs stacked to a spire.
-function conifer(seed: number) {
-  const needles = foliage('pine', 6, seed + 1)
-  const parts: Part[] = [...trunk([0, MID, 76], 3.4, 0.8, barkOf(seed, 'trunk', 4), seed, 5)]
-  const tiers = 10
-  for (let k = 0; k < tiers; k++) {
-    const z0 = 10 + k * 6.5
-    const height = 9.5 - k * 0.3
-    const radius = 20 * (1 - k / (tiers + 0.6)) + 2.5
-    const slope = height / Math.hypot(height, radius)
-    const boughs = 9 + Math.round(radius / 2)
-    const twist = k * 1.7 + seed
-    parts.push({
-      d: (x, y, z) => {
-        const dx = x
-        // Squashed front to back: seen from above, depth reads as height.
-        const dy = (y - MID) / 0.55
-        const q = Math.hypot(dx, dy)
-        const s = (z - z0) / height
-        // The skirt hangs lower at its rim, where the bough tips droop.
-        const tip = 0.5 + 0.5 * Math.cos(Math.atan2(dy, dx) * boughs + twist)
-        const side = (q - radius * (1 - Math.max(0, s)) - tip * 3.4) * slope
-        const under = z0 - 5 * tip * (q / radius) ** 2 - z
-        const bump = (noise3(x / 1.6, y / 1.6, z / 1.6, seed + k) - 0.5) * 1.6
-        return Math.max(side, under, z - z0 - height) + bump
-      },
-      paint: needles,
-      lo: [-radius - 4, MID - radius * 0.55 - 4, z0 - 5],
-      hi: [radius + 4, MID + radius * 0.55 + 4, z0 + height + 1]
-    })
+// Birch bark: chalk white, ringed with short dark marks that crowd together
+// into rough black bark near the foot.
+function birchBark(seed: number): Painter {
+  const black = mat('birch', 1)
+  const dark = mat('birch', 3)
+  const tones = [mat('birch', 5), mat('birch', 6), mat('birch', 6)]
+  return (x, y, z) => {
+    const rough = Math.max(0, 1 - z / 9)
+    // Stretched round the trunk and squeezed up it: marks run across.
+    const mark = noise3(x / 1.4, y / 1.4, z * 1.6, seed)
+    if (mark > 0.79 - rough * 0.32) return mark > 0.86 - rough * 0.22 ? black : dark
+    const n = noise3(x / 2, y / 2, z / 6, seed + 1)
+    return tones[n < 0.4 ? 0 : n > 0.62 ? 2 : 1]
   }
-  return model(parts, { sway: 1 })
+}
+
+// A clump of birches: three slender white stems from one foot, leaning apart,
+// each under its own small, airy crown of bright leaves.
+function birch(seed: number) {
+  const rand = random(seed)
+  const paint = birchBark(seed)
+  const canopy = foliage('birchLeaf', 6, seed + 1)
+  const heart = plain(mat('birchLeaf', 3))
+  const parts: Part[] = []
+  const stems: Array<{ foot: Vec3; top: Vec3; r: number }> = [
+    { foot: [-2.6, MID + 0.5, -1], top: [-15, MID - 1, 60], r: 1.7 },
+    { foot: [2.4, MID - 1.5, -1], top: [12, MID - 3, 70], r: 1.9 },
+    { foot: [0.6, MID + 2.4, -1], top: [1, MID + 4, 46], r: 1.5 }
+  ]
+  for (const { foot, top, r } of stems) {
+    const bend: Vec3 = [foot[0] + (top[0] - foot[0]) * 0.35, (foot[1] + top[1]) / 2, top[2] * 0.5]
+    parts.push(...limb(curve(foot, bend, top, 6), r, r * 0.4, paint))
+    // Fine twigs fan up from the upper stem into the crown.
+    for (let k = 0; k < 3; k++) {
+      const t = 0.6 + k * 0.12
+      const from: Vec3 = [
+        foot[0] + (top[0] - foot[0]) * t,
+        foot[1] + (top[1] - foot[1]) * t,
+        top[2] * t
+      ]
+      const side = k % 2 ? 1 : -1
+      parts.push(
+        taper(
+          from,
+          [
+            from[0] + side * (5 + rand() * 3),
+            from[1] + (rand() - 0.5) * 3,
+            from[2] + 6 + rand() * 4
+          ],
+          r * 0.45,
+          0.35,
+          paint
+        )
+      )
+    }
+    parts.push(
+      ...crown(
+        [top[0], top[1], top[2] - 5],
+        [13, 8, 15],
+        28,
+        2.8,
+        canopy,
+        heart,
+        seed + Math.round(top[2]),
+        1,
+        0.35
+      )
+    )
+  }
+  return model(parts, { sway: 2 })
 }
 
 // A frond: a rib that rises and arches over, its leaflets combed along it.
@@ -1476,7 +1517,7 @@ const makers: Record<DecorKind, Array<() => Model>> = {
     () => acacia(3, true, 501),
     () => broadleaf(520),
     () => sapling(530),
-    () => conifer(540)
+    () => birch(540)
   ],
   palm: [
     () => palm(66, 6, -1, 10, 610),

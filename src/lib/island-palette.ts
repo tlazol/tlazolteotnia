@@ -71,6 +71,17 @@ export const ramps = {
   savanna: ['#1f2414', '#2d351b', '#3e4923', '#525e2c', '#677536', '#7f8c43', '#9ca456', '#bcbd72'],
   frond: ['#132117', '#1c321d', '#284625', '#365c2e', '#477238', '#5c8943', '#77a152', '#9bbb6a'],
   trunk: ['#1f1712', '#2e231b', '#3f3125', '#544231', '#6b5640', '#846d53', '#9f8869', '#bba788'],
+  birch: ['#25221f', '#4a453f', '#7d786f', '#a9a499', '#cfcabe', '#e9e6dc', '#faf8f2', '#ffffff'],
+  birchLeaf: [
+    '#1d2b15',
+    '#2c401d',
+    '#3f5926',
+    '#567431',
+    '#6f8e3d',
+    '#8daa4e',
+    '#adc566',
+    '#d1de8a'
+  ],
   palmTrunk: ['#2a2219', '#3d3226', '#524435', '#6a5a46', '#837259', '#9d8d73', '#bbab90'],
   // Small fires drawn as signs: a few flat, bright colors in a bold line.
   flame: ['#b5301f', '#ec5a2a', '#ff9530', '#ffd04a', '#fff4bd'],
