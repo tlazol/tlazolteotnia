@@ -2,10 +2,12 @@ import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
 import {
   BAKE_CHUNK,
+  bakeModel,
   bakeTemplate,
   DEPTH_UNIT,
   IslandBaker,
   isViewportBaked,
+  modelKeysByPriority,
   prioritizeChunks,
   REFERENCE_HEIGHT
 } from '../src/lib/island-bake'
@@ -249,6 +251,44 @@ describe('island baker', () => {
     expect(at(3, 3)).toBeGreaterThan(at(0, 0))
     expect(at(0, 0)).toBe(0)
     expect(at(6, 1)).toBeGreaterThan(0)
+  })
+
+  it('bakes the same chunks from models baked elsewhere, reading only those it names', () => {
+    const world = createDefaultIsland()
+    const local = new IslandBaker(world.columns, world.rows)
+    local.update(world.ground, world.decor)
+    const given = new IslandBaker(world.columns, world.rows)
+    given.update(world.ground, world.decor)
+    // The chunks with the most models, where a missing one would show.
+    const chunks = Array.from({ length: given.chunkColumns * given.chunkRows }, (_, i) => i)
+      .sort((a, b) => given.chunkModels(b).size - given.chunkModels(a).size)
+      .slice(0, 3)
+    const named = new Set<string>()
+    for (const index of chunks) {
+      const keys = given.chunkModels(index)
+      expect(keys.size).toBeGreaterThan(0)
+      for (const key of keys) {
+        named.add(key)
+        if (!given.hasModel(key)) given.addModel(bakeModel(key))
+      }
+      expect(given.bakeChunk(index)).toEqual(local.bakeChunk(index))
+      // Nothing was baked in place: every model read was one handed over.
+      expect(new Set(given.models().map((model) => model.key))).toEqual(named)
+    }
+  }, 15_000)
+
+  it('lists the models standing in earlier chunks first, each once', () => {
+    const world = createIsland(30, 10)
+    world.ground.fill(GRASS)
+    // 480 pixels across: four chunks to a row.
+    world.decor[2 * 30 + 1] = decorCode('rock')
+    world.decor[2 * 30 + 3] = decorCode('rock')
+    world.decor[2 * 30 + 25] = decorCode('palm')
+    const rock = modelKeysByPriority(30, world.decor, 4, [0, 1, 2, 3])
+    expect(rock).toHaveLength(2)
+    expect(rock[0]).toMatch(/^rock:/)
+    expect(modelKeysByPriority(30, world.decor, 4, [3, 0, 1, 2])[0]).toMatch(/^palm:/)
+    expect(() => bakeModel('nothing:0:0')).toThrow()
   })
 
   it('bakes only what changed', () => {

@@ -1,4 +1,4 @@
-import { BAKE_CHUNK, type BakedChunk } from './island-bake'
+import { BAKE_CHUNK, type BakedChunk, type BakedModel } from './island-bake'
 import { TILE_SIZE } from './island-world'
 
 export type BakeSnapshot = {
@@ -32,32 +32,32 @@ async function database() {
   })
 }
 
-export async function readBakeSnapshot(): Promise<{ snapshot: unknown; writable: boolean }> {
+async function read(key: string): Promise<{ value: unknown; writable: boolean }> {
   let db: IDBDatabase | undefined
   try {
     db = await database()
-    const snapshot = await new Promise((resolve, reject) => {
-      const request = db?.transaction('snapshot').objectStore('snapshot').get('latest')
+    const value = await new Promise((resolve, reject) => {
+      const request = db?.transaction('snapshot').objectStore('snapshot').get(key)
       if (!request) return resolve(null)
       request.onsuccess = () => resolve(request.result ?? null)
       request.onerror = () => reject(request.error)
     })
-    return { snapshot, writable: true }
+    return { value, writable: true }
   } catch {
-    return { snapshot: null, writable: false }
+    return { value: null, writable: false }
   } finally {
     db?.close()
   }
 }
 
-export async function writeBakeSnapshot(snapshot: BakeSnapshot) {
+async function write(key: string, value: unknown) {
   let db: IDBDatabase | undefined
   try {
     db = await database()
     await new Promise<void>((resolve, reject) => {
       const transaction = db?.transaction('snapshot', 'readwrite')
       if (!transaction) return resolve()
-      transaction.objectStore('snapshot').put(snapshot, 'latest')
+      transaction.objectStore('snapshot').put(value, key)
       transaction.oncomplete = () => resolve()
       transaction.onerror = () => reject(transaction.error)
       transaction.onabort = () => reject(transaction.error)
@@ -67,6 +67,66 @@ export async function writeBakeSnapshot(snapshot: BakeSnapshot) {
   } finally {
     db?.close()
   }
+}
+
+export async function readBakeSnapshot(): Promise<{ snapshot: unknown; writable: boolean }> {
+  const { value, writable } = await read('latest')
+  return { snapshot: value, writable }
+}
+
+export async function writeBakeSnapshot(snapshot: BakeSnapshot) {
+  await write('latest', snapshot)
+}
+
+// Decoration models, kept apart from the island: they stay valid however the
+// shared island is edited, so a returning visitor skips most of the work.
+export type ModelCache = { version: string; models: BakedModel[] }
+
+export async function readModelCache(): Promise<{ cache: unknown; writable: boolean }> {
+  const { value, writable } = await read('models')
+  return { cache: value, writable }
+}
+
+export async function writeModelCache(cache: ModelCache) {
+  await write('models', cache)
+}
+
+// The usable models of a cache from this renderer version; broken entries are skipped.
+export function cachedModels(cache: unknown, version: string): BakedModel[] {
+  if (!cache || typeof cache !== 'object') return []
+  const { version: cachedVersion, models } = cache as Partial<ModelCache>
+  if (cachedVersion !== version || !Array.isArray(models)) return []
+  return models.filter(validModel)
+}
+
+function validModel(model: unknown): model is BakedModel {
+  if (!model || typeof model !== 'object') return false
+  const { key, template: t, shadow: s } = model as Partial<BakedModel>
+  return (
+    typeof key === 'string' &&
+    !!t &&
+    Number.isInteger(t.count) &&
+    t.count >= 0 &&
+    t.x instanceof Int16Array &&
+    t.x.length === t.count &&
+    t.y instanceof Int16Array &&
+    t.y.length === t.count &&
+    t.depth instanceof Float32Array &&
+    t.depth.length === t.count &&
+    t.slot instanceof Uint16Array &&
+    t.slot.length === t.count &&
+    t.sway instanceof Float32Array &&
+    t.sway.length === t.count &&
+    t.glow instanceof Uint8Array &&
+    t.glow.length === t.count &&
+    !!s &&
+    Number.isFinite(s.x0) &&
+    Number.isFinite(s.y0) &&
+    Number.isInteger(s.width) &&
+    Number.isInteger(s.height) &&
+    s.light instanceof Float32Array &&
+    s.light.length === s.width * s.height
+  )
 }
 
 export function matchesBakeSnapshot(

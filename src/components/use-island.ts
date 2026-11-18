@@ -147,6 +147,8 @@ export function useIsland({
     const visibility = () => {
       if (document.visibilityState === 'visible') live?.resume()
     }
+    // Fetch the renderer while the island itself is still on its way.
+    void loadRenderer().catch(() => {})
     void loadConnection().then((module) => {
       if (cancelled) return
       live = module.createBrowserIslandConnection({

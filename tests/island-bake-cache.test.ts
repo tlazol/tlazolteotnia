@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest'
+import { bakeModel } from '../src/lib/island-bake'
 import {
   type BakeSnapshot,
+  cachedModels,
   matchesBakeSnapshot,
   readBakeSnapshot,
-  writeBakeSnapshot
+  readModelCache,
+  writeBakeSnapshot,
+  writeModelCache
 } from '../src/lib/island-bake-cache'
 
 const snapshot: BakeSnapshot = {
@@ -77,5 +81,32 @@ describe('baked island cache', () => {
   it('falls back to calculation when IndexedDB is unavailable', async () => {
     expect(await readBakeSnapshot()).toEqual({ snapshot: null, writable: false })
     await expect(writeBakeSnapshot(snapshot)).resolves.toBeUndefined()
+    expect(await readModelCache()).toEqual({ cache: null, writable: false })
+    await expect(writeModelCache({ version: 'renderer-v1', models: [] })).resolves.toBeUndefined()
+  })
+})
+
+describe('cached decoration models', () => {
+  const model = bakeModel('rock:0:0')
+
+  it('reuses models from the same renderer version, whatever the island', () => {
+    expect(cachedModels({ version: 'renderer-v1', models: [model] }, 'renderer-v1')).toEqual([
+      model
+    ])
+    expect(cachedModels({ version: 'renderer-v2', models: [model] }, 'renderer-v1')).toEqual([])
+  })
+
+  it('skips broken entries and keeps the rest', () => {
+    const broken = [
+      null,
+      { ...model, key: 1 },
+      { ...model, template: { ...model.template, x: new Int16Array(1) } },
+      { ...model, template: { ...model.template, slot: Array.from(model.template.slot) } },
+      { ...model, shadow: { ...model.shadow, light: new Float32Array(1) } },
+      { ...model, shadow: null }
+    ]
+    expect(cachedModels({ version: 'v', models: [...broken, model] }, 'v')).toEqual([model])
+    for (const value of [null, {}, { version: 'v', models: null }, 'models'])
+      expect(cachedModels(value, 'v')).toEqual([])
   })
 })

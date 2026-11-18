@@ -52,9 +52,10 @@ import {
   type BakedChunk,
   DEPTH_UNIT,
   isViewportBaked,
+  modelBuffers,
   REFERENCE_HEIGHT
 } from './island-bake'
-import type { BakeRequest, BakeResponse } from './island-bake.worker'
+import type { BakeRequest, BakeResponse, ModelMessage } from './island-bake.worker'
 import { clampView, type IslandView, WORLD_HEIGHT, WORLD_WIDTH } from './island-camera'
 import { daylightNow } from './island-daylight'
 import {
@@ -689,7 +690,17 @@ export type IslandRendererOptions = {
 
 export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandRendererOptions) {
   const { world, residents, designs, onFrame, onFailure } = options
-  const renderer = new WebGLRenderer({ canvas, antialias: false, alpha: false, stencil: true })
+  // The baker starts loading first, while the rest of the scene is set up here.
+  const bakeWorker = () =>
+    new Worker(new URL('./island-bake.worker.ts', import.meta.url), { type: 'module' })
+  const baker = bakeWorker()
+  let renderer: WebGLRenderer
+  try {
+    renderer = new WebGLRenderer({ canvas, antialias: false, alpha: false, stencil: true })
+  } catch (error) {
+    baker.terminate()
+    throw error
+  }
   const pixelRatio = Math.min(window.devicePixelRatio || 1, 2)
   renderer.setPixelRatio(pixelRatio)
   renderer.setClearColor(rawColor(islandPalette.deep))
@@ -942,9 +953,69 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
   })
   // Kept from rejecting unhandled when nobody waits for it.
   ready.catch(() => {})
-  const baker = new Worker(new URL('./island-bake.worker.ts', import.meta.url), {
-    type: 'module'
-  })
+  // Helpers bake decoration models for the first bake, which needs most of
+  // them at once. They are only started if the baker asks, and go when done.
+  const helperLimit = Math.min(4, Math.max(0, (navigator.hardwareConcurrency || 2) - 1))
+  let helpers: Worker[] = []
+  let helperQueue: string[] = []
+  let helperPending = 0
+  function stopHelpers() {
+    for (const helper of helpers) helper.terminate()
+    helpers = []
+    helperQueue = []
+    helperPending = 0
+  }
+  function helpersLost() {
+    if (!helpers.length) return
+    stopHelpers()
+    baker.postMessage({ type: 'models-unavailable' } satisfies ModelMessage)
+  }
+  function giveHelper(helper: Worker) {
+    const key = helperQueue.shift()
+    if (key === undefined) return
+    helperPending++
+    helper.postMessage({ type: 'models', keys: [key] } satisfies ModelMessage)
+  }
+  function startHelpers(keys: string[]) {
+    stopHelpers()
+    helperQueue = [...keys]
+    // Two models in flight each, so a helper never idles waiting for the page.
+    const count = Math.min(helperLimit, Math.ceil(keys.length / 2))
+    try {
+      for (let i = 0; i < count; i++) {
+        const helper = bakeWorker()
+        helpers.push(helper)
+        helper.onmessage = (event: MessageEvent<BakeResponse>) => {
+          if (disposed) return
+          const message = event.data
+          if (message.type !== 'model') {
+            helpersLost()
+            return
+          }
+          helperPending--
+          baker.postMessage(
+            { type: 'model', model: message.model } satisfies ModelMessage,
+            modelBuffers(message.model)
+          )
+          giveHelper(helper)
+          if (!helperQueue.length && !helperPending) stopHelpers()
+        }
+        helper.onerror = (event) => {
+          event.preventDefault()
+          helpersLost()
+        }
+      }
+    } catch {
+      // Without helpers the baker makes every model itself.
+      stopHelpers()
+    }
+    if (!helpers.length) {
+      baker.postMessage({ type: 'models-unavailable' } satisfies ModelMessage)
+      return
+    }
+    for (let round = 0; round < 2; round++) for (const helper of helpers) giveHelper(helper)
+  }
+  let helpersOffered = false
   function bakeViewport() {
     return size.width && size.height
       ? {
@@ -984,13 +1055,20 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
       rows: world.rows,
       ground: world.ground.slice(),
       decor: world.decor.slice(),
-      viewport: bakeViewport()
+      viewport: bakeViewport(),
+      helpers: !helpersOffered && helperLimit > 0
     }
+    helpersOffered = true
     baker.postMessage(request, [request.ground.buffer, request.decor.buffer])
   }
   baker.onmessage = (event: MessageEvent<BakeResponse>) => {
     if (disposed) return
     const message = event.data
+    if (message.type === 'need') {
+      startHelpers(message.keys)
+      return
+    }
+    if (message.type === 'model') return
     if (message.type === 'error') {
       rejectReady(new Error(message.message))
       fail(new Error(message.message))
@@ -1011,6 +1089,8 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
       baking = false
       initialReady = true
       resolveReady()
+      // Anything still with the helpers is no longer waited for.
+      stopHelpers()
       if (stale) requestBake()
     }
     wake()
@@ -1565,6 +1645,7 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
       cancelAnimationFrame(frame)
       clearInterval(lightTimer)
       baker.terminate()
+      stopHelpers()
       document.removeEventListener('visibilitychange', visibility)
       reducedMotion.removeEventListener('change', wake)
       canvas.removeEventListener('webglcontextlost', contextLost)

@@ -27,6 +27,7 @@ import {
   CLOVER,
   COBBLE,
   DECK,
+  type DecorKind,
   DRYGRASS,
   decorInfo,
   decorKindOf,
@@ -440,10 +441,75 @@ function shadowLight(map: ShadowMap, x: number, y: number, z: number) {
   return a + (b - a) * fu + (c - a) * fv + (a - b - c + d) * fu * fv
 }
 
+// ---- Models by key ------------------------------------------------------------------
+
+// A decoration's template and shadow depend only on its model, never on the
+// island around it, so they can be baked anywhere (another worker, an earlier
+// visit) and handed over by this key.
+export type BakedModel = { key: string; template: Template; shadow: ShadowMap }
+
+export function modelKey(kind: DecorKind, look: number, size: number) {
+  return `${kind}:${look}:${size}`
+}
+
+function modelAt(decor: Uint8Array, columns: number, tile: number) {
+  const code = decor[tile]
+  const kind = decorKindOf(code)
+  if (!kind) return null
+  const tx = tile % columns
+  const ty = Math.floor(tile / columns)
+  const look = decorLookAt(code, tx, ty) ?? 0
+  const size = decorSizeAt(code, tx, ty)
+  return { key: modelKey(kind, look, size), model: () => decorModel(kind, look, size) }
+}
+
+export function bakeModel(key: string): BakedModel {
+  const [kind, look, size] = key.split(':')
+  if (!Object.hasOwn(decorInfo, kind)) throw new Error(`Unknown decoration model ${key}`)
+  const model = decorModel(kind as DecorKind, Number(look), Number(size))
+  return { key, template: bakeTemplate(model), shadow: bakeShadow(model) }
+}
+
+// The buffers a baked model owns, for handing it to another thread.
+export function modelBuffers({ template, shadow }: BakedModel): ArrayBuffer[] {
+  return [
+    template.x.buffer,
+    template.y.buffer,
+    template.depth.buffer,
+    template.slot.buffer,
+    template.sway.buffer,
+    template.glow.buffer,
+    shadow.light.buffer
+  ] as ArrayBuffer[]
+}
+
+// The island's decoration models, those standing in earlier chunks first.
+export function modelKeysByPriority(
+  columns: number,
+  decor: Uint8Array,
+  chunkColumns: number,
+  chunkOrder: number[]
+) {
+  const rank = new Map(chunkOrder.map((index, i) => [index, i]))
+  const ranked: Array<[number, string]> = []
+  for (let tile = 0; tile < decor.length; tile++) {
+    const found = modelAt(decor, columns, tile)
+    if (!found) continue
+    // Where placeInstance stands it.
+    const x = (tile % columns) * TILE_SIZE + TILE_SIZE / 2
+    const y = Math.floor(tile / columns) * TILE_SIZE + TILE_SIZE - 2
+    const chunk = Math.floor(y / BAKE_CHUNK) * chunkColumns + Math.floor(x / BAKE_CHUNK)
+    ranked.push([rank.get(chunk) ?? chunkOrder.length, found.key])
+  }
+  ranked.sort((a, b) => a[0] - b[0])
+  return [...new Set(ranked.map(([, key]) => key))]
+}
+
 // ---- The baker --------------------------------------------------------------------
 
 type Instance = {
   tile: number
+  key: string
   model: Model
   template: () => Template
   shadow: () => ShadowMap
@@ -468,8 +534,8 @@ export class IslandBaker {
   private eroded: Float32Array
   readonly heights: Float32Array
   private instances = new Map<number, Instance>()
-  private templates = new Map<Model, Template>()
-  private shadows = new Map<Model, ShadowMap>()
+  private templates = new Map<string, Template>()
+  private shadows = new Map<string, ShadowMap>()
   private started = false
 
   constructor(columns: number, rows: number) {
@@ -670,13 +736,13 @@ export class IslandBaker {
 
   private placeInstance(tile: number) {
     this.instances.delete(tile)
-    const code = this.world.decor[tile]
-    const kind = decorKindOf(code)
-    if (!kind) return
+    const found = modelAt(this.world.decor, this.columns, tile)
+    const kind = decorKindOf(this.world.decor[tile])
+    if (!found || !kind) return
     const tx = tile % this.columns
     const ty = Math.floor(tile / this.columns)
-    const look = decorLookAt(code, tx, ty) ?? 0
-    const model = decorModel(kind, look, decorSizeAt(code, tx, ty))
+    const { key } = found
+    const model = found.model()
     const water = decorInfo[kind].on === 'water'
     const x = tx * TILE_SIZE + TILE_SIZE / 2
     const y = ty * TILE_SIZE + TILE_SIZE - 2
@@ -685,9 +751,10 @@ export class IslandBaker {
       : Math.round(Math.max(this.heightAt(x + 0.5, y - 3.5), this.heightAt(x + 0.5, y + 0.5)))
     this.instances.set(tile, {
       tile,
+      key,
       model,
-      template: () => this.template(model),
-      shadow: () => this.shadow(model),
+      template: () => this.template(key, model),
+      shadow: () => this.shadow(key, model),
       x,
       y,
       z,
@@ -697,22 +764,59 @@ export class IslandBaker {
     })
   }
 
-  private template(model: Model) {
-    let found = this.templates.get(model)
+  private template(key: string, model: Model) {
+    let found = this.templates.get(key)
     if (!found) {
       found = bakeTemplate(model)
-      this.templates.set(model, found)
+      this.templates.set(key, found)
     }
     return found
   }
 
-  private shadow(model: Model) {
-    let found = this.shadows.get(model)
+  private shadow(key: string, model: Model) {
+    let found = this.shadows.get(key)
     if (!found) {
       found = bakeShadow(model)
-      this.shadows.set(model, found)
+      this.shadows.set(key, found)
     }
     return found
+  }
+
+  // Takes a model baked elsewhere; one already here stays.
+  addModel({ key, template, shadow }: BakedModel) {
+    if (!this.templates.has(key)) this.templates.set(key, template)
+    if (!this.shadows.has(key)) this.shadows.set(key, shadow)
+  }
+
+  hasModel(key: string) {
+    return this.templates.has(key) && this.shadows.has(key)
+  }
+
+  // Every model baked or taken so far.
+  models(): BakedModel[] {
+    const models: BakedModel[] = []
+    for (const [key, template] of this.templates) {
+      const shadow = this.shadows.get(key)
+      if (shadow) models.push({ key, template, shadow })
+    }
+    return models
+  }
+
+  // The models a chunk's bake reads: those standing in it, and those near
+  // enough to shade its ground (bakeTerrain looks a tile further south).
+  chunkModels(index: number) {
+    const cx = index % this.chunkColumns
+    const cy = Math.floor(index / this.chunkColumns)
+    const X0 = cx * BAKE_CHUNK
+    const Y0 = cy * BAKE_CHUNK
+    const X1 = Math.min(this.width, X0 + BAKE_CHUNK)
+    const Y1 = Math.min(this.height, Y0 + BAKE_CHUNK)
+    const keys = new Set<string>()
+    for (const instance of this.neighbors(X0, Y0, X1, Y1 + TILE_SIZE)) keys.add(instance.key)
+    for (const instance of this.instances.values())
+      if (instance.x >= X0 && instance.x < X1 && instance.y >= Y0 && instance.y < Y1)
+        keys.add(instance.key)
+    return keys
   }
 
   bakeChunk(index: number): BakedChunk {
