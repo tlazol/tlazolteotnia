@@ -1897,28 +1897,6 @@ function paintReef(variant: number): SpriteFrame {
   return seaRock(buffer, 24, 2 + variant)
 }
 
-// Coral grown up to the surface, branching like a little tree.
-function paintCoral(tones: Rgba[], seed: number): SpriteFrame {
-  const buffer = createBuffer(34, 28)
-  const grow = (x: number, y: number, angle: number, length: number, depth: number) => {
-    const bx = Math.round(x + Math.cos(angle) * length)
-    const by = Math.round(y + Math.sin(angle) * length)
-    line(buffer, x, y, bx, by, (k) => tones[k ? 2 : 1], 2)
-    if (!depth) {
-      setPixel(buffer, bx, by - 1, tones[0])
-      return
-    }
-    for (const side of [-1, 1]) {
-      const turn = side * (0.45 + hash2(bx + side, by + depth, seed) * 0.4)
-      grow(bx, by, angle + turn, length * 0.72, depth - 1)
-    }
-  }
-  grow(10, 24, -Math.PI / 2 - 0.25, 6, 2)
-  grow(17, 25, -Math.PI / 2, 8, 2)
-  grow(24, 24, -Math.PI / 2 + 0.3, 6, 2)
-  return seaRock(buffer, 22, seed)
-}
-
 // Driftwood still at sea, riding low in the water.
 function afloat(frame: SpriteFrame, waterline: number, seed: number): SpriteFrame {
   const buffer = createBuffer(frame.buffer.width, frame.buffer.height)
@@ -2093,12 +2071,6 @@ export const decorVariants = {
     paintFishFire()
   ],
   fireflies: [1600, 1610, 1620, 1630].map(paintFireflies),
-  coral: [
-    paintCoral(shadesOf('#ffd9e2', '#ff9fb5', '#e0668a'), 11),
-    paintCoral(shadesOf('#ffe2b8', '#ffad5c', '#e07a2a'), 12),
-    paintCoral(shadesOf('#e9d9ff', '#b99af0', '#8660cf'), 13),
-    paintCoral(shadesOf('#ffffff', '#f1ece0', '#cfc6b2'), 14)
-  ],
   flotsam: [
     afloat(paintDriftwood(0), 10, 31),
     afloat(paintDriftwood(1), 10, 32),

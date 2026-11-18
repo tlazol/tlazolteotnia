@@ -1107,26 +1107,6 @@ function fireflies(seed: number) {
   return model(parts, { glow: { height: 10, soft: true } })
 }
 
-function coralModel(light: string, seed: number) {
-  const rand = random(seed)
-  const top = hexMat(light)
-  const parts: Part[] = [egg([0, 0, 0], [6, 4.5, 2], stone(seed, true, 3), { amp: 0.6, seed })]
-  const branch = (from: Vec3, yaw: number, length: number, r: number, depth: number) => {
-    const to: Vec3 = [
-      from[0] + Math.cos(yaw) * length * 0.6,
-      from[1] + Math.sin(yaw) * length * 0.3,
-      from[2] + length
-    ]
-    parts.push(taper(from, to, r, r * 0.75, plain(top)))
-    if (depth > 0)
-      for (const turn of [-0.8, 0.8])
-        branch(to, yaw + turn + (rand() - 0.5), length * 0.7, r * 0.75, depth - 1)
-  }
-  branch([-2, 0, 1], Math.PI + 0.4, 4.5, 1.3, 2)
-  branch([2.5, 0.5, 1], -0.3, 5, 1.3, 2)
-  return model(parts)
-}
-
 function afloat(base: Model) {
   return { ...base, bob: 1, sway: 0 }
 }
@@ -1304,12 +1284,6 @@ const makers: Record<DecorKind, Array<() => Model>> = {
   shell: [0, 1, 2, 3].map((look) => () => shellModel(look)),
   campfire: [0, 1, 2, 3, 4].map((look) => () => campfire(look, 1560 + look)),
   fireflies: [1600, 1610, 1620, 1630].map((seed) => () => fireflies(seed)),
-  coral: [
-    () => coralModel('#ff9fb5', 11),
-    () => coralModel('#ffad5c', 12),
-    () => coralModel('#b99af0', 13),
-    () => coralModel('#f1ece0', 14)
-  ],
   flotsam: [
     () => afloat(driftwood(0, 31)),
     () => afloat(driftwood(1, 32)),

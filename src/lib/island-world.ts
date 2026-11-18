@@ -121,7 +121,6 @@ export const decorInfo = {
   shell: { name: '貝殻', on: 'land', blocks: false },
   campfire: { name: '焚き火', on: 'land', blocks: true },
   fireflies: { name: 'ホタル', on: 'land', blocks: false },
-  coral: { name: 'サンゴ', on: 'water', blocks: true },
   flotsam: { name: '浮き流木', on: 'water', blocks: true },
   buoy: { name: 'ブイ', on: 'water', blocks: true }
 } as const satisfies Record<string, { name: string; on: 'land' | 'water'; blocks: boolean }>
@@ -152,10 +151,10 @@ export const decorGroups: Array<{ name: string; kinds: DecorKind[] }> = [
     ]
   },
   { name: 'あかり', kinds: ['torch', 'campfire', 'fireflies'] },
-  { name: '海', kinds: ['searock', 'coral', 'flotsam', 'buoy'] }
+  { name: '海', kinds: ['searock', 'flotsam', 'buoy'] }
 ]
 // Stored decoration codes: 0 is empty, otherwise the slot here plus one.
-// Retired kinds leave a null hole (stone lantern 19, seaweed 22) so the codes
+// Retired kinds leave a null hole (stone lantern 19, coral 21, seaweed 22) so the codes
 // after them keep their kinds; new kinds go at the end.
 const storedDecorKinds: Array<DecorKind | null> = [
   'tree',
@@ -178,7 +177,7 @@ const storedDecorKinds: Array<DecorKind | null> = [
   'campfire',
   null,
   'fireflies',
-  'coral',
+  null,
   null,
   'flotsam',
   'buoy'
@@ -205,7 +204,6 @@ export const decorLooks = {
   shell: 4,
   campfire: 5,
   fireflies: 4,
-  coral: 4,
   flotsam: 4,
   buoy: 2
 } as const satisfies Record<DecorKind, number>
@@ -554,9 +552,8 @@ export function createDefaultIsland(): IslandWorld {
       let dense = false
       if (ground === WATER) {
         if (!near(x, y, 2, anyLand) || near(x, y, 1, anyLand)) continue
-        // Reef rocks keep to the north and west; coral to the warm south-east.
+        // Reef rocks keep to the north and west.
         if (y < 22 || x < 20) kind = pick(roll, ['searock', 0.07])
-        else if (x > 38 && y > 30) kind = pick(roll, ['coral', 0.1])
       } else if (ground === SOIL) {
         // The flower bed is planted in rows, shoulder to shoulder.
         if ((x + y) % 2 === 0) put(x, y, 'flowers')
