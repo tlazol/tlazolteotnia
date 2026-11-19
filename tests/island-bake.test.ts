@@ -13,6 +13,8 @@ import {
 } from '../src/lib/island-bake'
 import { decorModel, GLOW_CODE, modelDistance, modelLookCount } from '../src/lib/island-models'
 import {
+  LEAF_TONES,
+  leafToneSlot,
   lightSteps,
   nearestSlot,
   palette,
@@ -29,6 +31,7 @@ import {
   decorKinds,
   decorLooks,
   decorSizeAt,
+  decorToneAt,
   GRASS,
   SAND,
   TILE_SIZE,
@@ -95,20 +98,21 @@ describe('decoration models', () => {
     }
   })
 
-  it('grow trees up to twice their size, never alike beside each other', () => {
+  it('grow trees up to 1.75 times their size, never alike beside each other', () => {
     const tree = decorCode('tree')
     for (let look = 0; look < decorLooks.tree; look++) {
       const drawn = decorModel('tree', look)
       const biggest = decorModel('tree', look, TREE_SIZES - 1)
-      expect(biggest.hi[2] / drawn.hi[2]).toBeCloseTo(2)
+      const s = 1.75
+      expect(biggest.hi[2] / drawn.hi[2]).toBeCloseTo(s)
       // Grown about the middle of the tile, so the trunk stays where it was.
       for (const [x, y, z] of [
         [0, -6, 5],
         [3, -4, 20],
         [-8, -9, 40]
       ])
-        expect(modelDistance(biggest, x * 2, -6 + (y + 6) * 2, z * 2)).toBeCloseTo(
-          modelDistance(drawn, x, y, z) * 2
+        expect(modelDistance(biggest, x * s, -6 + (y + 6) * s, z * s)).toBeCloseTo(
+          modelDistance(drawn, x, y, z) * s
         )
     }
     for (let y = 0; y < 12; y++)
@@ -206,6 +210,36 @@ describe('initial viewport baking', () => {
   })
 })
 
+describe('leaf tones', () => {
+  it('recolor leaves only, keeping their place from dark to light', () => {
+    for (let slot = 0; slot < palette.length; slot++) expect(leafToneSlot(slot, 0)).toBe(slot)
+    for (let tone = 1; tone < LEAF_TONES; tone++) {
+      expect(leafToneSlot(rampSlot('trunk', 4), tone)).toBe(rampSlot('trunk', 4))
+      expect(leafToneSlot(rampSlot('birch', 5), tone)).toBe(rampSlot('birch', 5))
+      expect(leafToneSlot(rampSlot('flame', 2), tone)).toBe(rampSlot('flame', 2))
+      const dark = palette[leafToneSlot(rampSlot('oak', 1), tone)]
+      const light = palette[leafToneSlot(rampSlot('oak', 7), tone)]
+      expect(dark.r + dark.g + dark.b).toBeLessThan(light.r + light.g + light.b)
+    }
+    const tones = new Set(
+      Array.from({ length: LEAF_TONES }, (_, tone) => leafToneSlot(rampSlot('oak', 6), tone))
+    )
+    expect(tones.size).toBe(LEAF_TONES)
+  })
+
+  it('vary leafy trees by position and leave everything else alone', () => {
+    const seen = new Set<number>()
+    for (let y = 0; y < 20; y++)
+      for (let x = 0; x < 20; x++) {
+        seen.add(decorToneAt(decorCode('tree'), x, y))
+        expect(decorToneAt(decorCode('rock'), x, y)).toBe(0)
+        expect(decorToneAt(decorCode('deadtree'), x, y)).toBe(0)
+      }
+    expect([...seen].sort()).toEqual(Array.from({ length: LEAF_TONES }, (_, i) => i))
+    expect(decorToneAt(0, 3, 4)).toBe(0)
+  })
+})
+
 describe('island baker', () => {
   it('preserves the complete scene when pruning lighting candidates', () => {
     const world = createDefaultIsland()
@@ -220,9 +254,12 @@ describe('island baker', () => {
       }
       hash.update(new Uint8Array(chunk.decor.anim.buffer))
     }
-    // Captured from the original full lighting calculation before optimization.
+    // Captured from the original full lighting calculation before optimization,
+    // with leaf tones (which only recolor leaves), smaller, squatter trees
+    // coarser leaf and bark grain, no mangroves, and single-stemmed birch and
+    // bamboo applied since.
     expect(hash.digest('hex')).toBe(
-      '923fada4bbe484e548de0124093992b0f2db2cfb8681a730d4064103d805777b'
+      '67cf30a692207077206b0d404f924cdc0634ef8e66e94a2a17d12449ee5cc54c'
     )
   }, 15_000)
 

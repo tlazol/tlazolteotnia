@@ -12,6 +12,7 @@ import { groundTexel, isPoolGround, terrainClass } from './island-art'
 import { decorModel, GLOW_CODE, type Model, modelDistance, nearestPart } from './island-models'
 import {
   bayer,
+  leafToneSlot,
   lightSteps,
   type Outline,
   palette,
@@ -33,6 +34,7 @@ import {
   decorKindOf,
   decorLookAt,
   decorSizeAt,
+  decorToneAt,
   GRASS,
   GRAVEL,
   GROUND_COUNT,
@@ -516,6 +518,8 @@ type Instance = {
   x: number
   y: number
   z: number
+  // Leaf tone, applied as the template is stamped down (decorToneAt).
+  tone: number
   lo: [number, number, number]
   hi: [number, number, number]
   water: boolean
@@ -758,6 +762,7 @@ export class IslandBaker {
       x,
       y,
       z,
+      tone: decorToneAt(this.world.decor[tile], tx, ty),
       lo: [x + model.lo[0], y + model.lo[1], z + model.lo[2]],
       hi: [x + model.hi[0], y + model.hi[1], z + model.hi[2]],
       water
@@ -1010,7 +1015,7 @@ export class IslandBaker {
         position[at * 3] = ox + t.x[i]
         position[at * 3 + 1] = oy + t.y[i]
         position[at * 3 + 2] = Math.round((instance.y + instance.z + t.depth[i]) * DEPTH_UNIT)
-        const c = palette[t.slot[i]]
+        const c = palette[leafToneSlot(t.slot[i], instance.tone)]
         color[at * 3] = c.r
         color[at * 3 + 1] = c.g
         color[at * 3 + 2] = c.b

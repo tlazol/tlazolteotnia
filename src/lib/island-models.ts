@@ -87,14 +87,16 @@ function mottled(ramp: RampName, step: number, seed: number, scale = 2.5, spread
     return n < 0.5 - spread ? dark : n > 0.5 + spread ? light : base
   }
 }
-// Leaves as a painter sees them: clumps of light and shade broken by a fine
-// speckle of single leaves, a step or two either side of the base.
+// Leaves as a painter sees them: clumps of light and shade broken by small
+// sprays of leaves, a step or two either side of the base. The sprays are a
+// couple of pixels across, not single pixels, so the crown reads as massed
+// leaves rather than grain.
 function foliage(ramp: RampName, step: number, seed: number): Painter {
   const tones = [-2, -1, 0, 1, 2].map((k) => mat(ramp, step + k))
   return (x, y, z) => {
-    const clump = noise3(x / 4.5, y / 4.5, z / 4.5, seed) - 0.5
-    const leaf = noise3(x / 1.05, y / 1.05, z / 1.05, seed + 17) - 0.5
-    const v = clump * 1.6 + leaf * 1.3
+    const clump = noise3(x / 6, y / 6, z / 6, seed) - 0.5
+    const leaf = noise3(x / 2, y / 2, z / 2, seed + 17) - 0.5
+    const v = clump * 1.8 + leaf * 0.75
     return tones[v < -0.42 ? 0 : v < -0.13 ? 1 : v < 0.16 ? 2 : v < 0.42 ? 3 : 4]
   }
 }
@@ -106,7 +108,8 @@ function barkOf(seed: number, ramp: RampName = 'trunk', step = 5): Painter {
   const ridge = mat(ramp, step + 1)
   return (x, y, z) => {
     const n =
-      noise3(x / 1.1, y / 1.1, z / 5, seed) * 0.75 + noise3(x / 3, y / 3, z / 3, seed + 3) * 0.25
+      noise3(x / 1.8, y / 1.8, z / 7, seed) * 0.7 +
+      noise3(x / 3.5, y / 3.5, z / 3.5, seed + 3) * 0.3
     return n < 0.33 ? furrow : n < 0.45 ? shade : n > 0.66 ? ridge : base
   }
 }
@@ -342,7 +345,7 @@ function crown(
   const rand = random(seed)
   const heartPart = egg(c, [r[0] * hollow, r[1] * hollow, r[2] * hollow * 0.95], heart, {
     amp: 1.2,
-    scale: 2.4,
+    scale: 3.4,
     seed
   })
   // The clumps are one part: a single pass of noise roughens all their edges,
@@ -368,7 +371,7 @@ function crown(
       hi[axis] = Math.max(hi[axis], at[axis] + size)
     }
   }
-  const amp = clump * 0.18
+  const amp = clump * 0.14
   const [low, high] = grow(lo, hi, amp)
   const leaves: Part = {
     d: (x, y, z) => {
@@ -382,7 +385,7 @@ function crown(
         const d = ellipsoid(dx, dy, dz, size, size, size * squash)
         if (d < best) best = d
       }
-      return best + (noise3(x / 1.3, y / 1.3, z / 1.3, seed) - 0.5) * 2 * amp
+      return best + (noise3(x / 2.4, y / 2.4, z / 2.4, seed) - 0.5) * 2 * amp
     },
     paint,
     lo: low,
@@ -422,7 +425,7 @@ function trunk(
 // ---- Trees ------------------------------------------------------------------
 
 const leaves = (seed: number, ramp: RampName = 'leaf', step = 4) =>
-  mottled(ramp, step, seed, 2.2, 0.17)
+  mottled(ramp, step, seed, 3, 0.17)
 
 // A savanna tree: a leaning trunk forks into limbs under a wide, flat roof.
 function acacia(lean: number, flip: boolean, seed: number) {
@@ -511,59 +514,33 @@ function birchBark(seed: number): Painter {
   }
 }
 
-// A clump of birches: three slender white stems from one foot, leaning apart,
-// each under its own small, airy crown of bright leaves.
+// A birch: one slender white stem, bowed a little, with twigs fanning up from
+// its upper half into a tall, airy crown of bright leaves.
 function birch(seed: number) {
   const rand = random(seed)
   const paint = birchBark(seed)
   const canopy = foliage('birchLeaf', 6, seed + 1)
   const heart = plain(mat('birchLeaf', 3))
-  const parts: Part[] = []
-  const stems: Array<{ foot: Vec3; top: Vec3; r: number }> = [
-    { foot: [-2.6, MID + 0.5, -1], top: [-15, MID - 1, 60], r: 1.7 },
-    { foot: [2.4, MID - 1.5, -1], top: [12, MID - 3, 70], r: 1.9 },
-    { foot: [0.6, MID + 2.4, -1], top: [1, MID + 4, 46], r: 1.5 }
-  ]
-  for (const { foot, top, r } of stems) {
-    const bend: Vec3 = [foot[0] + (top[0] - foot[0]) * 0.35, (foot[1] + top[1]) / 2, top[2] * 0.5]
-    parts.push(...limb(curve(foot, bend, top, 6), r, r * 0.4, paint))
-    // Fine twigs fan up from the upper stem into the crown.
-    for (let k = 0; k < 3; k++) {
-      const t = 0.6 + k * 0.12
-      const from: Vec3 = [
-        foot[0] + (top[0] - foot[0]) * t,
-        foot[1] + (top[1] - foot[1]) * t,
-        top[2] * t
-      ]
-      const side = k % 2 ? 1 : -1
-      parts.push(
-        taper(
-          from,
-          [
-            from[0] + side * (5 + rand() * 3),
-            from[1] + (rand() - 0.5) * 3,
-            from[2] + 6 + rand() * 4
-          ],
-          r * 0.45,
-          0.35,
-          paint
-        )
-      )
-    }
+  const stem = curve([0, MID, -1], [3, MID + 0.5, 34], [-2, MID - 1, 64], 8)
+  const parts: Part[] = [...limb(stem, 2.3, 0.8, paint)]
+  // Fine twigs leave the upper stem by turns, left and right.
+  for (let k = 3; k < stem.length - 1; k++) {
+    const from = stem[k]
+    const side = k % 2 ? 1 : -1
     parts.push(
-      ...crown(
-        [top[0], top[1], top[2] - 5],
-        [13, 8, 15],
-        28,
-        2.8,
-        canopy,
-        heart,
-        seed + Math.round(top[2]),
-        1,
-        0.35
+      taper(
+        from,
+        [from[0] + side * (6 + rand() * 3), from[1] + (rand() - 0.5) * 3, from[2] + 6 + rand() * 4],
+        0.9,
+        0.35,
+        paint
       )
     )
   }
+  parts.push(
+    ...crown([1, MID, 46], [17, 10, 14], 30, 3, canopy, heart, seed + 2, 1, 0.35),
+    ...crown([-1, MID - 1, 62], [11, 8, 10], 18, 2.8, canopy, heart, seed + 3, 1, 0.35)
+  )
   return model(parts, { sway: 2 })
 }
 
@@ -850,67 +827,25 @@ function deadTree(seed: number, height: number, spread: number) {
   return model(parts, { sway: 1 })
 }
 
-function mangrove(seed: number, roots: number, lean: number) {
+// A single bamboo culm: jointed, leaning a little at the tip, leafing in
+// sprays from its upper joints.
+function bamboo(height: number, lean: number, seed: number) {
   const rand = random(seed)
-  const paint = barkOf(seed, 'trunk', 5)
-  const parts: Part[] = []
-  // Stilt roots arch out from the trunk and down into the water.
-  for (let i = 0; i < roots + 2; i++) {
-    const a = (i / (roots + 2)) * Math.PI * 2 + rand() * 0.5
-    const foot: Vec3 = [Math.cos(a) * (9 + rand() * 3), MID + Math.sin(a) * (5 + rand() * 2), -1]
-    parts.push(
-      ...limb(
-        curve(foot, [foot[0] * 0.9, MID + (foot[1] - MID) * 0.9, 12], [lean * 0.3, MID, 13], 4),
-        0.9,
-        1.6,
-        paint
-      )
-    )
-  }
-  parts.push(
-    ...limb(
-      curve([lean * 0.3, MID, 11], [lean * 0.5, MID, 20], [lean, MID, 28], 3),
-      2.6,
-      1.8,
-      paint
-    )
-  )
-  parts.push(
-    ...crown(
-      [lean, MID, 36],
-      [22, 13, 10],
-      22,
-      5.5,
-      foliage('pine', 6, seed + 3),
-      plain(mat('pine', 2)),
-      seed + 4
-    )
-  )
-  return model(parts, { sway: 1 })
-}
-
-function bamboo(stalks: Array<[number, number, number]>, seed: number) {
-  const rand = random(seed)
-  const parts: Part[] = []
   const leaf = leaves(seed, 'palmLeaf', 4)
-  for (const [x, height, lean] of stalks) {
-    const dx = x - 22
-    const dy = (rand() - 0.5) * 6
-    const h = height * 0.85
-    const node: Painter = (_x, _y, z) =>
-      (z + dx * 3) % 9 < 0.9
-        ? mat('bamboo', 1)
-        : (z + dx) % 9 < 3
-          ? mat('bamboo', 4)
-          : mat('bamboo', 3)
-    parts.push(taper([dx, dy, -1], [dx + lean, dy, h], 1.5, 1.1, node))
-    for (let k = 0; k < 5; k++) {
-      const t = 0.45 + k * 0.12
-      const at: Vec3 = [dx + lean * t, dy, h * t]
-      const yaw = (k % 2 ? 0 : Math.PI) + (rand() - 0.5) * 0.8
-      parts.push(blade(at, yaw, -15 * deg, 7 + rand() * 2, 1.5, 0.45, leaf))
-    }
+  const h = height * 0.85
+  const node: Painter = (_x, _y, z) =>
+    z % 9 < 0.9 ? mat('bamboo', 1) : z % 9 < 3 ? mat('bamboo', 4) : mat('bamboo', 3)
+  const parts: Part[] = [taper([0, MID, -1], [lean, MID, h], 2.1, 1.4, node)]
+  for (let k = 0; k < 7; k++) {
+    const t = 0.4 + k * 0.09
+    const at: Vec3 = [lean * t, MID, h * t]
+    const yaw = (k % 2 ? 0 : Math.PI) + (rand() - 0.5) * 1.2
+    parts.push(blade(at, yaw, -15 * deg, 7 + rand() * 2, 1.5, 0.45, leaf))
+    parts.push(blade(at, yaw + (rand() - 0.5) * 1.4, -5 * deg, 5 + rand() * 2, 1.3, 0.45, leaf))
   }
+  // A last spray tips the culm.
+  for (const yaw of [rand() * Math.PI * 2, rand() * Math.PI * 2])
+    parts.push(blade([lean, MID, h], yaw, 10 * deg, 6 + rand() * 2, 1.3, 0.45, leaf))
   return model(parts, { sway: 2 })
 }
 
@@ -1560,44 +1495,10 @@ const makers: Record<DecorKind, Array<() => Model>> = {
     () => spireModel(7, true)
   ],
   bamboo: [
-    () =>
-      bamboo(
-        [
-          [14, 70, -3],
-          [22, 78, 1],
-          [30, 66, 4]
-        ],
-        1300
-      ),
-    () =>
-      bamboo(
-        [
-          [10, 60, -4],
-          [17, 76, -1],
-          [24, 80, 1],
-          [31, 70, 3],
-          [36, 56, 5]
-        ],
-        1320
-      ),
-    () =>
-      bamboo(
-        [
-          [18, 46, -2],
-          [25, 52, 2]
-        ],
-        1340
-      ),
-    () =>
-      bamboo(
-        [
-          [12, 74, -5],
-          [20, 80, -2],
-          [27, 72, 2],
-          [33, 62, 6]
-        ],
-        1360
-      )
+    () => bamboo(78, 1, 1300),
+    () => bamboo(68, -4, 1320),
+    () => bamboo(54, 3, 1340),
+    () => bamboo(82, 5, 1360)
   ],
   banana: [
     () => banana(6, 16, true, 1370),
@@ -1610,12 +1511,6 @@ const makers: Record<DecorKind, Array<() => Model>> = {
     () => deadTree(2, 22, 0.9),
     () => deadTree(3, 28, 0.6),
     () => deadTree(4, 16, 1)
-  ],
-  mangrove: [
-    () => mangrove(1, 6, 0),
-    () => mangrove(2, 5, 3),
-    () => mangrove(3, 7, -3),
-    () => mangrove(4, 4, 1)
   ],
   monstera: [
     () =>
@@ -1680,6 +1575,29 @@ const makers: Record<DecorKind, Array<() => Model>> = {
   buoy: [() => buoy('#e5483f', '#fbf6ea'), () => buoy('#f2c230', '#3d424b')]
 }
 
+// Trees and their kin are drawn as toys: a little smaller than as modelled,
+// and squatter, narrower by TOY_WIDTH and shorter by TOY_HEIGHT. Their paint
+// keeps its own scale, so leaf clumps and bark read bolder on the smaller tree.
+const toyKinds: ReadonlySet<DecorKind> = new Set(['tree', 'palm', 'banana', 'bamboo', 'deadtree'])
+const TOY_WIDTH = 0.9
+const TOY_HEIGHT = 0.82
+function toy(m: Model): Model {
+  const w = TOY_WIDTH
+  const h = TOY_HEIGHT
+  // Squeezed unevenly, a distance shrinks by at most the smaller factor.
+  const least = Math.min(w, h)
+  const shrink = (v: Vec3): Vec3 => [v[0] * w, MID + (v[1] - MID) * w, v[2] * h]
+  const parts = m.parts.map(
+    (p): Part => ({
+      d: (x, y, z) => p.d(x / w, MID + (y - MID) / w, z / h) * least,
+      paint: p.paint,
+      lo: shrink(p.lo),
+      hi: shrink(p.hi)
+    })
+  )
+  return { ...m, parts, lo: shrink(m.lo), hi: shrink(m.hi) }
+}
+
 // A model grown by `s` about the middle of its tile, where a big plant's trunk
 // stands, so the trunk stays put and only the tree around it gets bigger.
 function scaled(m: Model, s: number): Model {
@@ -1712,7 +1630,7 @@ export function decorModel(kind: DecorKind, look: number, size = 0): Model {
     if (size > 0) found = scaled(decorModel(kind, look), decorScale(size))
     else {
       const make = makers[kind][Math.max(0, Math.min(decorLooks[kind] - 1, look))]
-      found = make()
+      found = toyKinds.has(kind) ? toy(make()) : make()
     }
     built.set(key, found)
   }

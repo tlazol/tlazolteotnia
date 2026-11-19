@@ -1,6 +1,8 @@
 // The island is a grid of ground tiles with at most one decoration per tile.
 // Everything here is plain data so edits, saving and rendering stay separate.
 
+import { LEAF_TONES } from './island-palette'
+
 export const ISLAND_COLUMNS = 80
 export const ISLAND_ROWS = 60
 export const TILE_SIZE = 16
@@ -113,7 +115,6 @@ export const decorInfo = {
   bamboo: { name: '竹', on: 'land', blocks: true },
   banana: { name: 'バナナの木', on: 'land', blocks: true },
   deadtree: { name: '枯れ木', on: 'land', blocks: true },
-  mangrove: { name: 'マングローブ', on: 'land', blocks: true },
   monstera: { name: 'モンステラ', on: 'land', blocks: true },
   cactus: { name: 'サボテン', on: 'land', blocks: true },
   relic: { name: '遺物', on: 'land', blocks: true },
@@ -137,7 +138,6 @@ export const decorGroups: Array<{ name: string; kinds: DecorKind[] }> = [
       'tree',
       'banana',
       'bamboo',
-      'mangrove',
       'deadtree',
       'bush',
       'monstera',
@@ -154,7 +154,7 @@ export const decorGroups: Array<{ name: string; kinds: DecorKind[] }> = [
   { name: '海', kinds: ['searock', 'flotsam', 'buoy'] }
 ]
 // Stored decoration codes: 0 is empty, otherwise the slot here plus one.
-// Retired kinds leave a null hole (stone lantern 19, coral 21, seaweed 22) so the codes
+// Retired kinds leave a null hole (mangrove 12, stone lantern 19, coral 21, seaweed 22) so the codes
 // after them keep their kinds; new kinds go at the end.
 const storedDecorKinds: Array<DecorKind | null> = [
   'tree',
@@ -168,7 +168,7 @@ const storedDecorKinds: Array<DecorKind | null> = [
   'bamboo',
   'banana',
   'deadtree',
-  'mangrove',
+  null,
   'monstera',
   'cactus',
   'relic',
@@ -196,7 +196,6 @@ export const decorLooks = {
   bamboo: 4,
   banana: 4,
   deadtree: 4,
-  mangrove: 4,
   monstera: 4,
   cactus: 4,
   relic: 4,
@@ -230,7 +229,7 @@ export function decorLookAt(code: number, x: number, y: number): number | null {
   if (!kind) return null
   return decorLookOf(code) ?? Math.floor(hash2(x, y, 211) * decorLooks[kind])
 }
-// Trees grow to one of TREE_SIZES sizes, from as drawn up to twice that. The
+// Trees grow to one of TREE_SIZES sizes, from as drawn up to 1.75 times that. The
 // size comes from the tile's position, (x + 2y) mod 5 shuffled, so no two
 // trees among a tile and its eight neighbours are ever the same size.
 export const TREE_SIZES = 5
@@ -239,8 +238,19 @@ export function decorSizeAt(code: number, x: number, y: number) {
   if (decorKindOf(code) !== 'tree') return 0
   return treeSizeOrder[(((x + 2 * y) % TREE_SIZES) + TREE_SIZES) % TREE_SIZES]
 }
+// Leafy trees take one of LEAF_TONES leaf tones from their position: the one as
+// drawn for 40% of them, the others sharing the rest. Only colors change, so
+// no tone costs another bake of the model.
+const leafyKinds: ReadonlySet<DecorKind> = new Set(['tree', 'palm', 'banana', 'bamboo'])
+export function decorToneAt(code: number, x: number, y: number) {
+  const kind = decorKindOf(code)
+  if (!kind || !leafyKinds.has(kind)) return 0
+  const roll = hash2(x, y, 223)
+  if (roll < 0.4) return 0
+  return Math.min(LEAF_TONES - 1, 1 + Math.floor(((roll - 0.4) / 0.6) * (LEAF_TONES - 1)))
+}
 export function decorScale(size: number) {
-  return 1 + size / (TREE_SIZES - 1)
+  return 1 + (size / (TREE_SIZES - 1)) * 0.75
 }
 export function isDecorCode(code: number) {
   if (!Number.isSafeInteger(code) || code < 0 || code > 0xff) return false
@@ -531,7 +541,7 @@ export function createDefaultIsland(): IslandWorld {
   }
 
   // Decorations follow the ground: each quarter of the island grows its own.
-  const tallKinds: DecorKind[] = ['tree', 'palm', 'banana', 'bamboo', 'deadtree', 'mangrove']
+  const tallKinds: DecorKind[] = ['tree', 'palm', 'banana', 'bamboo', 'deadtree']
   const tall = tallKinds.map(decorCode)
   const crowded = (x: number, y: number, reach: number) => {
     for (let dy = -reach; dy <= reach; dy++) {
@@ -626,15 +636,10 @@ export function createDefaultIsland(): IslandWorld {
         else if (ground === ROCK)
           kind = pick(roll, ['relic', 0.1], ['rock', 0.08], ['deadtree', 0.04])
         else if (ground === GRAVEL) kind = pick(roll, ['rock', 0.07])
-        else if (ground === MUD) {
-          dense = true
-          kind = pick(roll, ['mangrove', 0.4], ['mushroom', 0.08])
-        } else if (ground === SWAMP) {
-          // Mangroves wade in from the banks; fireflies drift over the open water.
-          dense = true
-          kind = near(x, y, 1, (g) => !isWetGround(g))
-            ? pick(roll, ['mangrove', 0.35])
-            : pick(roll, ['fireflies', 0.12])
+        else if (ground === MUD) kind = pick(roll, ['mushroom', 0.08])
+        else if (ground === SWAMP) {
+          // Fireflies drift over the open water, clear of the banks.
+          if (!near(x, y, 1, (g) => !isWetGround(g))) kind = pick(roll, ['fireflies', 0.12])
         }
         const isTall = kind !== null && tallKinds.includes(kind)
         if (kind === 'palm') {

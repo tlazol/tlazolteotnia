@@ -185,6 +185,64 @@ export function rampSlot(name: RampName, step: number) {
   return slots[Math.max(0, Math.min(slots.length - 1, step))]
 }
 
+// Leaf tones: the same tree, read on another foliage ramp, so a wood of one
+// kind of tree is not all one green. Tone 0 is as drawn. A tone moves each
+// foliage ramp onto another (and some steps along it) at the same place from
+// dark to light; bark and everything else keep their colors.
+export const LEAF_TONES = 4
+const leafTones: Array<Partial<Record<RampName, readonly [RampName, number]>>> = [
+  {},
+  // Deep and cool.
+  {
+    oak: ['pine', 1],
+    frond: ['pine', 1],
+    birchLeaf: ['oak', 0],
+    savanna: ['oak', 0],
+    palmLeaf: ['pine', 1],
+    pine: ['pine', -1]
+  },
+  // Fresh and bright.
+  {
+    oak: ['birchLeaf', 0],
+    frond: ['birchLeaf', 0],
+    birchLeaf: ['birchLeaf', 1],
+    savanna: ['birchLeaf', -1],
+    palmLeaf: ['bamboo', 0],
+    pine: ['oak', 0]
+  },
+  // Olive, a little dry.
+  {
+    oak: ['savanna', 0],
+    frond: ['savanna', 0],
+    birchLeaf: ['savanna', 1],
+    savanna: ['savanna', -1],
+    palmLeaf: ['birchLeaf', 0],
+    pine: ['frond', -1]
+  }
+]
+// For each tone, every palette slot's slot in that tone.
+const leafToneSlots = leafTones.map((tone) => {
+  const table = new Uint16Array(palette.length)
+  for (let slot = 0; slot < palette.length; slot++) {
+    const { ramp, step } = palette[slot]
+    const move = tone[rampNames[ramp]]
+    if (!move) {
+      table[slot] = slot
+      continue
+    }
+    const [name, shift] = move
+    const from = ramps[rampNames[ramp]].length - 1
+    const to = ramps[name].length - 1
+    table[slot] = rampSlot(name, Math.round((step * to) / from) + shift)
+  }
+  return table
+})
+
+// The slot `slot` is drawn in under leaf tone `tone`.
+export function leafToneSlot(slot: number, tone: number) {
+  return tone ? leafToneSlots[tone][slot] : slot
+}
+
 // How a silhouette is edged: a few steps darker than the color beside it, as
 // a painter would shade a turning edge ('soft'), the darkest of its ramp
 // ('ramp'), a bold ink line ('ink'), or not at all.

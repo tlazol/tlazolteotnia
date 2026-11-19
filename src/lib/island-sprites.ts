@@ -1006,8 +1006,8 @@ function paintCairnTorch(): SpriteFrame {
 
 const bambooTones = shadesOf('#d3e58a', '#a4c957', '#6f9d3d', '#47722f')
 
-// A stand of bamboo: jointed culms of uneven height, leafing from the upper
-// joints. Each culm is its root, its height and how far its tip leans.
+// Bamboo: jointed culms leafing from the upper joints. Each culm is its root,
+// its height and how far its tip leans.
 function paintBamboo(culms: Array<[number, number, number]>, seed: number): SpriteFrame {
   const buffer = createBuffer(46, 86)
   const foot = 84
@@ -1193,44 +1193,6 @@ function paintDeadTree(seed: number, height: number, spread: number): SpriteFram
   branch(buffer, 30, 67, 24, 72, 1.3, weathered)
   branch(buffer, 31, 68, 36, 72, 1.1, weathered)
   return { buffer, shadow: 'medium' }
-}
-
-// A mangrove standing on arching stilt roots under a low, dense crown.
-function paintMangrove(seed: number, roots: number, lean: number): SpriteFrame {
-  const buffer = createBuffer(64, 64)
-  const rootTones = shadesOf('#9a8260', '#6a5a3e', '#463b2b')
-  // Stilt roots leave the trunk at different heights and bow out before they
-  // drop, the widest at the back and the nearest last.
-  for (let i = 0; i < roots; i++) {
-    const side = i % 2 ? 1 : -1
-    const rank = Math.floor(i / 2)
-    const reach = [21, 13, 7, 3][rank] + (hash2(i, seed, 851) - 0.5) * 5
-    const sx = 32 + side
-    const sy = 33 + rank * 5 + Math.floor(hash2(i, seed, 852) * 3)
-    const ex = 32 + side * reach
-    const ey = 59 + rank + Math.floor(hash2(i, seed, 853) * 2)
-    for (let step = 0; step <= 60; step++) {
-      const t = step / 60
-      const x = Math.round(sx + (ex - sx) * (1 - (1 - t) ** 2.4))
-      const y = Math.round(sy + (ey - sy) * t ** 1.7)
-      setPixel(buffer, x, y, rootTones[side < 0 ? 0 : 1])
-      setPixel(buffer, x + 1, y, rootTones[side < 0 ? 1 : 2])
-    }
-  }
-  line(buffer, 31, 44, 31, 61, (k) => rootTones[k ? 2 : 1], 2)
-  branch(buffer, 32, 46, 32 + lean, 24, 2.6)
-  branch(buffer, 32 + lean * 0.5, 34, 20, 24, 1.3)
-  branch(buffer, 32 + lean * 0.5, 33, 45, 23, 1.3)
-  const lobes = [
-    [32 + lean, 12, 15, 9],
-    [19, 19, 11, 8],
-    [46, 19, 11, 8],
-    [32 + lean * 0.5, 23, 15, 7]
-  ]
-  lobes.forEach(([x, y, rx, ry], i) => {
-    clump(buffer, x, y, rx, ry, seed * 31 + i * 7, deepGreens)
-  })
-  return { buffer: padded(buffer, 2), shadow: 'large', sway: 1 }
 }
 
 // A monstera: big split leaves on long stalks from one root. Each leaf is its
@@ -1967,40 +1929,10 @@ export const decorVariants = {
     seaRock(paintSpire(true), 40, 7)
   ],
   bamboo: [
-    paintBamboo(
-      [
-        [14, 70, -3],
-        [22, 78, 1],
-        [30, 66, 4]
-      ],
-      1300
-    ),
-    paintBamboo(
-      [
-        [10, 60, -4],
-        [17, 76, -1],
-        [24, 80, 1],
-        [31, 70, 3],
-        [36, 56, 5]
-      ],
-      1320
-    ),
-    paintBamboo(
-      [
-        [18, 46, -2],
-        [25, 52, 2]
-      ],
-      1340
-    ),
-    paintBamboo(
-      [
-        [12, 74, -5],
-        [20, 80, -2],
-        [27, 72, 2],
-        [33, 62, 6]
-      ],
-      1360
-    )
+    paintBamboo([[22, 78, 1]], 1300),
+    paintBamboo([[24, 68, -4]], 1320),
+    paintBamboo([[21, 54, 3]], 1340),
+    paintBamboo([[20, 82, 5]], 1360)
   ],
   banana: bananaLooks.map(paintBanana),
   deadtree: [
@@ -2008,12 +1940,6 @@ export const decorVariants = {
     paintDeadTree(2, 22, 0.9),
     paintDeadTree(3, 28, 0.6),
     paintDeadTree(4, 16, 1)
-  ],
-  mangrove: [
-    paintMangrove(1, 6, 0),
-    paintMangrove(2, 5, 3),
-    paintMangrove(3, 7, -3),
-    paintMangrove(4, 4, 1)
   ],
   monstera: [
     paintMonstera(

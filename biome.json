@@ -11,7 +11,7 @@
       "**/*.json",
       "!src/routeTree.gen.ts",
       "!.playwright-cli",
-      "!.wrangler",
+      "!**/.wrangler",
       "!dist"
     ]
   },
