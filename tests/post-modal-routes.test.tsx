@@ -19,7 +19,7 @@ vi.mock('#/lib/blog.functions', () => {
     getHomeData: async () => ({ posts: [post] }),
     getPostData: async ({ data }: { data: { slug: string } }) => {
       if (data.slug === 'broken') throw new Error('Failed to load post')
-      return data.slug === post.slug ? { post, reactions: [] } : null
+      return data.slug === post.slug ? { post } : null
     }
   }
 })

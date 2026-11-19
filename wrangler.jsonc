@@ -10,11 +10,6 @@
   "upload_source_maps": true,
   "ratelimits": [
     {
-      "name": "REACTION_RATE_LIMITER",
-      "namespace_id": "1834269501",
-      "simple": { "limit": 30, "period": 60 }
-    },
-    {
       "name": "ISLAND_SESSION_RATE_LIMITER",
       "namespace_id": "2741958301",
       "simple": { "limit": 10, "period": 60 }
@@ -29,13 +24,5 @@
     "bindings": [{ "name": "ISLAND_ROOM", "class_name": "IslandRoom" }]
   },
   "migrations": [{ "tag": "v1-island-room", "new_sqlite_classes": ["IslandRoom"] }],
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "tlazolteotnia",
-      "database_id": "88464a7d-1ec3-43a0-98ac-b4acfa63f567",
-      "migrations_dir": "migrations"
-    }
-  ],
   "observability": { "enabled": true }
 }

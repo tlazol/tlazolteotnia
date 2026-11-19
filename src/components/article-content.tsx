@@ -1,17 +1,9 @@
 import type { BlogPost } from '#/lib/blog-post'
-import type { ReactionCount } from '#/lib/reactions'
 import { authorName } from '#/lib/site'
-import { ArticleReactionFooter } from './article-reaction-footer'
 import { ArticleSticker } from './article-sticker'
 import { MarkdownBody } from './markdown-body'
 
-export function ArticleContent({
-  post,
-  reactions
-}: {
-  post: BlogPost
-  reactions: ReactionCount[]
-}) {
+export function ArticleContent({ post }: { post: BlogPost }) {
   return (
     <article>
       <header className="article-heading">
@@ -28,7 +20,6 @@ export function ArticleContent({
         </ul>
       </header>
       <MarkdownBody body={post.body} />
-      <ArticleReactionFooter reactions={reactions} slug={post.slug} />
     </article>
   )
 }

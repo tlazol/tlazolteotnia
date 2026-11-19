@@ -53,8 +53,8 @@ function getPostMeta(post?: BlogPostData) {
 }
 
 function BlogPost() {
-  const { post, reactions } = Route.useLoaderData()
-  return <ArticleContent key={post.slug} post={post} reactions={reactions} />
+  const { post } = Route.useLoaderData()
+  return <ArticleContent key={post.slug} post={post} />
 }
 
 function BlogPostError() {

@@ -16,7 +16,6 @@ import { Route as RssDotxmlRouteImport } from './routes/rss[.]xml'
 import { Route as TownIndexRouteImport } from './routes/_town.index'
 import { Route as AppLightsOutRouteImport } from './routes/app.lights-out'
 import { Route as TownBlogSlugRouteImport } from './routes/_town.blog.$slug'
-import { Route as ApiReactionsSlugRouteImport } from './routes/api.reactions.$slug'
 
 const TownRoute = TownRouteImport.update({
   id: '/_town',
@@ -52,11 +51,6 @@ const TownBlogSlugRoute = TownBlogSlugRouteImport.update({
   path: '/blog/$slug',
   getParentRoute: () => TownRoute,
 } as any)
-const ApiReactionsSlugRoute = ApiReactionsSlugRouteImport.update({
-  id: '/api/reactions/$slug',
-  path: '/api/reactions/$slug',
-  getParentRoute: () => rootRouteImport,
-} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof TownIndexRoute
@@ -65,7 +59,6 @@ export interface FileRoutesByFullPath {
   '/rss.xml': typeof RssDotxmlRoute
   '/app/lights-out': typeof AppLightsOutRoute
   '/blog/$slug': typeof TownBlogSlugRoute
-  '/api/reactions/$slug': typeof ApiReactionsSlugRoute
 }
 export interface FileRoutesByTo {
   '/atom.xml': typeof AtomDotxmlRoute
@@ -74,7 +67,6 @@ export interface FileRoutesByTo {
   '/app/lights-out': typeof AppLightsOutRoute
   '/': typeof TownIndexRoute
   '/blog/$slug': typeof TownBlogSlugRoute
-  '/api/reactions/$slug': typeof ApiReactionsSlugRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -85,27 +77,14 @@ export interface FileRoutesById {
   '/app/lights-out': typeof AppLightsOutRoute
   '/_town/': typeof TownIndexRoute
   '/_town/blog/$slug': typeof TownBlogSlugRoute
-  '/api/reactions/$slug': typeof ApiReactionsSlugRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    | '/'
-    | '/atom.xml'
-    | '/blog'
-    | '/rss.xml'
-    | '/app/lights-out'
-    | '/blog/$slug'
-    | '/api/reactions/$slug'
+    '/' | '/atom.xml' | '/blog' | '/rss.xml' | '/app/lights-out' | '/blog/$slug'
   fileRoutesByTo: FileRoutesByTo
   to:
-    | '/atom.xml'
-    | '/blog'
-    | '/rss.xml'
-    | '/app/lights-out'
-    | '/'
-    | '/blog/$slug'
-    | '/api/reactions/$slug'
+    '/atom.xml' | '/blog' | '/rss.xml' | '/app/lights-out' | '/' | '/blog/$slug'
   id:
     | '__root__'
     | '/_town'
@@ -115,7 +94,6 @@ export interface FileRouteTypes {
     | '/app/lights-out'
     | '/_town/'
     | '/_town/blog/$slug'
-    | '/api/reactions/$slug'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -124,7 +102,6 @@ export interface RootRouteChildren {
   BlogRoute: typeof BlogRoute
   RssDotxmlRoute: typeof RssDotxmlRoute
   AppLightsOutRoute: typeof AppLightsOutRoute
-  ApiReactionsSlugRoute: typeof ApiReactionsSlugRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -178,13 +155,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TownBlogSlugRouteImport
       parentRoute: typeof TownRoute
     }
-    '/api/reactions/$slug': {
-      id: '/api/reactions/$slug'
-      path: '/api/reactions/$slug'
-      fullPath: '/api/reactions/$slug'
-      preLoaderRoute: typeof ApiReactionsSlugRouteImport
-      parentRoute: typeof rootRouteImport
-    }
   }
 }
 
@@ -206,7 +176,6 @@ const rootRouteChildren: RootRouteChildren = {
   BlogRoute: BlogRoute,
   RssDotxmlRoute: RssDotxmlRoute,
   AppLightsOutRoute: AppLightsOutRoute,
-  ApiReactionsSlugRoute: ApiReactionsSlugRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

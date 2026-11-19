@@ -9,11 +9,10 @@ Use Node.js 22.22+, 24.x, or 26+ as specified in `package.json`.
 ```bash
 cp .dev.vars.example .dev.vars
 npm install
-npx wrangler d1 migrations apply tlazolteotnia --local
 npm run dev
 ```
 
-The application runs on `http://localhost:3000`. Set long random, different values for `REACTION_COOKIE_SECRET` and `ISLAND_COOKIE_SECRET` in `.dev.vars`; the file is ignored by Git. The shared island's Durable Object runs locally inside the dev server, with its storage under `.wrangler/` (separate from production).
+The application runs on `http://localhost:3000`. Set a long random value for `ISLAND_COOKIE_SECRET` in `.dev.vars`; the file is ignored by Git. The shared island's Durable Object runs locally inside the dev server, with its storage under `.wrangler/` (separate from production).
 
 ## Verification
 
@@ -34,22 +33,29 @@ After upgrading Biome, run `npx biome migrate --write`. After upgrading Wrangler
 
 ## Production
 
-Cloudflare configuration, the D1 binding, custom domain, and migrations live in `wrangler.jsonc`. Provision the production secret before deploying:
+Cloudflare configuration, the custom domain, and Durable Object migrations live in `wrangler.jsonc`.
+Provision `ISLAND_COOKIE_SECRET` as described below, then run `npm run deploy`.
+
+The article emoji reaction feature has been retired. No D1 database is required.
+When updating an existing deployment, deploy this version first to stop reaction reads and writes,
+then remove the retired resources from the same Cloudflare account:
 
 ```bash
-npx wrangler secret put REACTION_COOKIE_SECRET
-npm run deploy
+npx wrangler secret delete REACTION_COOKIE_SECRET
+npx wrangler d1 delete tlazolteotnia
+npx wrangler secret list
+npx wrangler d1 list
 ```
 
-Reaction POSTs use the `REACTION_RATE_LIMITER` binding configured in `wrangler.jsonc`: 30 attempts
-per minute per connection IP, shared across articles and independent of visitor cookies. Rejected
-requests return HTTP 429 before parsing the form or accessing D1. If the limiter is unavailable,
-writes return HTTP 503; reads remain available. Requests without `CF-Connecting-IP` share a fallback
-bucket, including local development; forwarded headers are not used as an identity fallback.
+The retired database ID is `88464a7d-1ec3-43a0-98ac-b4acfa63f567`; it contained only
+`reaction_counts`, `reaction_votes`, their trigger, and Cloudflare migration metadata.
+Verify the target ID before deletion. Removing a binding alone does not delete stored data.
+The island's `ISLAND_ROOM`, its migrations, rate limiters, and `ISLAND_COOKIE_SECRET` remain required.
 
-These are approximate limits per Cloudflare location, not a global quota or a one-person-one-vote
-guarantee. Visitors sharing an IP also share the limit. Keep the rate-limit namespace dedicated to
-this site. See the [Cloudflare Rate Limiting binding documentation](https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/).
+Production cleanup completed on 2026-11-19: the database and reaction secret were deleted,
+and the active Worker no longer binds D1 or the reaction rate limiter. D1 listing returned no
+databases, and the only remaining secret was `ISLAND_COOKIE_SECRET`. Article requests worked
+and the retired API returned HTTP 404 for both GET and POST.
 
 ## Shared island
 

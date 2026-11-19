@@ -14,9 +14,6 @@ export default {
     const nonce = createCspNonce()
     const response = await handler.fetch(request, {
       context: {
-        db: env.DB,
-        reactionCookieSecret: env.REACTION_COOKIE_SECRET,
-        reactionRateLimiter: env.REACTION_RATE_LIMITER,
         nonce
       }
     })
