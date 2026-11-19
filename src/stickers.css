@@ -232,49 +232,60 @@ body::after {
   color: var(--foil-pink);
 }
 .related-posts {
-  margin-top: 56px;
-  padding-top: 28px;
+  margin-top: 48px;
+  padding-top: 24px;
   border-top: 1px solid transparent;
   border-image: var(--post-spectrum) 1;
 }
 .related-posts h2 {
-  margin: 0 0 20px;
+  margin: 0 0 8px;
   color: var(--foil-lilac);
-  font-size: 20px;
+  font-size: 16px;
   font-weight: 700;
 }
 .related-posts__list {
+  display: grid;
+  grid-auto-columns: min(440px, 88%);
+  grid-auto-flow: column;
+  gap: 12px;
   margin: 0;
-  padding: 0;
+  padding: 4px 0 12px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: thin;
+  scrollbar-color: #ffffff33 transparent;
   list-style: none;
 }
-.related-posts__list > li + li {
-  border-top: 1px solid #ffffff1a;
+.related-posts__list > li {
+  scroll-snap-align: start;
 }
 .related-posts__list a {
   display: block;
-  padding: 20px 12px;
-  border-radius: 8px;
-  color: var(--text-strong);
-  text-decoration: none;
-  overflow-wrap: anywhere;
+  border-radius: 6px;
+  outline-offset: 2px;
+  transition: opacity 0.15s ease;
 }
-.related-posts__list a:hover,
+.related-posts__list a:hover {
+  opacity: 0.85;
+}
 .related-posts__list a:focus-visible {
+  outline: 2px solid var(--foil-lilac);
+}
+.related-posts__image {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1200 / 630;
+  border-radius: 6px;
   background: #ffffff0a;
+  object-fit: cover;
 }
-.related-posts__list time {
-  color: #aaa4b5;
-  font: 11px var(--font-mono);
-}
-.related-posts__list h3 {
-  margin: 8px 0 0;
-  font-size: 16px;
-  font-weight: 600;
-  line-height: 1.7;
-}
-.related-posts .article-tags {
-  margin-top: 12px;
+@media (max-width: 560px) {
+  /* Crop the og-image's side margins so the sticker text stays legible on narrow screens. */
+  .related-posts__image {
+    aspect-ratio: 4 / 3;
+  }
 }
 .article-page .markdown-body {
   line-height: 2;

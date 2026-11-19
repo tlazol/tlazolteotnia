@@ -1,6 +1,6 @@
 import { Link } from '@tanstack/react-router'
 import type { BlogPost, BlogPostSummary } from '#/lib/blog-post'
-import { authorName } from '#/lib/site'
+import { authorName, getBlogPostOgImagePath } from '#/lib/site'
 import { ArticleSticker } from './article-sticker'
 import { MarkdownBody } from './markdown-body'
 
@@ -34,15 +34,15 @@ export function ArticleContent({
             {relatedPosts.map((related) => (
               <li key={related.slug}>
                 <Link to="/blog/$slug" params={{ slug: related.slug }} preload={false}>
-                  <time dateTime={related.date}>{related.date.replaceAll('-', '.')}</time>
-                  <h3>{related.title}</h3>
-                  <ul className="article-tags" aria-label="共通のタグ">
-                    {related.tags
-                      .filter((tag) => post.tags.includes(tag))
-                      .map((tag) => (
-                        <li key={tag}>#{tag}</li>
-                      ))}
-                  </ul>
+                  <img
+                    className="related-posts__image"
+                    src={getBlogPostOgImagePath(related.slug)}
+                    alt={related.title}
+                    width={1200}
+                    height={630}
+                    loading="lazy"
+                    decoding="async"
+                  />
                 </Link>
               </li>
             ))}

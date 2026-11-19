@@ -18,8 +18,12 @@ export function getBlogPostUrl(slug: string) {
   return getAbsoluteUrl(`/blog/${encodeURIComponent(slug)}`)
 }
 
+export function getBlogPostOgImagePath(slug: string) {
+  return `/images/og/${encodeURIComponent(slug)}.png`
+}
+
 export function getBlogPostOgImageUrl(slug: string) {
-  return getAbsoluteUrl(`/images/og/${encodeURIComponent(slug)}.png`)
+  return getAbsoluteUrl(getBlogPostOgImagePath(slug))
 }
 
 export function getCopyrightYears(currentYear: number) {

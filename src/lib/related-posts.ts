@@ -6,5 +6,5 @@ export function getRelatedPosts(post: BlogPostSummary, posts: BlogPostSummary[])
     posts.filter(
       (candidate) => candidate.slug !== post.slug && candidate.tags.some((tag) => tags.has(tag))
     )
-  ).slice(0, 3)
+  ).slice(0, 5)
 }

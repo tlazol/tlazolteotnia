@@ -77,20 +77,23 @@ describe('post modal routes', () => {
     expect(html).not.toContain('絞り込みを解除')
   })
 
-  it('renders recommendations after the body with links and shared tags', async () => {
+  it('renders recommendations after the body as og-image links', async () => {
     const html = await renderRoute('/blog/sample')
     const article = html.slice(html.indexOf('<article>'), html.indexOf('</article>'))
     expect(article).toContain('あわせて読みたい')
     expect(article).toContain('href="/blog/related"')
-    expect(article).toContain('aria-label="共通のタグ"')
     expect(article.indexOf('Article body')).toBeLessThan(article.indexOf('あわせて読みたい'))
     expect(article).not.toContain('href="/blog/sample"')
     expect([...article.matchAll(/href="\/blog\/([^"]+)"/g)].map((match) => match[1])).toEqual([
       'react-only',
       'css-only',
-      'related'
+      'related',
+      'old'
     ])
-    // Display the shared tags, not all of the recommended article's tags.
+    expect(article).toContain('src="/images/og/related.png"')
+    expect(article).toContain('alt="Related article"')
+    // Only the og-image is shown; the title is exposed as alt text.
+    expect(article).not.toContain('共通のタグ')
     expect(article).not.toContain('#HTML')
   })
 
