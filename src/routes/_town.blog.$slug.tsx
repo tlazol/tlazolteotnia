@@ -1,8 +1,9 @@
-import { createFileRoute, notFound } from '@tanstack/react-router'
+import { createFileRoute, getRouteApi, notFound } from '@tanstack/react-router'
 import { ArticleContent } from '#/components/article-content'
 import { getPostData } from '#/lib/blog.functions'
 import type { BlogPost as BlogPostData } from '#/lib/blog-post'
 import { isValidSlug } from '#/lib/blog-slug'
+import { getRelatedPosts } from '#/lib/related-posts'
 import { requireRouteData } from '#/lib/route-helpers'
 import { getBlogPostOgImageUrl, getBlogPostUrl, siteName } from '#/lib/site'
 
@@ -54,7 +55,8 @@ function getPostMeta(post?: BlogPostData) {
 
 function BlogPost() {
   const { post } = Route.useLoaderData()
-  return <ArticleContent key={post.slug} post={post} />
+  const { posts } = getRouteApi('/_town').useLoaderData()
+  return <ArticleContent key={post.slug} post={post} relatedPosts={getRelatedPosts(post, posts)} />
 }
 
 function BlogPostError() {

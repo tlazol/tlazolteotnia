@@ -231,6 +231,51 @@ body::after {
 .article-tags li:nth-child(3n) {
   color: var(--foil-pink);
 }
+.related-posts {
+  margin-top: 56px;
+  padding-top: 28px;
+  border-top: 1px solid transparent;
+  border-image: var(--post-spectrum) 1;
+}
+.related-posts h2 {
+  margin: 0 0 20px;
+  color: var(--foil-lilac);
+  font-size: 20px;
+  font-weight: 700;
+}
+.related-posts__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.related-posts__list > li + li {
+  border-top: 1px solid #ffffff1a;
+}
+.related-posts__list a {
+  display: block;
+  padding: 20px 12px;
+  border-radius: 8px;
+  color: var(--text-strong);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+.related-posts__list a:hover,
+.related-posts__list a:focus-visible {
+  background: #ffffff0a;
+}
+.related-posts__list time {
+  color: #aaa4b5;
+  font: 11px var(--font-mono);
+}
+.related-posts__list h3 {
+  margin: 8px 0 0;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.7;
+}
+.related-posts .article-tags {
+  margin-top: 12px;
+}
 .article-page .markdown-body {
   line-height: 2;
 }

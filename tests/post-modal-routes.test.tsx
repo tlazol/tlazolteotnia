@@ -12,14 +12,25 @@ vi.mock('#/lib/blog.functions', () => {
     title: 'Sample article',
     description: 'Sample description',
     date: '2026-10-01',
-    tags: ['CSS'],
+    tags: ['CSS', 'React'],
     body: 'Article body'
   }
+  // Deliberately unsorted, with single-tag matches and a newer unrelated article.
+  const posts = [
+    { ...post, slug: 'old', date: '2020-01-01' },
+    post,
+    { ...post, slug: 'related', title: 'Related article', date: '2026-09-01' },
+    { ...post, slug: 'unrelated', date: '2026-11-01', tags: ['SQL'] },
+    { ...post, slug: 'css-only', date: '2026-10-02', tags: ['CSS', 'HTML'] },
+    { ...post, slug: 'react-only', date: '2026-10-03', tags: ['React'] },
+    { ...post, slug: 'untagged', tags: [] }
+  ]
   return {
-    getHomeData: async () => ({ posts: [post] }),
+    getHomeData: async () => ({ posts }),
     getPostData: async ({ data }: { data: { slug: string } }) => {
       if (data.slug === 'broken') throw new Error('Failed to load post')
-      return data.slug === post.slug ? { post } : null
+      const found = posts.find((candidate) => candidate.slug === data.slug)
+      return found ? { post: found } : null
     }
   }
 })
@@ -65,4 +76,30 @@ describe('post modal routes', () => {
     expect(html).not.toContain('type="search"')
     expect(html).not.toContain('絞り込みを解除')
   })
+
+  it('renders recommendations after the body with links and shared tags', async () => {
+    const html = await renderRoute('/blog/sample')
+    const article = html.slice(html.indexOf('<article>'), html.indexOf('</article>'))
+    expect(article).toContain('あわせて読みたい')
+    expect(article).toContain('href="/blog/related"')
+    expect(article).toContain('aria-label="共通のタグ"')
+    expect(article.indexOf('Article body')).toBeLessThan(article.indexOf('あわせて読みたい'))
+    expect(article).not.toContain('href="/blog/sample"')
+    expect([...article.matchAll(/href="\/blog\/([^"]+)"/g)].map((match) => match[1])).toEqual([
+      'react-only',
+      'css-only',
+      'related'
+    ])
+    // Display the shared tags, not all of the recommended article's tags.
+    expect(article).not.toContain('#HTML')
+  })
+
+  it.each(['unrelated', 'untagged'])(
+    'hides recommendations for %s when no other published article shares a tag',
+    async (slug) => {
+      const html = await renderRoute(`/blog/${slug}`)
+      expect(html).toContain('Article body')
+      expect(html).not.toContain('あわせて読みたい')
+    }
+  )
 })
