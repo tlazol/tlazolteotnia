@@ -1,36 +1,36 @@
 import {
   AdditiveBlending,
   AlwaysStencilFunc,
-  BufferAttribute,
-  BufferGeometry,
+  AmbientLight,
   CanvasTexture,
   Color,
   CustomBlending,
   DataTexture,
+  DirectionalLight,
   DoubleSide,
   DstColorFactor,
   EqualStencilFunc,
   GreaterDepth,
   Group,
   InstancedMesh,
-  LessEqualDepth,
   LinearFilter,
   LinearSRGBColorSpace,
   type Material,
   Matrix4,
   Mesh,
   MeshBasicMaterial,
+  MeshLambertMaterial,
   NearestFilter,
   NoColorSpace,
   OrthographicCamera,
   PlaneGeometry,
-  Points,
   RedFormat,
   ReplaceStencilOp,
   Scene,
   ShaderMaterial,
   type Texture,
   UnsignedByteType,
+  Vector3,
   WebGLRenderer,
   WebGLRenderTarget,
   ZeroFactor
@@ -48,16 +48,20 @@ import {
   updateShoreField
 } from './island-art'
 import {
-  BAKE_CHUNK,
-  type BakedChunk,
-  DEPTH_UNIT,
-  isViewportBaked,
-  modelBuffers,
-  REFERENCE_HEIGHT
-} from './island-bake'
-import type { BakeRequest, BakeResponse, ModelMessage } from './island-bake.worker'
-import { clampView, type IslandView, WORLD_HEIGHT, WORLD_WIDTH } from './island-camera'
+  cameraAxis,
+  clampView,
+  type IslandView,
+  pitchCos,
+  pitchSin,
+  projectGround,
+  tileAt,
+  WORLD_HEIGHT,
+  WORLD_WIDTH,
+  worldToScreen
+} from './island-camera'
 import { daylightNow } from './island-daylight'
+import { createDecor } from './island-decor.client'
+import { tileHeight } from './island-relief'
 import {
   dropResident,
   facings,
@@ -80,6 +84,7 @@ import {
   paintTurtle,
   shadowSizes
 } from './island-sprites'
+import { createTerrain } from './island-terrain.client'
 import { EDIT_MARGIN, hash2, type IslandWorld, TILE_SIZE } from './island-world'
 import type { SceneSize } from './scene-math'
 
@@ -101,34 +106,9 @@ export type IslandCursor = { tiles: CursorTile[]; soft: boolean; center: { x: nu
 
 // The whole scene is drawn one art pixel to one pixel into a small image,
 // which is then scaled up to the screen without smoothing.
-//
-// Things on the island live in world coordinates (x east, y south, z up) under
-// a group that projects them: x stays, y - z becomes the screen row, and y + z
-// orders them front to back. Points carry their screen position already.
-// Overlays (clouds, cursor, gulls, the time of day) are drawn flat in screen
-// coordinates, above everything.
-const DEPTH_SCALE = 0.01
-const DEPTH_BASE = -30
-const Z = { grid: 0.3, cursor: 5, sky: 20 }
-
-const OBLIQUE = new Matrix4().set(
-  1,
-  0,
-  0,
-  0,
-  0,
-  -1,
-  1,
-  -REFERENCE_HEIGHT,
-  0,
-  DEPTH_SCALE,
-  DEPTH_SCALE,
-  DEPTH_BASE,
-  0,
-  0,
-  0,
-  1
-)
+// World geometry uses east/south/up map coordinates. The ground group mirrors
+// south to Three's -Y. Overlays use projected art pixels.
+const Z = { sky: 20 }
 
 // Colors go into the small image exactly as they are written; nothing is
 // converted between color spaces on the way.
@@ -454,96 +434,6 @@ void main() {
 }
 `
 
-// Baked points: one pixel each, already lit and colored. Positions are the
-// screen column, screen row and depth.
-const pointHead = /* glsl */ `
-attribute vec3 aColor;
-varying vec3 vColor;
-vec4 place(vec2 screen, float depth) {
-  return projectionMatrix * viewMatrix * vec4(
-    screen.x + 0.5,
-    -(screen.y + 0.5),
-    depth / ${DEPTH_UNIT.toFixed(1)} * ${DEPTH_SCALE.toFixed(4)} + ${DEPTH_BASE.toFixed(1)},
-    1.0
-  );
-}
-`
-const terrainVertex = /* glsl */ `
-${pointHead}
-void main() {
-  vColor = aColor;
-  gl_Position = place(position.xy, position.z);
-  gl_PointSize = 1.0;
-}
-`
-const pointFragment = /* glsl */ `
-varying vec3 vColor;
-void main() {
-  gl_FragColor = vec4(vColor, 1.0);
-}
-`
-
-// Decoration points also lean with the wind row by row (so they stay on the
-// pixel grid), bob on the water, flicker as flames or drift as fireflies.
-const decorVertex = /* glsl */ `
-${pointHead}
-uniform float uTime;
-attribute vec4 aAnim;
-varying float vGlow;
-varying float vSeed;
-float seedOf(vec2 p) {
-  return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
-}
-void main() {
-  vColor = aColor;
-  vGlow = aAnim.z;
-  vSeed = seedOf(position.xy);
-  float phase = aAnim.w;
-  float gust = sin(uTime * 1.1 + phase) + 0.45 * sin(uTime * 2.7 + phase * 1.9);
-  float lean = floor(gust * aAnim.x * 0.7 + 0.5);
-  float bob = floor(sin(uTime * 1.7 + phase * 37.0) * aAnim.y + 0.5);
-  if (vGlow > 2.5) {
-    // A drawn flame: its tip leans one way, then the other, in whole pixels.
-    lean = floor(sin(uTime * 5.0 + phase * 13.0) * aAnim.x + 0.5);
-  }
-  vec2 screen = position.xy + vec2(lean, bob);
-  if (vGlow > 1.5 && vGlow < 2.5) {
-    float s = seedOf(position.xy + 3.1) * 6.283;
-    screen += floor(vec2(sin(uTime * 0.6 + s) * 2.6, cos(uTime * 0.8 + s * 1.3) * 1.8) + 0.5);
-  }
-  gl_Position = place(screen, position.z);
-  gl_PointSize = 1.0;
-}
-`
-const decorFragment = /* glsl */ `
-uniform float uTime;
-uniform float uGlowOnly;
-varying vec3 vColor;
-varying float vGlow;
-varying float vSeed;
-float flicker(float seed, float tick) {
-  return fract(sin(seed * 91.7 + tick * 47.3) * 43758.5453);
-}
-void main() {
-  if (uGlowOnly > 0.5 && vGlow < 0.5) discard;
-  vec3 col = vColor;
-  if (vGlow > 2.5) {
-    // A drawn flame keeps its colors and only breathes a little brighter.
-    if (sin(uTime * 3.1 + vSeed * 0.5) > 0.6) col = mix(col, ${vec3Of('#fff4bd')}, 0.18);
-  } else if (vGlow > 1.5) {
-    // A firefly glows and fades on its own beat.
-    if (sin(uTime * 2.3 + vSeed * 40.0) < -0.35) discard;
-  } else if (vGlow > 0.5) {
-    // Flames lick up and die back in steps, like the drawn frames they replace.
-    float h = flicker(vSeed, floor(uTime * 7.0));
-    if (h < 0.14) discard;
-    if (h > 0.78) col = mix(col, ${vec3Of('#fff3b0')}, 0.6);
-    else if (h < 0.3) col = mix(col, ${vec3Of('#c2410c')}, 0.5);
-  }
-  gl_FragColor = vec4(col, 1.0);
-}
-`
-
 const gridFragment = /* glsl */ `
 uniform vec2 uCursor;
 uniform float uRadius;
@@ -690,27 +580,39 @@ export type IslandRendererOptions = {
 
 export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandRendererOptions) {
   const { world, residents, designs, onFrame, onFailure } = options
-  // The baker starts loading first, while the rest of the scene is set up here.
-  const bakeWorker = () =>
-    new Worker(new URL('./island-bake.worker.ts', import.meta.url), { type: 'module' })
-  const baker = bakeWorker()
-  let renderer: WebGLRenderer
-  try {
-    renderer = new WebGLRenderer({ canvas, antialias: false, alpha: false, stencil: true })
-  } catch (error) {
-    baker.terminate()
-    throw error
-  }
+  const renderer = new WebGLRenderer({ canvas, antialias: false, alpha: false, stencil: true })
+  renderer.shadowMap.enabled = true
+  renderer.shadowMap.autoUpdate = false
+  renderer.autoClear = false
   const pixelRatio = Math.min(window.devicePixelRatio || 1, 2)
   renderer.setPixelRatio(pixelRatio)
   renderer.setClearColor(rawColor(islandPalette.deep))
   const scene = new Scene()
-  const camera = new OrthographicCamera(0, 1, 0, -1, 0.1, 100)
-  camera.position.z = 50
+  const overlay = new Scene()
+  const overlayCamera = new OrthographicCamera(0, 1, 0, -1, 0.1, 100)
+  overlayCamera.position.z = 50
+  const camera = new OrthographicCamera(0, 1, 0, -1, 1, 6000)
+  camera.up.set(0, 0, 1)
   const ground = new Group()
-  ground.matrixAutoUpdate = false
-  ground.matrix.copy(OBLIQUE)
+  ground.scale.y = -1
   scene.add(ground)
+  scene.add(new AmbientLight(0xffffff, 1.85))
+  const sun = new DirectionalLight(0xffffff, 1.65)
+  sun.target.position.set(WORLD_WIDTH / 2, -WORLD_HEIGHT / 2, 0)
+  sun.position.copy(sun.target.position).add(new Vector3(-390, -280, 740))
+  sun.castShadow = true
+  sun.shadow.mapSize.set(2048, 2048)
+  Object.assign(sun.shadow.camera, {
+    left: -840,
+    right: 840,
+    top: 820,
+    bottom: -820,
+    near: 1,
+    far: 1900
+  })
+  sun.shadow.camera.updateProjectionMatrix()
+  sun.shadow.normalBias = 0.6
+  scene.add(sun, sun.target)
   const disposables: Array<{ dispose: () => void }> = []
   const track = <T extends { dispose: () => void }>(item: T) => {
     disposables.push(item)
@@ -807,7 +709,7 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
   clouds.position.set(WORLD_WIDTH / 2, -WORLD_HEIGHT / 2, Z.sky)
   clouds.renderOrder = 20
   clouds.frustumCulled = false
-  scene.add(clouds)
+  overlay.add(clouds)
 
   // Time of day: everything drawn so far is multiplied by the hour's color.
   const tintMaterial = track(
@@ -824,7 +726,7 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
   tint.position.set(WORLD_WIDTH / 2, -WORLD_HEIGHT / 2, Z.sky)
   tint.renderOrder = 24
   tint.frustumCulled = false
-  scene.add(tint)
+  overlay.add(tint)
   const glowLayer = (look: typeof GLOW | typeof SOFT_GLOW) => {
     const material = track(
       new MeshBasicMaterial({
@@ -836,7 +738,7 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
       })
     )
     const layer = new SpriteLayer(
-      scene,
+      overlay,
       track(new PlaneGeometry(look.width, look.height)),
       material,
       look.width,
@@ -859,256 +761,41 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
     glow = light.glow
   }
 
-  // The island's points, baked off the main thread chunk by chunk. Heights come
-  // back with them, so residents and their shadows can stand on the ground.
-  const heights = new Float32Array(WORLD_WIDTH * WORLD_HEIGHT)
-  const heightAt = (x: number, y: number) => {
-    const px = Math.max(0, Math.min(WORLD_WIDTH - 1, Math.floor(x)))
-    const py = Math.max(0, Math.min(WORLD_HEIGHT - 1, Math.floor(y)))
-    return heights[py * WORLD_WIDTH + px]
-  }
-  const uniformsTime = { value: 0 }
-  const terrainMaterial = track(
-    new ShaderMaterial({ vertexShader: terrainVertex, fragmentShader: pointFragment })
-  )
+  const terrain = createTerrain(world, ground)
   const decorMaterial = track(
-    stampStencil(
-      new ShaderMaterial({
-        vertexShader: decorVertex,
-        fragmentShader: decorFragment,
-        uniforms: { uTime: uniformsTime, uGlowOnly: { value: 0 } }
-      }),
-      BEHIND_DECOR
-    )
+    stampStencil(new MeshLambertMaterial({ vertexColors: true }), BEHIND_DECOR)
   )
-  // Flames and fireflies again after the time of day darkens the rest.
-  const flameMaterial = track(
-    new ShaderMaterial({
-      vertexShader: decorVertex,
-      fragmentShader: decorFragment,
-      uniforms: { uTime: uniformsTime, uGlowOnly: { value: 1 } },
-      transparent: true,
-      depthWrite: false,
-      depthFunc: LessEqualDepth
-    })
+  const decor = createDecor(
+    world,
+    ground,
+    decorMaterial,
+    clock,
+    () => {
+      renderer.shadowMap.needsUpdate = true
+      placeGlows()
+      wake()
+    },
+    fail
   )
-  const chunks = new Map<
-    number,
-    { objects: Points[]; geometries: BufferGeometry[]; glowTiles: number[] }
-  >()
-  function dropChunk(index: number) {
-    const chunk = chunks.get(index)
-    if (!chunk) return
-    for (const object of chunk.objects) scene.remove(object)
-    for (const geometry of chunk.geometries) geometry.dispose()
-    for (const tile of chunk.glowTiles) {
-      glows.remove(tile)
-      softGlows.remove(tile)
-    }
-    chunks.delete(index)
-  }
-  function placeChunk(baked: BakedChunk) {
-    dropChunk(baked.index)
-    const objects: Points[] = []
-    const geometries: BufferGeometry[] = []
-    const add = (geometry: BufferGeometry, material: Material, renderOrder = 0) => {
-      const points = new Points(geometry, material)
-      points.frustumCulled = false
-      points.renderOrder = renderOrder
-      scene.add(points)
-      objects.push(points)
-    }
-    if (baked.terrain.color.length) {
-      const geometry = new BufferGeometry()
-      geometry.setAttribute('position', new BufferAttribute(baked.terrain.position, 3))
-      geometry.setAttribute('aColor', new BufferAttribute(baked.terrain.color, 3, true))
-      geometries.push(geometry)
-      add(geometry, terrainMaterial)
-    }
-    if (baked.decor.color.length) {
-      const geometry = new BufferGeometry()
-      geometry.setAttribute('position', new BufferAttribute(baked.decor.position, 3))
-      geometry.setAttribute('aColor', new BufferAttribute(baked.decor.color, 3, true))
-      geometry.setAttribute('aAnim', new BufferAttribute(baked.decor.anim, 4))
-      geometries.push(geometry)
-      add(geometry, decorMaterial)
-      if (baked.decor.anim.some((value, i) => i % 4 === 2 && value > 0))
-        add(geometry, flameMaterial, 25)
-    }
-    for (const light of baked.glows) {
+  renderer.shadowMap.needsUpdate = true
+  function placeGlows() {
+    glows.clear()
+    softGlows.clear()
+    for (const [tile, light] of decor.lights) {
+      const point = projectGround(view, light.x, light.y, light.z)
       const look = light.soft ? SOFT_GLOW : GLOW
-      ;(light.soft ? softGlows : glows).set(light.tile, light.x, light.y + look.height / 2, Z.sky)
-    }
-    chunks.set(baked.index, { objects, geometries, glowTiles: baked.glows.map((g) => g.tile) })
-  }
-
-  let bakeSerial = 0
-  let baking = false
-  let stale = false
-  let resolveReady: () => void = () => {}
-  let rejectReady: (error: unknown) => void = () => {}
-  const ready = new Promise<void>((resolve, reject) => {
-    resolveReady = resolve
-    rejectReady = reject
-  })
-  // Kept from rejecting unhandled when nobody waits for it.
-  ready.catch(() => {})
-  // Helpers bake decoration models for the first bake, which needs most of
-  // them at once. They are only started if the baker asks, and go when done.
-  const helperLimit = Math.min(4, Math.max(0, (navigator.hardwareConcurrency || 2) - 1))
-  let helpers: Worker[] = []
-  let helperQueue: string[] = []
-  let helperPending = 0
-  function stopHelpers() {
-    for (const helper of helpers) helper.terminate()
-    helpers = []
-    helperQueue = []
-    helperPending = 0
-  }
-  function helpersLost() {
-    if (!helpers.length) return
-    stopHelpers()
-    baker.postMessage({ type: 'models-unavailable' } satisfies ModelMessage)
-  }
-  function giveHelper(helper: Worker) {
-    const key = helperQueue.shift()
-    if (key === undefined) return
-    helperPending++
-    helper.postMessage({ type: 'models', keys: [key] } satisfies ModelMessage)
-  }
-  function startHelpers(keys: string[]) {
-    stopHelpers()
-    helperQueue = [...keys]
-    // Two models in flight each, so a helper never idles waiting for the page.
-    const count = Math.min(helperLimit, Math.ceil(keys.length / 2))
-    try {
-      for (let i = 0; i < count; i++) {
-        const helper = bakeWorker()
-        helpers.push(helper)
-        helper.onmessage = (event: MessageEvent<BakeResponse>) => {
-          if (disposed) return
-          const message = event.data
-          if (message.type !== 'model') {
-            helpersLost()
-            return
-          }
-          helperPending--
-          baker.postMessage(
-            { type: 'model', model: message.model } satisfies ModelMessage,
-            modelBuffers(message.model)
-          )
-          giveHelper(helper)
-          if (!helperQueue.length && !helperPending) stopHelpers()
-        }
-        helper.onerror = (event) => {
-          event.preventDefault()
-          helpersLost()
-        }
-      }
-    } catch {
-      // Without helpers the baker makes every model itself.
-      stopHelpers()
-    }
-    if (!helpers.length) {
-      baker.postMessage({ type: 'models-unavailable' } satisfies ModelMessage)
-      return
-    }
-    for (let round = 0; round < 2; round++) for (const helper of helpers) giveHelper(helper)
-  }
-  let helpersOffered = false
-  function bakeViewport() {
-    return size.width && size.height
-      ? {
-          left: view.x - size.width / view.zoom / 2 - 64,
-          top: view.y - size.height / view.zoom / 2 - 64,
-          right: view.x + size.width / view.zoom / 2 + 64,
-          bottom: view.y + size.height / view.zoom / 2 + 64
-        }
-      : undefined
-  }
-  let initialReady = false
-  let receivedHeights = false
-  function resolveVisible() {
-    if (initialReady || !receivedHeights) return
-    if (
-      isViewportBaked(
-        chunks,
-        Math.ceil(WORLD_WIDTH / BAKE_CHUNK),
-        Math.ceil(WORLD_HEIGHT / BAKE_CHUNK),
-        bakeViewport()
-      )
-    ) {
-      initialReady = true
-      resolveReady()
+      ;(light.soft ? softGlows : glows).set(tile, point.x, point.y + look.height / 2, Z.sky)
     }
   }
-  function requestBake() {
-    if (baking) {
-      stale = true
-      return
-    }
-    baking = true
-    stale = false
-    const request: BakeRequest = {
-      serial: ++bakeSerial,
-      columns: world.columns,
-      rows: world.rows,
-      ground: world.ground.slice(),
-      decor: world.decor.slice(),
-      viewport: bakeViewport(),
-      helpers: !helpersOffered && helperLimit > 0
-    }
-    helpersOffered = true
-    baker.postMessage(request, [request.ground.buffer, request.decor.buffer])
-  }
-  baker.onmessage = (event: MessageEvent<BakeResponse>) => {
-    if (disposed) return
-    const message = event.data
-    if (message.type === 'need') {
-      startHelpers(message.keys)
-      return
-    }
-    if (message.type === 'model') return
-    if (message.type === 'error') {
-      rejectReady(new Error(message.message))
-      fail(new Error(message.message))
-      return
-    }
-    if (message.type === 'heights') {
-      receivedHeights = true
-      const { rect } = message
-      for (let y = 0; y < rect.height; y++)
-        heights.set(
-          message.heights.subarray(y * rect.width, (y + 1) * rect.width),
-          (rect.y + y) * WORLD_WIDTH + rect.x
-        )
-    } else if (message.type === 'chunk') {
-      placeChunk(message.chunk)
-      resolveVisible()
-    } else {
-      baking = false
-      initialReady = true
-      resolveReady()
-      // Anything still with the helpers is no longer waited for.
-      stopHelpers()
-      if (stale) requestBake()
-    }
-    wake()
-  }
-  baker.onerror = (event) => {
-    event.preventDefault()
-    rejectReady(new Error('Island baker failed'))
-    fail(new Error('Island baker failed'))
-  }
-  // setView runs immediately after construction; use that actual viewport.
-  queueMicrotask(() => {
-    if (!disposed) requestBake()
-  })
 
   // Editing aids: corner dots near the cursor and the edge of the editable area.
   const gridMaterial = track(
     new ShaderMaterial({
-      vertexShader: screenVertex,
+      vertexShader: groundVertex,
+      side: DoubleSide,
+      polygonOffset: true,
+      polygonOffsetFactor: -1,
+      polygonOffsetUnits: -1,
       fragmentShader: gridFragment,
       transparent: true,
       depthWrite: false,
@@ -1121,17 +808,24 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
       }
     })
   )
-  const grid = new Mesh(track(new PlaneGeometry(WORLD_WIDTH + 64, WORLD_HEIGHT + 64)), gridMaterial)
-  grid.position.set(WORLD_WIDTH / 2, -WORLD_HEIGHT / 2, Z.grid)
+  const grid = new Group()
+  const seaGrid = new Mesh(seaGeometry, gridMaterial)
+  grid.add(seaGrid)
+  ground.add(grid)
   grid.visible = false
-  scene.add(grid)
+  // Overlay the same terrain triangles as the brush is picking.
+  function syncGrid() {
+    grid.clear()
+    grid.add(seaGrid)
+    for (const patch of terrain.patches.values()) grid.add(new Mesh(patch.geometry, gridMaterial))
+  }
 
   // Residents: one sheet texture each, cut into frames by UV offset, standing
   // upright in the world so trees and ledges hide them as they should.
   const residentWidth = RESIDENT_FRAME.width * RESIDENT_SCALE
   const residentHeight = RESIDENT_FRAME.height * RESIDENT_SCALE
   const residentGeometry = track(new PlaneGeometry(residentWidth, residentHeight))
-  residentGeometry.rotateX(Math.PI / 2)
+  residentGeometry.translate(0, residentHeight / 2, 0)
   const residentMeshes = residents.map((resident) => {
     const design = designs.get(resident.slug)
     const buffer = design
@@ -1167,7 +861,7 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
     )
     silhouette.renderOrder = 5
     mesh.add(silhouette)
-    ground.add(mesh)
+    scene.add(mesh)
     return { mesh, texture, swimTexture, silhouette }
   })
   // Flat things lying on the ground: shadows and selection rings.
@@ -1228,7 +922,7 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
     mesh.renderOrder = 22
     const shadow = new Mesh(gullShadowGeometry, gullShadowMaterial)
     shadow.renderOrder = 19
-    scene.add(mesh, shadow)
+    overlay.add(mesh, shadow)
     const direction = i % 2 ? -1 : 1
     return {
       mesh,
@@ -1300,9 +994,11 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
       const y = Math.round(
         gull.y + Math.sin(time * 0.5 + gull.speed) * 14 - gull.x * 0.12 * gull.direction
       )
-      gull.mesh.position.set(x, -y, Z.sky)
+      const bird = projectGround(view, x, y, 38)
+      const shade = projectGround(view, x + 9, y + 12)
+      gull.mesh.position.set(bird.x, -bird.y, Z.sky)
       gull.mesh.scale.x = gull.direction
-      gull.shadow.position.set(x + 8, -(y + 34), Z.sky)
+      gull.shadow.position.set(shade.x, -shade.y, Z.sky)
     }
     gullTexture.offset.x = Math.floor(time * 3.2) % 4 === 0 ? 0.5 : 0
     for (const swimmer of swimmers) {
@@ -1326,23 +1022,27 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
         depthWrite: false
       })
     )
-    const layer = new SpriteLayer(
-      scene,
-      track(new PlaneGeometry(TILE_SIZE, TILE_SIZE)),
-      material,
-      TILE_SIZE,
-      TILE_SIZE,
-      9,
-      30
-    )
-    return { layer, material }
+    const geometry = track(new PlaneGeometry(TILE_SIZE, TILE_SIZE))
+    geometry.scale(1, -1, 1)
+    material.side = DoubleSide
+    const mesh = new InstancedMesh(geometry, material, 9)
+    mesh.frustumCulled = false
+    mesh.renderOrder = 30
+    mesh.count = 0
+    ground.add(mesh)
+    return { mesh, material }
   })
+  const cursorMatrix = new Matrix4()
 
   let view: IslandView = { x: WORLD_WIDTH / 2, y: WORLD_HEIGHT / 2, zoom: 2 }
   let size: SceneSize = { width: 0, height: 0 }
-  let origin = { left: 0, top: 0 }
-  let dragged: { resident: Resident; original: Resident; offset: { x: number; y: number } } | null =
-    null
+  let lastTurn: number | undefined
+  let dragged: {
+    resident: Resident
+    original: Resident
+    height: number
+    offset: { x: number; y: number }
+  } | null = null
   let selected: string | null = null
   let focused: string | null = null
   let editing = false
@@ -1357,45 +1057,60 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
     if (!size.width || !size.height) return
     const unit = view.zoom * pixelRatio
     // Snap so art pixels land on whole device pixels.
-    const left = Math.round((view.x - size.width / 2 / view.zoom) * unit) / unit
-    const top = Math.round((view.y - size.height / 2 / view.zoom) * unit) / unit
-    origin = { left, top }
+    const center = projectGround(view, view.x, view.y)
+    const left = Math.round((center.x - size.width / 2 / view.zoom) * unit) / unit
+    const top = Math.round((center.y - size.height / 2 / view.zoom) * unit) / unit
+    if (lastTurn !== (view.turn ?? 0)) {
+      lastTurn = view.turn ?? 0
+      const axis = cameraAxis(view)
+      camera.position.set(axis.x * pitchCos * 3000, -axis.y * pitchCos * 3000, pitchSin * 3000)
+      camera.lookAt(0, 0, 0)
+      placeGlows()
+    }
     // The small image starts on a whole art pixel; the scale-up shifts it by
     // the rest.
-    const imageLeft = Math.floor(left)
-    const imageTop = Math.floor(top)
-    const imageWidth = Math.ceil(size.width / view.zoom) + 2
-    const imageHeight = Math.ceil(size.height / view.zoom) + 2
+    const density = Math.min(1, view.zoom)
+    const imageLeft = Math.floor(left * density)
+    const imageTop = Math.floor(top * density)
+    const imageWidth = Math.ceil((size.width * density) / view.zoom) + 2
+    const imageHeight = Math.ceil((size.height * density) / view.zoom) + 2
     if (target.width !== imageWidth || target.height !== imageHeight)
       target.setSize(imageWidth, imageHeight)
-    camera.left = imageLeft
-    camera.right = imageLeft + imageWidth
-    camera.top = -imageTop
-    camera.bottom = -(imageTop + imageHeight)
+    camera.left = imageLeft / density
+    camera.right = (imageLeft + imageWidth) / density
+    camera.top = -imageTop / density
+    camera.bottom = -(imageTop + imageHeight) / density
     camera.updateProjectionMatrix()
+    overlayCamera.left = camera.left
+    overlayCamera.right = camera.right
+    overlayCamera.top = camera.top
+    overlayCamera.bottom = camera.bottom
+    overlayCamera.updateProjectionMatrix()
     blitMaterial.uniforms.uSize.value = [imageWidth, imageHeight]
-    blitMaterial.uniforms.uOffset.value = [left - imageLeft, top - imageTop]
-    blitMaterial.uniforms.uScale.value = 1 / unit
+    blitMaterial.uniforms.uOffset.value = [left * density - imageLeft, top * density - imageTop]
+    blitMaterial.uniforms.uScale.value = density / unit
     blitMaterial.uniforms.uCanvasHeight.value = renderer.domElement.height
   }
 
-  // How far a resident stands above the reference height on screen.
-  const lift = (resident: Resident) =>
-    residentIsSwimming(world, resident) && dragged?.resident !== resident
-      ? -REFERENCE_HEIGHT
-      : Math.round(heightAt(resident.x, resident.y - 1)) - REFERENCE_HEIGHT
-
+  const heightAt = (x: number, y: number) =>
+    tileHeight(world, Math.floor(x / TILE_SIZE), Math.floor(y / TILE_SIZE))
+  const footHeight = (resident: Resident) =>
+    dragged?.resident === resident ? dragged.height : heightAt(resident.x, resident.y)
+  const residentFoot = (resident: Resident) => {
+    const p = worldToScreen(view, size, resident, footHeight(resident))
+    return {
+      x: p.x + resident.offsetX * view.zoom,
+      y: p.y + (resident.offsetY - (dragged?.resident === resident ? 5 : 0)) * view.zoom
+    }
+  }
   function project(): ResidentScreen[] {
     return residents.map((resident) => {
-      const up = lift(resident)
-      const x = Math.round(resident.x + resident.offsetX)
-      const y = Math.round(resident.y + resident.offsetY) - up
+      const foot = residentFoot(resident)
       return {
         slug: resident.slug,
-        x: (x - origin.left) * view.zoom,
-        y: (y - origin.top) * view.zoom,
-        bubbleX: (resident.x + resident.offsetX - view.x) * view.zoom + size.width / 2,
-        bubbleY: (resident.y + resident.offsetY - up - view.y) * view.zoom + size.height / 2,
+        ...foot,
+        bubbleX: foot.x,
+        bubbleY: foot.y,
         width: residentWidth * view.zoom,
         height: residentHeight * view.zoom,
         swimming: residentIsSwimming(world, resident) && dragged?.resident !== resident,
@@ -1404,7 +1119,11 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
     })
   }
 
+  const right = new Vector3()
+  const up = new Vector3()
   function placeResidents() {
+    right.set(1, 0, 0).applyQuaternion(camera.quaternion)
+    up.set(0, 1, 0).applyQuaternion(camera.quaternion)
     residents.forEach((resident, i) => {
       const { mesh, texture: walkTexture, swimTexture, silhouette } = residentMeshes[i]
       const swimming = residentIsSwimming(world, resident) && dragged?.resident !== resident
@@ -1412,28 +1131,30 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
       mesh.material.map = texture
       silhouette.material.uniforms.map.value = texture
       silhouette.material.uniforms.uvTransform.value = texture.matrix
-      const row = facings.indexOf(resident.facing)
+      const dx = resident.facing === 'side' ? (resident.flip ? -1 : 1) : 0
+      const dy = resident.facing === 'up' ? -1 : resident.facing === 'down' ? 1 : 0
+      const direction = projectGround(view, dx, dy)
+      const facing = direction.y < 0 ? 'up' : resident.facing === 'side' ? 'side' : 'down'
+      const row = facings.indexOf(facing)
       texture.offset.set(resident.frame / RESIDENT_FRAMES, 1 - (row + 1) / facings.length)
       texture.updateMatrix()
-      const footX = Math.round(resident.x)
-      const footY = Math.round(resident.y)
-      const base = lift(resident) + REFERENCE_HEIGHT
+      const footX = resident.x
+      const footY = resident.y
+      const base = footHeight(resident)
       const isDragged = dragged?.resident === resident
-      // Upright just in front of the foot; the art's shoes rest on the ground.
-      mesh.position.set(
-        footX + Math.round(resident.offsetX),
-        footY + 1,
-        base + residentHeight / 2 - Math.round(resident.offsetY) + (isDragged ? 5 : 0)
-      )
-      mesh.scale.x = resident.flip ? -1 : 1
-      mesh.rotation.y = -resident.tilt
+      mesh.position
+        .set(footX, -footY, base + 0.15)
+        .addScaledVector(right, resident.offsetX)
+        .addScaledVector(up, -resident.offsetY + (isDragged ? 5 : 0))
+      mesh.quaternion.copy(camera.quaternion)
+      mesh.rotateZ(resident.tilt)
+      mesh.scale.x = facing === 'side' && direction.x < 0 ? -1 : 1
       mesh.material.depthTest = !isDragged
       mesh.renderOrder = isDragged ? 31 : 0
-      // Raised a little toward the viewer (y and z together) so they lie over
-      // the ground without moving on screen.
+      // Keep contact shadows and selection rings just above the tile surface.
       const shadow = residentShadows[i]
       shadow.visible = !swimming
-      shadow.position.set(footX, footY + 2 - shadowBuffer.height / 2 + 0.3, base + 0.3)
+      shadow.position.set(footX, footY, heightAt(footX, footY) + 0.3)
       for (const [ring, slug] of [
         [selectedRing, selected],
         [focusRing, focused !== selected ? focused : null]
@@ -1483,7 +1204,6 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
       }
       waterMaterial.uniforms.uTime.value = time
       clock.value = time
-      uniformsTime.value = time
       updateDaylight(now)
       glows.mesh.visible = glow > 0.01
       // The firelight wavers in steps, like the flames.
@@ -1494,7 +1214,10 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
       placeWildlife(still ? 0 : dt)
       placeResidents()
       renderer.setRenderTarget(target)
+      renderer.clear()
       renderer.render(scene, camera)
+      renderer.clearDepth()
+      renderer.render(overlay, overlayCamera)
       renderer.setRenderTarget(null)
       renderer.render(blitScene, blitCamera)
       onFrame(project(), view)
@@ -1524,8 +1247,7 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
   canvas.addEventListener('webglcontextlost', contextLost)
 
   return {
-    // Settles when the initial viewport and its surrounding margin are baked.
-    ready,
+    ready: decor.ready,
     setView(next: IslandView, nextSize: SceneSize) {
       if (failed || disposed || !nextSize.width || !nextSize.height) return
       view = next
@@ -1534,10 +1256,9 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
         renderer.setSize(size.width, size.height, false)
       }
       placeCamera()
-      resolveVisible()
       wake()
     },
-    // Bakes again the chunks an edit touches, and updates the sea around them.
+    // Rebuild the affected terrain patches, decoration batches and shoreline.
     updateTiles(indices: number[]) {
       if (!indices.length || failed || disposed) return
       let minX = Infinity
@@ -1566,24 +1287,29 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
         shoreTexture.needsUpdate = true
         lakeTexture.needsUpdate = true
         settleResidents(world, residents)
-        requestBake()
+        terrain.update(indices)
+        decor.update(indices)
+        if (editing) syncGrid()
+        placeGlows()
+        renderer.shadowMap.needsUpdate = true
       } catch (error) {
         fail(error)
       }
       wake()
     },
     setCursor(cursor: IslandCursor | null) {
-      for (const { layer } of cursorLayers) layer.clear()
+      for (const { mesh } of cursorLayers) mesh.count = 0
       if (cursor) {
-        cursor.tiles.forEach((tile, i) => {
-          const blocked = !tile.allowed && !cursor.soft
-          cursorLayers[blocked ? 1 : 0].layer.set(
-            i,
-            tile.x * TILE_SIZE + TILE_SIZE / 2,
-            (tile.y + 1) * TILE_SIZE,
-            Z.cursor
+        for (const tile of cursor.tiles) {
+          const { mesh } = cursorLayers[!tile.allowed && !cursor.soft ? 1 : 0]
+          cursorMatrix.makeTranslation(
+            (tile.x + 0.5) * TILE_SIZE,
+            (tile.y + 0.5) * TILE_SIZE,
+            tileHeight(world, tile.x, tile.y) + 0.2
           )
-        })
+          mesh.setMatrixAt(mesh.count++, cursorMatrix)
+          mesh.instanceMatrix.needsUpdate = true
+        }
         cursorLayers[0].material.color.copy(rawColor(cursor.soft ? '#c9d6e3' : '#fff6bf'))
         cursorLayers[1].material.color.copy(rawColor('#ff5b5b'))
         gridMaterial.uniforms.uCursor.value = [
@@ -1596,6 +1322,7 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
     },
     setEditing(value: boolean) {
       editing = value
+      if (editing) syncGrid()
       grid.visible = editing
       if (!editing) this.setCursor(null)
       wake()
@@ -1614,6 +1341,7 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
       dragged = {
         resident,
         original: { ...resident },
+        height: heightAt(resident.x, resident.y),
         offset: { x: resident.x - point.x, y: resident.y - point.y }
       }
       wake()
@@ -1627,9 +1355,13 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
     endResidentDrag(cancel: boolean) {
       if (!dragged) return
       const { resident, original } = dragged
-      const point = { x: resident.x, y: resident.y }
+      const tile = tileAt(view, size, worldToScreen(view, size, resident, dragged.height), world)
       Object.assign(resident, original)
-      if (!cancel) dropResident(world, residents, resident, point)
+      if (!cancel)
+        dropResident(world, residents, resident, {
+          x: (tile.x + 0.5) * TILE_SIZE,
+          y: (tile.y + 0.5) * TILE_SIZE
+        })
       dragged = null
       wake()
     },
@@ -1644,13 +1376,13 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
       disposed = true
       cancelAnimationFrame(frame)
       clearInterval(lightTimer)
-      baker.terminate()
-      stopHelpers()
+      decor.dispose()
+      terrain.dispose()
+      sun.shadow.dispose()
       document.removeEventListener('visibilitychange', visibility)
       reducedMotion.removeEventListener('change', wake)
       canvas.removeEventListener('webglcontextlost', contextLost)
-      for (const index of [...chunks.keys()]) dropChunk(index)
-      for (const { layer } of cursorLayers) layer.dispose()
+      for (const { mesh } of cursorLayers) mesh.dispose()
       glows.dispose()
       softGlows.dispose()
       for (const item of disposables) item.dispose()

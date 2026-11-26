@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
+import { cameraAxis, tileAt, worldToScreen } from '../src/lib/island-camera'
 import { createIslandInput, type IslandInputBindings } from '../src/lib/island-input'
+import { tileHeight } from '../src/lib/island-relief'
+import { createIsland, ROCK, TILE_SIZE, WATER } from '../src/lib/island-world'
 
 function setup() {
   const resident = {
@@ -56,7 +59,10 @@ describe('resident gestures', () => {
     input.pointerMove(event(500))
     input.pointerUp(event(520))
     expect(bindings.residentStart).toHaveBeenCalledWith('a', { x: 640, y: 480 })
-    expect(bindings.residentMove).toHaveBeenLastCalledWith({ x: 700, y: 480 })
+    expect(bindings.residentMove).toHaveBeenLastCalledWith({
+      x: 640 + 60 * Math.SQRT1_2,
+      y: 480 - 60 * Math.SQRT1_2
+    })
     expect(bindings.residentEnd).toHaveBeenCalledWith(false)
     expect(bindings.setView).not.toHaveBeenCalled()
     expect(bindings.tap).not.toHaveBeenCalled()
@@ -119,5 +125,28 @@ describe('shared editing gestures', () => {
     input.pointerDown(down(1, 400))
     input.pointerDown(down(2, 500))
     expect(bindings.strokeEnd).toHaveBeenCalledWith(true)
+  })
+})
+
+describe('voxel terrain picking', () => {
+  const size = { width: 800, height: 600 }
+  it.each([0, 1, 2, 3])('picks the drawn top and exposed wall after quarter turn %i', (turn) => {
+    const world = createIsland()
+    world.ground.fill(WATER)
+    const tile = { x: 39, y: 28 }
+    world.ground[tile.y * world.columns + tile.x] = ROCK
+    const middle = { x: (tile.x + 0.5) * TILE_SIZE, y: (tile.y + 0.5) * TILE_SIZE }
+    const view = { ...middle, zoom: 2.5, turn }
+    const h = tileHeight(world, tile.x, tile.y)
+    const top = worldToScreen(view, size, middle, h)
+    expect(tileAt(view, size, top, world)).toEqual(tile)
+    const face = { ...middle, x: middle.x + (Math.sign(cameraAxis(view).x) * TILE_SIZE) / 2 }
+    const cliff = worldToScreen(view, size, face, h / 2)
+    expect(tileAt(view, size, cliff, world)).toEqual(tile)
+    const sea = { x: middle.x + 64, y: middle.y - 64 }
+    expect(tileAt(view, size, worldToScreen(view, size, sea), world)).toEqual({
+      x: tile.x + 4,
+      y: tile.y - 4
+    })
   })
 })

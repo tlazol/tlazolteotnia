@@ -7,7 +7,8 @@ import {
   type IslandView,
   islandSession,
   tileAt,
-  viewOn
+  viewOn,
+  worldToScreen
 } from '#/lib/island-camera'
 import type { ConnectionState, EditOutcome, IslandConnection } from '#/lib/island-connection.client'
 import {
@@ -24,6 +25,7 @@ import {
   type TileEdit,
   tilesAlong
 } from '#/lib/island-edit'
+import { tileHeight } from '#/lib/island-relief'
 import {
   createResidents,
   designResidents,
@@ -32,7 +34,7 @@ import {
   settleResidents
 } from '#/lib/island-residents'
 import type { IslandRenderer, ResidentScreen } from '#/lib/island-three.client'
-import { type IslandWorld, layoutResidentHomes } from '#/lib/island-world'
+import { type IslandWorld, layoutResidentHomes, TILE_SIZE } from '#/lib/island-world'
 import type { SceneSize } from '#/lib/scene-math'
 
 const loadRenderer = createClientOnlyFn(() => import('#/lib/island-three.client'))
@@ -103,7 +105,10 @@ export function useIsland({
     const foot = target
       ? { x: target.x + target.offsetX, y: target.y + target.offsetY }
       : footOf({ x: 40, y: 30 })
-    return viewOn({ x: foot.x, y: foot.y - 12 }, sizeRef.current, zoom)
+    const h = drawn.current
+      ? tileHeight(drawn.current, Math.floor(foot.x / TILE_SIZE), Math.floor(foot.y / TILE_SIZE))
+      : 0
+    return viewOn(foot, sizeRef.current, zoom, view.current.turn, h + 12)
   }, [])
 
   useEffect(() => {
@@ -117,6 +122,7 @@ export function useIsland({
   }, [])
 
   // Keep the same world point centered when the viewport changes size.
+  const restoredView = useRef(islandSession.view)
   const hadSize = useRef(false)
   useEffect(() => {
     if (!size.width || !size.height) return
@@ -238,7 +244,7 @@ export function useIsland({
     residents.current = createResidents(slugs, layoutResidentHomes(slugs.length))
     settleResidents(world, residents.current)
     const designs = designResidents(currentPosts)
-    if (hadSize.current && !islandSession.view) setView(homeView(initialTarget.current))
+    if (hadSize.current && !restoredView.current) setView(homeView(initialTarget.current))
     function fail() {
       if (cancelled) return
       renderer.current?.dispose()
@@ -260,7 +266,7 @@ export function useIsland({
           onFailure: fail
         })
         renderer.current.setView(view.current, sizeRef.current)
-        // Show the island as soon as the initial viewport is baked.
+        // Reveal the scene once its decoration meshes are available.
         return renderer.current.ready.then(() => {
           if (!cancelled) setStatus('ready')
         })
@@ -283,14 +289,31 @@ export function useIsland({
     return live.editBlock() !== null || !live.canSendSoon()
   }, [])
 
+  const pickTile = useCallback(
+    (point: { x: number; y: number }) =>
+      tileAt(view.current, sizeRef.current, point, confirmed.current),
+    []
+  )
+  const tileScreen = (tile: { x: number; y: number }) =>
+    worldToScreen(
+      view.current,
+      sizeRef.current,
+      { x: (tile.x + 0.5) * TILE_SIZE, y: (tile.y + 0.5) * TILE_SIZE },
+      drawn.current ? tileHeight(drawn.current, tile.x, tile.y) : 0
+    )
+
   // Shows what the current tool would do at a screen point, and why not.
   const previewAt = useCallback(
-    (point: { x: number; y: number } | null, options: EditOptions): CursorInfo => {
+    (
+      point: { x: number; y: number } | null,
+      options: EditOptions,
+      chosenTile?: { x: number; y: number }
+    ): CursorInfo => {
       if (!point || !drawn.current) {
         renderer.current?.setCursor(null)
         return null
       }
-      const tile = tileAt(view.current, sizeRef.current, point)
+      const tile = chosenTile ?? pickTile(point)
       const plan = planBrush(drawn.current, tile.x, tile.y, options)
       const settled = settledTile.current
       if (settled && (settled.x !== tile.x || settled.y !== tile.y)) settledTile.current = null
@@ -298,7 +321,7 @@ export function useIsland({
       renderer.current?.setCursor({ tiles: plan.tiles, soft, center: tile })
       return { reason: plan.reason, soft, ...point }
     },
-    []
+    [pickTile]
   )
 
   // Adds the tiles under a pointer path to the stroke, up to its limit.
@@ -336,7 +359,7 @@ export function useIsland({
   const strokeTo = useCallback(
     (point: { x: number; y: number }, options: EditOptions) => {
       if (!stroke.current || stroke.current.sent || !drawn.current) return null
-      const tile = tileAt(view.current, sizeRef.current, point)
+      const tile = pickTile(point)
       const path = lastStrokeTile.current
         ? tilesAlong(lastStrokeTile.current, tile).slice(1)
         : [tile]
@@ -346,7 +369,7 @@ export function useIsland({
       renderer.current?.setCursor({ tiles: after.tiles, soft: true, center: tile })
       return { reason, soft, ...point }
     },
-    [extend]
+    [extend, pickTile]
   )
 
   const startStroke = useCallback(
@@ -420,6 +443,8 @@ export function useIsland({
     sizeRef,
     setView,
     homeView,
+    pickTile,
+    tileScreen,
     preview: previewAt,
     editBlocked,
     edits

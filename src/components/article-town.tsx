@@ -16,11 +16,11 @@ import {
   useState
 } from 'react'
 import { type BlogPostSummary, sortBlogPostsNewestFirst } from '#/lib/blog-post'
-import { panView, stepZoom, tileAt, zoomViewAt } from '#/lib/island-camera'
+import { gridStep, panView, stepZoom, zoomViewAt } from '#/lib/island-camera'
 import type { EditOptions } from '#/lib/island-edit'
 import { createIslandInput } from '#/lib/island-input'
 import type { ResidentScreen } from '#/lib/island-three.client'
-import { GRASS, ISLAND_COLUMNS, ISLAND_ROWS } from '#/lib/island-world'
+import { GRASS, ISLAND_COLUMNS, ISLAND_ROWS, TILE_SIZE } from '#/lib/island-world'
 import { shouldClosePostByHistoryBack, shouldOpenPostModal } from '#/lib/post-modal'
 import { PixelIcon } from './island-icons'
 import { IslandToolbar, toolShortcuts } from './island-toolbar'
@@ -330,21 +330,19 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
     } else if (arrow && editing) {
       event.preventDefault()
       const center =
-        keyboardTile.current ??
-        tileAt(view.current, size, { x: size.width / 2, y: size.height / 2 })
+        keyboardTile.current ?? scene.pickTile({ x: size.width / 2, y: size.height / 2 })
+      const step = gridStep(view.current, ...arrow)
       const next = keyboardTile.current
         ? {
-            x: Math.max(0, Math.min(ISLAND_COLUMNS - 1, center.x + arrow[0])),
-            y: Math.max(0, Math.min(ISLAND_ROWS - 1, center.y + arrow[1]))
+            x: Math.max(0, Math.min(ISLAND_COLUMNS - 1, center.x + step.x)),
+            y: Math.max(0, Math.min(ISLAND_ROWS - 1, center.y + step.y))
           }
         : center
       keyboardTile.current = next
       updateKeyboardCursor(next)
     } else if (editing && (event.key === 'Enter' || event.key === ' ')) {
       event.preventDefault()
-      const tile =
-        keyboardTile.current ??
-        tileAt(view.current, size, { x: size.width / 2, y: size.height / 2 })
+      const tile = keyboardTile.current ?? scene.pickTile({ x: size.width / 2, y: size.height / 2 })
       keyboardTile.current = tile
       edits.applyAt(tile, options)
       updateKeyboardCursor(tile)
@@ -353,16 +351,19 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
   function updateKeyboardCursor(tile: { x: number; y: number }) {
     // Keep the keyboard cursor on screen.
     const v = view.current
-    const px = (tile.x + 0.5) * 16
-    const py = (tile.y + 0.5) * 16
-    const halfW = size.width / 2 / v.zoom - 48
-    const halfH = size.height / 2 / v.zoom - 80
-    if (Math.abs(px - v.x) > halfW || Math.abs(py - v.y) > halfH) setView({ ...v, x: px, y: py })
-    const screen = {
-      x: (px - view.current.x) * view.current.zoom + size.width / 2,
-      y: (py - view.current.y) * view.current.zoom + size.height / 2
+    const px = (tile.x + 0.5) * TILE_SIZE
+    const py = (tile.y + 0.5) * TILE_SIZE
+    let screen = scene.tileScreen(tile)
+    if (
+      screen.x < 48 ||
+      screen.x > size.width - 48 ||
+      screen.y < 80 ||
+      screen.y > size.height - 80
+    ) {
+      setView({ ...v, x: px, y: py })
+      screen = scene.tileScreen(tile)
     }
-    showCursor(scene.preview(screen, options))
+    showCursor(scene.preview(screen, options, tile))
   }
 
   // Posts opened from the island close by going back, so they do not stack history entries.
@@ -523,6 +524,20 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
       </div>
       {ready && (
         <fieldset className="island-camera-controls island-camera" aria-label="表示の操作">
+          <button
+            type="button"
+            aria-label="島を90度回転"
+            title="島を90度回転"
+            onClick={() => {
+              input.cancel()
+              renderer.current?.setCursor(null)
+              keyboardTile.current = null
+              setCursor(null)
+              setView({ ...view.current, turn: ((view.current.turn ?? 0) + 1) % 4 })
+            }}
+          >
+            <PixelIcon name="reset" />
+          </button>
           <button type="button" aria-label="縮小" title="縮小（−）" onClick={() => zoomBy(-1)}>
             <PixelIcon name="minus" />
           </button>

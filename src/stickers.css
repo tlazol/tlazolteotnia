@@ -1405,3 +1405,9 @@ body::after {
     transition: none;
   }
 }
+
+@media (max-width: 360px) {
+  .island-camera {
+    top: 72px;
+  }
+}
