@@ -19,13 +19,17 @@ import { WORLD_HEIGHT, WORLD_WIDTH } from './island-camera'
 import type { LightEmitter } from './island-models'
 import { lampRamps } from './island-palette'
 import type { Vec3 } from './island-sdf'
-import { hash2, SEA_LEVEL_CODE } from './island-world'
+import { hash2, SEA_LEVEL_CODE, TILE_SIZE } from './island-world'
 
 const FLAME = 1
 const EMBER = 2
 const FIREFLY = 3
 const SMOKE = 4
 const FILAMENT = 5
+// Like block light: full on the light's own tile, one level dimmer per tile
+// of Manhattan distance, and dark from the tenth tile on.
+const LIGHT_TILES = 10
+const LIGHT_RADIUS = (LIGHT_TILES + 1) * TILE_SIZE
 
 export type DecorPlacement = { tile: number; x: number; y: number; z: number; scale: number }
 
@@ -223,7 +227,7 @@ export function lightMaterial(
   })
 }
 
-type LightPool = { at: Vec3; reach: number; color?: Color }
+type LightPool = { at: Vec3; color?: Color }
 
 // A single pool covers a fire's several tips. Electric bulbs each cast their own color.
 export function decorLightVolumes(
@@ -237,12 +241,11 @@ export function decorLightVolumes(
     if (emitter.kind === 'lamp') {
       pools.push({
         at: emitter.at,
-        reach: emitter.reach,
         color: new Color().setStyle(lampRamps[emitter.glass][1], LinearSRGBColorSpace)
       })
     } else if (emitter.kind === 'flame') {
       const [x, y, z] = emitter.at
-      pools.push({ at: [x, y, z + emitter.size * 1.25], reach: 24 + emitter.size * 9 })
+      pools.push({ at: [x, y, z + emitter.size * 1.25] })
       break
     }
   }
@@ -259,9 +262,10 @@ export function lightVolumes(
   const matrix = new Matrix4()
   let index = 0
   for (const { x, y, z, scale } of placements) {
-    for (const { at, reach, color } of pools) {
+    for (const { at, color } of pools) {
       const [dx, dy, dz] = at
-      const radius = reach * scale
+      // Tiles have a fixed size whatever the decor's scale.
+      const radius = LIGHT_RADIUS
       matrix
         .makeScale(radius, radius, radius)
         .setPosition(x + dx * scale, -(y + dy * scale), z + dz * scale)
@@ -302,7 +306,7 @@ export function firelightMaterial(
     vertexShader: /* glsl */ `
       varying vec3 vCenter;
       varying vec4 vLamp;
-      varying float vRadius, vPhase;
+      varying float vPhase;
       void main() {
         #ifdef USE_INSTANCING_COLOR
           vLamp = vec4(instanceColor, 1.0);
@@ -311,7 +315,6 @@ export function firelightMaterial(
         #endif
         vec4 center = instanceMatrix[3];
         vCenter = (viewMatrix * center).xyz;
-        vRadius = instanceMatrix[0].x;
         vPhase = dot(center.xy, vec2(0.67, 0.13));
         gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0);
       }
@@ -322,7 +325,7 @@ export function firelightMaterial(
       uniform float uTime, uNight;
       varying vec3 vCenter;
       varying vec4 vLamp;
-      varying float vRadius, vPhase;
+      varying float vPhase;
       void main() {
         ivec2 pixel = ivec2(gl_FragCoord.xy);
         float depth = texelFetch(uDepth, pixel, 0).r;
@@ -330,14 +333,24 @@ export function firelightMaterial(
         vec4 eye = uInverseProjection * vec4(ndc, depth * 2.0 - 1.0, 1.0);
         vec3 surface = eye.xyz / eye.w;
         vec3 toward = vCenter - surface;
-        float d = length(toward) / vRadius;
         vec3 normal = cross(dFdx(surface), dFdy(surface));
-        if (d >= 1.0 || depth == 1.0) discard;
+        if (depth == 1.0) discard;
         float cosine = dot(normal, toward) / max(length(normal) * length(toward), 0.0001);
-        float incident = 0.18 + 0.82 * clamp(cosine, 0.0, 1.0);
-        // A broad, flat pool: the surrounding tiles are lit nearly to daylight,
-        // then the light drops off quickly into the dark night tint.
-        float falloff = (1.0 - smoothstep(0.45, 1.0, d)) * (1.0 - 0.25 * d);
+        float incident = 0.55 + 0.45 * clamp(cosine, 0.0, 1.0);
+        // Count whole tiles from the light's tile, as block light spreads.
+        mat3 toWorld = transpose(mat3(viewMatrix));
+        vec3 receiverWorld = toWorld * surface + cameraPosition;
+        vec3 lampWorld = toWorld * vCenter + cameraPosition;
+        vec2 steps = abs(floor(receiverWorld.xy / ${TILE_SIZE.toFixed(1)}) -
+                         floor(lampWorld.xy / ${TILE_SIZE.toFixed(1)}));
+        float rise = floor(max(0.0, abs(receiverWorld.z - lampWorld.z) - ${TILE_SIZE.toFixed(1)}) /
+                           ${TILE_SIZE.toFixed(1)});
+        float level = max(0.0, ${LIGHT_TILES.toFixed(1)} - steps.x - steps.y - rise) /
+                      ${LIGHT_TILES.toFixed(1)};
+        if (level <= 0.0) discard;
+        // Bright near the light, a long dim tail toward the edge. Overlapping
+        // lights mix toward the receiver's own color, so a row of lamps does not blow out.
+        float falloff = level / (1.75 - 0.75 * level);
         float flicker = 0.94 + 0.045 * sin(uTime * 5.7 + vPhase) + 0.025 * sin(uTime * 12.3 + vPhase);
         vec4 receiver = texelFetch(uSurface, pixel, 0);
         vec3 paint = receiver.rgb;
@@ -345,10 +358,10 @@ export function firelightMaterial(
         float energy = incident * falloff * mix(flicker, receiver.a, vLamp.a);
         float coverage = min(energy * uNight, 0.97);
         vec3 pigment = (paint + 0.06) * mix(vec3(1.16, 0.82, 0.43), 1.4 * vLamp.rgb, vLamp.a);
-        vec3 lit = pigment * coverage + pigment * mix(vec3(1.0, 0.69, 0.26), vLamp.rgb, vLamp.a) * energy * (0.07 + 0.27 * uNight);
+        vec3 lit = pigment * coverage + pigment * mix(vec3(1.0, 0.69, 0.26), vLamp.rgb, vLamp.a) * energy * (0.04 + 0.08 * uNight);
         // The sea and shallows are at z = 0. Break the reflected lamp into
         // short strokes on the waves; the wooden deck keeps its diffuse light.
-        vec3 world = transpose(mat3(viewMatrix)) * surface + cameraPosition;
+        vec3 world = receiverWorld;
         #ifdef WATER_PROJECTION
           // Refract the light into moving ridges on the receiving surface. World-space
           // coordinates keep the pattern anchored when the visitor turns the camera.
@@ -358,7 +371,7 @@ export function firelightMaterial(
           float wave = sin(p.x + 0.42*t) + cos(p.y - 0.55*t) + 0.35*sin(p.x + p.y + t);
           float thread = 1.0 - smoothstep(0.04, 0.28, abs(wave));
           vec3 caustic = mix(vec3(0.055, 0.16, 0.43), vec3(0.28, 0.90, 0.98), thread);
-          lit += caustic * receiver.a * uNight * pow(1.0 - d*d, 2.0) * (0.42 + 0.35 * incident);
+          lit += caustic * receiver.a * uNight * falloff * (0.18 + 0.15 * incident);
         #endif
         vec2 mapUv = world.xy / vec2(${WORLD_WIDTH.toFixed(1)}, -${WORLD_HEIGHT.toFixed(1)});
         if (uNight > 0.0 && abs(world.z) < 0.25 &&
@@ -368,7 +381,7 @@ export function firelightMaterial(
           float specular = max(0.0, dot(viewMatrix[2].xyz, halfway));
           float ripple = sin(world.y * 2.1 + 1.8 * sin(world.x * 0.43) + uTime * 1.7);
           lit += vLamp.rgb * uNight * pow(specular, 9.0) *
-                 smoothstep(-0.30, 0.75, ripple) * (1.0 - d * d);
+                 smoothstep(-0.30, 0.75, ripple) * falloff;
         }
         gl_FragColor = vec4(lit, coverage);
       }
