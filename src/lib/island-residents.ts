@@ -225,8 +225,18 @@ export function designResidents(posts: Array<{ slug: string; date: string }>) {
 // Tiny two-head-tall residents drawn at 1:1 so every pixel stays crisp.
 export const RESIDENT_FRAME = { width: 18, height: 19 } as const
 export const RESIDENT_SCALE = 1
-export type Facing = 'down' | 'up' | 'side'
-export const facings: Facing[] = ['down', 'up', 'side']
+export const facings = ['down', 'up', 'side', 'downSide', 'upSide'] as const
+export type Facing = (typeof facings)[number]
+
+// Grid steps project onto eight screen directions. The three turned poses
+// are drawn facing right; their left-facing counterparts share the same row.
+export function residentPose(direction: { x: number; y: number }) {
+  let facing: Facing
+  if (direction.x === 0) facing = direction.y < 0 ? 'up' : 'down'
+  else if (direction.y === 0) facing = 'side'
+  else facing = direction.y < 0 ? 'upSide' : 'downSide'
+  return { facing, flip: direction.x < 0 }
+}
 // Columns: idle, left step, right step.
 export const RESIDENT_FRAMES = 3
 
@@ -268,17 +278,20 @@ function paintBody(p: Painter, d: ResidentDesign, facing: Facing, step: number, 
   const shoe = hex(d.outfit === 'riding' ? '#2b2236' : '#5a3b32')
   const sock = d.outfit === 'riding' ? shoe : skin
   const side = facing === 'side'
-  const front = facing === 'down'
+  const diagonal = facing === 'downSide' || facing === 'upSide'
+  const front = facing === 'down' || facing === 'downSide'
+  const back = facing === 'up' || facing === 'upSide'
+  const frontShift = diagonal ? 1 : 0
   const y0 = 12 - bob
   const left = side ? 6 : 5
-  const width = side ? 4 : 6
+  const width = side ? 4 : diagonal ? 5 : 6
   const right = left + width - 1
 
   // Feet stay planted; a step lifts one of them.
-  const feet = side ? [6, 8] : [5, 9]
+  const feet = side ? [6, 8] : diagonal ? [5, 8] : [5, 9]
   feet.forEach((fx, i) => {
     const lifted = step !== 0 && step - 1 === i
-    const x = side && step ? fx + (i === 0 ? -1 : 1) * (step === 1 ? 1 : -1) : fx
+    const x = (side || diagonal) && step ? fx + (i === 0 ? -1 : 1) * (step === 1 ? 1 : -1) : fx
     if (lifted) p.rect(x, 14, 2, 1, shoe)
     else {
       p.rect(x, 14, 2, 1, sock)
@@ -308,19 +321,19 @@ function paintBody(p: Painter, d: ResidentDesign, facing: Facing, step: number, 
       break
     case 'sailor':
       p.rect(left, y0, width, 1, top)
-      if (front) p.rect(7, y0 + 1, 2, 1, accent)
-      if (facing === 'up') p.rect(left, y0 + 1, width, 1, top)
+      if (front) p.rect(7 + frontShift, y0 + 1, 2, 1, accent)
+      if (back) p.rect(left, y0 + 1, width, 1, top)
       break
     case 'kimono':
       p.rect(left, y0 + 1, width, 1, accent)
-      if (front) p.px(7, y0, topDark)
+      if (front) p.px(7 + frontShift, y0, topDark)
       break
     case 'apron':
-      if (front) p.rect(6, y0 + 1, 4, 2, bottom)
+      if (front) p.rect(6 + frontShift, y0 + 1, 4 - frontShift, 2, bottom)
       else if (side) p.rect(right - 1, y0 + 1, 2, 2, bottom)
       break
     case 'coat':
-      if (front) p.px(7, y0 + 1, accent)
+      if (front) p.px(7 + frontShift, y0 + 1, accent)
       break
     case 'hoodie':
       if (front) p.rect(6, y0 + 2, 4, 1, topDark)
@@ -333,7 +346,15 @@ function paintBody(p: Painter, d: ResidentDesign, facing: Facing, step: number, 
 
   // Stubby arms swing opposite the feet.
   const swing = step === 1 ? 1 : step === 2 ? -1 : 0
-  if (side) {
+  if (diagonal) {
+    // On a three-quarter turn the nearer sleeve overlaps the torso.
+    const near = back ? right : left
+    const far = back ? left - 1 : right + 1
+    p.px(far, y0, topDark)
+    p.px(far, y0 + 1, skin)
+    p.px(near + swing, y0 + 1, top)
+    p.px(near + swing, y0 + 2, skin)
+  } else if (side) {
     p.px(7 + swing, y0, topDark)
     p.px(7 + swing, y0 + 1, skin)
   } else {
@@ -346,9 +367,10 @@ function paintBody(p: Painter, d: ResidentDesign, facing: Facing, step: number, 
   if (d.backpack) {
     const pack = hex('#c0743c')
     const packDark = hex('#8f5230')
-    if (facing === 'up') {
-      p.rect(6, y0, 4, 3, pack)
-      p.rect(6, y0 + 2, 4, 1, packDark)
+    if (back) {
+      const packX = diagonal ? 4 : 6
+      p.rect(packX, y0, 4, 3, pack)
+      p.rect(packX, y0 + 2, 4, 1, packDark)
     } else if (side) {
       p.rect(left - 2, y0, 2, 3, pack)
       p.px(left - 2, y0 + 2, packDark)
@@ -366,7 +388,8 @@ function paintHead(p: Painter, d: ResidentDesign, facing: Facing, bob: number) {
   const hairLight = shade(d.hairColor, 0.35)
   const dy = -bob
   const side = facing === 'side'
-  const back = facing === 'up'
+  const diagonal = facing === 'downSide' || facing === 'upSide'
+  const back = facing === 'up' || facing === 'upSide'
   const hood = d.accessory === 'hood'
   const main = hood ? hex(d.top) : hair
   const dark = hood ? shade(d.top, -0.25) : hairDark
@@ -376,7 +399,11 @@ function paintHead(p: Painter, d: ResidentDesign, facing: Facing, bob: number) {
   if (!hood) {
     switch (d.hair) {
       case 'long':
-        if (back) behind(3, 7, 10, 7)
+        if (facing === 'upSide') behind(2, 7, 9, 7)
+        else if (facing === 'downSide') {
+          behind(2, 7, 4, 7)
+          behind(11, 8, 2, 5)
+        } else if (back) behind(3, 7, 10, 7)
         else if (side) behind(3, 7, 4, 7)
         else {
           behind(2, 7, 2, 7)
@@ -384,22 +411,31 @@ function paintHead(p: Painter, d: ResidentDesign, facing: Facing, bob: number) {
         }
         break
       case 'twintails':
-        if (side) behind(1, 6, 2, 5)
+        if (diagonal) {
+          behind(1, 6, 3, 6)
+          behind(12, 5, 2, 4)
+        } else if (side) behind(1, 6, 2, 5)
         else {
           behind(0, 6, 2, 5)
           behind(14, 6, 2, 5)
         }
         break
       case 'ponytail':
-        if (back) behind(7, 10, 2, 4)
+        if (diagonal) behind(back ? 4 : 2, 6, 3, 7)
+        else if (back) behind(7, 10, 2, 4)
         else if (side) behind(1, 5, 2, 5)
         break
       case 'braid':
-        if (back) behind(7, 10, 2, 5)
+        if (diagonal) {
+          behind(4, 9, 2, 3)
+          behind(3, 12, 2, 2)
+          p.px(4, 14 + dy, hex(d.accent))
+        } else if (back) behind(7, 10, 2, 5)
         else if (side) behind(3, 10, 2, 4)
         break
       case 'bob':
-        if (side) behind(3, 7, 4, 4)
+        if (diagonal) behind(2, 6, 4, 6)
+        else if (side) behind(3, 7, 4, 4)
         else {
           behind(2, 6, 2, 5)
           behind(12, 6, 2, 5)
@@ -428,10 +464,13 @@ function paintHead(p: Painter, d: ResidentDesign, facing: Facing, bob: number) {
     for (let x = 2; x <= 13; x++) {
       if (!inHead(x, y)) continue
       let covered: boolean
-      if (back) covered = true
+      if (facing === 'upSide') covered = x < 11 || y < 7 || (x === 11 && y < 9)
+      else if (facing === 'downSide') covered = y < fringe(x - 1) || x < 5 || (x === 5 && y < 9)
+      else if (back) covered = true
       else if (side) covered = y < fringe(x) || x < 7 || (x < 9 && y < 8)
       else covered = y < fringe(x) || x <= 3 || x >= 12 || ((x === 4 || x === 11) && y < 9)
-      if (hood && !back && !side) covered = covered || y < 6 || x <= 4 || x >= 11
+      if (hood && !back && !side)
+        covered ||= y < 6 || x <= (diagonal ? 5 : 4) || x >= (diagonal ? 13 : 11)
       if (!covered) continue
       p.px(x, y + dy, x >= 11 || y >= 10 ? dark : main)
     }
@@ -446,7 +485,7 @@ function paintHead(p: Painter, d: ResidentDesign, facing: Facing, bob: number) {
       p.px(13, 6 + dy, hair)
     }
     if (d.hair === 'buns')
-      for (const x of side ? [5] : [3, 11]) {
+      for (const x of side ? [5] : diagonal ? [3, 10] : [3, 11]) {
         p.rect(x, 1 + dy, 2, 2, hair)
         p.px(x + 1, 2 + dy, hairDark)
       }
@@ -464,6 +503,10 @@ function paintHead(p: Painter, d: ResidentDesign, facing: Facing, bob: number) {
     for (const x of [5, 10]) p.rect(x, 8 + dy, 1, 2, eye)
     p.px(4, 10 + dy, blush)
     p.px(11, 10 + dy, blush)
+  } else if (facing === 'downSide') {
+    p.rect(7, 8 + dy, 1, 2, eye)
+    p.px(11, 8 + dy, eye)
+    p.px(6, 10 + dy, blush)
   } else if (side) {
     p.rect(10, 8 + dy, 1, 2, eye)
     p.px(11, 10 + dy, blush)
@@ -475,14 +518,17 @@ function paintAccessory(p: Painter, d: ResidentDesign, facing: Facing, dy: numbe
   const accent = hex(d.accent)
   const accentDark = shade(d.accent, -0.3)
   const side = facing === 'side'
-  const front = facing === 'down'
+  const diagonal = facing === 'downSide' || facing === 'upSide'
+  const front = facing === 'down' || facing === 'downSide'
+  const offset = facing === 'downSide' ? 2 : 0
   const r = (x: number, y: number, w: number, h: number, color: Rgba) =>
     p.rect(x, y + dy, w, h, color)
   switch (d.accessory) {
     case 'cap':
       r(5, 2, 6, 1, accent)
       r(4, 3, 8, 2, accent)
-      if (front) r(4, 5, 8, 1, accentDark)
+      if (front) r(4 + offset, 5, 8, 1, accentDark)
+      if (facing === 'upSide') r(11, 4, 3, 1, accentDark)
       if (side) r(10, 5, 4, 1, accentDark)
       break
     case 'strawHat': {
@@ -498,14 +544,16 @@ function paintAccessory(p: Painter, d: ResidentDesign, facing: Facing, dy: numbe
       r(3, 3, 9, 1, accentDark)
       r(8, 1, 1, 1, accentDark)
       break
-    case 'ribbon':
-      r(side ? 4 : 10, 2, 2, 2, accent)
-      r(side ? 7 : 13, 2, 2, 2, accent)
-      r(side ? 6 : 12, 3, 1, 1, accentDark)
+    case 'ribbon': {
+      const x = side ? 4 : diagonal ? 7 : 10
+      r(x, 2, 2, 2, accent)
+      r(x + 3, 2, 2, 2, accent)
+      r(x + 2, 3, 1, 1, accentDark)
       break
+    }
     case 'flower': {
       const petal = hex('#fff6e8')
-      const fx = side ? 5 : 11
+      const fx = side ? 5 : diagonal ? 8 : 11
       r(fx, 2, 1, 1, petal)
       r(fx - 1, 3, 1, 1, petal)
       r(fx + 1, 3, 1, 1, petal)
@@ -515,7 +563,7 @@ function paintAccessory(p: Painter, d: ResidentDesign, facing: Facing, dy: numbe
     }
     case 'catEars': {
       const fur = hex(d.hairColor)
-      for (const x of side ? [5] : [3, 11]) {
+      for (const x of side ? [5] : diagonal ? [4, 10] : [3, 11]) {
         r(x, 2, 2, 2, fur)
         r(x + (x < 8 ? 0 : 1), 1, 1, 1, fur)
         if (front) r(x + (x < 8 ? 1 : 0), 3, 1, 1, hex('#f6a5b8'))
@@ -536,12 +584,14 @@ function paintAccessory(p: Painter, d: ResidentDesign, facing: Facing, dy: numbe
       const gold = hex('#f2c94c')
       r(5, 2, 6, 2, gold)
       for (const x of [5, 7, 8, 10]) r(x, 1, 1, 1, gold)
-      r(7, 3, 2, 1, hex('#e0574f'))
+      if (facing !== 'upSide') r(7 + offset, 3, 2, 1, hex('#e0574f'))
       break
     }
     case 'headphones':
       r(4, 2, 8, 1, hex('#4a4458'))
-      if (side) r(7, 6, 2, 3, accent)
+      if (diagonal) {
+        r(facing === 'upSide' ? 9 : 4, 6, 3, 3, accent)
+      } else if (side) r(7, 6, 2, 3, accent)
       else {
         r(2, 6, 2, 3, accent)
         r(12, 6, 2, 3, accent)
@@ -550,10 +600,10 @@ function paintAccessory(p: Painter, d: ResidentDesign, facing: Facing, dy: numbe
     case 'goggles':
       r(3, 5, 10, 1, hex('#4a4458'))
       if (front) {
-        r(5, 4, 2, 2, accent)
-        r(9, 4, 2, 2, accent)
-        r(5, 4, 1, 1, hex('#ffffff'))
-        r(9, 4, 1, 1, hex('#ffffff'))
+        for (const x of [5 + offset, 9 + offset]) {
+          r(x, 4, 2, 2, accent)
+          r(x, 4, 1, 1, hex('#ffffff'))
+        }
       } else if (side) r(10, 4, 2, 2, accent)
       break
     case 'visor': {
@@ -562,11 +612,11 @@ function paintAccessory(p: Painter, d: ResidentDesign, facing: Facing, dy: numbe
       const glow = hex('#63f3ff')
       const glowDeep = hex('#1fa9d6')
       if (front) {
-        r(3, 8, 10, 2, frame)
-        r(4, 8, 8, 1, glow)
-        r(4, 9, 8, 1, glowDeep)
-        r(5, 8, 2, 1, hex('#ffffff'))
-        r(10, 9, 1, 1, glow)
+        r(3 + offset, 8, 10 - offset, 2, frame)
+        r(4 + offset, 8, 8 - offset, 1, glow)
+        r(4 + offset, 9, 8 - offset, 1, glowDeep)
+        r(5 + offset, 8, 2, 1, hex('#ffffff'))
+        r(10 + offset, 9, 1, 1, glow)
       } else if (side) {
         r(7, 8, 6, 2, frame)
         r(9, 8, 4, 1, glow)
@@ -596,7 +646,8 @@ function paintAccessory(p: Painter, d: ResidentDesign, facing: Facing, dy: numbe
       r(4, 3, 8, 3, shell)
       r(6, 3, 2, 1, hex('#5a4f75'))
       r(8, 2, 1, 1, accent)
-      if (front) r(4, 6, 8, 1, shell)
+      if (front) r(4 + offset, 6, 8, 1, shell)
+      if (facing === 'upSide') r(11, 5, 3, 1, shell)
       if (side) r(10, 5, 4, 1, shell)
       break
     }
@@ -605,7 +656,7 @@ function paintAccessory(p: Painter, d: ResidentDesign, facing: Facing, dy: numbe
   }
 }
 
-// One sheet per resident: rows are facings (down, up, side), columns are frames.
+// One sheet per resident: rows are poses, columns are idle and the two steps.
 export function paintResidentSheet(design: ResidentDesign, swimming = false) {
   const { width, height } = RESIDENT_FRAME
   const sheet = createBuffer(width * RESIDENT_FRAMES, height * facings.length)
@@ -659,8 +710,7 @@ export type Resident = {
   // Foot position in art pixels.
   x: number
   y: number
-  facing: Facing
-  flip: boolean
+  heading: { x: number; y: number }
   frame: number
   wait: number
   walkClock: number
@@ -717,8 +767,7 @@ export function createResidents(
       target: null,
       route: [],
       ...foot,
-      facing: 'down',
-      flip: false,
+      heading: { x: 1, y: 1 },
       frame: 0,
       wait: hash2(i, 3, 5) * 2,
       walkClock: 0,
@@ -743,6 +792,28 @@ export function residentOccupies(resident: Resident, x: number, y: number) {
 
 export function canResidentEnter(world: IslandWorld, x: number, y: number) {
   return inBounds(world, x, y) && !decorBlocksWalking(decorAt(world, x, y))
+}
+
+const neighborSteps = [
+  [1, 0],
+  [0, 1],
+  [-1, 0],
+  [0, -1],
+  [1, 1],
+  [-1, 1],
+  [-1, -1],
+  [1, -1]
+] as const
+
+// A diagonal needs clearance on both sides of the corner it crosses.
+function canStep(
+  x: number,
+  y: number,
+  nx: number,
+  ny: number,
+  open: (x: number, y: number) => boolean
+) {
+  return open(nx, ny) && (nx === x || ny === y || (open(nx, y) && open(x, ny)))
 }
 
 // The sea, lakes and springs alike are for swimming in.
@@ -818,12 +889,15 @@ function planJourney(world: IslandWorld, residents: Resident[], resident: Reside
   const previous = new Int32Array(world.ground.length).fill(-1)
   const cost = new Float64Array(world.ground.length).fill(Number.POSITIVE_INFINITY)
   const strokes = new Uint8Array(world.ground.length)
-  const blocked = new Set<number>()
+  // Each tile is checked from several neighbors. Decode its passability once per search.
+  const passable = world.decor.map((code) => (decorBlocksWalking(code) ? 0 : 1))
   for (const other of residents) {
     if (other === resident) continue
-    blocked.add(other.tile.y * world.columns + other.tile.x)
-    if (other.target) blocked.add(other.target.y * world.columns + other.target.x)
+    passable[other.tile.y * world.columns + other.tile.x] = 0
+    if (other.target) passable[other.target.y * world.columns + other.target.x] = 0
   }
+  const tileOpen = (x: number, y: number) =>
+    inBounds(world, x, y) && passable[y * world.columns + x] === 1
   // Cheapest-first search; step costs are whole numbers, so tiles queue by total cost.
   const queues: number[][] = [[start]]
   const reached: number[] = []
@@ -843,18 +917,14 @@ function planJourney(world: IslandWorld, residents: Resident[], resident: Reside
         (!isWet(ground) || strokes[index] <= MAX_STROKES_FROM_SHORE)
       )
         destinations[FOOTING[ground]].push(index)
-      for (const [dx, dy] of [
-        [1, 0],
-        [0, 1],
-        [-1, 0],
-        [0, -1]
-      ]) {
+      for (const [dx, dy] of neighborSteps) {
         const nx = x + dx
         const ny = y + dy
         const next = ny * world.columns + nx
-        if (!canResidentEnter(world, nx, ny) || blocked.has(next)) continue
-        const nextGround = groundAt(world, nx, ny)
-        const nextCost = total + FOOTINGS[FOOTING[nextGround]].cost
+        if (!canStep(x, y, nx, ny, tileOpen)) continue
+        const nextGround = world.ground[next] as Ground
+        const footing = FOOTINGS[FOOTING[nextGround]].cost
+        const nextCost = total + (dx && dy ? Math.round(footing * Math.SQRT2) : footing)
         if (nextCost >= cost[next]) continue
         cost[next] = nextCost
         previous[next] = index
@@ -893,7 +963,10 @@ export function settleResidents(world: IslandWorld, residents: Resident[]) {
     resident.route = []
     const blocked =
       !canResidentEnter(world, resident.tile.x, resident.tile.y) ||
-      (resident.target && !canResidentEnter(world, resident.target.x, resident.target.y))
+      (resident.target &&
+        !canStep(resident.tile.x, resident.tile.y, resident.target.x, resident.target.y, (x, y) =>
+          canResidentEnter(world, x, y)
+        ))
     if (!blocked) continue
     const spot = nearestWalkable(world, resident.tile.x, resident.tile.y, (x, y) =>
       residents.some((other) => other !== resident && residentOccupies(other, x, y))
@@ -934,8 +1007,7 @@ export function stepResidents(
       resident.actionRemaining = actionDuration(resident.action, Math.random)
       // A breather only interrupts the journey; performances end it.
       if (resident.action === 'dance' || resident.action === 'jump') resident.route = []
-      resident.facing = 'down'
-      resident.flip = false
+      resident.heading = { x: 1, y: 1 }
     }
     if (resident.action !== 'walk' && !resident.target) {
       resident.actionClock += dt
@@ -946,7 +1018,6 @@ export function stepResidents(
         resident.offsetY = -Math.abs(Math.sin(beat * 1.2)) * 2
         resident.tilt = Math.sin(beat * 1.2) * 0.16
         resident.frame = Math.floor(resident.actionClock / 0.22) % 2 ? 1 : 2
-        resident.facing = 'down'
       } else if (resident.action === 'jump') {
         // A short hop followed by a grounded pause.
         const hop = (resident.actionClock % 1.4) / 0.7
@@ -963,8 +1034,15 @@ export function stepResidents(
       const next = resident.route.shift()
       if (
         !next ||
-        !canResidentEnter(world, next.x, next.y) ||
-        residents.some((other) => other !== resident && residentOccupies(other, next.x, next.y))
+        !canStep(
+          resident.tile.x,
+          resident.tile.y,
+          next.x,
+          next.y,
+          (x, y) =>
+            canResidentEnter(world, x, y) &&
+            !residents.some((other) => other !== resident && residentOccupies(other, x, y))
+        )
       ) {
         resident.route = []
         resident.wait = 0.3 + hash2(resident.seed, performanceSeed(resident), 9) * 0.7
@@ -973,8 +1051,7 @@ export function stepResidents(
       const dx = next.x - resident.tile.x
       const dy = next.y - resident.tile.y
       resident.target = next
-      resident.facing = dy < 0 ? 'up' : dy > 0 ? 'down' : 'side'
-      resident.flip = dx < 0
+      resident.heading = { x: dx, y: dy }
     }
     const goal = footOf(resident.target)
     const distance = Math.hypot(goal.x - resident.x, goal.y - resident.y)

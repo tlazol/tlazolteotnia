@@ -9,7 +9,15 @@ import {
   terrainClass,
   updateShoreField
 } from '../src/lib/island-art'
-import { clampView, stepZoom, tileAt, WORLD_WIDTH, zoomViewAt } from '../src/lib/island-camera'
+import {
+  clampView,
+  gridStep,
+  projectGround,
+  stepZoom,
+  tileAt,
+  WORLD_WIDTH,
+  zoomViewAt
+} from '../src/lib/island-camera'
 import {
   type EditOptions,
   overlayPreview,
@@ -22,10 +30,13 @@ import {
   createResidents,
   designResidents,
   dropResident,
+  facings,
   footOf,
   paintResidentSheet,
+  RESIDENT_FRAME,
   residentIsSwimming,
   residentOccupies,
+  residentPose,
   settleResidents,
   stepResidents
 } from '../src/lib/island-residents'
@@ -451,11 +462,69 @@ describe('island residents', () => {
     for (const post of posts) expect(withNewPost.get(post.slug)).toEqual(designs.get(post.slug))
   })
 
-  it('paints a full sprite sheet for every design', () => {
-    const design = designResidents(posts).get('post-0')
-    if (!design) throw new Error('missing design')
-    const sheet = paintResidentSheet(design)
-    expect(sheet.data.some((value, i) => i % 4 === 3 && value > 0)).toBe(true)
+  it.each([false, true])(
+    'draws distinct facing rows in every animation frame (swimming: %s)',
+    (swimming) => {
+      const { width, height } = RESIDENT_FRAME
+      for (const design of designResidents(posts).values()) {
+        const sheet = paintResidentSheet(design, swimming)
+        expect(sheet.height).toBe(height * 5)
+        for (let frame = 0; frame < 3; frame++) {
+          const poses = facings.map((_, row) => {
+            const pixels = Buffer.alloc(width * height * 4)
+            for (let y = 0; y < height; y++) {
+              const start = ((row * height + y) * sheet.width + frame * width) * 4
+              pixels.set(sheet.data.subarray(start, start + width * 4), y * width * 4)
+            }
+            expect(pixels.some((value) => value > 0)).toBe(true)
+            return pixels.toString('base64')
+          })
+          expect(new Set(poses).size).toBe(5)
+        }
+      }
+    }
+  )
+
+  it('faces the screen direction of travel at every camera turn', () => {
+    for (const turn of [0, 1, 2, 3]) {
+      const view = { x: 0, y: 0, zoom: 1, turn }
+      for (const [dx, dy, facing, flip] of [
+        [1, 1, 'down', false],
+        [1, 0, 'downSide', false],
+        [1, -1, 'side', false],
+        [0, -1, 'upSide', false],
+        [-1, -1, 'up', false],
+        [-1, 0, 'upSide', true],
+        [-1, 1, 'side', true],
+        [0, 1, 'downSide', true]
+      ] as const) {
+        const step = gridStep(view, dx, dy)
+        expect(residentPose(projectGround(view, step.x, step.y))).toEqual({ facing, flip })
+      }
+    }
+  })
+
+  it('walks diagonally at its usual speed and checks both sides of a reserved corner', () => {
+    const world = createIsland(7, 7)
+    world.ground.fill(GRASS)
+    const residents = createResidents(['walker'], [{ x: 0, y: 0 }], () => 0.1)
+    const resident = residents[0]
+    resident.wait = 0
+    const start = footOf(resident.tile)
+    stepResidents(world, residents, 0.1, () => false)
+    expect(resident.target).toEqual({ x: 1, y: 1 })
+    expect(resident.heading).toEqual(resident.target)
+    expect(Math.hypot(resident.x - start.x, resident.y - start.y)).toBeCloseTo(resident.speed * 0.1)
+    world.decor[1] = decorCode('tree')
+    settleResidents(world, residents)
+    expect(resident.target).toBeNull()
+    resident.route = [{ x: 1, y: 1 }]
+    resident.wait = 0
+    stepResidents(world, residents, 0.1, () => false)
+    expect(resident.target).toBeNull()
+    resident.wait = 0
+    stepResidents(world, residents, 0.1, () => false)
+    expect(resident.target).toEqual({ x: 0, y: 1 })
   })
 
   it.each([

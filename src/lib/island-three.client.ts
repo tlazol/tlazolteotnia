@@ -73,6 +73,7 @@ import {
   type ResidentDesign,
   residentIsSwimming,
   residentOccupies,
+  residentPose,
   settleResidents,
   stepResidents
 } from './island-residents'
@@ -830,7 +831,7 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
     const design = designs.get(resident.slug)
     const buffer = design
       ? paintResidentSheet(design)
-      : createBuffer(RESIDENT_FRAME.width * RESIDENT_FRAMES, RESIDENT_FRAME.height * 3)
+      : createBuffer(RESIDENT_FRAME.width * RESIDENT_FRAMES, RESIDENT_FRAME.height * facings.length)
     const texture = track(textureFrom(buffer))
     const swimTexture = track(textureFrom(design ? paintResidentSheet(design, true) : buffer))
     for (const map of [texture, swimTexture])
@@ -1131,10 +1132,9 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
       mesh.material.map = texture
       silhouette.material.uniforms.map.value = texture
       silhouette.material.uniforms.uvTransform.value = texture.matrix
-      const dx = resident.facing === 'side' ? (resident.flip ? -1 : 1) : 0
-      const dy = resident.facing === 'up' ? -1 : resident.facing === 'down' ? 1 : 0
-      const direction = projectGround(view, dx, dy)
-      const facing = direction.y < 0 ? 'up' : resident.facing === 'side' ? 'side' : 'down'
+      const { facing, flip } = residentPose(
+        projectGround(view, resident.heading.x, resident.heading.y)
+      )
       const row = facings.indexOf(facing)
       texture.offset.set(resident.frame / RESIDENT_FRAMES, 1 - (row + 1) / facings.length)
       texture.updateMatrix()
@@ -1148,7 +1148,7 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
         .addScaledVector(up, -resident.offsetY + (isDragged ? 5 : 0))
       mesh.quaternion.copy(camera.quaternion)
       mesh.rotateZ(resident.tilt)
-      mesh.scale.x = facing === 'side' && direction.x < 0 ? -1 : 1
+      mesh.scale.x = flip ? -1 : 1
       mesh.material.depthTest = !isDragged
       mesh.renderOrder = isDragged ? 31 : 0
       // Keep contact shadows and selection rings just above the tile surface.
