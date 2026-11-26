@@ -795,7 +795,7 @@ describe('island residents', () => {
     expect(landed).toBe(true)
   })
 
-  it('stays spread over the island rather than crowding the plaza', () => {
+  it('stays spread over dry land rather than crowding the plaza', () => {
     const world = createDefaultIsland()
     const slugs = Array.from({ length: 40 }, (_, i) => `resident-${i}`)
     const residents = createResidents(slugs, layoutResidentHomes(slugs.length), () => 0.1)
@@ -810,8 +810,19 @@ describe('island residents', () => {
         0
       ) / residents.length
     const start = fromCentre()
-    for (let i = 0; i < 3000; i++) stepResidents(world, residents, 0.1, () => false)
+    let afloat = 0
+    let samples = 0
+    for (let i = 0; i < 3000; i++) {
+      stepResidents(world, residents, 0.1, () => false)
+      if (i % 10) continue
+      for (const { tile } of residents) {
+        samples++
+        if (isWetGround(groundAt(world, tile.x, tile.y))) afloat++
+      }
+    }
     expect(fromCentre()).toBeGreaterThan(start * 0.75)
+    // Residents keep to dry land, only swimming on the way across water.
+    expect(afloat / samples).toBeLessThan(0.06)
   })
 
   it('takes the trail in preference to a straight line over grass', () => {

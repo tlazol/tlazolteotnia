@@ -925,9 +925,8 @@ export function dropResident(
 // Residents like firm footing: trails and paving first, then boards and
 // stepping stones, grass, bare ground and, last of all, mud and water. A route pays
 // `cost` for each tile it steps onto, so a trail is worth a modest detour but
-// never a long way round. Where journeys end: a footing is picked by `odds`,
-// then a tile on it, so the few trail tiles still draw more visits than all
-// the grass.
+// never a long way round. Where journeys end: around the spot a journey aims
+// for (see aimJourney), a footing is picked by `odds`, then a tile on it.
 const FOOTINGS = [
   { cost: 4, odds: 34 },
   { cost: 5, odds: 20 },
@@ -962,11 +961,75 @@ const FOOTING: Record<Ground, number> = {
 }
 // Swimmers paddle about the shallows instead of heading for open water.
 const MAX_STROKES_FROM_SHORE = 3
-// How far from the evenly drawn aim a journey may end to reach better footing.
-const AIM_RADIUS = 3
-// Spots weighed per journey, and how near a resident counts towards a crowd.
+// Journeys head for a dry spot drawn evenly from land within MAX_TRIP tiles,
+// picked as the least crowded of AIM_CANDIDATES, and end on the best footing
+// within AIM_RADIUS of it. Many short trips roam the whole island without
+// funnelling everyone across the middle, and trails win only locally instead of
+// drawing everyone to the paved plaza.
+const MAX_TRIP = 20
+// Most trips stay on dry land; now and then one swims over to another shore.
+const CROSSING_ODDS = 0.1
 const AIM_CANDIDATES = 5
+const AIM_RADIUS = 3
+// How near another resident, or where one is heading, counts towards a crowd.
 const CROWD_RADIUS = 6
+
+const chebyshev = (ax: number, ay: number, bx: number, by: number) =>
+  Math.max(Math.abs(ax - bx), Math.abs(ay - by))
+
+// Narrows each footing's destinations to the dry tiles around the chosen aim.
+function aimJourney(
+  world: IslandWorld,
+  residents: Resident[],
+  resident: Resident,
+  destinations: number[][],
+  swims: Uint8Array,
+  decision: number
+) {
+  const { columns } = world
+  const crossing = hash2(resident.seed & 0xffff, decision, 6) < CROSSING_ODDS
+  const ashore = destinations.flat().filter((index) => !isWet(world.ground[index] as Ground))
+  const landward = ashore.filter((index) => !swims[index])
+  const dry = !crossing && landward.length ? landward : ashore
+  const nearby = dry.filter(
+    (index) =>
+      Math.hypot(
+        (index % columns) - resident.tile.x,
+        Math.floor(index / columns) - resident.tile.y
+      ) <= MAX_TRIP
+  )
+  const aims = nearby.length ? nearby : dry
+  if (!aims.length) return destinations
+  const crowd: Array<{ x: number; y: number }> = []
+  for (const other of residents) {
+    if (other === resident) continue
+    crowd.push(other.tile)
+    const goal = other.route[other.route.length - 1]
+    if (goal) crowd.push(goal)
+  }
+  let aim = aims[0]
+  let fewest = Number.POSITIVE_INFINITY
+  for (let k = 0; k < AIM_CANDIDATES; k++) {
+    const index = aims[Math.floor(hash2(resident.seed & 0xffff, decision * 8 + k, 5) * aims.length)]
+    const x = index % columns
+    const y = Math.floor(index / columns)
+    const count = crowd.filter((spot) => chebyshev(spot.x, spot.y, x, y) <= CROWD_RADIUS).length
+    if (count < fewest) {
+      fewest = count
+      aim = index
+    }
+  }
+  const ax = aim % columns
+  const ay = Math.floor(aim / columns)
+  // Nobody makes for the water; swimming only happens on the way across it.
+  return destinations.map((tiles) =>
+    tiles.filter(
+      (index) =>
+        !isWet(world.ground[index] as Ground) &&
+        chebyshev(index % columns, Math.floor(index / columns), ax, ay) <= AIM_RADIUS
+    )
+  )
+}
 
 // A journey crosses the island along the most comfortable route, around
 // trees, rocks and other residents.
@@ -975,6 +1038,8 @@ function planJourney(world: IslandWorld, residents: Resident[], resident: Reside
   const previous = new Int32Array(world.ground.length).fill(-1)
   const cost = new Float64Array(world.ground.length).fill(Number.POSITIVE_INFINITY)
   const strokes = new Uint8Array(world.ground.length)
+  // Whether the route to each tile swims at all, however short the swim.
+  const swims = new Uint8Array(world.ground.length)
   // Each tile is checked from several neighbors. Decode its passability once per search.
   const passable = world.decor.map((code) => (decorBlocksWalking(code) ? 0 : 1))
   for (const other of residents) {
@@ -1015,6 +1080,7 @@ function planJourney(world: IslandWorld, residents: Resident[], resident: Reside
         cost[next] = nextCost
         previous[next] = index
         strokes[next] = isWet(nextGround) ? Math.min(255, strokes[index] + 1) : 0
+        swims[next] = swims[index] | (isWet(nextGround) ? 1 : 0)
         if (!queues[nextCost]) queues[nextCost] = []
         queues[nextCost].push(next)
       }
@@ -1022,47 +1088,7 @@ function planJourney(world: IslandWorld, residents: Resident[], resident: Reside
   }
   const decision = performanceSeed(resident)
   let choices = reached
-  // Aim at a spot drawn evenly from the whole island, then pick footing near it:
-  // trails still win locally without drawing everyone to the paved plaza.
-  const everywhere = destinations.flat()
-  const near = destinations
-  if (everywhere.length) {
-    // Of a few such spots, take the one with the fewest residents standing or heading near it.
-    const spots: Array<{ x: number; y: number }> = []
-    for (const other of residents) {
-      if (other === resident) continue
-      spots.push(other.tile)
-      const goal = other.route[other.route.length - 1]
-      if (goal) spots.push(goal)
-    }
-    let aim = everywhere[0]
-    let fewest = Number.POSITIVE_INFINITY
-    for (let k = 0; k < AIM_CANDIDATES; k++) {
-      const index =
-        everywhere[
-          Math.floor(hash2(resident.seed & 0xffff, decision * 8 + k, 5) * everywhere.length)
-        ]
-      const x = index % world.columns
-      const y = Math.floor(index / world.columns)
-      let crowd = 0
-      for (const spot of spots)
-        if (Math.max(Math.abs(spot.x - x), Math.abs(spot.y - y)) <= CROWD_RADIUS) crowd++
-      if (crowd < fewest) {
-        fewest = crowd
-        aim = index
-      }
-    }
-    const ax = aim % world.columns
-    const ay = Math.floor(aim / world.columns)
-    for (let i = 0; i < near.length; i++)
-      near[i] = near[i].filter(
-        (index) =>
-          Math.max(
-            Math.abs((index % world.columns) - ax),
-            Math.abs(Math.floor(index / world.columns) - ay)
-          ) <= AIM_RADIUS
-      )
-  }
+  const near = aimJourney(world, residents, resident, destinations, swims, decision)
   const open = FOOTINGS.map((footing, i) => ({ ...footing, tiles: near[i] })).filter(
     (footing) => footing.tiles.length
   )
