@@ -7,6 +7,7 @@ import {
   type Rgba,
   setPixel
 } from './island-art'
+import { tileHeight } from './island-relief'
 import {
   BLACKSAND,
   BRICK,
@@ -783,9 +784,33 @@ function actionDuration(action: Resident['action'], random: () => number) {
 const WALK_SPEEDS = [14, 21, 28] as const
 
 export const footOf = (tile: { x: number; y: number }) => ({
-  x: tile.x * TILE_SIZE + TILE_SIZE / 2,
-  y: tile.y * TILE_SIZE + TILE_SIZE - 3
+  x: (tile.x + 0.5) * TILE_SIZE,
+  y: (tile.y + 0.5) * TILE_SIZE
 })
+
+export function residentFootHeight(world: IslandWorld, resident: Resident) {
+  const { tile, target } = resident
+  const start = tileHeight(world, tile.x, tile.y)
+  if (!target) return start
+  const end = tileHeight(world, target.x, target.y)
+  // On a diagonal the feet pass over the shared corner of four terraces.
+  let ledge = Math.max(start, end)
+  if (tile.x !== target.x && tile.y !== target.y)
+    ledge = Math.max(
+      ledge,
+      tileHeight(world, tile.x, target.y),
+      tileHeight(world, target.x, tile.y)
+    )
+  if (start === end && start === ledge) return start
+
+  const origin = footOf(tile)
+  const progress =
+    Math.max(Math.abs(resident.x - origin.x), Math.abs(resident.y - origin.y)) / TILE_SIZE
+  // Clear the wall a shoe-width before the center crosses it, in either direction.
+  const t = Math.min(1, 4 * Math.min(progress, 1 - progress))
+  const floor = progress < 0.5 ? start : end
+  return floor + (ledge - floor) * t * t * (3 - 2 * t)
+}
 
 export function createResidents(
   slugs: string[],
@@ -855,10 +880,8 @@ function canStep(
 // The sea, lakes and springs alike are for swimming in.
 const isWet = isWetGround
 
-export function residentIsSwimming(world: IslandWorld, resident: Pick<Resident, 'x' | 'y'>) {
-  return isWet(
-    groundAt(world, Math.floor(resident.x / TILE_SIZE), Math.floor(resident.y / TILE_SIZE))
-  )
+export function residentIsSwimming(world: IslandWorld, resident: Resident) {
+  return residentFootHeight(world, resident) === 0
 }
 
 export function dropResident(

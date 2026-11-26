@@ -31,10 +31,11 @@ import {
   designResidents,
   footOf,
   type Resident,
+  residentFootHeight,
   settleResidents
 } from '#/lib/island-residents'
 import type { IslandRenderer, ResidentScreen } from '#/lib/island-three.client'
-import { type IslandWorld, layoutResidentHomes, TILE_SIZE } from '#/lib/island-world'
+import { ISLAND_CENTER, type IslandWorld, layoutResidentHomes, TILE_SIZE } from '#/lib/island-world'
 import type { SceneSize } from '#/lib/scene-math'
 
 const loadRenderer = createClientOnlyFn(() => import('#/lib/island-three.client'))
@@ -104,10 +105,13 @@ export function useIsland({
       residents.current.find((resident) => resident.slug === slug) ?? residents.current[0]
     const foot = target
       ? { x: target.x + target.offsetX, y: target.y + target.offsetY }
-      : footOf({ x: 40, y: 30 })
-    const h = drawn.current
-      ? tileHeight(drawn.current, Math.floor(foot.x / TILE_SIZE), Math.floor(foot.y / TILE_SIZE))
-      : 0
+      : footOf(ISLAND_CENTER)
+    const world = drawn.current
+    let h = 0
+    if (world)
+      h = target
+        ? residentFootHeight(world, target)
+        : tileHeight(world, ISLAND_CENTER.x, ISLAND_CENTER.y)
     return viewOn(foot, sizeRef.current, zoom, view.current.turn, h + 12)
   }, [])
 

@@ -73,6 +73,7 @@ import {
   RESIDENT_SCALE,
   type Resident,
   type ResidentDesign,
+  residentFootHeight,
   residentIsSwimming,
   residentOccupies,
   residentPose,
@@ -1142,26 +1143,24 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
   const heightAt = (x: number, y: number) =>
     tileHeight(world, Math.floor(x / TILE_SIZE), Math.floor(y / TILE_SIZE))
   const footHeight = (resident: Resident) =>
-    dragged?.resident === resident ? dragged.height : heightAt(resident.x, resident.y)
-  const residentFoot = (resident: Resident) => {
-    const p = worldToScreen(view, size, resident, footHeight(resident))
-    return {
-      x: p.x + resident.offsetX * view.zoom,
-      y: p.y + (resident.offsetY - (dragged?.resident === resident ? 5 : 0)) * view.zoom
-    }
-  }
+    dragged?.resident === resident ? dragged.height : residentFootHeight(world, resident)
   function project(): ResidentScreen[] {
     return residents.map((resident) => {
-      const foot = residentFoot(resident)
+      const dragging = dragged?.resident === resident
+      const base = footHeight(resident)
+      const p = worldToScreen(view, size, resident, base)
+      const x = p.x + resident.offsetX * view.zoom
+      const y = p.y + (resident.offsetY - (dragging ? 5 : 0)) * view.zoom
       return {
         slug: resident.slug,
-        ...foot,
-        bubbleX: foot.x,
-        bubbleY: foot.y,
+        x,
+        y,
+        bubbleX: x,
+        bubbleY: y,
         width: residentWidth * view.zoom,
         height: residentHeight * view.zoom,
-        swimming: residentIsSwimming(world, resident) && dragged?.resident !== resident,
-        dragging: dragged?.resident === resident
+        swimming: base === 0 && !dragging,
+        dragging
       }
     })
   }
@@ -1211,7 +1210,9 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
       const { mesh, texture: walkTexture, swimTexture, silhouette } = residentMeshes[i]
       mesh.visible = viewer !== resident
       silhouette.visible = !viewer
-      const swimming = residentIsSwimming(world, resident) && dragged?.resident !== resident
+      const isDragged = dragged?.resident === resident
+      const base = footHeight(resident)
+      const swimming = base === 0 && !isDragged
       const texture = swimming ? swimTexture : walkTexture
       mesh.material.map = texture
       silhouette.material.uniforms.map.value = texture
@@ -1229,8 +1230,6 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
       texture.updateMatrix()
       const footX = resident.x
       const footY = resident.y
-      const base = footHeight(resident)
-      const isDragged = dragged?.resident === resident
       mesh.position
         .set(footX, -footY, base + 0.15)
         .addScaledVector(right, resident.offsetX)
@@ -1243,14 +1242,15 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
       // Keep contact shadows and selection rings just above the tile surface.
       const shadow = residentShadows[i]
       shadow.visible = !swimming && mesh.visible
-      shadow.position.set(footX, footY, heightAt(footX, footY) + 0.3)
+      const surfaceHeight = heightAt(footX, footY)
+      shadow.position.set(footX, footY, surfaceHeight + 0.3)
       for (const [ring, slug] of [
         [selectedRing, selected],
         [focusRing, focused !== selected ? focused : null]
       ] as const) {
         if (slug !== resident.slug) continue
         ring.visible = !viewer
-        ring.position.set(footX, footY - 1 + 0.4, base + 0.4)
+        ring.position.set(footX, footY - 1 + 0.4, surfaceHeight + 0.4)
       }
     })
     if (!selected || !residents.some((r) => r.slug === selected)) selectedRing.visible = false
@@ -1480,7 +1480,7 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
       dragged = {
         resident,
         original: { ...resident },
-        height: heightAt(resident.x, resident.y),
+        height: footHeight(resident),
         offset: { x: resident.x - point.x, y: resident.y - point.y }
       }
       wake()

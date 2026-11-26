@@ -34,6 +34,7 @@ import {
   footOf,
   paintResidentSheet,
   RESIDENT_FRAME,
+  residentFootHeight,
   residentIsSwimming,
   residentOccupies,
   residentPose,
@@ -525,6 +526,52 @@ describe('island residents', () => {
     resident.wait = 0
     stepResidents(world, residents, 0.1, () => false)
     expect(resident.target).toEqual({ x: 0, y: 1 })
+  })
+
+  it.each([
+    [1, 0],
+    [0, -1],
+    [-1, 1]
+  ])('clears a ledge when stepping (%i, %i) and back', (dx, dy) => {
+    const world = createIsland(3, 3)
+    const low = { x: 1, y: 1 }
+    const high = { x: low.x + dx, y: low.y + dy }
+    world.ground[high.y * world.columns + high.x] = DECK
+    const [walker] = createResidents(['walker'], [low])
+    for (const [from, to] of [
+      [low, high],
+      [high, low]
+    ]) {
+      walker.tile = from
+      walker.target = to
+      for (const [progress, height] of [
+        [0, 0],
+        [0.125, 4],
+        [0.25, 8],
+        [0.5, 8],
+        [0.75, 8],
+        [1, 8]
+      ]) {
+        const t = from === low ? progress : 1 - progress
+        walker.x = footOf(from).x + (footOf(to).x - footOf(from).x) * t
+        walker.y = footOf(from).y + (footOf(to).y - footOf(from).y) * t
+        expect(residentFootHeight(world, walker)).toBe(height)
+        expect(residentIsSwimming(world, walker)).toBe(height === 0)
+      }
+    }
+  })
+
+  it('clears a raised side tile at a diagonal corner between two low tiles', () => {
+    const world = createIsland(2, 2)
+    world.ground.fill(SAND)
+    world.ground[1] = DECK
+    const [walker] = createResidents(['walker'], [{ x: 0, y: 0 }])
+    walker.target = { x: 1, y: 1 }
+    expect(residentFootHeight(world, walker)).toBe(4)
+    walker.x = walker.y = 16
+    expect(residentFootHeight(world, walker)).toBe(8)
+    Object.assign(walker, footOf(walker.target))
+    expect(residentFootHeight(world, walker)).toBe(4)
   })
 
   it.each([
