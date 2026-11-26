@@ -2,7 +2,7 @@ import { MAX_GROUND_HEIGHT, tileHeight } from './island-relief'
 import { ISLAND_COLUMNS, ISLAND_ROWS, type IslandWorld, TILE_SIZE } from './island-world'
 import type { SceneSize } from './scene-math'
 
-// The view center is a map coordinate at sea level. Quarter turns orbit it.
+// The view center is a map coordinate at sea level. turn is measured in quarter turns.
 export type IslandView = { x: number; y: number; zoom: number; turn?: number }
 export type Point = { x: number; y: number }
 
@@ -13,20 +13,19 @@ export const islandSession: { view?: IslandView } = {}
 
 export const pitchSin = 0.6
 export const pitchCos = 0.8
-const axes = [
-  [1, 1],
-  [1, -1],
-  [-1, -1],
-  [-1, 1]
-].map(([x, y]) => ({
-  x: x * Math.SQRT1_2,
-  y: y * Math.SQRT1_2
-}))
-export const cameraAxis = (view: IslandView) => axes[view.turn ?? 0]
+export function rotateView(view: IslandView, quarterTurns: number): IslandView {
+  const turn = ((view.turn ?? 0) + quarterTurns) % 4
+  return { ...view, turn: turn < 0 ? turn + 4 : turn }
+}
+
+export function cameraAxis(view: IslandView): Point {
+  const angle = (0.5 - (view.turn ?? 0)) * (Math.PI / 2)
+  return { x: Math.cos(angle), y: Math.sin(angle) }
+}
 
 // Rotate grid-key movement together with the map, keeping one tile per key.
 export function gridStep(view: IslandView, dx: number, dy: number): Point {
-  switch (view.turn) {
+  switch (Math.round(view.turn ?? 0) % 4) {
     case 1:
       return { x: dy, y: -dx }
     case 2:
@@ -91,8 +90,8 @@ export function tileAt(
   let x = Math.floor((base.x + z * dx) / TILE_SIZE)
   let y = Math.floor((base.y + z * dy) / TILE_SIZE)
   while (z > 0) {
-    const nextX = ((x + (dx < 0 ? 1 : 0)) * TILE_SIZE - base.x) / dx
-    const nextY = ((y + (dy < 0 ? 1 : 0)) * TILE_SIZE - base.y) / dy
+    const nextX = dx === 0 ? -Infinity : ((x + (dx < 0 ? 1 : 0)) * TILE_SIZE - base.x) / dx
+    const nextY = dy === 0 ? -Infinity : ((y + (dy < 0 ? 1 : 0)) * TILE_SIZE - base.y) / dy
     const exit = Math.max(nextX, nextY)
     if (tileHeight(world, x, y) >= Math.max(0, exit)) return { x, y }
     if (nextX >= nextY) x -= Math.sign(dx)

@@ -1,8 +1,10 @@
 import {
+  clampView,
   type IslandView,
   nearestZoom,
   type Point,
   panView,
+  rotateView,
   screenToWorld,
   stepZoom,
   zoomViewAt
@@ -47,12 +49,12 @@ export type IslandInputBindings = {
 type Gesture =
   | { kind: 'none' }
   | { kind: 'pan'; start: Point; view: IslandView; moved: boolean; id: number }
+  | { kind: 'rotate'; start: Point; view: IslandView; id: number }
   | { kind: 'resident'; start: Point; moved: boolean; id: number }
   | { kind: 'stroke'; id: number }
-  | { kind: 'pinch'; distance: number; mid: Point; view: IslandView }
+  | { kind: 'pinch'; distance: number; angle: number; anchor: Point; view: IslandView }
 
-// Editing: one finger or the left button edits; two fingers, the right/middle
-// button, Space or the hand tool move the camera. Viewing: any drag pans.
+// A right drag or two-finger twist orbits the camera. A pinch can also pan and zoom.
 export function createIslandInput(bind: IslandInputBindings) {
   const pointers = new Map<number, Point>()
   let gesture: Gesture = { kind: 'none' }
@@ -65,11 +67,13 @@ export function createIslandInput(bind: IslandInputBindings) {
   }
   function pinchState(): Gesture {
     const [a, b] = [...pointers.values()]
+    const view = bind.view()
     return {
       kind: 'pinch',
       distance: Math.max(1, Math.hypot(b.x - a.x, b.y - a.y)),
-      mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 },
-      view: bind.view()
+      angle: Math.atan2(b.y - a.y, b.x - a.x),
+      anchor: screenToWorld(view, bind.size(), { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }),
+      view
     }
   }
   function end(cancel = false) {
@@ -95,12 +99,20 @@ export function createIslandInput(bind: IslandInputBindings) {
       if (pointers.size === 2) {
         // A second finger turns a just-started edit into a camera gesture.
         end(true)
+        suppressClick = true
         bind.hover(null)
         gesture = pinchState()
         bind.setDragging(true)
         return
       }
       if (pointers.size > 2) return
+      if (event.button === 2) {
+        event.preventDefault()
+        bind.hover(null)
+        gesture = { kind: 'rotate', start: point, view: bind.view(), id: event.pointerId }
+        bind.setDragging(true)
+        return
+      }
       if (
         resident &&
         !bind.editing() &&
@@ -117,7 +129,6 @@ export function createIslandInput(bind: IslandInputBindings) {
       }
       const camera =
         event.button === 1 ||
-        event.button === 2 ||
         bind.panning() ||
         !bind.editing() ||
         (bind.canStroke ? !bind.canStroke() : false)
@@ -137,8 +148,27 @@ export function createIslandInput(bind: IslandInputBindings) {
         const distance = Math.hypot(b.x - a.x, b.y - a.y)
         const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }
         const zoom = nearestZoom(gesture.view.zoom * (distance / gesture.distance))
-        const zoomed = zoomViewAt(gesture.view, bind.size(), zoom, gesture.mid)
-        bind.setView(panView(zoomed, bind.size(), mid.x - gesture.mid.x, mid.y - gesture.mid.y))
+        const angle = Math.atan2(b.y - a.y, b.x - a.x)
+        const next = rotateView({ ...gesture.view, zoom }, (angle - gesture.angle) / (Math.PI / 2))
+        const size = bind.size()
+        const underMid = screenToWorld(next, size, mid)
+        bind.setView(
+          clampView(
+            {
+              ...next,
+              x: next.x + gesture.anchor.x - underMid.x,
+              y: next.y + gesture.anchor.y - underMid.y
+            },
+            size
+          )
+        )
+        return
+      }
+      if (gesture.kind === 'rotate' && gesture.id === event.pointerId) {
+        // Dragging across the viewport makes one full orbit.
+        bind.setView(
+          rotateView(gesture.view, (4 * (gesture.start.x - point.x)) / bind.size().width)
+        )
         return
       }
       if (gesture.kind === 'resident' && gesture.id === event.pointerId) {
@@ -170,7 +200,9 @@ export function createIslandInput(bind: IslandInputBindings) {
       const point = local(event)
       pointers.delete(event.pointerId)
       if (gesture.kind === 'pinch') {
+        suppressClick = true
         if (pointers.size === 0) end()
+        else if (pointers.size >= 2) gesture = pinchState()
         else if (pointers.size === 1) {
           // Keep panning with the finger that stayed down.
           const [id, rest] = [...pointers.entries()][0]
@@ -181,6 +213,7 @@ export function createIslandInput(bind: IslandInputBindings) {
       if (gesture.kind === 'resident' && gesture.moved)
         bind.residentMove?.(screenToWorld(bind.view(), bind.size(), point))
       if (gesture.kind === 'pan' && !gesture.moved && event.type === 'pointerup') bind.tap(point)
+      if (gesture.kind === 'pan' && gesture.moved) suppressClick = true
       end()
       if (event.pointerType !== 'touch' && bind.editing()) bind.hover(point)
     },
@@ -196,7 +229,8 @@ export function createIslandInput(bind: IslandInputBindings) {
     wheel(event: WheelEvent) {
       if (!bind.ready()) return
       event.preventDefault()
-      if (gesture.kind === 'resident') return
+      if (gesture.kind === 'resident' || gesture.kind === 'rotate' || gesture.kind === 'pinch')
+        return
       const scale = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? 400 : 1
       wheelDelta += event.deltaY * scale
       const threshold = event.ctrlKey ? 24 : 60

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { cameraAxis, tileAt, worldToScreen } from '../src/lib/island-camera'
+import { cameraAxis, screenToWorld, tileAt, worldToScreen } from '../src/lib/island-camera'
 import { createIslandInput, type IslandInputBindings } from '../src/lib/island-input'
 import { tileHeight } from '../src/lib/island-relief'
 import { createIsland, ROCK, TILE_SIZE, WATER } from '../src/lib/island-world'
@@ -128,25 +128,62 @@ describe('shared editing gestures', () => {
   })
 })
 
+describe('camera rotation', () => {
+  it('orbits continuously on right drag without moving the center or starting an edit', () => {
+    const { input, bindings, event } = setup()
+    bindings.editing = () => true
+    const right = { ...event(400), pointerType: 'mouse', button: 2 }
+    input.pointerDown(right)
+    input.pointerMove({ ...right, clientX: 500 })
+    expect(bindings.setView).toHaveBeenLastCalledWith({ ...bindings.view(), turn: 3.5 })
+    input.pointerMove({ ...right, clientX: 300 })
+    expect(bindings.setView).toHaveBeenLastCalledWith({ ...bindings.view(), turn: 0.5 })
+    input.pointerUp(right)
+    expect(bindings.strokeStart).not.toHaveBeenCalled()
+    expect(bindings.residentStart).not.toHaveBeenCalled()
+    expect(bindings.tap).not.toHaveBeenCalled()
+  })
+
+  it('keeps the same world point between the fingers while twisting, zooming and panning', () => {
+    const { input, bindings, event } = setup()
+    const setView = vi.mocked(bindings.setView)
+    const anchor = screenToWorld(bindings.view(), bindings.size(), { x: 250, y: 300 })
+    input.pointerDown(event(200))
+    input.pointerDown(event(300, 2))
+    input.pointerMove({ ...event(320, 2), clientY: 420 })
+    const [next] = setView.mock.calls[0]
+    expect(next.turn).toBeCloseTo(0.5)
+    expect(next.zoom).toBe(3)
+    const point = worldToScreen(next, bindings.size(), anchor)
+    expect(point.x).toBeCloseTo(260)
+    expect(point.y).toBeCloseTo(360)
+  })
+})
+
 describe('voxel terrain picking', () => {
   const size = { width: 800, height: 600 }
-  it.each([0, 1, 2, 3])('picks the drawn top and exposed wall after quarter turn %i', (turn) => {
-    const world = createIsland()
-    world.ground.fill(WATER)
-    const tile = { x: 39, y: 28 }
-    world.ground[tile.y * world.columns + tile.x] = ROCK
-    const middle = { x: (tile.x + 0.5) * TILE_SIZE, y: (tile.y + 0.5) * TILE_SIZE }
-    const view = { ...middle, zoom: 2.5, turn }
-    const h = tileHeight(world, tile.x, tile.y)
-    const top = worldToScreen(view, size, middle, h)
-    expect(tileAt(view, size, top, world)).toEqual(tile)
-    const face = { ...middle, x: middle.x + (Math.sign(cameraAxis(view).x) * TILE_SIZE) / 2 }
-    const cliff = worldToScreen(view, size, face, h / 2)
-    expect(tileAt(view, size, cliff, world)).toEqual(tile)
-    const sea = { x: middle.x + 64, y: middle.y - 64 }
-    expect(tileAt(view, size, worldToScreen(view, size, sea), world)).toEqual({
-      x: tile.x + 4,
-      y: tile.y - 4
-    })
-  })
+  it.each([0, 0.3, 0.5, 1, 1.5, 2, 2.5, 3, 3.5])(
+    'picks the drawn top and exposed wall at turn %s',
+    (turn) => {
+      const world = createIsland()
+      world.ground.fill(WATER)
+      const tile = { x: 39, y: 28 }
+      world.ground[tile.y * world.columns + tile.x] = ROCK
+      const middle = { x: (tile.x + 0.5) * TILE_SIZE, y: (tile.y + 0.5) * TILE_SIZE }
+      const view = { ...middle, zoom: 2.5, turn }
+      const h = tileHeight(world, tile.x, tile.y)
+      const top = worldToScreen(view, size, middle, h)
+      expect(tileAt(view, size, top, world)).toEqual(tile)
+      const axis = cameraAxis(view)
+      const side = Math.abs(axis.x) >= Math.abs(axis.y) ? 'x' : 'y'
+      const face = { ...middle, [side]: middle[side] + (Math.sign(axis[side]) * TILE_SIZE) / 2 }
+      const cliff = worldToScreen(view, size, face, h / 2)
+      expect(tileAt(view, size, cliff, world)).toEqual(tile)
+      const sea = { x: middle.x + 64, y: middle.y - 64 }
+      expect(tileAt(view, size, worldToScreen(view, size, sea), world)).toEqual({
+        x: tile.x + 4,
+        y: tile.y - 4
+      })
+    }
+  )
 })

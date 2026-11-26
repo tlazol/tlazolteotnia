@@ -16,7 +16,7 @@ import {
   useState
 } from 'react'
 import { type BlogPostSummary, sortBlogPostsNewestFirst } from '#/lib/blog-post'
-import { gridStep, panView, stepZoom, zoomViewAt } from '#/lib/island-camera'
+import { gridStep, panView, rotateView, stepZoom, zoomViewAt } from '#/lib/island-camera'
 import type { EditOptions } from '#/lib/island-edit'
 import { createIslandInput } from '#/lib/island-input'
 import type { ResidentScreen } from '#/lib/island-three.client'
@@ -410,7 +410,7 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
         aria-label={
           editing
             ? `島の編集。矢印キーで編集位置を動かし、Enterで${options.tool === 'land' ? '土地を足す・塗り替えます' : '選んだツールを使います'}。`
-            : '島の地図。矢印キーで移動、+ と − で拡大縮小、0 で最初の位置に戻ります。'
+            : '島の地図。右ドラッグまたは2本指でひねって回転。矢印キーで移動、+ と − で拡大縮小、0 で最初の位置に戻ります。'
         }
         onKeyDown={surfaceKeyDown}
         onPointerDown={input.pointerDown}
@@ -425,7 +425,8 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
           }
         }}
         onContextMenu={(event) => {
-          if (editing) event.preventDefault()
+          if (ready && (editing || !(event.target as Element).closest('a, [data-island-ui]')))
+            event.preventDefault()
         }}
         onBlur={() => {
           if (keyboardTile.current) {
@@ -527,13 +528,13 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
           <button
             type="button"
             aria-label="島を90度回転"
-            title="島を90度回転"
+            title="90度回転（右ドラッグ・2本指でひねると自由に回転）"
             onClick={() => {
               input.cancel()
               renderer.current?.setCursor(null)
               keyboardTile.current = null
               setCursor(null)
-              setView({ ...view.current, turn: ((view.current.turn ?? 0) + 1) % 4 })
+              setView(rotateView(view.current, 1))
             }}
           >
             <PixelIcon name="reset" />

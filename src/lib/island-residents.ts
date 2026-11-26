@@ -231,9 +231,13 @@ export type Facing = (typeof facings)[number]
 // Grid steps project onto eight screen directions. The three turned poses
 // are drawn facing right; their left-facing counterparts share the same row.
 export function residentPose(direction: { x: number; y: number }) {
+  // Choose the closest of the eight sprite directions at any camera angle.
+  const sectorSlope = Math.SQRT2 - 1 // tan(22.5°)
+  const x = Math.abs(direction.x)
+  const y = Math.abs(direction.y)
   let facing: Facing
-  if (direction.x === 0) facing = direction.y < 0 ? 'up' : 'down'
-  else if (direction.y === 0) facing = 'side'
+  if (x <= y * sectorSlope) return { facing: direction.y < 0 ? 'up' : 'down', flip: false } as const
+  if (y <= x * sectorSlope) facing = 'side'
   else facing = direction.y < 0 ? 'upSide' : 'downSide'
   return { facing, flip: direction.x < 0 }
 }
