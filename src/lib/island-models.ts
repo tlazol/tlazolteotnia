@@ -1095,61 +1095,138 @@ function reef(look: number, seed: number) {
   return model(pieces.map(([c, r], i) => slab(c, r, paint, seed + i * 7)))
 }
 
-const dressed = (seed: number) => {
-  const face = mottled('relic', 5, seed, 2.5, 0.2)
-  const moss = mat('moss', 4)
-  return (x: number, y: number, z: number) =>
-    z < 3 && noise3(x / 2, y / 2, z, seed + 3) > 0.5 ? moss : face(x, y, z)
+// Dressed stone weathers in beds. Water darkens the foot and leaves narrow
+// streaks below patches of lichen.
+function dressedStone(seed: number, ramp: RampName): Painter {
+  const tones = [2, 3, 4, 5].map((level) => mat(ramp, level))
+  const lichen = mat('lichen', 0)
+  return (x, y, z) => {
+    const runoff = noise3(x / 4, y / 4, z / 18, seed)
+    const bed = noise3(x / 15, y / 15, (z + x * 0.12) / 3, seed + 1)
+    if (runoff > 0.72 && z < 12 && bed > 0.52) return lichen
+    const damp = Math.max(0, 1 - z / 16) * 0.22
+    const grain = bed * 0.8 + noise3(x / 3, y / 3, z / 3, seed + 2) * 0.2 - damp
+    return tones[grain < 0.2 ? 0 : grain < 0.34 || runoff > 0.79 ? 1 : grain < 0.72 ? 2 : 3]
+  }
 }
+
+// Unequal corner breaks on a quarried stone.
+function hewnStone(c: Vec3, half: Vec3, paint: Painter, chip: number, yaw = 0): Part {
+  const cos = Math.cos(yaw)
+  const sin = Math.sin(yaw)
+  const rx = Math.abs(cos) * half[0] + Math.abs(sin) * half[1]
+  const ry = Math.abs(sin) * half[0] + Math.abs(cos) * half[1]
+  return {
+    paint,
+    lo: [c[0] - rx, c[1] - ry, c[2] - half[2]],
+    hi: [c[0] + rx, c[1] + ry, c[2] + half[2]],
+    d: (x, y, z) => {
+      const dx = x - c[0]
+      const dy = y - c[1]
+      const u = dx * cos + dy * sin
+      const v = -dx * sin + dy * cos
+      const top = z - c[2] - half[2]
+      return Math.max(
+        box(u, v, z - c[2], half[0], half[1], half[2], 0.8),
+        (u + v - half[0] - half[1] + chip) * Math.SQRT1_2,
+        (-u - half[0] + top * 1.5 + chip) / 1.81,
+        (v - half[1] + top + chip * 0.45) * Math.SQRT1_2
+      )
+    }
+  }
+}
+
 function relic(look: number, seed: number) {
-  const paint = dressed(seed)
+  const paint = dressedStone(seed, look === 0 || look === 2 ? 'gravel' : 'cobble')
+  const debris = stone(seed + 5, false)
+  // Two-tile monument bases, with a three-tile span for the gate.
   if (look === 0)
     return model([
+      hewnStone([0, MID, 0], [16, 16, 3], paint, 4),
+      hewnStone([0, MID, 5], [11.5, 11.5, 2.7], paint, 2, -0.04),
       {
         d: (x, y, z) => {
-          // A tapering shaft capped by a pyramid.
-          const half = 3.6 - z * 0.07
-          const shaft = Math.max(Math.max(Math.abs(x), Math.abs(y)) - half, Math.abs(z - 14) - 14)
-          const cap = Math.max((Math.abs(x) + Math.abs(y) + (z - 28) * 0.9) * 0.7, 26 - z)
-          return Math.min(shaft, cap)
+          const radius = Math.max(Math.abs(x), Math.abs(y - MID))
+          const shaft = radius - (8 - z * 0.07)
+          const cap = (radius + (z - 64) * 0.5) / Math.hypot(1, 0.5)
+          // A spall cuts across one edge and the tip has snapped at a slant.
+          const spall =
+            (x + y - MID - 11 + Math.max(0, 1 - Math.abs(z - 33) / 11) * 4) * Math.SQRT1_2
+          return Math.max(shaft, cap, spall, (z + x * 0.55 - 61) / 1.15, 6 - z)
         },
         paint,
-        lo: [-4, -4, 0],
-        hi: [4, 4, 33]
-      },
-      block([0, 0, 0.8], [5.5, 5.5, 1.2], paint, 0.4)
+        lo: [-8, MID - 8, 6],
+        hi: [8, MID + 8, 64]
+      }
     ])
   if (look === 1) {
-    const glyph: Painter = (x, y, z) =>
-      y > 1.6 &&
-      Math.abs(x) < 3.2 &&
-      z > 5 &&
-      z < 20 &&
-      Math.floor(z / 2) % 2 &&
-      hash3(Math.floor(x), Math.floor(z / 2), 0, seed) < 0.5
-        ? mat('relic', 3)
-        : paint(x, y, z)
-    return model([block([0, 0, 11], [5, 2.2, 11], glyph, 0.8)])
-  }
-  if (look === 2)
+    const tablet = hewnStone([0, MID, 23], [13, 6, 22], paint, 4.5)
+    // A recessed sun disc above a pair of chevrons on the front face.
+    const incision = (x: number, z: number) => {
+      const ring = Math.abs(Math.hypot(x, z - 31) - 5.3)
+      const chevron = Math.min(
+        Math.abs(z - 19 + Math.abs(x) * 0.55),
+        Math.abs(z - 13 + Math.abs(x) * 0.55)
+      )
+      return Math.min(ring, Math.max(Math.abs(x) - 7, chevron * 0.87))
+    }
+    const groove = mat('cobble', 1)
     return model([
+      hewnStone([0, MID, 0], [16, 14, 3], paint, 4, 0.05),
       {
-        d: (x, y, z) =>
-          Math.max(
-            cylinder(x, y, z, 4.2, 16, 0.4),
-            z - 12 - x * 0.35 - (noise3(x, y, z, seed) - 0.5) * 3
-          ),
-        paint: (x, y, z) =>
-          Math.cos(Math.atan2(y, x) * 10) > 0.7 ? mat('relic', 4) : paint(x, y, z),
-        lo: [-4.5, -4.5, 0],
-        hi: [4.5, 4.5, 16]
+        ...tablet,
+        d: (x, y, z) => Math.max(tablet.d(x, y, z), Math.min(y - MID - 3.5, 1.45 - incision(x, z))),
+        paint: (x, y, z) => (y > MID + 3 && incision(x, z) < 1.6 ? groove : paint(x, y, z))
       },
-      block([8, 4, 2.2], [3, 2.6, 2.2], paint, 0.6, 0.4)
+      slab([-10, MID + 9, 2.5], [5, 3.5, 2.3], debris, seed)
     ])
+  }
+  if (look === 2) {
+    const fluted = (x: number, y: number) => 1.3 * (0.5 + 0.5 * Math.cos(10 * Math.atan2(y, x)))
+    return model([
+      hewnStone([0, MID, 0], [16, 16, 3], paint, 6, -0.04),
+      {
+        d: (x, y, z) => {
+          const dx = x + 4
+          const dy = y - MID + 3
+          const joint = Math.max(0, 1.3 - Math.abs(z - 13))
+          const shaft = cylinder(dx, dy, z, 9.8 - fluted(dx, dy) - joint, 34, 0.8)
+          const fracture =
+            z - 26 - dx * 0.43 - dy * 0.17 - (noise3(dx / 3, dy / 3, 0, seed) - 0.5) * 5
+          return Math.max(shaft, fracture * 0.8)
+        },
+        paint,
+        lo: [-14, MID - 13, 0],
+        hi: [6, MID + 7, 34]
+      },
+      {
+        // A piece of the fluted drum lies across the front of the plinth.
+        d: (x, y, z) => {
+          const dy = y - MID - 7 - (x - 7) * 0.24
+          return cylinder(dy, z - 7, x - 1, 6 - fluted(dy, z - 7), 14, 0.7)
+        },
+        paint,
+        lo: [1, MID - 1, 1],
+        hi: [15, MID + 15, 13]
+      }
+    ])
+  }
+  const lintel = hewnStone([0, MID, 44], [24, 7.5, 5.3], paint, 6, 0.025)
   return model([
-    block([-6.5, 0, 9], [2.6, 2.6, 9], paint, 0.5),
-    block([6.5, 0, 9], [2.6, 2.6, 9], paint, 0.5),
-    block([0, 0, 20], [10.5, 3, 2.3], paint, 0.5)
+    hewnStone([-14, MID, 1], [9, 10, 4], paint, 3, 0.08),
+    hewnStone([14, MID + 1, 0], [10, 10, 4], paint, 4, -0.06),
+    hewnStone([-15, MID, 21], [6.5, 6.5, 19], paint, 3, -0.1),
+    hewnStone([15, MID + 1, 21], [6, 7, 19], paint, 4, 0.12),
+    {
+      ...lintel,
+      d: (x, y, z) => {
+        // A diagonal fissure opens at the top and dies out above the supports.
+        const split = 1.3 - Math.abs(x - 8 + (y - MID) * 0.28 - (z - 45) * 0.46)
+        return Math.max(lintel.d(x, y, z), Math.min(split * 0.86, z - 42))
+      }
+    },
+    slab([-11, MID + 16, 1.5], [8, 6, 4], debris, seed),
+    slab([9, MID - 16, 1], [6, 6, 3], debris, seed + 1)
   ])
 }
 

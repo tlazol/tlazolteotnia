@@ -254,12 +254,10 @@ describe('island baker', () => {
       }
       hash.update(new Uint8Array(chunk.decor.anim.buffer))
     }
-    // Captured from the original full lighting calculation before optimization,
-    // with leaf tones (which only recolor leaves), smaller, squatter trees
-    // coarser leaf and bark grain, no mangroves, and single-stemmed birch and
-    // bamboo applied since.
+    // Based on the full lighting calculation, updated for changes to the
+    // island's vegetation and the two- and three-tile relic models.
     expect(hash.digest('hex')).toBe(
-      '67cf30a692207077206b0d404f924cdc0634ef8e66e94a2a17d12449ee5cc54c'
+      '5f059c83a73c0085d18af078a965bb98f47205fbfe6f41b59af1c06422d27a83'
     )
   }, 15_000)
 

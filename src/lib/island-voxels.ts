@@ -9,9 +9,9 @@ export type VoxelSurface = {
 
 // Sample each bounded SDF part onto the same lattice. A small shell catches
 // thin palm leaves and flower stems that fall between voxel centers.
-export function voxelSurface(model: Model): VoxelSurface {
+export function voxelSurface(model: Model, maxStep = 4): VoxelSurface {
   const extent = model.hi.map((v, i) => v - model.lo[i])
-  const step = Math.max(1, Math.min(4, Math.max(...extent) / 15))
+  const step = Math.max(1, Math.min(maxStep, Math.max(...extent) / 15))
   const origin = model.lo.map((v) => Math.floor(v / step - 1) * step)
   const dims = model.hi.map((v, i) => Math.ceil((v - origin[i]) / step) + 1)
   const stride = [1, dims[0], dims[0] * dims[1]]

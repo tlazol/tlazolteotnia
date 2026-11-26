@@ -11,7 +11,8 @@ export type VoxelResult = VoxelRequest & {
 }
 self.onmessage = ({ data }: MessageEvent<VoxelRequest>) => {
   const model = decorModel(data.kind, data.look)
-  const surface = voxelSurface(model)
+  // Resolve the narrow incisions and flutes on the larger stone monuments.
+  const surface = voxelSurface(model, data.kind === 'relic' ? 1.25 : undefined)
   const result: VoxelResult = {
     ...data,
     surface,
