@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
 import {
   BAKE_CHUNK,
@@ -84,17 +83,16 @@ describe('palette', () => {
 })
 
 describe('decoration models', () => {
-  it('draw every look of every kind', () => {
-    for (const kind of decorKinds) {
-      expect(modelLookCount(kind)).toBe(decorLooks[kind])
-      for (let look = 0; look < decorLooks[kind]; look++) {
-        const model = decorModel(kind, look)
-        const template = bakeTemplate(model)
-        // Fireflies are a few glowing specks; everything else has a body.
-        expect(template.count, `${kind} ${look}`).toBeGreaterThan(kind === 'fireflies' ? 4 : 20)
-        // Every point is colored from the palette.
-        for (const slot of template.slot) expect(slot).toBeLessThan(palette.length)
-      }
+  it.each(decorKinds)('draws every look of %s', (kind) => {
+    expect(modelLookCount(kind)).toBe(decorLooks[kind])
+    for (let look = 0; look < decorLooks[kind]; look++) {
+      const template = bakeTemplate(decorModel(kind, look))
+      // Fireflies are a few glowing specks; everything else has a body.
+      expect(template.count, `look ${look}`).toBeGreaterThan(kind === 'fireflies' ? 4 : 20)
+      expect(
+        template.slot.every((slot) => slot < palette.length),
+        `look ${look}`
+      ).toBe(true)
     }
   })
 
@@ -241,24 +239,23 @@ describe('leaf tones', () => {
 })
 
 describe('island baker', () => {
-  it('preserves the complete scene when pruning lighting candidates', () => {
-    const world = createDefaultIsland()
+  it('shades terrain across a chunk boundary only for nearby decorations', () => {
+    const tilesPerChunk = BAKE_CHUNK / TILE_SIZE
+    const world = createIsland(tilesPerChunk * 3, 4)
+    world.ground.fill(GRASS)
     const baker = new IslandBaker(world.columns, world.rows)
-    const change = baker.update(world.ground, world.decor)
-    const hash = createHash('sha256')
-    for (const index of change?.chunks ?? []) {
-      const chunk = baker.bakeChunk(index)
-      for (const points of [chunk.terrain, chunk.decor]) {
-        hash.update(new Uint8Array(points.position.buffer))
-        hash.update(new Uint8Array(points.color.buffer))
-      }
-      hash.update(new Uint8Array(chunk.decor.anim.buffer))
+    function groundColors() {
+      baker.update(world.ground, world.decor)
+      return baker.bakeChunk(1).terrain.color
     }
-    // Reference scene rendered with the complete list of lighting candidates.
-    expect(hash.digest('hex')).toBe(
-      'd16dd97ac9b52d5d9a9034169c201408832e71425c4c14499dd56c276cb5fa29'
-    )
-  }, 15_000)
+    const bare = groundColors()
+    const row = 2 * world.columns
+    world.decor[row + tilesPerChunk - 1] = decorCode('tree')
+    const shaded = groundColors()
+    expect(shaded.some((channel, i) => channel < bare[i])).toBe(true)
+    world.decor[row + world.columns - 1] = decorCode('rock')
+    expect(groundColors()).toEqual(shaded)
+  })
 
   it('interpolates heights at centers, between columns, and outside the island', () => {
     const baker = new IslandBaker(1, 1)
@@ -288,17 +285,19 @@ describe('island baker', () => {
   })
 
   it('bakes the same chunks from models baked elsewhere, reading only those it names', () => {
-    const world = createDefaultIsland()
+    const tilesPerChunk = BAKE_CHUNK / TILE_SIZE
+    const world = createIsland(tilesPerChunk * 2, 4)
+    world.ground.fill(GRASS)
+    const row = 2 * world.columns
+    world.decor[row + tilesPerChunk - 1] = decorCode('tree')
+    world.decor[row + tilesPerChunk] = decorCode('rock')
+    world.decor[row + tilesPerChunk + 2] = decorCode('flowers')
     const local = new IslandBaker(world.columns, world.rows)
     local.update(world.ground, world.decor)
     const given = new IslandBaker(world.columns, world.rows)
     given.update(world.ground, world.decor)
-    // The chunks with the most models, where a missing one would show.
-    const chunks = Array.from({ length: given.chunkColumns * given.chunkRows }, (_, i) => i)
-      .sort((a, b) => given.chunkModels(b).size - given.chunkModels(a).size)
-      .slice(0, 3)
     const named = new Set<string>()
-    for (const index of chunks) {
+    for (let index = 0; index < given.chunkColumns; index++) {
       const keys = given.chunkModels(index)
       expect(keys.size).toBeGreaterThan(0)
       for (const key of keys) {

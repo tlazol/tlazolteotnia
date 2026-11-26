@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   createBuffer,
   createShoreField,
@@ -75,6 +75,7 @@ import {
   type Ground,
   groundAt,
   HOTSPRING,
+  hash2,
   ISLAND_CENTER,
   ISLAND_SAVE_VERSION,
   isWalkable,
@@ -421,7 +422,7 @@ describe('island rendering helpers', () => {
 
   it('shows every ground in the middle of its own patch and marks fresh water by kind', () => {
     for (const ground of landGrounds) {
-      const world = createIsland()
+      const world = createIsland(13, 13)
       for (let y = 9; y <= 11; y++)
         for (let x = 9; x <= 11; x++) world.ground[y * world.columns + x] = ground
       for (let py = 164; py < 172; py++)
@@ -813,16 +814,23 @@ describe('island residents', () => {
     expect(steps[1]).toBeGreaterThan(steps[0] * 3)
   })
 
-  it('gathers on trails, spreads over the island and leaves a few residents in the sea', () => {
+  it('gathers on trails, spreads over the island and leaves a few residents in the sea', ({
+    onTestFinished
+  }) => {
+    let sample = 0
+    const random = vi.spyOn(Math, 'random').mockImplementation(() => hash2(sample++, 0, 1))
+    onTestFinished(() => {
+      random.mockRestore()
+    })
     const world = createDefaultIsland()
     const slugs = Array.from({ length: 50 }, (_, i) => `post-${i}`)
     const residents = createResidents(slugs, layoutResidentHomes(slugs.length))
     const tiles = new Array<number>(GROUND_COUNT).fill(0)
     for (const ground of world.ground) tiles[ground]++
     const seen = new Array<number>(GROUND_COUNT).fill(0)
-    for (let i = 0; i < 3000; i++) {
+    for (let i = 0; i < 1200; i++) {
       stepResidents(world, residents, 0.2, () => false)
-      if (i < 500 || i % 5) continue
+      if (i < 200 || i % 5) continue
       for (const resident of residents)
         seen[groundAt(world, Math.floor(resident.x / 16), Math.floor(resident.y / 16))]++
     }

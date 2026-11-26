@@ -1,7 +1,8 @@
 // Runs the island's Worker and Durable Object in workerd (wrangler's test
 // harness): storage, transactions, hibernation and WebSockets are real.
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { decodeIsland } from '../src/lib/island-world'
+import { parseServerMessage } from '../src/lib/island-protocol'
+import { decodeIsland, SEA_LEVEL_CODE } from '../src/lib/island-world'
 import { type Client, startIsland, tiles } from './runtime/island-harness'
 
 vi.setConfig({ testTimeout: 30_000 })
@@ -50,6 +51,28 @@ describe('shared island in workerd', () => {
     expect(snapshot.revision).toBe(2)
     const state = await island.sql('SELECT revision FROM island_state')
     expect(state[0].revision).toBe(2)
+  })
+
+  it('broadcasts height-only edits and restores a pit for a returning visitor', async () => {
+    const writer = await connect()
+    const watcher = await connect()
+    const indices = tiles(1)
+    expect((await writer.edit(land(SAND), indices)).status).toBe('applied')
+    await watcher.next('patch')
+    for (const elevation of [SEA_LEVEL_CODE, SEA_LEVEL_CODE + 1]) {
+      expect((await writer.edit({ tool: 'lower' }, indices)).status).toBe('applied')
+      const patch = parseServerMessage(JSON.stringify(await watcher.next('patch')))
+      expect(patch).toMatchObject({
+        type: 'patch',
+        edits: [{ index: indices[0], ground: SAND, decor: 0, elevation }]
+      })
+    }
+    await island.evict('close')
+    const returning = await connect()
+    const restored = decodeIsland(returning.messages[0].island)
+    expect(restored?.elevation[indices[0]]).toBe(SEA_LEVEL_CODE + 1)
+    expect((await returning.edit({ tool: 'raise' }, indices)).status).toBe('applied')
+    expect((await returning.next('patch')).edits[0].elevation).toBe(SEA_LEVEL_CODE)
   })
 
   it('settles conflicts on one tile the same way for everyone', async () => {
