@@ -11,8 +11,13 @@ describe('palette thumbnails', () => {
         const thumbnail = decorThumbnail(kind, look)
         let drawn = 0
         for (let i = 3; i < thumbnail.data.length; i += 4) if (thumbnail.data[i]) drawn++
-        // One pixel for each baked point, cropped to fit.
-        expect(drawn).toBe(bakeTemplate(decorModel(kind, look)).count)
+        const model = decorModel(kind, look)
+        const solids = bakeTemplate(model).count
+        if (model.shades) {
+          expect(drawn).toBeGreaterThanOrEqual(solids)
+          if (drawn > solids)
+            expect(thumbnail.data.some((v, i) => i % 4 === 3 && v > 0 && v < 255)).toBe(true)
+        } else expect(drawn).toBe(solids)
         expect(thumbnail.data.length).toBe(thumbnail.width * thumbnail.height * 4)
       }
     // Bakes every look twice over, the big trees too: slow beside the others.

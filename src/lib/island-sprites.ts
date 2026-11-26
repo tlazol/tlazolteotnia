@@ -8,7 +8,8 @@ import {
   type Rgba,
   setPixel
 } from './island-art'
-import { type DecorKind, hash2, valueNoise } from './island-world'
+import { decorThumbnail } from './island-thumbnails'
+import { type DecorKind, hash2, resortLightNames, valueNoise } from './island-world'
 
 // ---- Decorations ----------------------------------------------------------
 
@@ -2003,6 +2004,12 @@ export const decorVariants = {
     afloat(paintBough(), 14, 33),
     afloat(paintStump(), 12, 34)
   ],
+  get resortLight(): SpriteFrame[] {
+    return resortLightNames.map((_, look) => ({
+      buffer: decorThumbnail('resortLight', look),
+      shadow: 'small'
+    }))
+  },
   buoy: [paintBuoy('#e5483f', '#fbf6ea', 41), paintBuoy('#f2c230', '#3d424b', 42)]
 } satisfies Record<DecorKind, SpriteFrame[]>
 

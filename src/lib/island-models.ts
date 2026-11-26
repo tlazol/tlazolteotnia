@@ -2,7 +2,14 @@
 // its foot at the origin: x east, y south (toward the viewer), z up, in art
 // pixels. Each part knows its distance, its bounds and how it is colored.
 
-import { nearestSlot, type Outline, type RampName, rampSlot } from './island-palette'
+import type { GlassShade } from './island-lamp-glass'
+import {
+  type LampGlass,
+  nearestSlot,
+  type Outline,
+  type RampName,
+  rampSlot
+} from './island-palette'
 import {
   box,
   capsule,
@@ -13,7 +20,7 @@ import {
   sphere,
   type Vec3
 } from './island-sdf'
-import { type DecorKind, decorLooks, decorScale, groundCoverScale } from './island-world'
+import { type DecorKind, decorLooks, decorPlacementScale, decorScale } from './island-world'
 
 // 'flame' is a drawn flame: steady colors, its tip leaning from side to side.
 export type Glow = 'fire' | 'firefly' | 'flame'
@@ -21,7 +28,17 @@ export const GLOW_CODE = { fire: 1, firefly: 2, flame: 3 } as const satisfies Re
 // `flat` lights a surface in two tones only, as a sign rather than a thing.
 export type Material = { slot: number; glow?: Glow; outline?: Outline; flat?: boolean }
 export type Painter = (x: number, y: number, z: number) => Material
-export type LightEmitter = { kind: 'flame' | 'firefly'; at: Vec3; size: number }
+export type ParticleEmitter = { kind: 'flame' | 'firefly'; at: Vec3; size: number }
+export type LightEmitter =
+  | ParticleEmitter
+  | {
+      kind: 'lamp'
+      at: Vec3
+      glass: LampGlass
+      reach: number
+      projection?: 'water'
+      filament?: boolean
+    }
 export type Part = {
   emitter?: LightEmitter
   d: (x: number, y: number, z: number) => number
@@ -30,6 +47,7 @@ export type Part = {
   hi: Vec3
 }
 export type Model = {
+  shades?: GlassShade[]
   parts: Part[]
   // Pixels the top sways in the wind, and pixels a floating thing bobs.
   sway: number
@@ -1497,6 +1515,198 @@ function buoy(body: string, band: string, beacon: boolean) {
   return model(parts, { bob: 1 })
 }
 
+// Turned fittings share a vertical axis with the shade and bulb.
+function fitting(
+  x: number,
+  y: number,
+  bottom: number,
+  top: number,
+  r: number,
+  paint: Painter
+): Part {
+  return {
+    d: (px, py, z) => cylinder(px - x, py - y, z - bottom, r, top - bottom, 0.24),
+    lo: [x - r, y - r, bottom],
+    hi: [x + r, y + r, top],
+    paint
+  }
+}
+
+function filamentBulb(at: Vec3, glass: LampGlass, reach: number): Part {
+  const [cx, cy, cz] = at
+  return {
+    ...egg(at, [2.15, 2.15, 3.35], (x, y, z) =>
+      mat('honeyGlass', Math.abs(x - cx) + Math.abs(y - cy) < 1.7 || z > cz + 1 ? 2 : 1)
+    ),
+    emitter: { kind: 'lamp', at, glass, reach, filament: true }
+  }
+}
+
+// The colored panes hang below a brass lampholder.
+function pendantLight(blue: boolean): Model {
+  const bronze = plain(mat('bronze', 1))
+  const brass = plain(mat('bronze', 3))
+  const cord = plain(mat('steel', 1))
+  const x = 3,
+    y = -5,
+    postX = -9
+  const shoulder = blue ? 32 : 28
+  const bottom = blue ? 10 : 9
+  const shade: GlassShade = {
+    x,
+    y,
+    sides: blue ? 7 : 6,
+    rings: [
+      [bottom, blue ? 4.7 : 5.7],
+      [bottom + 6.5, blue ? 8.1 : 8.8],
+      [shoulder, 3.1]
+    ],
+    tint: blue ? [0.085, 0.52, 0.66] : [0.94, 0.72, 0.34],
+    opacity: blue ? 0.49 : 0.39
+  }
+  const hook = shoulder + (blue ? 12 : 9)
+  const parts: Part[] = [
+    fitting(postX, -7, 0, 2.3, 4.4, bronze),
+    fitting(postX, -7, 2, 4, 3, brass),
+    stick([postX, -7, 2], [postX, -7, hook - 5], 1.1, bronze),
+    ...limb(
+      curve([postX, -7, hook - 5], [postX, -7, hook + 1], [postX + 5, -6, hook + 1], 6),
+      1.1,
+      1.1,
+      bronze
+    ),
+    ...limb(
+      curve([postX + 5, -6, hook + 1], [x, -5, hook + 1], [x, y, hook - 2], 5),
+      1.1,
+      0.9,
+      bronze
+    ),
+    stick([x, y, hook - 2], [x, y, shoulder + 3], 0.62, cord),
+    fitting(x, y, shoulder + 1.1, shoulder + 3.3, 1.5, brass),
+    taper([x, y, shoulder - 0.4], [x, y, shoulder + 1.5], 3.1, 1.6, brass),
+    fitting(x, y, shoulder - 3.3, shoulder, 2, bronze),
+    filamentBulb([x, y, shoulder - 6.1], blue ? 'lagoonGlass' : 'honeyGlass', 47)
+  ]
+  return { ...model(parts), shades: [shade] }
+}
+
+function urchinLight() {
+  const y = -6
+  const brass = plain(mat('bronze', 3))
+  const dark = plain(mat('bronze', 1))
+  const dome = egg([0, y, 15], [10.5, 10.5, 7.8], (x, py, z) => {
+    const theta = Math.atan2(py - y, x)
+    const latitude = Math.asin(Math.max(-1, Math.min(1, (z - 15) / 7.8)))
+    const rib = Math.cos(5 * theta + 0.28 * Math.sin(2 * latitude))
+    // Stagger the pores between neighboring rows, following the curvature of the shell.
+    const row = (latitude + Math.PI / 2) * 4.6
+    const column = (theta / (2 * Math.PI)) * 30 + (Math.floor(row) % 2) * 0.5
+    const pore = Math.hypot(row - Math.round(row), column - Math.round(column))
+    if (rib > 0.42) return mat('pearlGlass', pore < 0.23 ? 0 : rib > 0.75 ? 2 : 1)
+    return mat('urchinShell', pore < 0.24 ? 0 : rib < -0.35 ? 1 : 2)
+  })
+  const shell = {
+    ...dome,
+    d: (x: number, py: number, z: number) => Math.max(dome.d(x, py, z), 11 - z)
+  }
+  return model([
+    fitting(0, y, 0, 1.4, 4.7, dark),
+    fitting(0, y, 1.4, 2.6, 4, brass),
+    taper([0, y, 3], [0, y, 9.8], 2.9, 1.5, brass),
+    fitting(0, y, 9.4, 11, 3.5, brass),
+    { ...shell, emitter: { kind: 'lamp', at: [0, y, 15], glass: 'urchinShell', reach: 30 } },
+    fitting(0, y, 22.4, 23.4, 1.6, brass),
+    ball([0, y, 23.8], 1.2, dark)
+  ])
+}
+
+function marineLight(): Model {
+  const x = 1,
+    y = -3
+  const iron = plain(mat('steel', 1))
+  const patina = mottled('bronze', 2, 184)
+  const radius = 5.6
+  const shade: GlassShade = {
+    x,
+    y,
+    sides: 16,
+    rings: [
+      [7, radius],
+      [25, radius]
+    ],
+    tint: [0.82, 0.88, 0.78],
+    opacity: 0.13
+  }
+  const parts: Part[] = [
+    block([x, -11, 14.5], [3.4, 2.2, 14.5], barkOf(245, 'deadWood', 3), 0.7),
+    block([x, -8.6, 24.5], [3, 0.7, 4.8], iron),
+    stick([x, -9, 27], [x, y, 27], 1.05, iron),
+    fitting(x, y, 5.5, 7.3, 6.3, iron),
+    fitting(x, y, 6.6, 8, 6.1, patina),
+    fitting(x, y, 24, 26, 6.3, patina),
+    fitting(x, y, 26, 27.3, 5.6, iron),
+    fitting(x, y, 20, 24, 2.35, iron),
+    filamentBulb([x, y, 17], 'honeyGlass', 37)
+  ]
+  // An open waist band leaves the filament visible through the cylinder.
+  const band = fitting(x, y, 14, 15.4, 6.15, patina)
+  parts.push({
+    ...band,
+    d: (px, py, z) => Math.max(band.d(px, py, z), 5.45 - Math.hypot(px - x, py - y))
+  })
+  for (let i = 0; i < 4; i++) {
+    const a = ((i + 0.3) * Math.PI) / 2
+    const px = x + 5.8 * Math.cos(a),
+      py = y + 5.8 * Math.sin(a)
+    parts.push(stick([px, py, 6.1], [px, py, 25.5], 0.65, iron))
+  }
+  const eye = Array.from(
+    { length: 13 },
+    (_, i): Vec3 => [
+      x + 2.1 * Math.cos((i * Math.PI) / 6),
+      y,
+      29 + 2.8 * Math.sin((i * Math.PI) / 6)
+    ]
+  )
+  parts.push(...limb(eye, 0.66, 0.66, iron))
+  return { ...model(parts), shades: [shade] }
+}
+
+function tideProjector() {
+  const y = -6,
+    r = 7.6
+  const base = block(
+    [0, y, 1.5],
+    [8.1, 8.1, 1.5],
+    (x, py, z) => mat('palmBark', Math.sin(1.7 * z + 0.2 * x + 0.14 * py) > 0.65 ? 3 : 4),
+    0.7
+  )
+  const prism = block(
+    [0, y, 10],
+    [r, r, 7],
+    (x, py, z) => {
+      const onTop = z > 16.4
+      const u = onTop || Math.abs(py - y) > Math.abs(x) ? x : py - y
+      const v = onTop ? py - y : z
+      const a =
+        Math.sin(0.78 * u + 0.65 * Math.sin(0.63 * v)) +
+        Math.cos(0.59 * v - 0.5 * Math.sin(0.81 * u))
+      const ridge = Math.abs(a)
+      if (ridge < 0.23) return mat('tideGlass', onTop || z > 11 ? 4 : 3)
+      if (onTop) return mat('tideGlass', ridge < 0.55 ? 4 : 3)
+      return mat('tideGlass', (z > 12 ? 2 : z > 7 ? 1 : 0) + (ridge < 0.62 ? 1 : 0))
+    },
+    0.65
+  )
+  return model([
+    base,
+    {
+      ...prism,
+      emitter: { kind: 'lamp', at: [0, y, 12], glass: 'tideGlass', reach: 44, projection: 'water' }
+    }
+  ])
+}
+
 // ---- Catalogue -----------------------------------------------------------------
 
 const makers: Record<DecorKind, Array<() => Model>> = {
@@ -1596,6 +1806,13 @@ const makers: Record<DecorKind, Array<() => Model>> = {
     () => mushrooms('#b79ae8', true),
     () => mushrooms('#ffc04d', false)
   ],
+  resortLight: [
+    () => pendantLight(true),
+    () => pendantLight(false),
+    urchinLight,
+    marineLight,
+    tideProjector
+  ],
   shell: [0, 1, 2, 3].map((look) => () => shellModel(look)),
   campfire: [0, 1, 2, 3, 4].map((look) => () => campfire(look, 1560 + look)),
   fireflies: [1600, 1610, 1620, 1630].map((seed) => () => fireflies(seed)),
@@ -1647,6 +1864,7 @@ function scaled(m: Model, s: number, middle: number): Model {
     ...m,
     parts,
     sway: m.sway * s,
+    glow: m.glow && { ...m.glow, height: m.glow.height * s },
     lo: grow(m.lo),
     hi: grow(m.hi),
     grown: { from: m, scale: s, middle }
@@ -1677,7 +1895,7 @@ export function modelLookCount(kind: DecorKind) {
 // dimensions before sampling so its ground shadows follow the placed object.
 export function placedDecorModel(kind: DecorKind, look: number, size: number): Model {
   const model = decorModel(kind, look, size)
-  const scale = groundCoverScale(kind, look)
+  const scale = decorPlacementScale(kind, look)
   if (scale === 1) return model
   const key = `placed:${kind}:${look}:${size}`
   let found = built.get(key)

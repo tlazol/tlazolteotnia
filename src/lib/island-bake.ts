@@ -18,7 +18,6 @@ import {
 } from './island-models'
 import {
   bayer,
-  inlayEmission,
   leafToneSlot,
   lightSteps,
   type Outline,
@@ -26,7 +25,8 @@ import {
   type RampName,
   rimSlot,
   slotOnRamp,
-  stepSlot
+  stepSlot,
+  surfaceEmission
 } from './island-palette'
 import {
   BLACKSAND,
@@ -314,7 +314,7 @@ export function bakeTemplate(m: Model): Template {
       const part = nearestPart(m, X, Y, z)
       const material = part.paint(X, Y, z)
       let slot = material.slot
-      const emission = inlayEmission(slot)
+      const emission = surfaceEmission(slot)
       if (!material.glow && emission < 1) {
         const e = 0.3
         let nx = distance(X + e, Y, z) - distance(X - e, Y, z)

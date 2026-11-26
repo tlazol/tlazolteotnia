@@ -1,11 +1,12 @@
 import { Group, InstancedMesh, Raycaster, Scene, ShaderMaterial, Vector3 } from 'three'
 import { describe, expect, it } from 'vitest'
 import { applyEdits, planStroke } from '../src/lib/island-edit'
-import type { Model } from '../src/lib/island-models'
+import { decorModel, type Model } from '../src/lib/island-models'
+import { surfaceEmission } from '../src/lib/island-palette'
 import { box } from '../src/lib/island-sdf'
 import { createTerrain } from '../src/lib/island-terrain.client'
 import { voxelSurface } from '../src/lib/island-voxels'
-import { createIsland, DECK, SAND, TILE_SIZE, WATER } from '../src/lib/island-world'
+import { createIsland, DECK, decorLooks, SAND, TILE_SIZE, WATER } from '../src/lib/island-world'
 
 describe('live terrain mesh', () => {
   it('opens and fills a pit next to water across a patch boundary', () => {
@@ -73,6 +74,20 @@ describe('live terrain mesh', () => {
 })
 
 describe('decoration voxel mesh', () => {
+  it('keeps the resort lamps luminous in the mesh and supplies colored light emitters', () => {
+    const colors = new Set<string>()
+    for (let look = 0; look < decorLooks.resortLight; look++) {
+      const model = decorModel('resortLight', look)
+      const lamps = model.parts.flatMap((part) =>
+        part.emitter?.kind === 'lamp' ? [part.emitter] : []
+      )
+      expect(lamps.length).toBeGreaterThan(0)
+      for (const lamp of lamps) colors.add(lamp.glass)
+      expect(voxelSurface(model, 1.25).slots.some((slot) => surfaceEmission(slot) > 0)).toBe(true)
+    }
+    expect(colors.size).toBeGreaterThanOrEqual(4)
+  })
+
   it('keeps the exposed faces of adjacent solids and leaves luminous parts to the particles', () => {
     const model: Model = {
       lo: [0, 0, 0],

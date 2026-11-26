@@ -239,7 +239,7 @@ export function createTerrain(
         fixtures.setMatrixAt(i, matrix.setPosition(x, y, z + 2.6))
       })
       parent.add(fixtures)
-      const pools = lightVolumes(lamps, lampBox, lightMaterial, [0, 0, 3.2], 21)
+      const pools = lightVolumes(lamps, lampBox, lightMaterial, [{ at: [0, 0, 3.2], reach: 21 }])
       lightScene.add(pools)
       lampsByPatch.set(key, [fixtures, pools])
     }

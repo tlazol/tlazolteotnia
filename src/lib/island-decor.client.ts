@@ -2,27 +2,30 @@ import {
   BoxGeometry,
   BufferAttribute,
   BufferGeometry,
+  Float32BufferAttribute,
   type Group,
   type InstancedBufferGeometry,
   InstancedMesh,
   Matrix4,
   Mesh,
+  MeshBasicMaterial,
   type MeshLambertMaterial,
   Scene,
   type ShaderMaterial
 } from 'three'
-import { type DecorPlacement, firelightVolumes, lightGeometry } from './island-lights.client'
-import { inlayEmission, leafToneSlot, palette } from './island-palette'
+import { type GlassShade, glassFacets } from './island-lamp-glass'
+import { type DecorPlacement, decorLightVolumes, lightGeometry } from './island-lights.client'
+import { leafToneSlot, palette, surfaceEmission } from './island-palette'
 import { tileHeight } from './island-relief'
 import type { VoxelResult } from './island-voxels.worker'
 import {
   type DecorKind,
   decorKindOf,
   decorLookAt,
+  decorPlacementScale,
   decorScale,
   decorSizeAt,
   decorToneAt,
-  groundCoverScale,
   type IslandWorld,
   TILE_SIZE
 } from './island-world'
@@ -33,8 +36,26 @@ type Batch = {
   firelight?: InstancedMesh
   data?: VoxelResult
   geometry: Map<number, BufferGeometry>
+  glass?: BufferGeometry
   meshes: InstancedMesh[]
   material?: MeshLambertMaterial
+}
+
+function glassGeometry(shades: GlassShade[]) {
+  const positions: number[] = []
+  const colors: number[] = []
+  for (const shade of shades) {
+    for (const { corners, rgb, opacity } of glassFacets(shade)) {
+      for (const index of [0, 1, 2, 0, 2, 3]) {
+        positions.push(...corners[index])
+        colors.push(...rgb, opacity)
+      }
+    }
+  }
+  const geometry = new BufferGeometry()
+  geometry.setAttribute('position', new Float32BufferAttribute(positions, 3))
+  geometry.setAttribute('color', new Float32BufferAttribute(colors, 4))
+  return geometry
 }
 
 export function createDecor(
@@ -42,7 +63,11 @@ export function createDecor(
   parent: Group,
   material: MeshLambertMaterial,
   time: { value: number },
-  lightMaterials: { particles: ShaderMaterial; firelight: ShaderMaterial },
+  lightMaterials: {
+    particles: ShaderMaterial
+    firelight: ShaderMaterial
+    projector: ShaderMaterial
+  },
   changed: () => void,
   failure: (error: unknown) => void
 ) {
@@ -59,6 +84,11 @@ export function createDecor(
   const matrix = new Matrix4()
   const particleScene = new Scene()
   const firelightScene = new Scene()
+  const glassMaterial = new MeshBasicMaterial({
+    vertexColors: true,
+    transparent: true,
+    depthWrite: false
+  })
   const lightBox = new BoxGeometry(2, 2, 2)
   function rebuild(batch: Batch) {
     const data = batch.data
@@ -80,7 +110,7 @@ export function createDecor(
     }
     const placements: DecorPlacement[] = []
     const tones = new Map<number, DecorPlacement[]>()
-    const coverScale = groundCoverScale(data.kind, data.look)
+    const placementScale = decorPlacementScale(data.kind, data.look)
     for (const tile of batch.tiles) {
       const x = tile % world.columns,
         y = Math.floor(tile / world.columns)
@@ -91,7 +121,7 @@ export function createDecor(
         x: (x + 0.5) * TILE_SIZE,
         y: (y + 0.5) * TILE_SIZE + 6 * scale,
         z: tileHeight(world, x, y),
-        scale: scale * coverScale
+        scale: scale * placementScale
       }
       if (data.emitters.length) placements.push(placement)
       if (!data.surface.indices.length) continue
@@ -114,10 +144,10 @@ export function createDecor(
           colors.set([c.r, c.g, c.b], i * 3)
         })
         geo.setAttribute('color', new BufferAttribute(colors, 3, true))
-        if (data.kind === 'relic') {
+        if (data.kind === 'relic' || data.kind === 'resortLight') {
           geo.setAttribute(
-            'inlay',
-            new BufferAttribute(Float32Array.from(surface.slots, inlayEmission), 1)
+            'emission',
+            new BufferAttribute(Float32Array.from(surface.slots, surfaceEmission), 1)
           )
         }
         batch.geometry.set(tone, geo)
@@ -130,20 +160,30 @@ export function createDecor(
       mesh.castShadow = mesh.receiveShadow = true
       batch.meshes.push(mesh)
       parent.add(mesh)
+      if (batch.glass) {
+        const panes = new InstancedMesh(batch.glass, glassMaterial, tiles.length)
+        panes.instanceMatrix.copy(mesh.instanceMatrix)
+        batch.meshes.push(panes)
+        parent.add(panes)
+      }
     }
     if (placements.length) {
-      batch.particles = new Mesh(
-        lightGeometry(data.emitters, placements, data.kind === 'campfire'),
-        lightMaterials.particles
-      )
-      // The shader positions quads across the island from per-instance origins.
-      batch.particles.frustumCulled = false
-      particleScene.add(batch.particles)
-      batch.firelight = firelightVolumes(
+      if (data.emitters.some((e) => e.kind !== 'lamp' || e.filament)) {
+        batch.particles = new Mesh(
+          lightGeometry(data.emitters, placements, data.kind === 'campfire'),
+          lightMaterials.particles
+        )
+        // The shader positions quads across the island from per-instance origins.
+        batch.particles.frustumCulled = false
+        particleScene.add(batch.particles)
+      }
+      batch.firelight = decorLightVolumes(
         data.emitters,
         placements,
         lightBox,
-        lightMaterials.firelight
+        data.emitters.some((e) => e.kind === 'lamp' && e.projection === 'water')
+          ? lightMaterials.projector
+          : lightMaterials.firelight
       )
       if (batch.firelight) firelightScene.add(batch.firelight)
     }
@@ -154,8 +194,9 @@ export function createDecor(
       const batch = batches.get(`${data.kind}:${data.look}`)
       if (!batch) return
       batch.data = data
+      if (data.shades) batch.glass = glassGeometry(data.shades)
       const animated = material.clone()
-      const hasInlay = data.kind === 'relic'
+      const hasEmission = data.kind === 'relic' || data.kind === 'resortLight'
       animated.onBeforeCompile = (shader) => {
         shader.uniforms.uTime = time
         shader.vertexShader =
@@ -169,26 +210,26 @@ export function createDecor(
           transformed.z += wave * ${data.bob.toFixed(2)};
         `
           )
-        if (hasInlay) {
+        if (hasEmission) {
           shader.vertexShader =
-            'attribute float inlay; varying float vInlay;\n' +
+            'attribute float emission; varying float vEmission;\n' +
             shader.vertexShader.replace(
               '#include <color_vertex>',
-              '#include <color_vertex>\nvInlay = inlay;'
+              '#include <color_vertex>\nvEmission = emission;'
             )
           shader.fragmentShader =
-            'varying float vInlay;\n' +
+            'varying float vEmission;\n' +
             shader.fragmentShader.replace(
               '#include <opaque_fragment>',
               `
-              outgoingLight = mix(outgoingLight, vColor.rgb, vInlay);
+              outgoingLight = mix(outgoingLight, vColor.rgb, vEmission);
               #include <opaque_fragment>
-              gl_FragColor.a = 1.0 - vInlay;
+              gl_FragColor.a = 1.0 - vEmission;
               `
             )
         }
       }
-      animated.customProgramCacheKey = () => `voxel:${data.sway}:${data.bob}:${hasInlay}`
+      animated.customProgramCacheKey = () => `voxel:${data.sway}:${data.bob}:${hasEmission}`
       batch.material = animated
       rebuild(batch)
       changed()
@@ -239,10 +280,12 @@ export function createDecor(
     dispose() {
       worker.terminate()
       lightBox.dispose()
+      glassMaterial.dispose()
       for (const batch of batches.values()) {
         for (const geometry of batch.geometry.values()) geometry.dispose()
         for (const mesh of batch.meshes) mesh.dispose()
         batch.material?.dispose()
+        batch.glass?.dispose()
         batch.particles?.geometry.dispose()
         batch.firelight?.dispose()
       }

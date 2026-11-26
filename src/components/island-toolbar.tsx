@@ -12,7 +12,8 @@ import {
   groundGroups,
   groundNames,
   type LandGround,
-  landGrounds
+  landGrounds,
+  resortLightNames
 } from '#/lib/island-world'
 import { type IconName, PixelIcon } from './island-icons'
 
@@ -294,10 +295,12 @@ function DecorLooks({
 }) {
   const nameId = useId()
   const name = decorNames[kind]
+  const lookName = (look: number) =>
+    kind === 'resortLight' ? resortLightNames[look] : `${name}（${look + 1}）`
   return (
     <fieldset className="island-looks" aria-labelledby={nameId}>
       <p id={nameId} className="island-looks__name">
-        {name}
+        {kind === 'resortLight' ? lookName(selected) : name}
       </p>
       <div className="island-chips island-chips--decor island-looks__list">
         {Array.from({ length: decorLooks[kind] }, (_, look) => (
@@ -306,8 +309,8 @@ function DecorLooks({
             type="button"
             disabled={disabled}
             aria-pressed={selected === look}
-            aria-label={`${name}（${look + 1}）`}
-            title={`${name}（${look + 1}）`}
+            aria-label={lookName(look)}
+            title={lookName(look)}
             onClick={() => onSelect(look)}
           >
             {thumbnails?.[look] ? (

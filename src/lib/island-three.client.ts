@@ -845,7 +845,18 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
     clock,
     {
       particles: track(lightMaterial(clock, night, depth, artRect)),
-      firelight
+      firelight,
+      projector: track(
+        firelightMaterial(
+          clock,
+          night,
+          depth,
+          target.texture,
+          elevationTexture,
+          inverseProjection,
+          true
+        )
+      )
     },
     () => {
       renderer.shadowMap.needsUpdate = true

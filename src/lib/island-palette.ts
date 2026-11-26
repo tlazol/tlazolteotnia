@@ -2,6 +2,16 @@
 // A lit surface keeps its ramp and only steps along it, so each material shows
 // a handful of tones and the scene as a whole a limited palette.
 
+// Tinted glass goes from its colored edge to the bright face toward the bulb.
+export const lampRamps = {
+  lagoonGlass: ['#447e8e', '#70baca', '#cee9db'],
+  honeyGlass: ['#cb8648', '#ffcf80', '#fff7d3'],
+  pearlGlass: ['#a19a77', '#e7d7a9', '#fff0c8'],
+  urchinShell: ['#8d7087', '#c0a1ba', '#dbbfd2'],
+  tideGlass: ['#163b8c', '#2465b5', '#299fcc', '#67dadb', '#caf9ea']
+} as const
+export type LampGlass = keyof typeof lampRamps
+
 export const ramps = {
   ink: ['#2b2236'],
   // Ground.
@@ -102,7 +112,9 @@ export const ramps = {
   lilac: ['#3a2470', '#5a3a9a', '#8660cf', '#b99af0', '#e9d9ff'],
   steel: ['#15171c', '#1f2228', '#3d424b', '#5a606b', '#7c838f'],
   firefly: ['#4f7a1a', '#7fae2a', '#b9e85a', '#e8ff9a'],
-  relicInlay: ['#799c9c', '#56aba7', '#73dace']
+  relicInlay: ['#799c9c', '#56aba7', '#73dace'],
+  bronze: ['#312e2b', '#4c4133', '#7f7257', '#b49a68', '#dfc48c'],
+  ...lampRamps
 } as const satisfies Record<string, readonly string[]>
 
 export type RampName = keyof typeof ramps
@@ -187,12 +199,17 @@ export function rampSlot(name: RampName, step: number) {
 }
 
 // The stone at the edge catches a little light; the center supplies its own.
-const inlayStrengths = new Float32Array(palette.length)
+const emissionStrengths = new Float32Array(palette.length)
 for (const [step, strength] of [0.18, 0.56, 1].entries()) {
-  inlayStrengths[rampSlot('relicInlay', step)] = strength
+  emissionStrengths[rampSlot('relicInlay', step)] = strength
 }
-export function inlayEmission(slot: number) {
-  return inlayStrengths[slot]
+for (const ramp of Object.keys(lampRamps) as LampGlass[]) {
+  for (let step = 0; step < lampRamps[ramp].length; step++) {
+    emissionStrengths[rampSlot(ramp, step)] = 0.55 + (0.45 * step) / (lampRamps[ramp].length - 1)
+  }
+}
+export function surfaceEmission(slot: number) {
+  return emissionStrengths[slot]
 }
 
 // Leaf tones: the same tree, read on another foliage ramp, so a wood of one

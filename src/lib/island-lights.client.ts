@@ -1,11 +1,13 @@
 import {
   BackSide,
   type BoxGeometry,
+  Color,
   CustomBlending,
   Float32BufferAttribute,
   InstancedBufferAttribute,
   InstancedBufferGeometry,
   InstancedMesh,
+  LinearSRGBColorSpace,
   Matrix4,
   OneFactor,
   OneMinusSrcAlphaFactor,
@@ -15,12 +17,15 @@ import {
 } from 'three'
 import { WORLD_HEIGHT, WORLD_WIDTH } from './island-camera'
 import type { LightEmitter } from './island-models'
+import { lampRamps } from './island-palette'
+import type { Vec3 } from './island-sdf'
 import { hash2, SEA_LEVEL_CODE } from './island-world'
 
 const FLAME = 1
 const EMBER = 2
 const FIREFLY = 3
 const SMOKE = 4
+const FILAMENT = 5
 
 export type DecorPlacement = { tile: number; x: number; y: number; z: number; scale: number }
 
@@ -34,10 +39,16 @@ export function lightGeometry(
   const origins: number[] = []
   const particles: number[] = []
   for (const { tile, x, y, z, scale } of placements) {
-    emitters.forEach(({ at, size, kind }, i) => {
+    emitters.forEach((emitter, i) => {
+      const { kind, at } = emitter
+      const size = kind === 'lamp' ? 2.25 : emitter.size
       const add = (type: number, phase: number, seed: number) => {
         origins.push(x + at[0] * scale, -(y + at[1] * scale), z + at[2] * scale)
         particles.push(type, size * scale, phase, seed)
+      }
+      if (kind === 'lamp') {
+        if (emitter.filament) add(FILAMENT, 0, 0)
+        return
       }
       const phase = hash2(tile, i, 73)
       if (kind === 'firefly') {
@@ -115,7 +126,7 @@ export function lightMaterial(
                                    vAge * drift + 0.4 * cos(5.0 * vAge + angle));
           center.z += size * (2.2 + vAge * (4.0 + 3.0 * vSeed));
           radius = vec2(0.65, 1.05) * (0.65 + 0.45 * vSeed);
-        } else {
+        } else if (vType == ${FIREFLY}.0) {
           float t = uTime * (0.52 + vSeed * 0.27) + 6.2832 * vPhase;
           center += size * vec3(3.9 * sin(t) + 0.8 * sin(2.1 * t + angle),
                                 3.2 * cos(0.72 * t + angle), 1.8 * sin(1.31 * t + angle));
@@ -123,6 +134,12 @@ export function lightMaterial(
           radius *= 3.35;
         }
         vec4 eye = viewMatrix * vec4(center, 1.0);
+        if (vType == ${FILAMENT}.0) {
+          // Draw just in front of the bulb, still behind the cage and lampholder.
+          if (isOrthographic) eye.z += size * 1.45;
+          else eye.xyz -= normalize(eye.xyz) * size * 1.45;
+          radius *= 3.2;
+        }
         eye.xy += position.xy * radius;
         vec4 clip = projectionMatrix * eye;
         vDepthUv = vec3((clip.xy + clip.w) * 0.5, clip.w);
@@ -179,6 +196,15 @@ export function lightMaterial(
                         (1.0 - smoothstep(0.52, 0.89, vAge));
           vec3 color = mix(vec3(1.0, 0.81, 0.36), vec3(0.83, 0.28, 0.12), vAge);
           gl_FragColor = vec4(color * ember * 0.82, ember * 0.48);
+        } else if (vType == ${FILAMENT}.0) {
+          vec2 p = vPoint * vec2(1.3, 1.0);
+          float r = length(p);
+          float coil = abs(p.x - 0.045 * sin(p.y * 50.0));
+          float wire = (1.0 - smoothstep(0.02, 0.09, coil)) * (1.0 - smoothstep(0.12, 0.22, abs(p.y)));
+          float core = (1.0 - smoothstep(0.07, 0.32, r)) * 0.87;
+          float halo = pow(max(0.0, 1.0-r), 3.0) * (0.16 + 0.32 * uNight);
+          gl_FragColor = vec4(vec3(1.0,0.76,0.40)*core + vec3(1.0,0.95,0.80)*wire +
+                              vec3(1.0,0.63,0.28)*halo, max(core,wire));
         } else {
           float pulse = smoothstep(0.08, 0.30, vAge) * (1.0 - smoothstep(0.34, 0.78, vAge));
           float r = length(vPoint);
@@ -197,41 +223,53 @@ export function lightMaterial(
   })
 }
 
-// One light volume covers the entire fire, including models with several flame tips.
-export function firelightVolumes(
+type LightPool = { at: Vec3; reach: number; color?: Color }
+
+// A single pool covers a fire's several tips. Electric bulbs each cast their own color.
+export function decorLightVolumes(
   emitters: LightEmitter[],
   placements: DecorPlacement[],
   box: BoxGeometry,
   material: ShaderMaterial
 ) {
-  const fire = emitters.find((e) => e.kind === 'flame')
-  if (!fire) return
-  const [dx, dy, dz] = fire.at
-  return lightVolumes(
-    placements,
-    box,
-    material,
-    [dx, dy, dz + fire.size * 1.25],
-    16 + fire.size * 7
-  )
+  const pools: LightPool[] = []
+  for (const emitter of emitters) {
+    if (emitter.kind === 'lamp') {
+      pools.push({
+        at: emitter.at,
+        reach: emitter.reach,
+        color: new Color().setStyle(lampRamps[emitter.glass][1], LinearSRGBColorSpace)
+      })
+    } else if (emitter.kind === 'flame') {
+      const [x, y, z] = emitter.at
+      pools.push({ at: [x, y, z + emitter.size * 1.25], reach: 16 + emitter.size * 7 })
+      break
+    }
+  }
+  if (pools.length) return lightVolumes(placements, box, material, pools)
 }
 
 export function lightVolumes(
   placements: DecorPlacement[],
   box: BoxGeometry,
   material: ShaderMaterial,
-  [dx, dy, dz]: [number, number, number],
-  reach: number
+  pools: LightPool[]
 ) {
-  const mesh = new InstancedMesh(box, material, placements.length)
+  const mesh = new InstancedMesh(box, material, placements.length * pools.length)
   const matrix = new Matrix4()
-  placements.forEach(({ x, y, z, scale }, i) => {
-    const radius = reach * scale
-    matrix
-      .makeScale(radius, radius, radius)
-      .setPosition(x + dx * scale, -(y + dy * scale), z + dz * scale)
-    mesh.setMatrixAt(i, matrix)
-  })
+  let index = 0
+  for (const { x, y, z, scale } of placements) {
+    for (const { at, reach, color } of pools) {
+      const [dx, dy, dz] = at
+      const radius = reach * scale
+      matrix
+        .makeScale(radius, radius, radius)
+        .setPosition(x + dx * scale, -(y + dy * scale), z + dz * scale)
+      mesh.setMatrixAt(index, matrix)
+      if (color) mesh.setColorAt(index, color)
+      index++
+    }
+  }
   return mesh
 }
 
@@ -241,7 +279,8 @@ export function firelightMaterial(
   depth: Texture,
   sceneColor: Texture,
   elevation: Texture,
-  inverseProjection: { value: Matrix4 }
+  inverseProjection: { value: Matrix4 },
+  waterProjection = false
 ) {
   return new ShaderMaterial({
     uniforms: {
@@ -252,6 +291,7 @@ export function firelightMaterial(
       uElevation: { value: elevation },
       uInverseProjection: inverseProjection
     },
+    defines: waterProjection ? { WATER_PROJECTION: 1 } : {},
     side: BackSide,
     transparent: true,
     depthTest: false,
@@ -261,8 +301,14 @@ export function firelightMaterial(
     blendDst: OneMinusSrcAlphaFactor,
     vertexShader: /* glsl */ `
       varying vec3 vCenter;
+      varying vec4 vLamp;
       varying float vRadius, vPhase;
       void main() {
+        #ifdef USE_INSTANCING_COLOR
+          vLamp = vec4(instanceColor, 1.0);
+        #else
+          vLamp = vec4(1.0, 0.56, 0.19, 0.0);
+        #endif
         vec4 center = instanceMatrix[3];
         vCenter = (viewMatrix * center).xyz;
         vRadius = instanceMatrix[0].x;
@@ -275,6 +321,7 @@ export function firelightMaterial(
       uniform mat4 uInverseProjection;
       uniform float uTime, uNight;
       varying vec3 vCenter;
+      varying vec4 vLamp;
       varying float vRadius, vPhase;
       void main() {
         ivec2 pixel = ivec2(gl_FragCoord.xy);
@@ -290,15 +337,27 @@ export function firelightMaterial(
         float incident = 0.18 + 0.82 * clamp(cosine, 0.0, 1.0);
         float falloff = pow(1.0 - d * d, 2.0) / (1.0 + 5.0 * d * d);
         float flicker = 0.94 + 0.045 * sin(uTime * 5.7 + vPhase) + 0.025 * sin(uTime * 12.3 + vPhase);
-        vec3 paint = texelFetch(uSurface, pixel, 0).rgb;
-        // Recover the receiver's local pigment under amber light, including its dark grain.
-        float energy = incident * falloff * flicker;
+        vec4 receiver = texelFetch(uSurface, pixel, 0);
+        vec3 paint = receiver.rgb;
+        // Recover the receiver's local pigment under the cast light, including its dark grain.
+        float energy = incident * falloff * mix(flicker, receiver.a, vLamp.a);
         float coverage = energy * uNight * 0.90;
-        vec3 warm = (paint + 0.06) * vec3(1.16, 0.82, 0.43);
-        vec3 lit = warm * coverage + warm * vec3(1.0, 0.69, 0.26) * energy * (0.07 + 0.27 * uNight);
+        vec3 pigment = (paint + 0.06) * mix(vec3(1.16, 0.82, 0.43), 1.4 * vLamp.rgb, vLamp.a);
+        vec3 lit = pigment * coverage + pigment * mix(vec3(1.0, 0.69, 0.26), vLamp.rgb, vLamp.a) * energy * (0.07 + 0.27 * uNight);
         // The sea and shallows are at z = 0. Break the reflected lamp into
         // short strokes on the waves; the wooden deck keeps its diffuse light.
         vec3 world = transpose(mat3(viewMatrix)) * surface + cameraPosition;
+        #ifdef WATER_PROJECTION
+          // Refract the light into moving ridges on the receiving surface. World-space
+          // coordinates keep the pattern anchored when the visitor turns the camera.
+          vec2 p = (transpose(mat3(viewMatrix)) * (surface - vCenter)).xy * 0.33;
+          float t = uTime * 0.52;
+          p += 0.65 * vec2(sin(p.y * 1.3 + t), cos(p.x * 1.1 - 0.8 * t));
+          float wave = sin(p.x + 0.42*t) + cos(p.y - 0.55*t) + 0.35*sin(p.x + p.y + t);
+          float thread = 1.0 - smoothstep(0.04, 0.28, abs(wave));
+          vec3 caustic = mix(vec3(0.055, 0.16, 0.43), vec3(0.28, 0.90, 0.98), thread);
+          lit += caustic * receiver.a * uNight * pow(1.0 - d*d, 2.0) * (0.42 + 0.35 * incident);
+        #endif
         vec2 mapUv = world.xy / vec2(${WORLD_WIDTH.toFixed(1)}, -${WORLD_HEIGHT.toFixed(1)});
         if (uNight > 0.0 && abs(world.z) < 0.25 &&
             texture2D(uElevation, mapUv).r * 255.0 < ${(SEA_LEVEL_CODE - 0.5).toFixed(1)}) {
@@ -306,7 +365,7 @@ export function firelightMaterial(
           vec3 halfway = normalize(normalize(toward) + eyeDir);
           float specular = max(0.0, dot(viewMatrix[2].xyz, halfway));
           float ripple = sin(world.y * 2.1 + 1.8 * sin(world.x * 0.43) + uTime * 1.7);
-          lit += vec3(1.0, 0.56, 0.19) * uNight * pow(specular, 9.0) *
+          lit += vLamp.rgb * uNight * pow(specular, 9.0) *
                  smoothstep(-0.30, 0.75, ripple) * (1.0 - d * d);
         }
         gl_FragColor = vec4(lit, coverage);

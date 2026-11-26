@@ -4,13 +4,15 @@
 
 import { hex, islandPalette, type PixelBuffer, type Rgba } from './island-art'
 import { bakeTemplate, flatGroundSlot } from './island-bake'
+import { type GlassShade, glassFacets } from './island-lamp-glass'
 import { decorModel } from './island-models'
 import { palette } from './island-palette'
 import { type DecorKind, HOTSPRING, type LandGround, SHALLOWS, SWAMP } from './island-world'
 
 // A decoration's look as it stands on the island, cropped to its outline.
 export function decorThumbnail(kind: DecorKind, look: number): PixelBuffer {
-  const t = bakeTemplate(decorModel(kind, look))
+  const model = decorModel(kind, look)
+  const t = bakeTemplate(model)
   let x0 = Number.POSITIVE_INFINITY
   let y0 = Number.POSITIVE_INFINITY
   let x1 = Number.NEGATIVE_INFINITY
@@ -21,10 +23,21 @@ export function decorThumbnail(kind: DecorKind, look: number): PixelBuffer {
     x1 = Math.max(x1, t.x[i])
     y1 = Math.max(y1, t.y[i])
   }
+  for (const shade of model.shades ?? []) {
+    for (const { corners } of glassFacets(shade)) {
+      for (const [x, y, z] of corners) {
+        x0 = Math.min(x0, Math.floor(x))
+        x1 = Math.max(x1, Math.ceil(x))
+        y0 = Math.min(y0, Math.floor(y - z))
+        y1 = Math.max(y1, Math.ceil(y - z))
+      }
+    }
+  }
   if (t.count === 0) return { width: 1, height: 1, data: new Uint8ClampedArray(4) }
   const width = x1 - x0 + 1
   const height = y1 - y0 + 1
   const data = new Uint8ClampedArray(width * height * 4)
+  const depth = model.shades && new Float32Array(width * height).fill(-Infinity)
   // Each pixel holds one point, the surface or the rim beside it.
   for (let i = 0; i < t.count; i++) {
     const color = palette[t.slot[i]]
@@ -33,8 +46,61 @@ export function decorThumbnail(kind: DecorKind, look: number): PixelBuffer {
     data[at + 1] = color.g
     data[at + 2] = color.b
     data[at + 3] = 255
+    if (depth) depth[at / 4] = t.depth[i]
   }
-  return { width, height, data }
+  const image = { width, height, data }
+  if (depth && model.shades)
+    for (const shade of model.shades) drawGlass(image, depth, x0, y0, shade)
+  return image
+}
+
+// Composite the front pane over the bulb in the baker's x, y-z projection.
+// Opaque hardware in front of a pane keeps its baked color.
+function drawGlass(
+  image: PixelBuffer,
+  depth: Float32Array,
+  x0: number,
+  y0: number,
+  shade: GlassShade
+) {
+  for (const { corners, rgb, opacity } of glassFacets(shade)) {
+    const points = corners.map(([x, y, z]) => ({ x: x - x0, y: y - z - y0, depth: y + z }))
+    const a = points[0],
+      b = points[1],
+      c = points[2]
+    const abx = b.x - a.x,
+      aby = b.y - a.y,
+      acx = c.x - a.x,
+      acy = c.y - a.y
+    const area = abx * acy - aby * acx
+    if (area <= 0.00001) continue
+    const left = Math.max(0, Math.floor(Math.min(...points.map((p) => p.x))))
+    const top = Math.max(0, Math.floor(Math.min(...points.map((p) => p.y))))
+    const right = Math.min(image.width, Math.ceil(Math.max(...points.map((p) => p.x))))
+    const bottom = Math.min(image.height, Math.ceil(Math.max(...points.map((p) => p.y))))
+    for (let y = top; y < bottom; y++)
+      for (let x = left; x < right; x++) {
+        const px = x + 0.5,
+          py = y + 0.5
+        if (
+          points.some((p, i) => {
+            const q = points[(i + 1) % 4]
+            return (q.x - p.x) * (py - p.y) - (q.y - p.y) * (px - p.x) < 0
+          })
+        )
+          continue
+        const u = ((px - a.x) * acy - (py - a.y) * acx) / area
+        const v = (abx * (py - a.y) - aby * (px - a.x)) / area
+        const index = y * image.width + x
+        if (a.depth + u * (b.depth - a.depth) + v * (c.depth - a.depth) < depth[index]) continue
+        const at = index * 4
+        const behind = (image.data[at + 3] / 255) * (1 - opacity)
+        const alpha = opacity + behind
+        for (let k = 0; k < 3; k++)
+          image.data[at + k] = (255 * rgb[k] * opacity + image.data[at + k] * behind) / alpha
+        image.data[at + 3] = 255 * alpha
+      }
+  }
 }
 
 // Open water in pools is the water shader's: its body color, with one wavelet

@@ -107,6 +107,14 @@ export function isWetGround(ground: Ground) {
   return ground === WATER || ground === SWAMP || ground === SHALLOWS || ground === HOTSPRING
 }
 
+export const resortLightNames = [
+  '青硝子のペンダント',
+  '琥珀硝子のペンダント',
+  'ウニ殻のテーブルランプ',
+  '真鍮のマリンブラケット',
+  '水紋のガラスキューブ'
+] as const
+
 // Decorations stand on land or float on the sea; flat ones can be walked over.
 // Saves store a kind by its slot in storedDecorKinds, not by its place here.
 export const decorInfo = {
@@ -129,7 +137,8 @@ export const decorInfo = {
   campfire: { name: '焚き火', on: 'land', blocks: true },
   fireflies: { name: 'ホタル', on: 'land', blocks: false },
   flotsam: { name: '浮き流木', on: 'water', blocks: true },
-  buoy: { name: 'ブイ', on: 'water', blocks: true }
+  buoy: { name: 'ブイ', on: 'water', blocks: true },
+  resortLight: { name: 'リゾートライト', on: 'land', blocks: true }
 } as const satisfies Record<string, { name: string; on: 'land' | 'water'; blocks: boolean }>
 export type DecorKind = keyof typeof decorInfo
 export const decorKinds = Object.keys(decorInfo) as DecorKind[]
@@ -156,7 +165,7 @@ export const decorGroups: Array<{ name: string; kinds: DecorKind[] }> = [
       'shell'
     ]
   },
-  { name: 'あかり', kinds: ['torch', 'campfire', 'fireflies'] },
+  { name: 'あかり', kinds: ['torch', 'campfire', 'fireflies', 'resortLight'] },
   { name: '海', kinds: ['searock', 'flotsam', 'buoy'] }
 ]
 // Stored decoration codes: 0 is empty, otherwise the slot here plus one.
@@ -186,7 +195,8 @@ const storedDecorKinds: Array<DecorKind | null> = [
   null,
   null,
   'flotsam',
-  'buoy'
+  'buoy',
+  'resortLight'
 ]
 export const MAX_DECOR_CODE = storedDecorKinds.length
 // How many looks each kind has; the sprites draw exactly this many.
@@ -210,7 +220,8 @@ export const decorLooks = {
   campfire: 5,
   fireflies: 4,
   flotsam: 4,
-  buoy: 2
+  buoy: 2,
+  resortLight: resortLightNames.length
 } as const satisfies Record<DecorKind, number>
 // A stored code keeps the kind in its low five bits and, above them, the look
 // the visitor picked plus one. Zero there (every older save) lets the tile's
@@ -259,17 +270,21 @@ export function decorScale(size: number) {
   return 1 + (size / (TREE_SIZES - 1)) * 0.75
 }
 
-// Ground cover is drawn at full detail for the palette, then sized against
-// the residents when placed. The last two bush looks are fern and tall grass.
-const groundCoverScales: Partial<Record<DecorKind, number>> = {
+// The palette uses the full model. On the island, props are sized against the residents.
+const placementScales: Partial<Record<DecorKind, number>> = {
   flowers: 0.48,
   shell: 0.48,
   mushroom: 0.5,
-  monstera: 0.65
+  monstera: 0.65,
+  torch: 0.5,
+  campfire: 0.55,
+  fireflies: 0.6,
+  resortLight: 0.48
 }
-export function groundCoverScale(kind: DecorKind, look: number) {
+export function decorPlacementScale(kind: DecorKind, look: number) {
+  // The last two bush looks are fern and tall grass.
   if (kind === 'bush') return look >= 4 ? 0.45 : 0.68
-  return groundCoverScales[kind] ?? 1
+  return placementScales[kind] ?? 1
 }
 
 export function isDecorCode(code: number) {
@@ -549,6 +564,12 @@ export function createDefaultIsland(): IslandWorld {
     [56, 35, 'torch'],
     [61, 47, 'buoy'],
     [64, 46, 'buoy'],
+    // Five different lights along the lagoon beach and the outer edges of the pier.
+    [49, 41, 'resortLight'],
+    [61, 42, 'resortLight'],
+    [51, 36, 'resortLight'],
+    [60, 36, 'resortLight'],
+    [56, 46, 'resortLight'],
     // The islets.
     [11, 48, 'palm'],
     [70, 10, 'relic'],
