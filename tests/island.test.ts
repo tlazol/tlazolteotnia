@@ -795,6 +795,25 @@ describe('island residents', () => {
     expect(landed).toBe(true)
   })
 
+  it('stays spread over the island rather than crowding the plaza', () => {
+    const world = createDefaultIsland()
+    const slugs = Array.from({ length: 40 }, (_, i) => `resident-${i}`)
+    const residents = createResidents(slugs, layoutResidentHomes(slugs.length), () => 0.1)
+    settleResidents(world, residents)
+    for (const resident of residents) {
+      resident.action = 'walk'
+      resident.actionRemaining = 1000
+    }
+    const fromCentre = () =>
+      residents.reduce(
+        (sum, { tile }) => sum + Math.hypot(tile.x - ISLAND_CENTER.x, tile.y - ISLAND_CENTER.y),
+        0
+      ) / residents.length
+    const start = fromCentre()
+    for (let i = 0; i < 3000; i++) stepResidents(world, residents, 0.1, () => false)
+    expect(fromCentre()).toBeGreaterThan(start * 0.75)
+  })
+
   it('takes the trail in preference to a straight line over grass', () => {
     const world = createIsland(24, 2)
     world.ground.fill(GRASS, 0, 24)

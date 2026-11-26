@@ -962,6 +962,11 @@ const FOOTING: Record<Ground, number> = {
 }
 // Swimmers paddle about the shallows instead of heading for open water.
 const MAX_STROKES_FROM_SHORE = 3
+// Most journeys end near home, so residents stay spread over the island instead
+// of all criss-crossing (and gathering on) the central plaza and its trails; now
+// and then one sets off for anywhere at all.
+const HOME_RANGE = 12
+const EXCURSION_ODDS = 0.15
 
 // A journey crosses the island along the most comfortable route, around
 // trees, rocks and other residents.
@@ -982,8 +987,10 @@ function planJourney(world: IslandWorld, residents: Resident[], resident: Reside
   // Cheapest-first search; step costs are whole numbers, so tiles queue by total cost.
   const queues: number[][] = [[start]]
   const reached: number[] = []
-  // Candidate destinations, listed per footing.
-  const destinations: number[][] = FOOTINGS.map(() => [])
+  // Candidate destinations, listed per footing: those around home, and anywhere
+  // for excursions or when home has been walled or flooded off.
+  const nearHome: number[][] = FOOTINGS.map(() => [])
+  const anywhere: number[][] = FOOTINGS.map(() => [])
   previous[start] = start
   cost[start] = 0
   for (let total = 0; total < queues.length; total++) {
@@ -996,8 +1003,11 @@ function planJourney(world: IslandWorld, residents: Resident[], resident: Reside
       if (
         Math.hypot(x - resident.tile.x, y - resident.tile.y) >= 8 &&
         (!isWet(ground) || strokes[index] <= MAX_STROKES_FROM_SHORE)
-      )
-        destinations[FOOTING[ground]].push(index)
+      ) {
+        anywhere[FOOTING[ground]].push(index)
+        if (Math.hypot(x - resident.home.x, y - resident.home.y) <= HOME_RANGE)
+          nearHome[FOOTING[ground]].push(index)
+      }
       for (const [dx, dy] of neighborSteps) {
         const nx = x + dx
         const ny = y + dy
@@ -1017,6 +1027,8 @@ function planJourney(world: IslandWorld, residents: Resident[], resident: Reside
   }
   const decision = performanceSeed(resident)
   let choices = reached
+  const excursion = hash2(resident.seed & 0xffff, decision, 5) < EXCURSION_ODDS
+  const destinations = !excursion && nearHome.some((tiles) => tiles.length) ? nearHome : anywhere
   const open = FOOTINGS.map((footing, i) => ({ ...footing, tiles: destinations[i] })).filter(
     (footing) => footing.tiles.length
   )
