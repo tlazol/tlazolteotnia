@@ -123,7 +123,7 @@ export function createDecor(
         z: tileHeight(world, x, y),
         scale: scale * placementScale
       }
-      if (data.emitters.length) placements.push(placement)
+      if (data.emitters.length || data.kind === 'relic') placements.push(placement)
       if (!data.surface.indices.length) continue
       const tone = decorToneAt(code, x, y)
       const group = tones.get(tone) ?? []
@@ -183,7 +183,8 @@ export function createDecor(
         lightBox,
         data.emitters.some((e) => e.kind === 'lamp' && e.projection === 'water')
           ? lightMaterials.projector
-          : lightMaterials.firelight
+          : lightMaterials.firelight,
+        data.kind === 'relic'
       )
       if (batch.firelight) firelightScene.add(batch.firelight)
     }

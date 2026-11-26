@@ -17,7 +17,7 @@ import {
 } from 'three'
 import { WORLD_HEIGHT, WORLD_WIDTH } from './island-camera'
 import type { LightEmitter } from './island-models'
-import { lampRamps } from './island-palette'
+import { lampRamps, ramps } from './island-palette'
 import type { Vec3 } from './island-sdf'
 import { hash2, SEA_LEVEL_CODE, TILE_SIZE } from './island-world'
 
@@ -29,7 +29,12 @@ const FILAMENT = 5
 // Like block light: full on the light's own tile, one level dimmer per tile
 // of Manhattan distance, and dark from the tenth tile on.
 const LIGHT_TILES = 10
-const LIGHT_RADIUS = (LIGHT_TILES + 1) * TILE_SIZE
+// Relic inlays glow faintly: a teal pool three tiles across.
+const RELIC_LIGHT: LightPool = {
+  at: [0, -6, 24],
+  tiles: 3,
+  color: new Color().setStyle(ramps.relicInlay[2], LinearSRGBColorSpace)
+}
 
 export type DecorPlacement = { tile: number; x: number; y: number; z: number; scale: number }
 
@@ -227,16 +232,17 @@ export function lightMaterial(
   })
 }
 
-type LightPool = { at: Vec3; color?: Color }
+type LightPool = { at: Vec3; color?: Color; tiles?: number }
 
 // A single pool covers a fire's several tips. Electric bulbs each cast their own color.
 export function decorLightVolumes(
   emitters: LightEmitter[],
   placements: DecorPlacement[],
   box: BoxGeometry,
-  material: ShaderMaterial
+  material: ShaderMaterial,
+  relic = false
 ) {
-  const pools: LightPool[] = []
+  const pools: LightPool[] = relic ? [RELIC_LIGHT] : []
   for (const emitter of emitters) {
     if (emitter.kind === 'lamp') {
       pools.push({
@@ -262,10 +268,11 @@ export function lightVolumes(
   const matrix = new Matrix4()
   let index = 0
   for (const { x, y, z, scale } of placements) {
-    for (const { at, color } of pools) {
+    for (const { at, color, tiles = LIGHT_TILES } of pools) {
       const [dx, dy, dz] = at
-      // Tiles have a fixed size whatever the decor's scale.
-      const radius = LIGHT_RADIUS
+      // Tiles have a fixed size whatever the decor's scale. The shader reads the
+      // light's range back from the volume's radius.
+      const radius = (tiles + 1) * TILE_SIZE
       matrix
         .makeScale(radius, radius, radius)
         .setPosition(x + dx * scale, -(y + dy * scale), z + dz * scale)
@@ -306,7 +313,7 @@ export function firelightMaterial(
     vertexShader: /* glsl */ `
       varying vec3 vCenter;
       varying vec4 vLamp;
-      varying float vPhase;
+      varying float vRadius, vPhase;
       void main() {
         #ifdef USE_INSTANCING_COLOR
           vLamp = vec4(instanceColor, 1.0);
@@ -315,6 +322,7 @@ export function firelightMaterial(
         #endif
         vec4 center = instanceMatrix[3];
         vCenter = (viewMatrix * center).xyz;
+        vRadius = instanceMatrix[0].x;
         vPhase = dot(center.xy, vec2(0.67, 0.13));
         gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0);
       }
@@ -325,7 +333,7 @@ export function firelightMaterial(
       uniform float uTime, uNight;
       varying vec3 vCenter;
       varying vec4 vLamp;
-      varying float vPhase;
+      varying float vRadius, vPhase;
       void main() {
         ivec2 pixel = ivec2(gl_FragCoord.xy);
         float depth = texelFetch(uDepth, pixel, 0).r;
@@ -345,8 +353,8 @@ export function firelightMaterial(
                          floor(lampWorld.xy / ${TILE_SIZE.toFixed(1)}));
         float rise = floor(max(0.0, abs(receiverWorld.z - lampWorld.z) - ${TILE_SIZE.toFixed(1)}) /
                            ${TILE_SIZE.toFixed(1)});
-        float level = max(0.0, ${LIGHT_TILES.toFixed(1)} - steps.x - steps.y - rise) /
-                      ${LIGHT_TILES.toFixed(1)};
+        float tiles = floor(vRadius / ${TILE_SIZE.toFixed(1)} + 0.5) - 1.0;
+        float level = max(0.0, tiles - steps.x - steps.y - rise) / tiles;
         if (level <= 0.0) discard;
         // Bright near the light, a long dim tail toward the edge. Overlapping
         // lights mix toward the receiver's own color, so a row of lamps does not blow out.
