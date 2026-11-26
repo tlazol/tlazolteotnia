@@ -141,6 +141,19 @@ describe('shared editing gestures', () => {
 })
 
 describe('camera rotation', () => {
+  it('picks at the release point of a first-person tap and ignores cancelled taps', () => {
+    const { input, bindings, event } = setup()
+    bindings.firstPerson = () => true
+    input.pointerDown(event(400))
+    input.pointerMove(event(401))
+    input.pointerUp(event(402))
+    input.pointerDown(event(430))
+    input.pointerCancel(event(430))
+    input.pointerUp(event(430))
+    expect(bindings.tap).toHaveBeenCalledExactlyOnceWith({ x: 402, y: 300 })
+    expect(bindings.lookAround).not.toHaveBeenCalled()
+  })
+
   it('zooms from the initial finger spacing and keeps looking with the remaining finger', () => {
     const { input, bindings, event } = setup()
     bindings.firstPerson = () => true
@@ -156,6 +169,7 @@ describe('camera rotation', () => {
     input.pointerMove(event(260, 2))
     expect(bindings.lookAround).toHaveBeenCalledExactlyOnceWith(10, 0)
     input.pointerUp(event(260, 2))
+    expect(bindings.tap).not.toHaveBeenCalled()
     expect(bindings.setDragging).toHaveBeenLastCalledWith(false)
   })
 

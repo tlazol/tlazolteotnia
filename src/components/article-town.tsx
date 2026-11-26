@@ -212,8 +212,15 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
         showCursor(sceneRef.current.edits.begin(point, latest.current.options)),
       strokeMove: (point) => showCursor(sceneRef.current.edits.move(point, latest.current.options)),
       strokeEnd: (cancel) => sceneRef.current.edits.end(cancel),
-      tap: () => {
-        if (!latest.current.editorOpen) setActiveSlug(null)
+      tap: (point) => {
+        if (latest.current.firstPerson) {
+          const scene = sceneRef.current
+          const slug = scene.renderer.current?.pickResident(point)
+          if (slug) {
+            scene.setView(scene.homeView(slug, scene.view.current.zoom))
+            setActiveSlug(slug)
+          }
+        } else if (!latest.current.editorOpen) setActiveSlug(null)
       },
       residentStart: (slug, point) =>
         sceneRef.current.renderer.current?.beginResidentDrag(slug, point),
@@ -441,7 +448,7 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
         aria-roledescription={viewerSlug ? '住民の視点' : '島の地図'}
         aria-label={
           viewerSlug
-            ? `「${activePost?.title}」の住民の視点。ドラッグで周囲を見渡し、ピンチで拡大・縮小できます。`
+            ? `「${activePost?.title}」の住民の視点。他の住民を選ぶと、その住民の視点に切り替わります。ドラッグで周囲を見渡し、ピンチで拡大・縮小できます。`
             : editing
               ? `島の編集。矢印キーで編集位置を動かし、Enterで${options.tool === 'land' ? '土地を足す・塗り替えます' : '選んだツールを使います'}。`
               : '島の地図。右ドラッグまたは2本指でひねって回転。矢印キーで移動、+ と − で拡大縮小、0 で最初の位置に戻ります。'

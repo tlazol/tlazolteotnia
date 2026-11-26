@@ -52,6 +52,7 @@ export type IslandInputBindings = {
 
 type Gesture =
   | { kind: 'none' }
+  | { kind: 'eyeTap'; start: Point }
   | { kind: 'look' }
   | { kind: 'eyePinch'; distance: number; zoom: number }
   | { kind: 'trackpadPinch'; zoom: number }
@@ -111,13 +112,13 @@ export function createIslandInput(bind: IslandInputBindings) {
       suppressClick = false
       const point = local(event)
       if (bind.firstPerson()) {
-        if (event.button !== 0 || (gesture.kind !== 'none' && gesture.kind !== 'look')) return
+        if (event.button !== 0 || !['none', 'eyeTap', 'look'].includes(gesture.kind)) return
         event.preventDefault()
         bind.surface()?.setPointerCapture?.(event.pointerId)
         pointers.set(event.pointerId, point)
         gesture =
           pointers.size === 1
-            ? { kind: 'look' }
+            ? { kind: 'eyeTap', start: point }
             : { kind: 'eyePinch', distance: fingerDistance(), zoom: bind.eyeZoom() }
         bind.setDragging(true)
         return
@@ -172,6 +173,16 @@ export function createIslandInput(bind: IslandInputBindings) {
       const point = local(event)
       const previous = pointers.get(event.pointerId)
       if (previous) pointers.set(event.pointerId, point)
+      if (gesture.kind === 'eyeTap') {
+        if (!previous) return
+        const dx = point.x - gesture.start.x
+        const dy = point.y - gesture.start.y
+        if (Math.hypot(dx, dy) >= 4) {
+          gesture = { kind: 'look' }
+          bind.lookAround(dx, dy)
+        }
+        return
+      }
       if (gesture.kind === 'look' || gesture.kind === 'eyePinch') {
         if (!previous) return
         if (gesture.kind === 'look') bind.lookAround(point.x - previous.x, point.y - previous.y)
@@ -231,6 +242,14 @@ export function createIslandInput(bind: IslandInputBindings) {
         bind.hover(bind.panning() ? null : point)
     },
     pointerUp(event: PointerLike) {
+      if (gesture.kind === 'eyeTap') {
+        if (!pointers.has(event.pointerId)) return
+        const point = local(event)
+        const start = gesture.start
+        releaseEyePointer(event.pointerId)
+        if (Math.hypot(point.x - start.x, point.y - start.y) < 4) bind.tap(point)
+        return
+      }
       if (gesture.kind === 'look' || gesture.kind === 'eyePinch') {
         releaseEyePointer(event.pointerId)
         return
@@ -257,7 +276,7 @@ export function createIslandInput(bind: IslandInputBindings) {
       if (event.pointerType !== 'touch' && bind.editing()) bind.hover(point)
     },
     pointerCancel(event: PointerLike) {
-      if (gesture.kind === 'look' || gesture.kind === 'eyePinch') {
+      if (gesture.kind === 'eyeTap' || gesture.kind === 'look' || gesture.kind === 'eyePinch') {
         releaseEyePointer(event.pointerId)
         return
       }

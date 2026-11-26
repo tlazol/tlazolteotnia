@@ -25,12 +25,14 @@ import {
   OrthographicCamera,
   PerspectiveCamera,
   PlaneGeometry,
+  Raycaster,
   RedFormat,
   ReplaceStencilOp,
   Scene,
   ShaderMaterial,
   type Texture,
   UnsignedByteType,
+  Vector2,
   Vector3,
   WebGLRenderer,
   WebGLRenderTarget,
@@ -52,6 +54,7 @@ import {
   cameraAxis,
   clampView,
   type IslandView,
+  type Point,
   pitchCos,
   pitchSin,
   projectGround,
@@ -812,13 +815,15 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
     glow = light.glow
   }
 
-  const terrain = createTerrain(world, ground)
+  const scenery = new Group()
+  ground.add(scenery)
+  const terrain = createTerrain(world, scenery)
   const decorMaterial = track(
     stampStencil(new MeshLambertMaterial({ vertexColors: true }), BEHIND_DECOR)
   )
   const decor = createDecor(
     world,
-    ground,
+    scenery,
     decorMaterial,
     clock,
     () => {
@@ -886,7 +891,8 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
       ? paintResidentSheet(design)
       : createBuffer(RESIDENT_FRAME.width * RESIDENT_FRAMES, RESIDENT_FRAME.height * facings.length)
     const texture = track(textureFrom(buffer))
-    const swimTexture = track(textureFrom(design ? paintResidentSheet(design, true) : buffer))
+    const swimBuffer = design ? paintResidentSheet(design, true) : buffer
+    const swimTexture = track(textureFrom(swimBuffer))
     for (const map of [texture, swimTexture])
       map.repeat.set(1 / RESIDENT_FRAMES, 1 / facings.length)
     const mesh = new Mesh(
@@ -916,8 +922,9 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
     silhouette.renderOrder = 5
     mesh.add(silhouette)
     scene.add(mesh)
-    return { mesh, texture, swimTexture, silhouette }
+    return { mesh, texture, swimTexture, silhouette, buffer, swimBuffer }
   })
+  const pickMeshes = residentMeshes.map(({ mesh }) => mesh)
   // Flat things lying on the ground: shadows and selection rings.
   // The world's y runs south, so a flat picture is flipped to keep its top north.
   const flatGeometry = (buffer: PixelBuffer) =>
@@ -1374,6 +1381,36 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
 
   return {
     ready: decor.ready,
+    pickResident(point: Point) {
+      if (!viewer || !size.width || !size.height) return null
+      const ray = new Raycaster()
+      // Aim through the center of the art pixel displayed under the pointer.
+      ray.setFromCamera(
+        new Vector2(
+          ((Math.floor(point.x / 2) + 0.5) / target.width) * 2 - 1,
+          1 - ((Math.floor(point.y / 2) + 0.5) / target.height) * 2
+        ),
+        eyeCamera
+      )
+      for (const hit of ray.intersectObjects(pickMeshes, false)) {
+        if (!hit.object.visible || !hit.uv) continue
+        const depth = hit.point.project(eyeCamera).z
+        if (depth < -1 || depth > 1) continue
+        const index = residentMeshes.findIndex(({ mesh }) => mesh === hit.object)
+        const sprite = residentMeshes[index]
+        const map = sprite.mesh.material.map
+        if (!map) continue
+        const sheet = map === sprite.swimTexture ? sprite.swimBuffer : sprite.buffer
+        const uv = map.transformUv(hit.uv)
+        const x = Math.min(sheet.width - 1, Math.floor(uv.x * sheet.width))
+        const y = Math.min(sheet.height - 1, Math.floor(uv.y * sheet.height))
+        if (sheet.data[(y * sheet.width + x) * 4 + 3] < 128) continue
+        ray.far = hit.distance
+        if (ray.intersectObject(scenery).length) return null
+        return residents[index].slug
+      }
+      return null
+    },
     setView(next: IslandView, nextSize: SceneSize) {
       if (failed || disposed || !nextSize.width || !nextSize.height) return
       view = next
