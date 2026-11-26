@@ -555,7 +555,8 @@ body::after {
   color: #181818;
 }
 .town-bubble__meta button {
-  margin-left: auto;
+  display: grid;
+  place-items: center;
   width: 32px;
   height: 32px;
   border: 0;
@@ -564,6 +565,11 @@ body::after {
   color: #f8f0d8;
   font: 22px / 1 "IBM Plex Mono", monospace;
   cursor: pointer;
+}
+.town-bubble__meta button:first-of-type {
+  margin-left: auto;
+  width: 44px;
+  height: 44px;
 }
 .town-bubble > a {
   position: relative;
@@ -935,6 +941,11 @@ body::after {
   color: #c8c5d3;
   font: 600 11px "IBM Plex Mono", monospace;
   text-align: center;
+}
+.island-camera button.island-camera__return {
+  width: auto;
+  min-height: 44px;
+  padding: 0 10px;
 }
 .island-editor-toggle button[aria-expanded="true"] {
   border-color: var(--ink);

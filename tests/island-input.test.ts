@@ -16,6 +16,10 @@ function setup() {
     size: () => ({ width: 800, height: 600 }),
     setView: vi.fn(),
     ready: () => true,
+    firstPerson: () => false,
+    lookAround: vi.fn(),
+    eyeZoom: () => 1,
+    setEyeZoom: vi.fn(),
     editing: () => false,
     panning: () => false,
     hover: vi.fn(),
@@ -129,6 +133,68 @@ describe('shared editing gestures', () => {
 })
 
 describe('camera rotation', () => {
+  it('zooms from the initial finger spacing and keeps looking with the remaining finger', () => {
+    const { input, bindings, event } = setup()
+    bindings.firstPerson = () => true
+    bindings.eyeZoom = () => 1.5
+    input.pointerDown(event(200))
+    input.pointerDown(event(300, 2))
+    input.pointerMove(event(400, 2))
+    input.pointerMove(event(250, 2))
+    expect(vi.mocked(bindings.setEyeZoom).mock.calls).toEqual([[3], [0.75]])
+    expect(bindings.lookAround).not.toHaveBeenCalled()
+    expect(bindings.setView).not.toHaveBeenCalled()
+    input.pointerUp(event(200))
+    input.pointerMove(event(260, 2))
+    expect(bindings.lookAround).toHaveBeenCalledExactlyOnceWith(10, 0)
+    input.pointerUp(event(260, 2))
+    expect(bindings.setDragging).toHaveBeenLastCalledWith(false)
+  })
+
+  it('uses native trackpad scale once when both gesture and wheel events arrive', () => {
+    const { input, bindings } = setup()
+    bindings.firstPerson = () => true
+    const wheel = {
+      ctrlKey: true,
+      deltaY: -10,
+      deltaMode: 0,
+      preventDefault: vi.fn()
+    } as unknown as WheelEvent
+    input.trackpadGesture(new Event('gesturestart'))
+    input.wheel(wheel)
+    input.trackpadGesture(Object.assign(new Event('gesturechange'), { scale: 2 }))
+    expect(bindings.setEyeZoom).toHaveBeenCalledExactlyOnceWith(2)
+    input.trackpadGesture(new Event('gestureend'))
+    input.wheel(wheel)
+    expect(bindings.setEyeZoom).toHaveBeenLastCalledWith(Math.exp(0.1))
+    expect(wheel.preventDefault).toHaveBeenCalled()
+  })
+
+  it('looks around with one pointer and resumes map input after leaving first person', () => {
+    const { input, bindings, event } = setup()
+    bindings.firstPerson = () => true
+    input.pointerDown(event(400))
+    input.pointerMove({ ...event(420), clientY: 285 })
+    input.pointerDown(event(600, 2))
+    input.pointerMove(event(640, 2))
+    input.pointerCancel(event(640, 2))
+    input.pointerMove(event(415))
+    input.pointerUp(event(415))
+    input.pointerMove(event(430))
+    expect(vi.mocked(bindings.lookAround).mock.calls).toEqual([
+      [20, -15],
+      [-5, 15]
+    ])
+    expect(bindings.setDragging).toHaveBeenLastCalledWith(false)
+    expect(bindings.setView).not.toHaveBeenCalled()
+    expect(bindings.tap).not.toHaveBeenCalled()
+    expect(bindings.residentStart).not.toHaveBeenCalled()
+
+    bindings.firstPerson = () => false
+    input.pointerDown(event(400))
+    expect(bindings.residentStart).toHaveBeenCalledTimes(1)
+  })
+
   it('orbits continuously on right drag without moving the center or starting an edit', () => {
     const { input, bindings, event } = setup()
     bindings.editing = () => true

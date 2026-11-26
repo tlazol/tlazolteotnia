@@ -29,6 +29,10 @@ export type IslandInputBindings = {
   size: () => SceneSize
   setView: (view: IslandView) => void
   ready: () => boolean
+  firstPerson: () => boolean
+  lookAround: (dx: number, dy: number) => void
+  eyeZoom: () => number
+  setEyeZoom: (zoom: number) => void
   editing: () => boolean
   // Whether a new stroke may start now (connected, quota left, nothing pending).
   // When it may not, the primary button moves the camera instead.
@@ -48,6 +52,9 @@ export type IslandInputBindings = {
 
 type Gesture =
   | { kind: 'none' }
+  | { kind: 'look' }
+  | { kind: 'eyePinch'; distance: number; zoom: number }
+  | { kind: 'trackpadPinch'; zoom: number }
   | { kind: 'pan'; start: Point; view: IslandView; moved: boolean; id: number }
   | { kind: 'rotate'; start: Point; view: IslandView; id: number }
   | { kind: 'resident'; start: Point; moved: boolean; id: number }
@@ -76,6 +83,15 @@ export function createIslandInput(bind: IslandInputBindings) {
       view
     }
   }
+  function fingerDistance() {
+    const [a, b] = pointers.values()
+    return Math.max(1, Math.hypot(b.x - a.x, b.y - a.y))
+  }
+  function releaseEyePointer(id: number) {
+    if (!pointers.delete(id)) return
+    if (pointers.size) gesture = { kind: 'look' }
+    else end()
+  }
   function end(cancel = false) {
     if (gesture.kind === 'stroke') bind.strokeEnd(cancel)
     if (gesture.kind === 'resident') {
@@ -94,6 +110,18 @@ export function createIslandInput(bind: IslandInputBindings) {
       if (!resident && target?.closest('button, a, [data-island-ui]')) return
       suppressClick = false
       const point = local(event)
+      if (bind.firstPerson()) {
+        if (event.button !== 0 || (gesture.kind !== 'none' && gesture.kind !== 'look')) return
+        event.preventDefault()
+        bind.surface()?.setPointerCapture?.(event.pointerId)
+        pointers.set(event.pointerId, point)
+        gesture =
+          pointers.size === 1
+            ? { kind: 'look' }
+            : { kind: 'eyePinch', distance: fingerDistance(), zoom: bind.eyeZoom() }
+        bind.setDragging(true)
+        return
+      }
       pointers.set(event.pointerId, point)
       ;(resident ?? bind.surface())?.setPointerCapture?.(event.pointerId)
       if (pointers.size === 2) {
@@ -142,7 +170,14 @@ export function createIslandInput(bind: IslandInputBindings) {
     },
     pointerMove(event: PointerLike) {
       const point = local(event)
-      if (pointers.has(event.pointerId)) pointers.set(event.pointerId, point)
+      const previous = pointers.get(event.pointerId)
+      if (previous) pointers.set(event.pointerId, point)
+      if (gesture.kind === 'look' || gesture.kind === 'eyePinch') {
+        if (!previous) return
+        if (gesture.kind === 'look') bind.lookAround(point.x - previous.x, point.y - previous.y)
+        else bind.setEyeZoom(gesture.zoom * (fingerDistance() / gesture.distance))
+        return
+      }
       if (gesture.kind === 'pinch' && pointers.size >= 2) {
         const [a, b] = [...pointers.values()]
         const distance = Math.hypot(b.x - a.x, b.y - a.y)
@@ -196,6 +231,10 @@ export function createIslandInput(bind: IslandInputBindings) {
         bind.hover(bind.panning() ? null : point)
     },
     pointerUp(event: PointerLike) {
+      if (gesture.kind === 'look' || gesture.kind === 'eyePinch') {
+        releaseEyePointer(event.pointerId)
+        return
+      }
       if (!pointers.has(event.pointerId)) return
       const point = local(event)
       pointers.delete(event.pointerId)
@@ -218,6 +257,10 @@ export function createIslandInput(bind: IslandInputBindings) {
       if (event.pointerType !== 'touch' && bind.editing()) bind.hover(point)
     },
     pointerCancel(event: PointerLike) {
+      if (gesture.kind === 'look' || gesture.kind === 'eyePinch') {
+        releaseEyePointer(event.pointerId)
+        return
+      }
       pointers.delete(event.pointerId)
       // A cancelled touch (e.g. the browser took over) undoes the partial stroke.
       end(true)
@@ -228,10 +271,17 @@ export function createIslandInput(bind: IslandInputBindings) {
     },
     wheel(event: WheelEvent) {
       if (!bind.ready()) return
+      const scale = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? 400 : 1
+      if (bind.firstPerson()) {
+        if (!event.ctrlKey) return
+        event.preventDefault()
+        if (gesture.kind === 'none')
+          bind.setEyeZoom(bind.eyeZoom() * Math.exp((-event.deltaY * scale) / 100))
+        return
+      }
       event.preventDefault()
       if (gesture.kind === 'resident' || gesture.kind === 'rotate' || gesture.kind === 'pinch')
         return
-      const scale = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? 400 : 1
       wheelDelta += event.deltaY * scale
       const threshold = event.ctrlKey ? 24 : 60
       if (Math.abs(wheelDelta) < threshold) return
@@ -240,6 +290,21 @@ export function createIslandInput(bind: IslandInputBindings) {
       const view = bind.view()
       const zoom = stepZoom(view.zoom, direction)
       if (zoom !== view.zoom) bind.setView(zoomViewAt(view, bind.size(), zoom, local(event)))
+    },
+    // Safari also reports trackpad pinches as gesture events, without touch pointers.
+    trackpadGesture(event: Event) {
+      if (!bind.ready() || !bind.firstPerson()) return
+      event.preventDefault()
+      if (event.type === 'gesturestart' && gesture.kind === 'none')
+        gesture = { kind: 'trackpadPinch', zoom: bind.eyeZoom() }
+      if (gesture.kind !== 'trackpadPinch') return
+      if (event.type === 'gestureend') gesture = { kind: 'none' }
+      else if (
+        event.type === 'gesturechange' &&
+        'scale' in event &&
+        typeof event.scale === 'number'
+      )
+        bind.setEyeZoom(gesture.zoom * event.scale)
     },
     consumeResidentClick() {
       const suppressed = suppressClick

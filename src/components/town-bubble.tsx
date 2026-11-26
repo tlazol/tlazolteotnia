@@ -2,6 +2,7 @@ import { Link } from '@tanstack/react-router'
 import type { MouseEvent, Ref } from 'react'
 import type { BlogPostSummary } from '#/lib/blog-post'
 import type { SceneSize } from '#/lib/scene-math'
+import { PixelIcon } from './island-icons'
 
 // Above the resident's head when it fits, otherwise below its feet; always on screen.
 export function placeTownBubble(
@@ -28,12 +29,14 @@ export function TownBubble({
   post,
   newestSlug,
   bubble,
+  onFirstPerson,
   onClose,
   openPost
 }: {
   post: BlogPostSummary
   newestSlug?: string
   bubble: Ref<HTMLDivElement>
+  onFirstPerson: () => void
   onClose: () => void
   openPost: (event: MouseEvent<HTMLAnchorElement>) => void
 }) {
@@ -42,6 +45,14 @@ export function TownBubble({
       <div className="town-bubble__meta">
         <time dateTime={post.date}>{post.date.replaceAll('-', '.')}</time>
         {post.slug === newestSlug && <span>NEW</span>}
+        <button
+          type="button"
+          aria-label="この住民の視点で見る"
+          title="この住民の視点で見る"
+          onClick={onFirstPerson}
+        >
+          <PixelIcon name="eye" size={24} />
+        </button>
         <button type="button" aria-label="吹き出しを閉じる" onClick={onClose}>
           ×
         </button>

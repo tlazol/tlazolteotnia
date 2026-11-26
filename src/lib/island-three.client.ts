@@ -23,6 +23,7 @@ import {
   NearestFilter,
   NoColorSpace,
   OrthographicCamera,
+  PerspectiveCamera,
   PlaneGeometry,
   RedFormat,
   ReplaceStencilOp,
@@ -473,10 +474,12 @@ uniform vec2 uSize;
 uniform vec2 uOffset;
 uniform float uScale;
 uniform float uCanvasHeight;
+uniform vec3 uTint;
 void main() {
   vec2 device = vec2(gl_FragCoord.x, uCanvasHeight - gl_FragCoord.y);
   vec2 art = floor(uOffset + device * uScale + 0.0001) + 0.5;
   gl_FragColor = texture2D(uImage, vec2(art.x / uSize.x, 1.0 - art.y / uSize.y));
+  gl_FragColor.rgb *= uTint;
 }
 `
 
@@ -594,6 +597,9 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
   overlayCamera.position.z = 50
   const camera = new OrthographicCamera(0, 1, 0, -1, 1, 6000)
   camera.up.set(0, 0, 1)
+  const eyeCamera = new PerspectiveCamera(90, 1, 0.35, 6000)
+  eyeCamera.up.set(0, 0, 1)
+  const skyColor = rawColor('#a5d8ed')
   const ground = new Group()
   ground.scale.y = -1
   scene.add(ground)
@@ -640,7 +646,8 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
         uSize: { value: [1, 1] },
         uOffset: { value: [0, 0] },
         uScale: { value: 1 },
-        uCanvasHeight: { value: 1 }
+        uCanvasHeight: { value: 1 },
+        uTint: { value: new Color(1, 1, 1) }
       },
       depthTest: false,
       depthWrite: false
@@ -1045,6 +1052,11 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
     offset: { x: number; y: number }
   } | null = null
   let selected: string | null = null
+  let viewer: Resident | null = null
+  let eyeYaw = 0
+  const initialEyePitch = -Math.atan(0.12)
+  let eyePitch = initialEyePitch
+  let followHeading = true
   let focused: string | null = null
   let editing = false
   let frame = 0
@@ -1054,8 +1066,22 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
   let failed = false
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
 
+  function sizeImage(width: number, height: number, x: number, y: number, scale: number) {
+    if (target.width !== width || target.height !== height) target.setSize(width, height)
+    blitMaterial.uniforms.uSize.value = [width, height]
+    blitMaterial.uniforms.uOffset.value = [x, y]
+    blitMaterial.uniforms.uScale.value = scale
+    blitMaterial.uniforms.uCanvasHeight.value = renderer.domElement.height
+  }
+
   function placeCamera() {
     if (!size.width || !size.height) return
+    if (viewer) {
+      eyeCamera.aspect = size.width / size.height
+      eyeCamera.updateProjectionMatrix()
+      sizeImage(Math.ceil(size.width / 2), Math.ceil(size.height / 2), 0, 0, 0.5 / pixelRatio)
+      return
+    }
     const unit = view.zoom * pixelRatio
     // Snap so art pixels land on whole device pixels.
     const center = projectGround(view, view.x, view.y)
@@ -1075,8 +1101,6 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
     const imageTop = Math.floor(top * density)
     const imageWidth = Math.ceil((size.width * density) / view.zoom) + 2
     const imageHeight = Math.ceil((size.height * density) / view.zoom) + 2
-    if (target.width !== imageWidth || target.height !== imageHeight)
-      target.setSize(imageWidth, imageHeight)
     camera.left = imageLeft / density
     camera.right = (imageLeft + imageWidth) / density
     camera.top = -imageTop / density
@@ -1087,10 +1111,13 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
     overlayCamera.top = camera.top
     overlayCamera.bottom = camera.bottom
     overlayCamera.updateProjectionMatrix()
-    blitMaterial.uniforms.uSize.value = [imageWidth, imageHeight]
-    blitMaterial.uniforms.uOffset.value = [left * density - imageLeft, top * density - imageTop]
-    blitMaterial.uniforms.uScale.value = density / unit
-    blitMaterial.uniforms.uCanvasHeight.value = renderer.domElement.height
+    sizeImage(
+      imageWidth,
+      imageHeight,
+      left * density - imageLeft,
+      top * density - imageTop,
+      density / unit
+    )
   }
 
   const heightAt = (x: number, y: number) =>
@@ -1122,18 +1149,41 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
 
   const right = new Vector3()
   const up = new Vector3()
+  function followEyes(resident: Resident, dt: number) {
+    if (followHeading) {
+      const delta = Math.atan2(resident.heading.y, resident.heading.x) - eyeYaw
+      eyeYaw += Math.atan2(Math.sin(delta), Math.cos(delta)) * (1 - Math.exp(-8 * dt))
+    }
+    const eyeHeight = residentIsSwimming(world, resident) ? 7 : 10
+    const z = footHeight(resident) + eyeHeight - resident.offsetY
+    eyeCamera.position.set(resident.x, -resident.y, z)
+    eyeCamera.lookAt(
+      resident.x + Math.cos(eyeYaw),
+      -resident.y - Math.sin(eyeYaw),
+      z + Math.tan(eyePitch)
+    )
+  }
+
   function placeResidents() {
-    right.set(1, 0, 0).applyQuaternion(camera.quaternion)
-    up.set(0, 1, 0).applyQuaternion(camera.quaternion)
+    const rotation = (viewer ? eyeCamera : camera).quaternion
+    right.set(1, 0, 0).applyQuaternion(rotation)
+    up.set(0, 1, 0).applyQuaternion(rotation)
     residents.forEach((resident, i) => {
       const { mesh, texture: walkTexture, swimTexture, silhouette } = residentMeshes[i]
+      mesh.visible = viewer !== resident
+      silhouette.visible = !viewer
       const swimming = residentIsSwimming(world, resident) && dragged?.resident !== resident
       const texture = swimming ? swimTexture : walkTexture
       mesh.material.map = texture
       silhouette.material.uniforms.map.value = texture
       silhouette.material.uniforms.uvTransform.value = texture.matrix
       const { facing, flip } = residentPose(
-        projectGround(view, resident.heading.x, resident.heading.y)
+        viewer
+          ? {
+              x: right.x * resident.heading.x - right.y * resident.heading.y,
+              y: -Math.cos(eyeYaw) * resident.heading.x - Math.sin(eyeYaw) * resident.heading.y
+            }
+          : projectGround(view, resident.heading.x, resident.heading.y)
       )
       const row = facings.indexOf(facing)
       texture.offset.set(resident.frame / RESIDENT_FRAMES, 1 - (row + 1) / facings.length)
@@ -1146,21 +1196,21 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
         .set(footX, -footY, base + 0.15)
         .addScaledVector(right, resident.offsetX)
         .addScaledVector(up, -resident.offsetY + (isDragged ? 5 : 0))
-      mesh.quaternion.copy(camera.quaternion)
+      mesh.quaternion.copy(rotation)
       mesh.rotateZ(resident.tilt)
       mesh.scale.x = flip ? -1 : 1
       mesh.material.depthTest = !isDragged
       mesh.renderOrder = isDragged ? 31 : 0
       // Keep contact shadows and selection rings just above the tile surface.
       const shadow = residentShadows[i]
-      shadow.visible = !swimming
+      shadow.visible = !swimming && mesh.visible
       shadow.position.set(footX, footY, heightAt(footX, footY) + 0.3)
       for (const [ring, slug] of [
         [selectedRing, selected],
         [focusRing, focused !== selected ? focused : null]
       ] as const) {
         if (slug !== resident.slug) continue
-        ring.visible = true
+        ring.visible = !viewer
         ring.position.set(footX, footY - 1 + 0.4, base + 0.4)
       }
     })
@@ -1199,7 +1249,7 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
             { ...view, x: view.x + followed.x - previous.x, y: view.y + followed.y - previous.y },
             size
           )
-          placeCamera()
+          if (!viewer) placeCamera()
         }
       }
       waterMaterial.uniforms.uTime.value = time
@@ -1212,15 +1262,20 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
       // Fireflies pulse slowly instead.
       softGlowMaterial.opacity = glow * (0.6 + 0.3 * Math.sin(time * 1.6))
       placeWildlife(still ? 0 : dt)
+      if (viewer) followEyes(viewer, dt)
       placeResidents()
       renderer.setRenderTarget(target)
       renderer.clear()
-      renderer.render(scene, camera)
-      renderer.clearDepth()
-      renderer.render(overlay, overlayCamera)
+      renderer.render(scene, viewer ? eyeCamera : camera)
+      if (!viewer) {
+        renderer.clearDepth()
+        renderer.render(overlay, overlayCamera)
+      }
+      // The map receives daylight in its overlay. Tint the eye-level image at blit time.
+      if (viewer) blitMaterial.uniforms.uTint.value.copy(tintMaterial.color)
       renderer.setRenderTarget(null)
       renderer.render(blitScene, blitCamera)
-      onFrame(project(), view)
+      onFrame(viewer ? [] : project(), view)
       if (!still) frame = requestAnimationFrame(draw)
     } catch (error) {
       fail(error)
@@ -1329,6 +1384,38 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
     },
     select(slug: string | null) {
       selected = slug
+      wake()
+    },
+    setFirstPerson(slug: string | null) {
+      const resident = residents.find((item) => item.slug === slug) ?? null
+      if (viewer === resident) return
+      viewer = resident
+      if (viewer) eyeYaw = Math.atan2(viewer.heading.y, viewer.heading.x)
+      eyePitch = initialEyePitch
+      eyeCamera.zoom = 1
+      followHeading = true
+      scene.background = viewer ? skyColor : null
+      blitMaterial.uniforms.uTint.value.setRGB(1, 1, 1)
+      placeCamera()
+      wake()
+    },
+    get eyeZoom() {
+      return eyeCamera.zoom
+    },
+    setEyeZoom(zoom: number) {
+      if (!viewer) return
+      eyeCamera.zoom = Math.max(0.75, Math.min(3, zoom))
+      eyeCamera.updateProjectionMatrix()
+      wake()
+    },
+    lookAround(dx: number, dy: number) {
+      if (!viewer || !size.width || !size.height || (!dx && !dy)) return
+      const radiansPerPixel =
+        (Math.PI * 2) / (3 * Math.min(size.width, size.height) * eyeCamera.zoom)
+      const pitchLimit = (Math.PI * 85) / 180
+      followHeading = false
+      eyeYaw -= dx * radiansPerPixel
+      eyePitch = Math.max(-pitchLimit, Math.min(pitchLimit, eyePitch + dy * radiansPerPixel))
       wake()
     },
     focus(slug: string | null) {
