@@ -258,6 +258,20 @@ export function decorToneAt(code: number, x: number, y: number) {
 export function decorScale(size: number) {
   return 1 + (size / (TREE_SIZES - 1)) * 0.75
 }
+
+// Ground cover is drawn at full detail for the palette, then sized against
+// the residents when placed. The last two bush looks are fern and tall grass.
+const groundCoverScales: Partial<Record<DecorKind, number>> = {
+  flowers: 0.48,
+  shell: 0.48,
+  mushroom: 0.5,
+  monstera: 0.65
+}
+export function groundCoverScale(kind: DecorKind, look: number) {
+  if (kind === 'bush') return look >= 4 ? 0.45 : 0.68
+  return groundCoverScales[kind] ?? 1
+}
+
 export function isDecorCode(code: number) {
   if (!Number.isSafeInteger(code) || code < 0 || code > 0xff) return false
   const look = decorLookOf(code)

@@ -154,15 +154,15 @@ export function lightMaterial(
           float bend = 0.12 + 0.29 * sin(t * 0.81);
           float body = tongue(p, height, 0.69, bend, t);
           float fork = tongue(p - vec2(-0.29, 0.06), 0.48 + 0.13 * sin(t + 2.3), 0.33, -0.36, t);
-          float veil = smoothstep(-0.13, 0.29, max(body, fork));
+          float veil = smoothstep(-0.05, 0.11, max(body, fork));
           float gold = smoothstep(-0.07, 0.20, tongue(p, height * 0.76, 0.44, bend * 0.8, t + 0.6));
           float core = smoothstep(-0.02, 0.19, tongue(p - vec2(-0.04, 0.02),
                                                       height * 0.49, 0.28, -0.12, t));
           float lift = smoothstep(0.0, 0.10, p.y);
-          float alpha = lift * (0.15 * veil + 0.20 * gold + 0.17 * core);
-          vec3 hue = mix(vec3(0.99, 0.32, 0.09), vec3(1.0, 0.65, 0.24), gold);
+          float alpha = lift * (0.60 * veil + 0.20 * gold + 0.12 * core);
+          vec3 hue = mix(vec3(0.93, 0.25, 0.07), vec3(1.0, 0.65, 0.24), gold);
           hue = mix(hue, vec3(1.0, 0.92, 0.62), core);
-          // Emission can brighten the flame without masking the fuel and scenery behind it.
+          // A solid orange body holds its silhouette against sunlit sand.
           vec3 emission = lift * (vec3(0.21, 0.064, 0.008) * veil +
                                   vec3(0.14, 0.11, 0.044) * core);
           gl_FragColor = vec4(hue * alpha + emission, alpha);

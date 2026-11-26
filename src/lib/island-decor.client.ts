@@ -22,6 +22,7 @@ import {
   decorScale,
   decorSizeAt,
   decorToneAt,
+  groundCoverScale,
   type IslandWorld,
   TILE_SIZE
 } from './island-world'
@@ -79,6 +80,7 @@ export function createDecor(
     }
     const placements: DecorPlacement[] = []
     const tones = new Map<number, DecorPlacement[]>()
+    const coverScale = groundCoverScale(data.kind, data.look)
     for (const tile of batch.tiles) {
       const x = tile % world.columns,
         y = Math.floor(tile / world.columns)
@@ -89,7 +91,7 @@ export function createDecor(
         x: (x + 0.5) * TILE_SIZE,
         y: (y + 0.5) * TILE_SIZE + 6 * scale,
         z: tileHeight(world, x, y),
-        scale
+        scale: scale * coverScale
       }
       if (data.emitters.length) placements.push(placement)
       if (!data.surface.indices.length) continue

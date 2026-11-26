@@ -254,10 +254,9 @@ describe('island baker', () => {
       }
       hash.update(new Uint8Array(chunk.decor.anim.buffer))
     }
-    // Based on the full lighting calculation, updated for changes to the
-    // island's vegetation and the two- and three-tile relic models.
+    // Reference scene rendered with the complete list of lighting candidates.
     expect(hash.digest('hex')).toBe(
-      '5f059c83a73c0085d18af078a965bb98f47205fbfe6f41b59af1c06422d27a83'
+      '946687e6ee178542b6279608d449e7d0b0201f8c5efd066af96171465a070d1e'
     )
   }, 15_000)
 

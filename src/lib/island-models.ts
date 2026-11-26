@@ -8,13 +8,12 @@ import {
   capsule,
   cylinder,
   ellipsoid,
-  hash3,
   noise3,
   roundCone,
   sphere,
   type Vec3
 } from './island-sdf'
-import { type DecorKind, decorLooks, decorScale } from './island-world'
+import { type DecorKind, decorLooks, decorScale, groundCoverScale } from './island-world'
 
 // 'flame' is a drawn flame: steady colors, its tip leaning from side to side.
 export type Glow = 'fire' | 'firefly' | 'flame'
@@ -195,7 +194,7 @@ function blade(
   width: number,
   thick: number,
   paint: Painter,
-  holes = 0,
+  split = false,
   // Leaflets `comb` pixels apart, swept forward from a rib down the middle.
   comb = 0
 ): Part {
@@ -217,11 +216,15 @@ function blade(
       const u = flat * cp + dz * sp
       const w = -flat * sp + dz * cp
       let d = ellipsoid(u, v, w, half, width, thick)
-      // Splits along the edges, as a monstera leaf has.
-      for (let i = 0; i < holes; i++) {
-        const at = -half * 0.5 + (i >> 1) * ((half * 1.1) / Math.max(1, (holes >> 1) - 0.5))
-        const side = i % 2 ? 1 : -1
-        d = Math.max(d, -sphere(u - at, v - side * width * 0.85, w, width * 0.32))
+      // Two offset notches leave a thick central rib in a monstera leaf.
+      if (split) {
+        const notch = sphere(
+          u - Math.sign(v) * half * 0.24,
+          Math.abs(v) - width * 0.84,
+          w,
+          width * 0.53
+        )
+        d = Math.max(d, -notch)
       }
       if (comb > 0 && Math.abs(v) > width * 0.18) {
         const f = ((((u - Math.abs(v) * 0.9) / comb) % 1) + 1) % 1
@@ -578,7 +581,7 @@ function frond(
         Math.max(0.7, half),
         0.45,
         paint,
-        0,
+        false,
         2.1
       )
     )
@@ -628,167 +631,119 @@ function palm(height: number, leanX: number, leanY: number, fronds: number, seed
 
 // ---- Undergrowth -------------------------------------------------------------
 
-function thicket(dark: boolean, seed: number) {
-  const canopy = dark ? foliage('pine', 6, seed) : foliage('oak', 6, seed)
-  const heart = plain(dark ? mat('pine', 2) : mat('oak', 2))
-  const parts: Part[] = crown([0, -2, 7], [12, 7, 7], 14, 4.2, canopy, heart, seed)
-  const berry = plain(mat('red', 2))
-  const shine = plain(mat('red', 4))
-  const rand = random(seed + 7)
-  if (dark)
-    for (let i = 0; i < 9; i++) {
-      const a = rand() * Math.PI - Math.PI * 0.05
-      const at: Vec3 = [Math.cos(a) * 10, Math.sin(a) * 6 - 1, 4 + rand() * 7]
-      parts.push(ball(at, 0.85, berry), ball([at[0] - 0.4, at[1] + 0.5, at[2] + 0.5], 0.35, shine))
-    }
+function thicket(dark: boolean) {
+  const leaf = plain(mat(dark ? 'pine' : 'oak', 5))
+  const parts = [
+    egg([-6, 0, 5], [7, 6, 5.5], leaf),
+    egg([1, -2, 7], [8, 7, 8], leaf),
+    egg([8, 1, 4], [6, 5, 5], leaf)
+  ]
+  if (dark) {
+    const berry = plain(mat('red', 3))
+    parts.push(ball([-5, 4, 8], 2.8, berry), ball([4, 2, 13], 2.7, berry))
+  }
   return model(parts, { sway: 1 })
 }
 
-function shrub(flowering: boolean, seed: number) {
-  const parts: Part[] = crown(
-    [0, -1, 6],
-    [9, 6, 6],
-    11,
-    3.6,
-    foliage('frond', 5, seed),
-    plain(mat('frond', 1)),
-    seed
-  )
+function shrub(flowering: boolean) {
+  const leaf = plain(mat('frond', 5))
+  const parts = [egg([-4, 0, 4], [6, 5, 5], leaf), egg([3, -2, 6], [7, 6, 7], leaf)]
   if (flowering) {
-    const rand = random(seed)
-    const petals = [plain(mat('bloom', 2)), plain(mat('bloom', 3)), plain(mat('coral', 3))]
-    for (let i = 0; i < 14; i++) {
-      const a = rand() * Math.PI * 2
-      const up = 0.2 + rand() * 0.8
-      parts.push(
-        ball(
-          [Math.cos(a) * 9 * (1 - up * 0.45), Math.sin(a) * 6 * (1 - up * 0.45) - 1, 6 + up * 6.5],
-          0.75,
-          petals[i % 3]
-        )
-      )
-    }
+    const petals = plain(mat('bloom', 2))
+    parts.push(egg([-5, 1, 9], [3.5, 3, 2.6], petals), egg([4, 0, 12], [4, 3.5, 3], petals))
   }
   return model(parts, { sway: 1 })
 }
 
-function fern(seed: number) {
-  const rand = random(seed)
-  const paint = leaves(seed, 'jungle', 4)
+function fern() {
   const parts: Part[] = []
-  for (let i = 0; i < 9; i++) {
-    const yaw = (i / 9) * Math.PI * 2 + rand() * 0.4
-    parts.push(blade([0, 0, 1], yaw, (20 + rand() * 25) * deg, 10 + rand() * 3, 2.4, 0.6, paint))
+  for (let i = 0; i < 5; i++) {
+    const yaw = (i * 2 * Math.PI) / 5 + 0.25
+    const leaf = plain(mat('frond', i % 2 ? 6 : 4))
+    parts.push(blade([0, 0, 1], yaw, (i % 2 ? 30 : 45) * deg, 17, 4, 1.7, leaf, false, 7))
   }
   return model(parts, { sway: 1 })
 }
 
-function tallGrass(seed: number) {
-  const rand = random(seed)
+function tallGrass() {
   const parts: Part[] = []
-  for (let i = 0; i < 16; i++) {
-    const a = rand() * Math.PI * 2
-    const r = rand() * 5
-    const base: Vec3 = [Math.cos(a) * r, Math.sin(a) * r * 0.7, 0]
-    const tip: Vec3 = [base[0] * 1.5 + (rand() - 0.5) * 3, base[1] * 1.3, 8 + rand() * 6]
-    const paint = plain(mat(rand() < 0.25 ? 'dryGrass' : 'grass', rand() < 0.5 ? 4 : 5))
-    parts.push(taper(base, tip, 0.8, 0.3, paint))
+  for (const angle of [10, 85, 165, 245, 310]) {
+    parts.push(blade([0, 0, 0], angle * deg, 54 * deg, 15, 2.6, 1.5, plain(mat('frond', 5))))
+  }
+  const straw = plain(mat('dryGrass', 5))
+  for (const [x, y, h] of [
+    [-5, 1, 16],
+    [3, -2, 20]
+  ]) {
+    parts.push(stick([0, 0, 0], [x, y, h], 1.4, straw), egg([x, y, h], [2, 2, 4.5], straw))
   }
   return model(parts, { sway: 2 })
 }
 
-function flowers(look: number, seed: number) {
-  const rand = random(seed)
-  const parts: Part[] = []
-  const stem = plain(mat('grass', 4))
-  const heads: Record<number, Material[]> = {
-    0: [mat('bloom', 2), mat('coral', 3), mat('white', 3)],
-    1: [mat('yellow', 3), mat('amber', 3)],
-    2: [mat('blue', 3), mat('violet', 3), mat('white', 3)],
-    3: [mat('red', 3), mat('amber', 3)],
-    4: [mat('violet', 3), mat('lilac', 3)],
-    5: [mat('white', 3)]
-  }
-  const count = look === 3 ? 4 : 8
-  for (let i = 0; i < count; i++) {
-    const a = rand() * Math.PI * 2
-    const r = 1 + rand() * 5.5
-    const x = Math.cos(a) * r
-    const y = Math.sin(a) * r * 0.7
-    const h = 3 + rand() * (look === 4 ? 6 : 4)
-    parts.push(stick([x, y, 0], [x, y, h], 0.45, stem))
-    const color = heads[look][Math.floor(rand() * heads[look].length)]
-    if (look === 4) {
-      // Lupine spikes: florets stacked up the stem.
-      for (let k = 0; k < 4; k++) parts.push(ball([x, y, h - k * 1.3], 1.1 - k * 0.1, plain(color)))
-    } else if (look === 3) {
-      // Big tropical heads over broad leaves.
-      parts.push(ball([x, y, h + 1], 2, plain(color)))
-      parts.push(blade([x, y, 1], a, 15 * deg, 5, 1.6, 0.5, plain(mat('jungle', 4))))
-    } else {
-      parts.push(ball([x, y, h], 1.3, plain(color)))
-      if (look === 5) parts.push(ball([x, y + 0.4, h + 0.6], 0.6, plain(mat('yellow', 3))))
+function flowers(look: number) {
+  const petalRamp = (['bloom', 'yellow', 'blue', 'red', 'violet', 'white'] as const)[look]
+  const petals = plain(mat(petalRamp, 3))
+  const stem = plain(mat('frond', 3))
+  const leaf = plain(mat('leaf', 4))
+  const height = look === 4 ? 16 : 12
+  const parts = [
+    stick([0, 0, 0], [-2, -1, height], 1.7, stem),
+    blade([0, 0, 1], 0.4, 0.55, 10, 3.3, 1.6, leaf),
+    blade([0, 0, 1], 3.5, 0.35, 9, 3.3, 1.6, leaf)
+  ]
+  if (look === 4) {
+    // The lavender spike has two broad tiers and one tapered tip.
+    parts.push(egg([-2, -1, 11], [4.5, 4, 3], petals), egg([-2, -1, 16], [3.6, 3.3, 4.3], petals))
+  } else {
+    const upright = look === 2 || look === 3
+    const count = upright ? 3 : 5
+    for (let i = 0; i < count; i++) {
+      const yaw = (i * 2 * Math.PI) / count + look * 0.3
+      parts.push(blade([-2, -1, height], yaw, upright ? 0.92 : 0.24, 8.4, 3.3, 2.1, petals))
     }
-  }
-  for (let i = 0; i < 4; i++) {
-    const a = (i / 4) * Math.PI * 2 + rand()
-    parts.push(blade([0, 0, 0.5], a, 10 * deg, 6, 1.4, 0.5, plain(mat('grass', 3))))
+    parts.push(ball([-2, -1, height + 2.4], 2.8, plain(mat('amber', 2))))
   }
   return model(parts, { sway: 1 })
 }
 
 // ---- Wood --------------------------------------------------------------------
 
-const wood = (seed: number) => barkOf(seed, 'deadWood', 4)
-
-function driftwood(look: number, seed: number) {
-  const paint = barkOf(seed, 'deadWood', 4)
+function driftwood(look: number) {
+  const bark = plain(mat('palmTrunk', 5))
   if (look === 0)
     return model([
-      taper([-10, 1, 1.6], [10, -1, 1.4], 2.4, 1.6, paint),
-      taper([4, -0.5, 2], [8, -5, 3], 1, 0.6, paint)
+      taper([-9, 0, 2], [10, -1, 2], 3.8, 2.5, bark),
+      taper([-3, 0, 2], [-7, 5, 7], 2.4, 1.7, bark)
     ])
   return model([
-    taper([-9, -2, 1.5], [9, 2, 1.5], 2, 1.4, paint),
-    taper([-6, 4, 1.3], [7, -3, 3], 1.5, 1.1, paint)
+    taper([-9, -3, 2], [8, 3, 2], 3.2, 2.2, bark),
+    taper([-7, 5, 2], [6, -5, 5], 2.7, 1.9, plain(mat('deadWood', 4)))
   ])
 }
 
-function bough(seed: number) {
-  const paint = wood(seed)
+function bough() {
+  const bark = plain(mat('deadWood', 4))
   return model([
-    taper([-11, 0, 1.6], [10, 1, 1.6], 2.2, 1.2, paint),
-    taper([-3, 0, 2], [1, -6, 3.5], 1.1, 0.6, paint),
-    taper([3, 1, 2], [8, 6, 3], 1, 0.6, paint),
-    taper([6, 1, 2], [11, -4, 4], 0.9, 0.5, paint)
+    taper([-11, 0, 2], [10, 1, 2], 3.2, 2, bark),
+    taper([-3, 0, 2], [1, -7, 6], 2.2, 1.5, bark),
+    taper([3, 1, 2], [8, 6, 5], 2.2, 1.4, bark)
   ])
 }
-function stump(seed: number) {
-  const side = wood(seed)
-  const ring: Painter = (x, y, z) =>
-    z > 4.6
-      ? Math.floor(Math.hypot(x, y) * 1.3) % 2
-        ? mat('tan', 3)
-        : mat('tan', 2)
-      : side(x, y, z)
+function stump() {
+  const side = mat('deadWood', 3)
+  const heart = mat('tan', 3)
   const parts: Part[] = [
     {
-      d: (x, y, z) => cylinder(x, y, z + 1, 4.2, 6, 0.5),
-      paint: ring,
-      lo: [-4.5, -4.5, -1],
-      hi: [4.5, 4.5, 5]
+      d: (x, y, z) => cylinder(x, y, z + 1, 6, 9, 0.8),
+      paint: (x, y, z) => (z > 6 && Math.hypot(x, y) < 4.9 ? heart : side),
+      lo: [-6, -6, -1],
+      hi: [6, 6, 8]
     }
   ]
-  for (let i = 0; i < 4; i++) {
-    const a = (i / 4) * Math.PI * 2 + 0.4
+  for (let i = 0; i < 3; i++) {
+    const angle = (i * 2 * Math.PI) / 3 + 0.4
     parts.push(
-      taper(
-        [Math.cos(a) * 3, Math.sin(a) * 3, 1.5],
-        [Math.cos(a) * 7, Math.sin(a) * 6, 0],
-        1.3,
-        0.6,
-        side
-      )
+      taper([0, 0, 3], [Math.cos(angle) * 8, Math.sin(angle) * 8, 0], 3.8, 1.5, plain(side))
     )
   }
   return model(parts)
@@ -870,7 +825,9 @@ function banana(leafCount: number, height: number, bunch: boolean, seed: number)
     ]
     parts.push(blade(top, yaw, pitch, rise + 1, 4.2, 0.6, leaf))
     // Wind tears the broad blades into strips.
-    parts.push(blade(bend, yaw, -(20 + rand() * 20) * deg, 12 + rand() * 5, 5.2, 0.6, leaf, 0, 3.4))
+    parts.push(
+      blade(bend, yaw, -(20 + rand() * 20) * deg, 12 + rand() * 5, 5.2, 0.6, leaf, false, 3.4)
+    )
   }
   if (bunch) {
     const fruit = mottled('yellow', 2, seed, 1, 0.2)
@@ -880,35 +837,30 @@ function banana(leafCount: number, height: number, bunch: boolean, seed: number)
   return model(parts, { sway: 1 })
 }
 
-function monstera(leafs: Array<[number, number, number]>, seed: number) {
+function monstera(leafs: Array<[number, number, number]>) {
   const parts: Part[] = []
   const stem = plain(mat('jungle', 3))
-  const leaf = leaves(seed, 'jungle', 4)
+  const leaf = plain(mat('jungle', 4))
   for (const [angle, length, size] of leafs) {
     const a = angle * deg
     const reach = length * 0.55
     const tip: Vec3 = [Math.cos(a) * reach, Math.sin(a) * reach * 0.8, length * 0.45 + 2]
-    parts.push(stick([0, 0, 0], tip, 0.55, stem))
-    parts.push(blade(tip, a, -18 * deg, size * 2, size * 0.75, 0.6, leaf, 4))
+    parts.push(stick([0, 0, 0], tip, 1.7, stem))
+    parts.push(blade(tip, a, -18 * deg, size * 2, size * 0.84, 2, leaf, true))
   }
   return model(parts, { sway: 1 })
 }
 
-function cactus(look: number, seed: number) {
-  const rib: Painter = (x, y, z) => {
-    const ridge = Math.cos(Math.atan2(y, x) * 8)
-    if (hash3(Math.round(x * 2), Math.round(y * 2), Math.round(z * 2), seed) < 0.05)
-      return mat('white', 3)
-    return ridge > 0.6 ? mat('cactus', 4) : ridge < -0.6 ? mat('cactus', 2) : mat('cactus', 3)
-  }
+function cactus(look: number) {
+  const rib: Painter = (x, y) => (x + y * 0.45 < -1 ? mat('cactus', 4) : mat('cactus', 2))
   if (look === 0)
     return model([
       stick([0, 0, 0], [0, 0, 22], 3, rib),
       ...limb(
         [
           [0, 0, 9],
-          [5.5, 0, 10],
-          [6, 0, 17]
+          [7, 0, 10],
+          [7.5, 0, 17]
         ],
         2,
         2,
@@ -917,8 +869,8 @@ function cactus(look: number, seed: number) {
       ...limb(
         [
           [0, 0, 12],
-          [-4.5, 0, 13],
-          [-5, 0, 18]
+          [-7, 0, 13],
+          [-7, 0, 20]
         ],
         1.8,
         1.8,
@@ -928,17 +880,16 @@ function cactus(look: number, seed: number) {
   if (look === 1)
     return model([
       egg([0, 0, 5], [5.5, 5, 6.5], rib),
-      ball([0, 0, 11.3], 1.5, plain(mat('bloom', 2))),
-      ball([1.6, 0.6, 11], 1, plain(mat('red', 3)))
+      egg([0, 0, 12], [3.3, 3.3, 2.5], plain(mat('bloom', 2)))
     ])
   if (look === 2) {
-    const pad = mottled('cactus', 3, seed, 1.5, 0.25)
+    const pad = plain(mat('cactus', 3))
     return model([
-      egg([0, 0, 5], [4.2, 1.6, 5.2], pad),
-      egg([-4, 0.5, 11], [3.4, 1.4, 4], pad),
-      egg([3.6, -0.5, 12], [3.2, 1.4, 4.2], pad),
-      ball([-5, 0.5, 15.5], 1.1, plain(mat('red', 3))),
-      ball([4, -0.2, 16.8], 1.1, plain(mat('red', 3)))
+      egg([0, 0, 5], [4.2, 2.7, 5.2], pad),
+      egg([-4, 0.5, 11], [3.4, 2.5, 4], pad),
+      egg([3.6, -0.5, 12], [3.2, 2.5, 4.2], pad),
+      ball([-5, 0.5, 15.5], 2, plain(mat('red', 3))),
+      ball([4, -0.2, 16.8], 2, plain(mat('red', 3)))
     ])
   }
   return model([
@@ -950,26 +901,21 @@ function cactus(look: number, seed: number) {
 
 // ---- Stone ---------------------------------------------------------------------
 
-// Weathered stone: grain, the odd dark crack, lichen in patches, and weed at
-// the waterline when wet.
+// One cap, one shadow plane, and moss confined to the damp foot.
 function stone(seed: number, wet: boolean, step = 4): Painter {
-  const dark = mat('rock', step - 2)
-  const tones = [mat('rock', step - 1), mat('rock', step), mat('rock', step + 1)]
-  const lichen = [mat('lichen', 0), mat('lichen', 1)]
-  const weed = mat('moss', 3)
+  const ramp = wet ? 'relic' : 'gravel'
+  const face = mat(ramp, step - 1)
+  const cap = mat(ramp, step + 1)
+  const foot = mat(wet ? 'pine' : ramp, wet ? 3 : step - 2)
+  const slope = seed % 2 ? 0.28 : -0.28
   return (x, y, z) => {
-    if (wet && z < 1.4 + noise3(x, y, 0, seed) * 1.2) return weed
-    const crack = Math.abs(noise3(x / 4, y / 4, z / 4, seed + 5) - 0.5)
-    if (crack < 0.018) return dark
-    const patch = noise3(x / 2.2, y / 2.2, z / 2.2, seed + 9)
-    if (patch > 0.74 && z > 2) return lichen[patch > 0.82 ? 1 : 0]
-    const grain =
-      noise3(x / 1.1, y / 1.1, z / 1.1, seed) * 0.6 + noise3(x / 3, y / 3, z / 3, seed + 1) * 0.4
-    return tones[grain < 0.42 ? 0 : grain > 0.6 ? 2 : 1]
+    const level = z + x * slope - y * 0.16
+    if (level < 1.8) return foot
+    return level > (wet ? 3.4 : 5.2) ? cap : face
   }
 }
 
-// A rock with broken faces: an ellipsoid cut by a few planes, then pitted.
+// Cut broad planes into the outline of the boulder.
 function slab(c: Vec3, r: Vec3, paint: Painter, seed: number): Part {
   const rand = random(seed)
   const cuts: Array<[number, number, number, number]> = []
@@ -989,7 +935,7 @@ function slab(c: Vec3, r: Vec3, paint: Painter, seed: number): Part {
       const pz = z - c[2]
       let d = ellipsoid(px, py, pz, r[0], r[1], r[2])
       for (const [nx, ny, nz, off] of cuts) d = Math.max(d, px * nx + py * ny + pz * nz - off)
-      return d + (noise3(x / 1.8, y / 1.8, z / 1.8, seed) - 0.5) * 0.9
+      return d
     },
     paint,
     lo: [c[0] - r[0] - 0.5, c[1] - r[1] - 0.5, c[2] - r[2] - 0.5],
@@ -1036,7 +982,7 @@ function stonesModel(seed: number, wet: boolean) {
 function spireModel(seed: number, wet: boolean) {
   const paint = stone(seed, wet, 4)
   return model([
-    taper([0, 0, -1], [1.5, -1, 26], 6.5, 1.5, paint, { amp: 1.1, scale: 2.2, seed }),
+    taper([0, 0, -1], [1.5, -1, 26], 6.5, 1.8, paint),
     slab([5, 2, 1.5], [3.8, 3, 3.2], paint, seed + 1)
   ])
 }
@@ -1095,18 +1041,13 @@ function reef(look: number, seed: number) {
   return model(pieces.map(([c, r], i) => slab(c, r, paint, seed + i * 7)))
 }
 
-// Dressed stone weathers in beds. Water darkens the foot and leaves narrow
-// streaks below patches of lichen.
-function dressedStone(seed: number, ramp: RampName): Painter {
-  const tones = [2, 3, 4, 5].map((level) => mat(ramp, level))
-  const lichen = mat('lichen', 0)
+function dressedStone(ramp: RampName): Painter {
+  const plinth = mat('moss', 2)
+  const base = mat(ramp, 3)
+  const face = mat(ramp, 5)
   return (x, y, z) => {
-    const runoff = noise3(x / 4, y / 4, z / 18, seed)
-    const bed = noise3(x / 15, y / 15, (z + x * 0.12) / 3, seed + 1)
-    if (runoff > 0.72 && z < 12 && bed > 0.52) return lichen
-    const damp = Math.max(0, 1 - z / 16) * 0.22
-    const grain = bed * 0.8 + noise3(x / 3, y / 3, z / 3, seed + 2) * 0.2 - damp
-    return tones[grain < 0.2 ? 0 : grain < 0.34 || runoff > 0.79 ? 1 : grain < 0.72 ? 2 : 3]
+    if (z < 3 && x - y > 3) return plinth
+    return z < 7 ? base : face
   }
 }
 
@@ -1137,7 +1078,7 @@ function hewnStone(c: Vec3, half: Vec3, paint: Painter, chip: number, yaw = 0): 
 }
 
 function relic(look: number, seed: number) {
-  const paint = dressedStone(seed, look === 0 || look === 2 ? 'gravel' : 'cobble')
+  const paint = dressedStone(look === 0 || look === 2 ? 'gravel' : 'cobble')
   const debris = stone(seed + 5, false)
   // Two-tile monument bases, with a three-tile span for the gate.
   if (look === 0)
@@ -1175,14 +1116,14 @@ function relic(look: number, seed: number) {
       hewnStone([0, MID, 0], [16, 14, 3], paint, 4, 0.05),
       {
         ...tablet,
-        d: (x, y, z) => Math.max(tablet.d(x, y, z), Math.min(y - MID - 3.5, 1.45 - incision(x, z))),
-        paint: (x, y, z) => (y > MID + 3 && incision(x, z) < 1.6 ? groove : paint(x, y, z))
+        d: (x, y, z) => Math.max(tablet.d(x, y, z), Math.min(y - MID - 3.5, 2 - incision(x, z))),
+        paint: (x, y, z) => (y > MID + 3 && incision(x, z) < 2.2 ? groove : paint(x, y, z))
       },
       slab([-10, MID + 9, 2.5], [5, 3.5, 2.3], debris, seed)
     ])
   }
   if (look === 2) {
-    const fluted = (x: number, y: number) => 1.3 * (0.5 + 0.5 * Math.cos(10 * Math.atan2(y, x)))
+    const fluted = (x: number, y: number) => 1.3 * (0.5 + 0.5 * Math.cos(6 * Math.atan2(y, x)))
     return model([
       hewnStone([0, MID, 0], [16, 16, 3], paint, 6, -0.04),
       {
@@ -1232,57 +1173,65 @@ function relic(look: number, seed: number) {
 
 // ---- Small things ------------------------------------------------------------
 
-function mushrooms(cap: string, spotted: boolean, seed: number) {
-  const rand = random(seed)
+function mushrooms(cap: string, spotted: boolean) {
   const capColor = hexMat(cap)
-  const spot = mat('white', 3)
-  const stem = plain(mat('white', 2))
+  const ivory = mat('white', 2)
+  const underside = mat('tan', 3)
+  const stem = plain(ivory)
   const parts: Part[] = []
-  for (const [x, y, size] of [
-    [-3, 0, 1],
-    [2.5, 1.5, 0.75],
-    [0.5, -3, 0.6]
+  for (const [x, y, r, h] of [
+    [-3, -2, 7.3, 10],
+    [5.5, 3, 4.2, 5.4]
   ]) {
-    const h = (3 + rand() * 2) * size + 1
-    const r = 3.4 * size + 0.6
-    parts.push(stick([x, y, 0], [x, y, h], 0.8 * size + 0.3, stem))
+    parts.push(taper([x, y, 0], [x, y, h], r * 0.41, r * 0.34, stem))
     parts.push({
-      d: (px, py, pz) => Math.max(ellipsoid(px - x, py - y, pz - h, r, r, r * 0.6), h - 0.4 - pz),
-      paint: (px, py, pz) =>
-        spotted && noise3(px * 0.9, py * 0.9, pz * 0.9, seed) > 0.7 ? spot : capColor,
-      lo: [x - r, y - r, h - 1],
-      hi: [x + r, y + r, h + r * 0.6]
+      d: (px, py, z) => Math.max(ellipsoid(px - x, py - y, z - h, r, r, r * 0.75), h - 1.4 - z),
+      paint: (px, py, z) => {
+        if (z < h) return underside
+        if (spotted && Math.hypot(px - x + r * 0.4, py - y) < r * 0.34) return ivory
+        return capColor
+      },
+      lo: [x - r, y - r, h - 1.4],
+      hi: [x + r, y + r, h + r * 0.75]
     })
   }
   return model(parts)
 }
 
 function shellModel(look: number) {
+  const coral = plain(mat('coral', 2))
+  const rose = plain(mat('shell', 1))
+  const pearl = plain(mat('white', 2))
   if (look === 0)
     return model([
-      taper([-2.4, 0, 1], [2.6, 0.5, 0.7], 1.9, 0.5, (x) =>
-        Math.floor(x * 1.2) % 2 ? mat('shell', 1) : mat('white', 3)
-      )
+      taper([-9, -2, 1.6], [2, 0, 4], 1.5, 5.4, plain(mat('shellSand', 1))),
+      egg([3, 1.5, 4], [5.7, 4.8, 4.5], rose),
+      egg([5.3, 3.4, 5.5], [3.8, 3, 2.4], coral),
+      egg([6, 4.4, 6.8], [2.2, 1.8, 1.6], plain(mat('clay', 1)))
     ])
-  if (look === 1)
-    return model([
-      egg([0, 0, 0.6], [2.8, 2.3, 1], (x, y) =>
-        Math.cos(Math.atan2(y + 2, x) * 12) > 0.3 ? mat('shell', 2) : mat('shell', 1)
-      )
-    ])
+  if (look === 1) {
+    // Five joined lobes open out from one hinge. The raised ribs are wide
+    // enough to survive the voxel grid on the beach as well as in the palette.
+    const parts = [block([0, 4, 1.5], [3.8, 2.1, 1.5], coral)]
+    for (let i = -2; i <= 2; i++) {
+      const angle = -Math.PI / 2 + i * 0.43
+      parts.push(blade([0, 4, 1.5], angle, 0.39, 16 - Math.abs(i), 3.6, 2.4, i % 2 ? rose : coral))
+    }
+    return model(parts)
+  }
   if (look === 2) {
-    const arm = plain(mat('star', 1))
-    return model(
-      [0, 1, 2, 3, 4].map((i) => {
-        const a = (i / 5) * Math.PI * 2 - Math.PI / 2
-        return taper([0, 0, 0.6], [Math.cos(a) * 3.4, Math.sin(a) * 3.4, 0.4], 1.1, 0.5, arm)
-      })
-    )
+    const skin = plain(mat('star', 1))
+    const parts: Part[] = []
+    for (let i = 0; i < 5; i++) {
+      const angle = (i * Math.PI * 2) / 5
+      parts.push(taper([0, 0, 2.2], [Math.cos(angle) * 10, Math.sin(angle) * 10, 1], 3.2, 1, skin))
+    }
+    return model(parts)
   }
   return model([
-    egg([-1.5, 0, 0.5], [1.8, 1.5, 0.8], plain(mat('white', 3))),
-    egg([2, 1, 0.5], [1.5, 1.3, 0.7], plain(mat('bloom', 2))),
-    ball([0.5, -2, 0.4], 0.8, plain(mat('shellSand', 1)))
+    blade([0, 0, 1], -Math.PI / 2, 0.95, 12, 6, 2, rose),
+    egg([0, 3, 1.7], [7.4, 5.8, 2.6], coral),
+    ball([0, 3, 5], 3.3, pearl)
   ])
 }
 
@@ -1315,8 +1264,8 @@ function embers(at: Vec3, seed: number): Part[] {
 
 // A chunky log, rounded at the ends, its cut faces showing rings.
 function cuteLog(a: Vec3, b: Vec3, r: number): Part {
-  const bark0 = toon('cuteLog', 2)
-  const bark1 = toon('cuteLog', 3)
+  const bark0 = mat('trunk', 3)
+  const bark1 = mat('trunk', 5)
   const ring = toon('cuteRing', 1)
   const core = toon('cuteRing', 2)
   const ax = b[0] - a[0]
@@ -1331,15 +1280,15 @@ function cuteLog(a: Vec3, b: Vec3, r: number): Part {
         const end = t < 0 ? a : b
         return Math.hypot(x - end[0], y - end[1], z - end[2]) < r * 0.45 ? ring : core
       }
-      return Math.floor(t * 6) % 2 ? bark0 : bark1
+      return z - (a[2] + t * az) > r * 0.35 ? bark1 : bark0
     }
   }
 }
 
 // A plump stone with a shine on top.
 function cuteStone(c: Vec3, r: Vec3, tone = 2): Part {
-  const body = toon('cuteStone', tone)
-  const shine = toon('cuteStone', tone + 2)
+  const body = mat('rock', tone + 1)
+  const shine = mat('rock', tone + 3)
   return egg(c, r, (x, y, z) =>
     z > c[2] + r[2] * 0.55 && x < c[0] && y < c[1] + r[1] * 0.2 ? shine : body
   )
@@ -1351,11 +1300,9 @@ function torch(look: number, seed: number) {
     const wrap = toon('cuteRing', 1)
     return model(
       [
-        cuteLog([0, C, -1], [0, C, 13], 1.5),
-        egg([0, C, 13.5], [2.6, 2.6, 2], (_x, _y, z) =>
-          Math.floor(z) % 2 ? wrap : toon('tan', 3)
-        ),
-        ...fireParts([0, C, 14], 3),
+        cuteLog([0, C, -1], [0, C, 13], 2.2),
+        egg([0, C, 13.5], [3.5, 3.5, 2.8], plain(wrap)),
+        ...fireParts([0, C, 15], 3.9),
         ...embers([0, C, 22], seed)
       ],
       { glow: { height: 22 } }
@@ -1375,7 +1322,7 @@ function torch(look: number, seed: number) {
       )
     parts.push(
       egg([0, C, 15], [4, 3.4, 1.8], plain(toon('cuteLog', 2))),
-      ...fireParts([0, C, 15.5], 3.4),
+      ...fireParts([0, C, 15.5], 3.9),
       ...embers([0, C, 24], seed)
     )
     return model(parts, { glow: { height: 24 } })
@@ -1384,9 +1331,9 @@ function torch(look: number, seed: number) {
     const iron = plain(toon('steel', 3))
     return model(
       [
-        stick([-3.5, C + 1.5, 0], [0, C, 8], 0.8, iron),
-        stick([3.5, C + 1.5, 0], [0, C, 8], 0.8, iron),
-        stick([0, C - 3.5, 0], [0, C, 8], 0.8, iron),
+        stick([-5, C + 2, 0], [0, C, 8], 1.6, iron),
+        stick([5, C + 2, 0], [0, C, 8], 1.6, iron),
+        stick([0, C - 5, 0], [0, C, 8], 1.6, iron),
         {
           d: (x, y, z) => Math.max(ellipsoid(x, y - C, z - 10, 5, 4.4, 2.8), z - 10.8),
           paint: (_x, _y, z) => (z > 10.2 ? toon('steel', 4) : toon('steel', 3)),
@@ -1404,7 +1351,7 @@ function torch(look: number, seed: number) {
       cuteStone([0, C, 2.6], [5, 4.2, 3], 1),
       cuteStone([0.4, C, 7.6], [3.8, 3.3, 2.4], 2),
       cuteStone([0, C, 11.4], [2.8, 2.5, 2], 1),
-      ...fireParts([0, C, 13], 2.6),
+      ...fireParts([0, C, 13], 3.4),
       ...embers([0, C, 20], seed)
     ],
     { glow: { height: 20 } }
@@ -1415,34 +1362,24 @@ function campfire(look: number, seed: number) {
   const C = -5
   const parts: Part[] = []
   const ring = (radius: number) => {
-    for (let i = 0; i < 8; i++) {
-      const a = (i / 8) * Math.PI * 2 + 0.2
-      // Every other stone a shade darker, so each reads on its own.
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2 + 0.2
+      // Leave gaps between the stones so the fuel bed is visible.
       parts.push(
-        cuteStone(
-          [Math.cos(a) * radius, C + Math.sin(a) * radius * 0.62, 1.2],
-          [2.2, 1.8, 1.8],
-          1 + (i % 2)
-        )
+        cuteStone([Math.cos(a) * radius, C + Math.sin(a) * radius * 0.78, 1.7], [2.9, 2.6, 2.1], 2)
       )
     }
   }
   // Two logs crossed under the flame.
   const crossed = () => {
-    parts.push(cuteLog([-4.5, C - 1.5, 1.4], [4.5, C + 1.5, 1.4], 1.4))
-    parts.push(cuteLog([-4, C + 2, 1.6], [4, C - 2, 2.6], 1.4))
+    parts.push(cuteLog([-6, C - 3.5, 2], [6, C + 3.5, 2], 2.1))
+    parts.push(cuteLog([-6, C + 3.5, 2], [6, C - 3.5, 3], 2.1))
   }
   if (look === 0 || look === 1) {
-    ring(6.5)
+    ring(8.5)
     crossed()
-    const size = look ? 3.6 : 3.1
-    parts.push(
-      ...fireParts([0, C + 0.5, 2], size),
-      // Two little tongues either side of the big one.
-      ...fireParts([-4.2, C + 1, 1.4], size * 0.55, -1.6),
-      ...fireParts([4.2, C + 1, 1.4], size * 0.55, 1.6),
-      ...embers([0, C, 12], seed)
-    )
+    const size = look ? 5.1 : 4.6
+    parts.push(...fireParts([0, C + 0.5, 2], size), ...embers([0, C, 12], seed))
     if (look === 1) {
       parts.push(cuteLog([-14, C + 3, 1.8], [-10, C - 5, 1.8], 2))
       parts.push(cuteLog([10, C - 5, 1.8], [14, C + 3, 1.8], 2))
@@ -1451,42 +1388,42 @@ function campfire(look: number, seed: number) {
   }
   if (look === 2) {
     // Logs stacked like a little cabin, the flame on top.
-    for (let k = 0; k < 3; k++) {
-      const z = 1.3 + k * 2.3
+    for (let k = 0; k < 2; k++) {
+      const z = 1.9 + k * 3.6
       for (const side of [-1, 1])
         parts.push(
           k % 2 === 0
-            ? cuteLog([-5, C + side * 3.4, z], [5, C + side * 3.4, z], 1.25)
-            : cuteLog([side * 3.4, C - 5, z], [side * 3.4, C + 5, z], 1.25)
+            ? cuteLog([-5, C + side * 3.4, z], [5, C + side * 3.4, z], 1.9)
+            : cuteLog([side * 3.4, C - 5, z], [side * 3.4, C + 5, z], 1.9)
         )
     }
-    parts.push(...fireParts([0, C, 7], 3.3), ...embers([0, C, 18], seed))
+    parts.push(...fireParts([0, C, 7], 4.4), ...embers([0, C, 18], seed))
     return model(parts, { glow: { height: 16 } })
   }
-  ring(6)
-  parts.push(...fireParts([0, C + 0.5, 1.2], 2.7))
+  ring(8)
+  parts.push(...fireParts([0, C + 1, 1.6], 3.5))
   if (look === 3) {
-    // A round pot over the fire, steam curling from its lid.
+    // A round pot over the fire, suspended from a tripod.
     const leg = plain(toon('cuteLog', 2))
     parts.push(
-      stick([-6.5, C + 2, 0], [0, C, 16], 0.7, leg),
-      stick([6.5, C + 2, 0], [0, C, 16], 0.7, leg),
-      stick([0, C - 5, 0], [0, C, 16], 0.7, leg),
-      egg([0, C, 9.5], [4.4, 4, 3.4], (_x, _y, z) =>
-        z > 11.2 ? toon('steel', 4) : toon('steel', 3)
+      stick([-8, C + 3, 0], [0, C, 20], 1.55, leg),
+      stick([8, C + 3, 0], [0, C, 20], 1.55, leg),
+      stick([0, C - 5, 0], [0, C, 20], 1.55, leg),
+      egg([0, C, 13], [5.7, 5.4, 4.4], (_x, _y, z) =>
+        z > 15 ? toon('steel', 4) : toon('steel', 3)
       ),
-      ball([0, C, 13.2], 0.9, plain(toon('cuteStone', 3)))
+      ball([0, C, 17.3], 1.6, plain(toon('cuteStone', 3)))
     )
     return model(parts, { glow: { height: 8 } })
   }
   // Fish on skewers, leaning in to cook.
   const stickPaint = plain(toon('cuteLog', 3))
-  for (const a of [0.5, 2.6, 4.4]) {
+  for (const a of [0.5, 3.4]) {
     const foot: Vec3 = [Math.cos(a) * 8, C + Math.sin(a) * 5, 0]
-    const top: Vec3 = [Math.cos(a) * 3.5, C + Math.sin(a) * 2.2, 10]
-    parts.push(stick(foot, top, 0.55, stickPaint))
+    const top: Vec3 = [Math.cos(a) * 6, C + Math.sin(a) * 4, 13]
+    parts.push(stick(foot, top, 1.4, stickPaint))
     parts.push(
-      egg([top[0], top[1], top[2] - 1.6], [1.4, 1.2, 2.8], (_x, _y, z) =>
+      egg([top[0], top[1], top[2] - 1.6], [2.2, 2, 3.8], (_x, _y, z) =>
         z > top[2] - 0.2
           ? toon('cuteStone', 3)
           : z < top[2] - 3.4
@@ -1503,9 +1440,11 @@ function fireflies(seed: number) {
   const rand = random(seed)
   const glow = plain(mat('firefly', 2, 'firefly', 'none'))
   const parts: Part[] = []
-  for (let i = 0; i < 6; i++) {
-    const at: Vec3 = [(rand() - 0.5) * 20, (rand() - 0.5) * 12, 4 + rand() * 12]
-    parts.push({ ...ball(at, 0.7, glow), emitter: { kind: 'firefly', at, size: 1 } })
+  const phase = rand() * Math.PI * 2
+  for (let i = 0; i < 4; i++) {
+    const angle = phase + (i * Math.PI) / 2
+    const at: Vec3 = [Math.cos(angle) * 10, Math.sin(angle) * 8, 5 + rand() * 10]
+    parts.push({ ...ball(at, 1.15, glow), emitter: { kind: 'firefly', at, size: 1.3 } })
   }
   return model(parts, { glow: { height: 10, soft: true } })
 }
@@ -1514,18 +1453,28 @@ function afloat(base: Model) {
   return { ...base, bob: 1, sway: 0 }
 }
 
-function buoy(body: string, band: string) {
+function buoy(body: string, band: string, beacon: boolean) {
   const main = hexMat(body)
   const stripe = hexMat(band)
-  return model(
-    [
-      egg([0, 0, 0.6], [4.4, 3.6, 1], plain(mat('steel', 2))),
-      egg([0, 0, 3.6], [3.3, 3.1, 3.6], (_x, _y, z) => (z > 3 && z < 4.8 ? stripe : main)),
-      stick([0, 0, 6.5], [0, 0, 10.5], 0.5, plain(mat('steel', 3))),
-      ball([0, 0, 11], 1, plain(mat('fire', 2)))
-    ],
-    { bob: 1 }
-  )
+  const iron = plain(mat('steel', 2))
+  const parts = [
+    egg([0, 0, 1.8], [6.8, 6.8, 2.6], iron),
+    egg([0, 0, 5.8], [6.4, 6.4, 5.5], (_x, _y, z) => (z > 7 ? stripe : main)),
+    block([0, 0, 11], [3.1, 3.1, 1.3], iron)
+  ]
+  if (beacon) {
+    parts.push(
+      stick([0, 0, 11], [0, 0, 15], 2, plain(main)),
+      egg([0, 0, 16.5], [2.8, 2.8, 2.8], plain(mat('amber', 4))),
+      egg([0, 0, 19], [3.4, 3.4, 1.4], iron)
+    )
+  } else {
+    parts.push(
+      stick([0, 0, 11], [0, 0, 14], 1.8, iron),
+      taper([0, 0, 15], [0, 0, 20], 3.8, 1, plain(main))
+    )
+  }
+  return model(parts, { bob: 1 })
 }
 
 // ---- Catalogue -----------------------------------------------------------------
@@ -1546,12 +1495,12 @@ const makers: Record<DecorKind, Array<() => Model>> = {
     () => palm(62, -10, 1, 10, 650)
   ],
   bush: [
-    () => thicket(false, 700),
-    () => thicket(true, 710),
-    () => shrub(false, 720),
-    () => shrub(true, 730),
-    () => fern(740),
-    () => tallGrass(750)
+    () => thicket(false),
+    () => thicket(true),
+    () => shrub(false),
+    () => shrub(true),
+    fern,
+    tallGrass
   ],
   rock: [
     () => rockModel(0, 800),
@@ -1560,13 +1509,8 @@ const makers: Record<DecorKind, Array<() => Model>> = {
     () => stonesModel(671, false),
     () => spireModel(685, false)
   ],
-  flowers: [0, 1, 2, 3, 4, 5].map((look) => () => flowers(look, 900 + look * 7)),
-  driftwood: [
-    () => driftwood(0, 1000),
-    () => driftwood(1, 1010),
-    () => bough(1020),
-    () => stump(1030)
-  ],
+  flowers: [0, 1, 2, 3, 4, 5].map((look) => () => flowers(look)),
+  driftwood: [() => driftwood(0), () => driftwood(1), bough, stump],
   torch: [0, 1, 2, 3].map((look) => () => torch(look, 1100 + look)),
   searock: [
     () => reef(0, 1200),
@@ -1595,65 +1539,53 @@ const makers: Record<DecorKind, Array<() => Model>> = {
   ],
   monstera: [
     () =>
-      monstera(
-        [
-          [-155, 13, 7],
-          [-25, 13, 7],
-          [-115, 15, 8],
-          [-62, 16, 8]
-        ],
-        1400
-      ),
+      monstera([
+        [-155, 13, 7],
+        [-25, 13, 7],
+        [-115, 15, 8],
+        [-62, 16, 8]
+      ]),
     () =>
-      monstera(
-        [
-          [-165, 14, 7],
-          [-90, 17, 7.5],
-          [-20, 14, 7.5],
-          [-128, 11, 7.5],
-          [-52, 11, 7.5]
-        ],
-        1410
-      ),
+      monstera([
+        [-165, 14, 7],
+        [-90, 17, 7.5],
+        [-20, 14, 7.5],
+        [-128, 11, 7.5],
+        [-52, 11, 7.5]
+      ]),
     () =>
-      monstera(
-        [
-          [-140, 10, 6.5],
-          [-40, 10, 6.5],
-          [-90, 13, 7]
-        ],
-        1420
-      ),
+      monstera([
+        [-140, 10, 6.5],
+        [-40, 10, 6.5],
+        [-90, 13, 7]
+      ]),
     () =>
-      monstera(
-        [
-          [-172, 14, 6.5],
-          [-8, 14, 6.5],
-          [-135, 16, 7.5],
-          [-45, 16, 7.5],
-          [-90, 10, 7.5]
-        ],
-        1430
-      )
+      monstera([
+        [-172, 14, 6.5],
+        [-8, 14, 6.5],
+        [-135, 16, 7.5],
+        [-45, 16, 7.5],
+        [-90, 10, 7.5]
+      ])
   ],
-  cactus: [0, 1, 2, 3].map((look) => () => cactus(look, 1450 + look)),
+  cactus: [0, 1, 2, 3].map((look) => () => cactus(look)),
   relic: [0, 1, 2, 3].map((look) => () => relic(look, 1470 + look)),
   mushroom: [
-    () => mushrooms('#f0604d', true, 1500),
-    () => mushrooms('#c99a6a', false, 1501),
-    () => mushrooms('#b79ae8', true, 1502),
-    () => mushrooms('#ffc04d', false, 1503)
+    () => mushrooms('#f0604d', true),
+    () => mushrooms('#c99a6a', false),
+    () => mushrooms('#b79ae8', true),
+    () => mushrooms('#ffc04d', false)
   ],
   shell: [0, 1, 2, 3].map((look) => () => shellModel(look)),
   campfire: [0, 1, 2, 3, 4].map((look) => () => campfire(look, 1560 + look)),
   fireflies: [1600, 1610, 1620, 1630].map((seed) => () => fireflies(seed)),
   flotsam: [
-    () => afloat(driftwood(0, 31)),
-    () => afloat(driftwood(1, 32)),
-    () => afloat(bough(33)),
-    () => afloat(stump(34))
+    () => afloat(driftwood(0)),
+    () => afloat(driftwood(1)),
+    () => afloat(bough()),
+    () => afloat(stump())
   ],
-  buoy: [() => buoy('#e5483f', '#fbf6ea'), () => buoy('#f2c230', '#3d424b')]
+  buoy: [() => buoy('#e5483f', '#fbf6ea', true), () => buoy('#f2c230', '#3d424b', false)]
 }
 
 // Trees and their kin are drawn as toys: a little smaller than as modelled,
@@ -1679,15 +1611,14 @@ function toy(m: Model): Model {
   return { ...m, parts, lo: shrink(m.lo), hi: shrink(m.hi) }
 }
 
-// A model grown by `s` about the middle of its tile, where a big plant's trunk
-// stands, so the trunk stays put and only the tree around it gets bigger.
-function scaled(m: Model, s: number): Model {
+// Trees scale about the trunk at MID. Small decorations scale about their foot.
+function scaled(m: Model, s: number, middle: number): Model {
   if (s === 1) return m
-  const grow = (v: Vec3): Vec3 => [v[0] * s, MID + (v[1] - MID) * s, v[2] * s]
+  const grow = (v: Vec3): Vec3 => [v[0] * s, middle + (v[1] - middle) * s, v[2] * s]
   const parts = m.parts.map(
     (p): Part => ({
-      d: (x, y, z) => p.d(x / s, MID + (y - MID) / s, z / s) * s,
-      paint: (x, y, z) => p.paint(x / s, MID + (y - MID) / s, z / s),
+      d: (x, y, z) => p.d(x / s, middle + (y - middle) / s, z / s) * s,
+      paint: (x, y, z) => p.paint(x / s, middle + (y - middle) / s, z / s),
       lo: grow(p.lo),
       hi: grow(p.hi)
     })
@@ -1698,7 +1629,7 @@ function scaled(m: Model, s: number): Model {
     sway: m.sway * s,
     lo: grow(m.lo),
     hi: grow(m.hi),
-    grown: { from: m, scale: s, middle: MID }
+    grown: { from: m, scale: s, middle }
   }
 }
 
@@ -1708,7 +1639,7 @@ export function decorModel(kind: DecorKind, look: number, size = 0): Model {
   const key = `${kind}:${look}:${size}`
   let found = built.get(key)
   if (!found) {
-    if (size > 0) found = scaled(decorModel(kind, look), decorScale(size))
+    if (size > 0) found = scaled(decorModel(kind, look), decorScale(size), MID)
     else {
       const make = makers[kind][Math.max(0, Math.min(decorLooks[kind] - 1, look))]
       found = toyKinds.has(kind) ? toy(make()) : make()
@@ -1720,6 +1651,21 @@ export function decorModel(kind: DecorKind, look: number, size = 0): Model {
 
 export function modelLookCount(kind: DecorKind) {
   return makers[kind].length
+}
+
+// The voxel renderer scales its mesh instances. The point baker needs the same
+// dimensions before sampling so its ground shadows follow the placed object.
+export function placedDecorModel(kind: DecorKind, look: number, size: number): Model {
+  const model = decorModel(kind, look, size)
+  const scale = groundCoverScale(kind, look)
+  if (scale === 1) return model
+  const key = `placed:${kind}:${look}:${size}`
+  let found = built.get(key)
+  if (!found) {
+    found = scaled(model, scale, 0)
+    built.set(key, found)
+  }
+  return found
 }
 
 // Distance from a model's surface, and the part nearest, at a point.

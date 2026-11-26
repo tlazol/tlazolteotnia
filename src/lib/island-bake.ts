@@ -9,7 +9,13 @@
 // screen exactly where the flat map put it, so tiles are picked as before.
 
 import { groundTexel, isPoolGround, terrainClass } from './island-art'
-import { decorModel, GLOW_CODE, type Model, modelDistance, nearestPart } from './island-models'
+import {
+  GLOW_CODE,
+  type Model,
+  modelDistance,
+  nearestPart,
+  placedDecorModel
+} from './island-models'
 import {
   bayer,
   leafToneSlot,
@@ -463,13 +469,13 @@ function modelAt(decor: Uint8Array, columns: number, tile: number) {
   const ty = Math.floor(tile / columns)
   const look = decorLookAt(code, tx, ty) ?? 0
   const size = decorSizeAt(code, tx, ty)
-  return { key: modelKey(kind, look, size), model: () => decorModel(kind, look, size) }
+  return { key: modelKey(kind, look, size), model: () => placedDecorModel(kind, look, size) }
 }
 
 export function bakeModel(key: string): BakedModel {
   const [kind, look, size] = key.split(':')
   if (!Object.hasOwn(decorInfo, kind)) throw new Error(`Unknown decoration model ${key}`)
-  const model = decorModel(kind as DecorKind, Number(look), Number(size))
+  const model = placedDecorModel(kind as DecorKind, Number(look), Number(size))
   return { key, template: bakeTemplate(model), shadow: bakeShadow(model) }
 }
 
