@@ -66,6 +66,7 @@ import { tileHeight } from './island-relief'
 import {
   dropResident,
   facings,
+  paintResidentHand,
   paintResidentSheet,
   RESIDENT_FRAME,
   RESIDENT_FRAMES,
@@ -626,6 +627,24 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
     return item
   }
 
+  // Draw the hands in camera space after the world, so looking around or
+  // approaching scenery cannot move them away from the screen or clip them.
+  const handsScene = new Scene()
+  const handsCamera = new OrthographicCamera(-1, 1, 1, -1, 0.1, 10)
+  handsCamera.position.z = 2
+  const handGeometry = track(new PlaneGeometry(0.48, 0.64))
+  const handMaterial = track(
+    new MeshBasicMaterial({ transparent: true, depthTest: false, depthWrite: false })
+  )
+  const hands = [-1, 1].map((side) => {
+    const mesh = new Mesh(handGeometry, handMaterial)
+    mesh.scale.x = side
+    handsScene.add(mesh)
+    return { mesh, side }
+  })
+  let handTexture: Texture | null = null
+  let handLift = 0
+
   // The small image and the pass that scales it up.
   const target = track(
     new WebGLRenderTarget(1, 1, {
@@ -1164,6 +1183,26 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
     )
   }
 
+  function placeHands(dt: number, walking: boolean) {
+    const visible = viewer && walking && !residentIsSwimming(world, viewer)
+    handLift += ((visible ? 1 : 0) - handLift) * (1 - Math.exp(-12 * dt))
+    handsScene.visible = !!viewer && !!handTexture && handLift > 0.001
+    const aspect = size.width / size.height
+    handsCamera.left = -aspect
+    handsCamera.right = aspect
+    handsCamera.updateProjectionMatrix()
+    const phase = ((viewer?.walkClock ?? 0) / 0.36) * Math.PI * 2
+    for (const { mesh, side } of hands) {
+      const swing = Math.sin(phase + (side < 0 ? Math.PI : 0)) * handLift
+      mesh.position.set(
+        side * (Math.min(aspect * 0.62, 0.95) + swing * 0.025),
+        -1.4 + handLift * 0.54 + swing * 0.09,
+        0
+      )
+      mesh.rotation.z = side * (0.16 + swing * 0.08)
+    }
+  }
+
   function placeResidents() {
     const rotation = (viewer ? eyeCamera : camera).quaternion
     right.set(1, 0, 0).applyQuaternion(rotation)
@@ -1238,6 +1277,7 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
       }
       last = now
       const still = reducedMotion.matches
+      const previousWalkClock = viewer?.walkClock
       if (!still) {
         time += dt
         const followed = residents.find((resident) => resident.slug === selected)
@@ -1263,10 +1303,15 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
       softGlowMaterial.opacity = glow * (0.6 + 0.3 * Math.sin(time * 1.6))
       placeWildlife(still ? 0 : dt)
       if (viewer) followEyes(viewer, dt)
+      placeHands(dt, viewer !== null && viewer.walkClock !== previousWalkClock)
       placeResidents()
       renderer.setRenderTarget(target)
       renderer.clear()
       renderer.render(scene, viewer ? eyeCamera : camera)
+      if (viewer && handsScene.visible) {
+        renderer.clearDepth()
+        renderer.render(handsScene, handsCamera)
+      }
       if (!viewer) {
         renderer.clearDepth()
         renderer.render(overlay, overlayCamera)
@@ -1390,6 +1435,13 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
       const resident = residents.find((item) => item.slug === slug) ?? null
       if (viewer === resident) return
       viewer = resident
+      handLift = 0
+      handTexture?.dispose()
+      handTexture = null
+      const design = viewer && designs.get(viewer.slug)
+      if (design) handTexture = textureFrom(paintResidentHand(design))
+      handMaterial.map = handTexture
+      handMaterial.needsUpdate = true
       if (viewer) eyeYaw = Math.atan2(viewer.heading.y, viewer.heading.x)
       eyePitch = initialEyePitch
       eyeCamera.zoom = 1
@@ -1459,6 +1511,7 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
       return residents.find((resident) => resident.slug === slug) ?? null
     },
     dispose() {
+      handTexture?.dispose()
       if (disposed) return
       disposed = true
       cancelAnimationFrame(frame)

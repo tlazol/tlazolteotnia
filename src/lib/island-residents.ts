@@ -1,4 +1,12 @@
-import { createBuffer, hex, outline, type PixelBuffer, type Rgba, setPixel } from './island-art'
+import {
+  createBuffer,
+  hex,
+  islandPalette,
+  outline,
+  type PixelBuffer,
+  type Rgba,
+  setPixel
+} from './island-art'
 import {
   BLACKSAND,
   BRICK,
@@ -264,6 +272,31 @@ function painter(buffer: PixelBuffer, ox: number, oy: number): Painter {
         for (let i = 0; i < w; i++) setPixel(buffer, ox + x + i, oy + y + j, color)
     }
   }
+}
+
+// A camera-facing right hand; mirror it for the left. Keep the same palette
+// and chunky outline as the resident sprites, with the sleeve below the wrist.
+export function paintResidentHand(design: ResidentDesign) {
+  const buffer = createBuffer(24, 32)
+  const p = painter(buffer, 0, 0)
+  const skin = hex(design.skin)
+  p.rect(8, 3, 9, 2, hex(islandPalette.outline))
+  p.rect(6, 5, 13, 10, hex(islandPalette.outline))
+  p.rect(4, 10, 5, 7, hex(islandPalette.outline))
+  p.rect(7, 14, 11, 7, hex(islandPalette.outline))
+  p.rect(8, 5, 9, 10, skin)
+  p.rect(6, 11, 5, 4, skin)
+  p.rect(9, 14, 7, 6, skin)
+  p.rect(15, 6, 2, 9, shade(design.skin, -0.18))
+  p.rect(9, 5, 6, 2, shade(design.skin, 0.2))
+  p.rect(7, 11, 2, 3, shade(design.skin, 0.2))
+  p.rect(9, 12, 1, 3, shade(design.skin, -0.18))
+  p.rect(6, 19, 14, 13, hex(islandPalette.outline))
+  p.rect(8, 20, 10, 12, hex(design.top))
+  p.rect(8, 20, 10, 2, hex(design.accent))
+  p.rect(16, 22, 2, 10, shade(design.top, -0.25))
+  p.rect(8, 23, 2, 9, shade(design.top, 0.15))
+  return buffer
 }
 
 // Art layout (16×17, inset by one pixel for the outline): headwear rows 0–3,
