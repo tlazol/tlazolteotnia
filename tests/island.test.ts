@@ -42,7 +42,9 @@ import {
   residentOccupies,
   residentPose,
   settleResidents,
-  stepResidents
+  stepManualResident,
+  stepResidents,
+  takeOverResident
 } from '../src/lib/island-residents'
 import { decorVariants } from '../src/lib/island-sprites'
 import {
@@ -583,6 +585,54 @@ describe('island residents', () => {
     resident.wait = 0
     stepResidents(world, residents, 0.1, () => false)
     expect(resident.target).toEqual({ x: 0, y: 1 })
+  })
+
+  it('finishes a reserved step, strafes relative to the camera, and resumes walking from there', () => {
+    const world = createIsland(5, 5)
+    world.ground.fill(GRASS)
+    const residents = createResidents(['walker'], [{ x: 1, y: 1 }])
+    const [resident] = residents
+    resident.target = { x: 1, y: 2 }
+    resident.route = [{ x: 1, y: 3 }]
+    takeOverResident(resident)
+    expect(resident.route).toEqual([])
+    const strafe = { x: 1, y: 0 }
+    const facingSouth = Math.PI / 2
+    stepManualResident(world, residents, resident, 2, facingSouth, strafe)
+    expect(resident.tile).toEqual({ x: 1, y: 2 })
+    stepManualResident(world, residents, resident, 0.1, facingSouth, strafe)
+    expect(resident.target).toEqual({ x: 0, y: 2 })
+    for (let i = 0; i < 3; i++)
+      stepManualResident(world, residents, resident, 2, facingSouth, { x: 0, y: 0 })
+    expect(resident.tile).toEqual({ x: 0, y: 2 })
+    expect(resident.target).toBeNull()
+    stepResidents(world, residents, 0.1, () => false)
+    expect(resident.target).not.toBeNull()
+  })
+
+  it('keeps manual steps inside the island and out of blocked or reserved corners', () => {
+    const world = createIsland(3, 3)
+    const residents = createResidents(
+      ['walker', 'neighbor'],
+      [
+        { x: 0, y: 0 },
+        { x: 2, y: 0 }
+      ]
+    )
+    const [walker, neighbor] = residents
+    neighbor.target = { x: 1, y: 0 }
+    const forward = { x: 0, y: -1 }
+    for (const yaw of [Math.PI, 0, Math.PI / 4]) {
+      stepManualResident(world, residents, walker, 0.1, yaw, forward)
+      expect(walker.target).toBeNull()
+    }
+    neighbor.target = null
+    world.decor[1] = decorCode('tree')
+    stepManualResident(world, residents, walker, 0.1, Math.PI / 4, forward)
+    expect(walker.target).toBeNull()
+    world.decor[1] = 0
+    stepManualResident(world, residents, walker, 0.1, Math.PI / 4, forward)
+    expect(walker.target).toEqual({ x: 1, y: 1 })
   })
 
   it.each([

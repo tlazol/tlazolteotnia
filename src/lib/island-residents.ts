@@ -1066,6 +1066,80 @@ export function settleResidents(world: IslandWorld, residents: Resident[]) {
   return moved
 }
 
+function startStep(
+  world: IslandWorld,
+  residents: Resident[],
+  resident: Resident,
+  next: { x: number; y: number }
+) {
+  if (
+    !canStep(
+      resident.tile.x,
+      resident.tile.y,
+      next.x,
+      next.y,
+      (x, y) =>
+        canResidentEnter(world, x, y) &&
+        !residents.some((other) => other !== resident && residentOccupies(other, x, y))
+    )
+  )
+    return false
+  resident.target = next
+  resident.heading = { x: next.x - resident.tile.x, y: next.y - resident.tile.y }
+  return true
+}
+
+function advanceStep(world: IslandWorld, resident: Resident, dt: number) {
+  if (!resident.target) return
+  const goal = footOf(resident.target)
+  const distance = Math.hypot(goal.x - resident.x, goal.y - resident.y)
+  const speed = resident.speed * (residentIsSwimming(world, resident) ? 0.65 : 1)
+  const move = speed * dt
+  resident.walkClock += dt * (speed / 21)
+  resident.frame = Math.floor(resident.walkClock / 0.18) % 2 ? 1 : 2
+  if (distance <= move) {
+    resident.x = goal.x
+    resident.y = goal.y
+    resident.tile = resident.target
+    resident.target = null
+    resident.frame = 0
+  } else {
+    resident.x += ((goal.x - resident.x) / distance) * move
+    resident.y += ((goal.y - resident.y) / distance) * move
+  }
+}
+
+export function takeOverResident(resident: Resident) {
+  resident.route = []
+  resident.wait = 0
+  resident.offsetX = 0
+  resident.offsetY = 0
+  resident.tilt = 0
+  resident.frame = 0
+  resident.action = 'walk'
+  resident.actionRemaining = actionDuration('walk', Math.random)
+}
+
+export function stepManualResident(
+  world: IslandWorld,
+  residents: Resident[],
+  resident: Resident,
+  dt: number,
+  yaw: number,
+  input: { x: number; y: number }
+) {
+  // Reserve one of the eight neighboring tiles in the direction seen by the viewer.
+  if (!resident.target && (input.x || input.y)) {
+    const sector = Math.round((yaw + Math.atan2(input.x, -input.y)) / (Math.PI / 4))
+    const angle = (sector * Math.PI) / 4
+    startStep(world, residents, resident, {
+      x: resident.tile.x + Math.round(Math.cos(angle)),
+      y: resident.tile.y + Math.round(Math.sin(angle))
+    })
+  }
+  advanceStep(world, resident, dt)
+}
+
 export function stepResidents(
   world: IslandWorld,
   residents: Resident[],
@@ -1113,45 +1187,15 @@ export function stepResidents(
       if (resident.wait > 0) continue
       if (!resident.route.length) resident.route = planJourney(world, residents, resident)
       const next = resident.route.shift()
-      if (
-        !next ||
-        !canStep(
-          resident.tile.x,
-          resident.tile.y,
-          next.x,
-          next.y,
-          (x, y) =>
-            canResidentEnter(world, x, y) &&
-            !residents.some((other) => other !== resident && residentOccupies(other, x, y))
-        )
-      ) {
+      if (!next || !startStep(world, residents, resident, next)) {
         resident.route = []
         resident.wait = 0.3 + hash2(resident.seed, performanceSeed(resident), 9) * 0.7
         continue
       }
-      const dx = next.x - resident.tile.x
-      const dy = next.y - resident.tile.y
-      resident.target = next
-      resident.heading = { x: dx, y: dy }
     }
-    const goal = footOf(resident.target)
-    const distance = Math.hypot(goal.x - resident.x, goal.y - resident.y)
-    const speed = resident.speed * (residentIsSwimming(world, resident) ? 0.65 : 1)
-    const move = speed * dt
-    resident.walkClock += dt * (speed / 21)
-    resident.frame = Math.floor(resident.walkClock / 0.18) % 2 ? 1 : 2
-    if (distance <= move) {
-      resident.x = goal.x
-      resident.y = goal.y
-      resident.tile = resident.target
-      resident.target = null
-      resident.frame = 0
-      if (!resident.route.length)
-        resident.wait = 0.5 + hash2(resident.seed, performanceSeed(resident), 7) * 1.5
-    } else {
-      resident.x += ((goal.x - resident.x) / distance) * move
-      resident.y += ((goal.y - resident.y) / distance) * move
-    }
+    advanceStep(world, resident, dt)
+    if (!resident.target && !resident.route.length)
+      resident.wait = 0.5 + hash2(resident.seed, performanceSeed(resident), 7) * 1.5
   }
 }
 

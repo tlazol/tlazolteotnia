@@ -82,7 +82,9 @@ import {
   residentOccupies,
   residentPose,
   settleResidents,
-  stepResidents
+  stepManualResident,
+  stepResidents,
+  takeOverResident
 } from './island-residents'
 import {
   GULL_FRAME,
@@ -1002,6 +1004,8 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
   } | null = null
   let selected: string | null = null
   let viewer: Resident | null = null
+  let walkInput: Point | null = null
+  let queuedInput: Point | null = null
   let eyeYaw = 0
   const initialEyePitch = -Math.atan(0.12)
   let eyePitch = initialEyePitch
@@ -1099,7 +1103,7 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
   const right = new Vector3()
   const up = new Vector3()
   function followEyes(resident: Resident, dt: number) {
-    if (followHeading) {
+    if (followHeading && !walkInput) {
       const delta = Math.atan2(resident.heading.y, resident.heading.x) - eyeYaw
       eyeYaw += Math.atan2(Math.sin(delta), Math.cos(delta)) * (1 - Math.exp(-8 * dt))
     }
@@ -1209,11 +1213,22 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
       last = now
       const still = reducedMotion.matches
       const previousWalkClock = viewer?.walkClock
-      if (!still) {
-        time += dt
+      if (!still) time += dt
+      if (!still || (viewer && walkInput)) {
         const followed = residents.find((resident) => resident.slug === selected)
         const previous = followed && { x: followed.x, y: followed.y }
-        stepResidents(world, residents, dt, (slug) => slug === dragged?.resident.slug)
+        if (!still)
+          stepResidents(
+            world,
+            residents,
+            dt,
+            (slug) => slug === dragged?.resident.slug || (!!walkInput && slug === viewer?.slug)
+          )
+        if (viewer && walkInput) {
+          const direction = queuedInput ?? walkInput
+          if (!viewer.target) queuedInput = null
+          stepManualResident(world, residents, viewer, dt, eyeYaw, direction)
+        }
         if (followed && previous && (followed.x !== previous.x || followed.y !== previous.y)) {
           // Follow walking without undoing the user's pan or zoom, or chasing each hop.
           view = clampView(
@@ -1228,7 +1243,8 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
       updateDaylight(now)
       placeWildlife(still ? 0 : dt)
       if (viewer) followEyes(viewer, dt)
-      placeHands(dt, viewer !== null && viewer.walkClock !== previousWalkClock)
+      if (still) handLift = 0
+      placeHands(dt, !still && viewer !== null && viewer.walkClock !== previousWalkClock)
       placeResidents()
       renderer.setRenderTarget(target)
       renderer.clear()
@@ -1244,7 +1260,8 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
       renderer.render(decor.particleScene, activeCamera)
       if (viewer && handsScene.visible) renderer.render(handsScene, handsCamera)
       onFrame(viewer ? [] : project(), view)
-      if (!still) frame = requestAnimationFrame(draw)
+      if (!still || (walkInput && (walkInput.x || walkInput.y || queuedInput || viewer?.target)))
+        wake()
     } catch (error) {
       fail(error)
     }
@@ -1387,6 +1404,8 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
     setFirstPerson(slug: string | null) {
       const resident = residents.find((item) => item.slug === slug) ?? null
       if (viewer === resident) return
+      walkInput = null
+      queuedInput = null
       viewer = resident
       handLift = 0
       handTexture?.dispose()
@@ -1401,6 +1420,14 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
       followHeading = true
       scene.background = viewer ? skyColor : null
       placeCamera()
+      wake()
+    },
+    setWalkInput(input: Point | null) {
+      if (!viewer) return
+      if (input && !walkInput) takeOverResident(viewer)
+      walkInput = input
+      // Remember a quick tap until the current tile reservation finishes.
+      if (!input || input.x || input.y) queuedInput = input
       wake()
     },
     get eyeZoom() {

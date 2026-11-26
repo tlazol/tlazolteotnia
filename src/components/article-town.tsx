@@ -25,6 +25,7 @@ import { shouldClosePostByHistoryBack, shouldOpenPostModal } from '#/lib/post-mo
 import { PixelIcon } from './island-icons'
 import { IslandToolbar, toolShortcuts } from './island-toolbar'
 import { PostModal } from './post-modal'
+import { ResidentWalkControls } from './resident-walk-controls'
 import { SiteHeader } from './site-header'
 import { TownArticleList } from './town-article-list'
 import { placeTownBubble, TownBubble } from './town-bubble'
@@ -448,7 +449,7 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
         aria-roledescription={viewerSlug ? '住民の視点' : '島の地図'}
         aria-label={
           viewerSlug
-            ? `「${activePost?.title}」の住民の視点。他の住民を選ぶと、その住民の視点に切り替わります。ドラッグで周囲を見渡し、ピンチで拡大・縮小できます。`
+            ? `「${activePost?.title}」の住民の視点。他の住民を選ぶと、その住民の視点に切り替わります。WASD・矢印キーまたは方向ボタンで移動し、操作を離すと4秒で自動移動に戻ります。ドラッグで周囲を見渡し、ピンチで拡大・縮小できます。`
             : editing
               ? `島の編集。矢印キーで編集位置を動かし、Enterで${options.tool === 'land' ? '土地を足す・塗り替えます' : '選んだツールを使います'}。`
               : '島の地図。右ドラッグまたは2本指でひねって回転。矢印キーで移動、+ と − で拡大縮小、0 で最初の位置に戻ります。'
@@ -567,6 +568,9 @@ export function ArticleTown({ posts }: { posts: BlogPostSummary[] }) {
             />
           )}
         </div>
+      )}
+      {viewerSlug && renderer.current && (
+        <ResidentWalkControls key={viewerSlug} renderer={renderer.current} />
       )}
       {viewerSlug && (
         <div className="island-camera-controls island-camera">
