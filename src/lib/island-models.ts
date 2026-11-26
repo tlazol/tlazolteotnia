@@ -22,7 +22,9 @@ export const GLOW_CODE = { fire: 1, firefly: 2, flame: 3 } as const satisfies Re
 // `flat` lights a surface in two tones only, as a sign rather than a thing.
 export type Material = { slot: number; glow?: Glow; outline?: Outline; flat?: boolean }
 export type Painter = (x: number, y: number, z: number) => Material
+export type LightEmitter = { kind: 'flame' | 'firefly'; at: Vec3; size: number }
 export type Part = {
+  emitter?: LightEmitter
   d: (x: number, y: number, z: number) => number
   paint: Painter
   lo: Vec3
@@ -1218,7 +1220,7 @@ function fireParts(at: Vec3, size: number, lean = 0): Part[] {
     return taper(base, tip, s, s * 0.08, plain(mat('flame', step, 'flame', 'ramp')))
   }
   return [
-    layer(1, 1, 0),
+    { ...layer(1, 1, 0), emitter: { kind: 'flame', at, size } },
     layer(2, 0.72, size * 0.5),
     layer(3, 0.45, size * 0.9),
     layer(4, 0.2, size * 1.15)
@@ -1424,8 +1426,10 @@ function fireflies(seed: number) {
   const rand = random(seed)
   const glow = plain(mat('firefly', 2, 'firefly', 'none'))
   const parts: Part[] = []
-  for (let i = 0; i < 6; i++)
-    parts.push(ball([(rand() - 0.5) * 20, (rand() - 0.5) * 12, 4 + rand() * 12], 0.7, glow))
+  for (let i = 0; i < 6; i++) {
+    const at: Vec3 = [(rand() - 0.5) * 20, (rand() - 0.5) * 12, 4 + rand() * 12]
+    parts.push({ ...ball(at, 0.7, glow), emitter: { kind: 'firefly', at, size: 1 } })
+  }
   return model(parts, { glow: { height: 10, soft: true } })
 }
 

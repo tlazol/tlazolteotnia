@@ -1,14 +1,13 @@
 import {
-  AdditiveBlending,
   AlwaysStencilFunc,
   AmbientLight,
   CanvasTexture,
   Color,
-  CustomBlending,
   DataTexture,
+  DepthStencilFormat,
+  DepthTexture,
   DirectionalLight,
   DoubleSide,
-  DstColorFactor,
   EqualStencilFunc,
   GreaterDepth,
   Group,
@@ -32,11 +31,12 @@ import {
   ShaderMaterial,
   type Texture,
   UnsignedByteType,
+  UnsignedInt248Type,
   Vector2,
   Vector3,
+  Vector4,
   WebGLRenderer,
-  WebGLRenderTarget,
-  ZeroFactor
+  WebGLRenderTarget
 } from 'three'
 import {
   createBuffer,
@@ -65,6 +65,7 @@ import {
 } from './island-camera'
 import { daylightNow } from './island-daylight'
 import { createDecor } from './island-decor.client'
+import { firelightMaterial, lightMaterial } from './island-lights.client'
 import { tileHeight } from './island-relief'
 import {
   dropResident,
@@ -142,81 +143,6 @@ function pixelTexture<T extends Texture>(texture: T) {
   texture.generateMipmaps = false
   texture.colorSpace = NoColorSpace
   return texture
-}
-
-// Instanced flat sprites keyed by an id, in screen coordinates. Adding and
-// removing touches only that instance; capacity grows by doubling.
-class SpriteLayer {
-  mesh: InstancedMesh
-  private keys: number[] = []
-  private slots = new Map<number, number>()
-  private matrix = new Matrix4()
-  constructor(
-    private scene: Scene,
-    private geometry: PlaneGeometry,
-    private material: Material,
-    private width: number,
-    private height: number,
-    capacity = 32,
-    private renderOrder = 0
-  ) {
-    this.mesh = this.create(capacity)
-  }
-  private create(capacity: number) {
-    const mesh = new InstancedMesh(this.geometry, this.material, capacity)
-    mesh.count = 0
-    mesh.frustumCulled = false
-    mesh.renderOrder = this.renderOrder
-    this.scene.add(mesh)
-    return mesh
-  }
-  // Places the sprite with its bottom-center at (x, y) in art pixels.
-  set(key: number, x: number, y: number, z: number) {
-    let slot = this.slots.get(key)
-    if (slot === undefined) {
-      slot = this.keys.length
-      if (slot >= this.mesh.instanceMatrix.count) {
-        const next = this.create(this.mesh.instanceMatrix.count * 2)
-        for (let i = 0; i < this.keys.length; i++) {
-          this.mesh.getMatrixAt(i, this.matrix)
-          next.setMatrixAt(i, this.matrix)
-        }
-        this.scene.remove(this.mesh)
-        this.mesh.dispose()
-        this.mesh = next
-      }
-      this.keys.push(key)
-      this.slots.set(key, slot)
-      this.mesh.count = this.keys.length
-    }
-    const left = Math.round(x) - Math.floor(this.width / 2)
-    const top = Math.round(y) - this.height
-    this.matrix.makeTranslation(left + this.width / 2, -(top + this.height / 2), z)
-    this.mesh.setMatrixAt(slot, this.matrix)
-    this.mesh.instanceMatrix.needsUpdate = true
-  }
-  remove(key: number) {
-    const slot = this.slots.get(key)
-    if (slot === undefined) return
-    const last = this.keys.length - 1
-    if (slot !== last) {
-      this.mesh.getMatrixAt(last, this.matrix)
-      this.mesh.setMatrixAt(slot, this.matrix)
-      this.keys[slot] = this.keys[last]
-      this.slots.set(this.keys[slot], slot)
-    }
-    this.keys.pop()
-    this.slots.delete(key)
-    this.mesh.count = this.keys.length
-    this.mesh.instanceMatrix.needsUpdate = true
-  }
-  clear() {
-    for (const key of [...this.keys]) this.remove(key)
-  }
-  dispose() {
-    this.scene.remove(this.mesh)
-    this.mesh.dispose()
-  }
 }
 
 // A flat plane in screen coordinates, at the reference height.
@@ -487,22 +413,18 @@ void main() {
 // Scales the small image up to the screen, each art pixel a block of whole
 // device pixels; the offset keeps panning smooth below one art pixel.
 const blitVertex = /* glsl */ `
+varying vec2 vUv;
 void main() {
+  vUv = uv;
   gl_Position = vec4(position.xy, 0.0, 1.0);
 }
 `
 const blitFragment = /* glsl */ `
 uniform sampler2D uImage;
-uniform vec2 uSize;
-uniform vec2 uOffset;
-uniform float uScale;
-uniform float uCanvasHeight;
-uniform vec3 uTint;
+uniform vec4 uArtRect;
+varying vec2 vUv;
 void main() {
-  vec2 device = vec2(gl_FragCoord.x, uCanvasHeight - gl_FragCoord.y);
-  vec2 art = floor(uOffset + device * uScale + 0.0001) + 0.5;
-  gl_FragColor = texture2D(uImage, vec2(art.x / uSize.x, 1.0 - art.y / uSize.y));
-  gl_FragColor.rgb *= uTint;
+  gl_FragColor = texture2D(uImage, uArtRect.xy + vUv * uArtRect.zw);
 }
 `
 
@@ -541,28 +463,6 @@ function ringBuffer() {
     }
   }
   outline(buffer, hex('#2b2236', 160))
-  return buffer
-}
-
-// Warm light around a fire, added over the darkened scene at night, and the
-// smaller, greener light of fireflies. Dithered rings keep both on the pixel grid.
-const GLOW = { width: 96, height: 72, color: '#ff9d3c' } as const
-const SOFT_GLOW = { width: 56, height: 42, color: '#b9e85a' } as const
-function glowBuffer(look: { width: number; height: number; color: string }) {
-  const buffer = createBuffer(look.width, look.height)
-  const bayer = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5]
-  for (let y = 0; y < look.height; y++) {
-    for (let x = 0; x < look.width; x++) {
-      const d = Math.hypot(
-        (x + 0.5 - look.width / 2) / (look.width / 2),
-        (y + 0.5 - look.height / 2) / (look.height / 2)
-      )
-      if (d >= 1) continue
-      const threshold = (bayer[((y >> 1) & 3) * 4 + ((x >> 1) & 3)] + 0.5) / 16
-      const level = Math.floor((1 - d) ** 1.5 * 6 + threshold)
-      if (level > 0) setPixel(buffer, x, y, hex(look.color, Math.min(150, level * 26)))
-    }
-  }
   return buffer
 }
 
@@ -608,6 +508,7 @@ export type IslandRendererOptions = {
 export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandRendererOptions) {
   const { world, residents, designs, onFrame, onFailure } = options
   const renderer = new WebGLRenderer({ canvas, antialias: false, alpha: false, stencil: true })
+  renderer.outputColorSpace = LinearSRGBColorSpace
   renderer.shadowMap.enabled = true
   renderer.shadowMap.autoUpdate = false
   renderer.autoClear = false
@@ -668,27 +569,37 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
   let handLift = 0
 
   // The small image and the pass that scales it up.
+  const depth = new DepthTexture(1, 1, UnsignedInt248Type)
+  depth.format = DepthStencilFormat
   const target = track(
     new WebGLRenderTarget(1, 1, {
       depthBuffer: true,
       stencilBuffer: true,
+      depthTexture: depth,
       magFilter: NearestFilter,
       minFilter: NearestFilter,
       generateMipmaps: false
     })
   )
   target.texture.colorSpace = NoColorSpace
+  // Sample the world's color and depth while composing light into a separate image.
+  const litTarget = track(
+    new WebGLRenderTarget(1, 1, {
+      depthBuffer: false,
+      minFilter: NearestFilter,
+      magFilter: NearestFilter,
+      generateMipmaps: false
+    })
+  )
+  // UV bounds of the visible crop within the slightly oversized world image.
+  const artRect = { value: new Vector4(0, 0, 1, 1) }
   const blitMaterial = track(
     new ShaderMaterial({
       vertexShader: blitVertex,
       fragmentShader: blitFragment,
       uniforms: {
-        uImage: { value: target.texture },
-        uSize: { value: [1, 1] },
-        uOffset: { value: [0, 0] },
-        uScale: { value: 1 },
-        uCanvasHeight: { value: 1 },
-        uTint: { value: new Color(1, 1, 1) }
+        uImage: { value: litTarget.texture },
+        uArtRect: artRect
       },
       depthTest: false,
       depthWrite: false
@@ -768,51 +679,24 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
   // Time of day: everything drawn so far is multiplied by the hour's color.
   const tintMaterial = track(
     new MeshBasicMaterial({
-      blending: CustomBlending,
-      blendSrc: DstColorFactor,
-      blendDst: ZeroFactor,
-      transparent: true,
+      map: target.texture,
       depthTest: false,
       depthWrite: false
     })
   )
-  const tint = new Mesh(skyGeometry, tintMaterial)
-  tint.position.set(WORLD_WIDTH / 2, -WORLD_HEIGHT / 2, Z.sky)
-  tint.renderOrder = 24
-  tint.frustumCulled = false
-  overlay.add(tint)
-  const glowLayer = (look: typeof GLOW | typeof SOFT_GLOW) => {
-    const material = track(
-      new MeshBasicMaterial({
-        map: track(textureFrom(glowBuffer(look))),
-        blending: AdditiveBlending,
-        transparent: true,
-        depthTest: false,
-        depthWrite: false
-      })
-    )
-    const layer = new SpriteLayer(
-      overlay,
-      track(new PlaneGeometry(look.width, look.height)),
-      material,
-      look.width,
-      look.height,
-      16,
-      26
-    )
-    return { material, layer }
-  }
-  const { material: glowMaterial, layer: glows } = glowLayer(GLOW)
-  const { material: softGlowMaterial, layer: softGlows } = glowLayer(SOFT_GLOW)
-  let glow = 0
+  const tintScene = new Scene()
+  const tint = new Mesh(blit.geometry, tintMaterial)
+  tint.position.z = -0.5
+  tintScene.add(tint)
+  const night = { value: 0 }
   let lightChecked = -Infinity
   function updateDaylight(now: number) {
     if (now - lightChecked < 15_000) return
     lightChecked = now
     const light = daylightNow()
     tintMaterial.color.setRGB(...light.tint, LinearSRGBColorSpace)
-    tint.visible = light.tint.some((channel) => channel < 0.999)
-    glow = light.glow
+    night.value = light.glow
+    handMaterial.color.copy(tintMaterial.color)
   }
 
   const scenery = new Group()
@@ -821,29 +705,23 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
   const decorMaterial = track(
     stampStencil(new MeshLambertMaterial({ vertexColors: true }), BEHIND_DECOR)
   )
+  const inverseProjection = { value: camera.projectionMatrixInverse }
   const decor = createDecor(
     world,
     scenery,
     decorMaterial,
     clock,
+    {
+      particles: track(lightMaterial(clock, night, depth, artRect)),
+      firelight: track(firelightMaterial(clock, night, depth, target.texture, inverseProjection))
+    },
     () => {
       renderer.shadowMap.needsUpdate = true
-      placeGlows()
       wake()
     },
     fail
   )
   renderer.shadowMap.needsUpdate = true
-  function placeGlows() {
-    glows.clear()
-    softGlows.clear()
-    for (const [tile, light] of decor.lights) {
-      const point = projectGround(view, light.x, light.y, light.z)
-      const look = light.soft ? SOFT_GLOW : GLOW
-      ;(light.soft ? softGlows : glows).set(tile, point.x, point.y + look.height / 2, Z.sky)
-    }
-  }
-
   // Editing aids: corner dots near the cursor and the edge of the editable area.
   const gridMaterial = track(
     new ShaderMaterial({
@@ -1120,11 +998,14 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
 
   function sizeImage(width: number, height: number, x: number, y: number, scale: number) {
-    if (target.width !== width || target.height !== height) target.setSize(width, height)
-    blitMaterial.uniforms.uSize.value = [width, height]
-    blitMaterial.uniforms.uOffset.value = [x, y]
-    blitMaterial.uniforms.uScale.value = scale
-    blitMaterial.uniforms.uCanvasHeight.value = renderer.domElement.height
+    if (target.width !== width || target.height !== height) {
+      target.setSize(width, height)
+      litTarget.setSize(width, height)
+    }
+    const spanX = (renderer.domElement.width * scale) / width
+    const spanY = (renderer.domElement.height * scale) / height
+    // Match the art-pixel tie break on the top and left edges when zoomed.
+    artRect.value.set((x + 0.0001) / width, 1 - (y + 0.0001) / height - spanY, spanX, spanY)
   }
 
   function placeCamera() {
@@ -1145,7 +1026,6 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
       const axis = cameraAxis(view)
       camera.position.set(axis.x * pitchCos * 3000, -axis.y * pitchCos * 3000, pitchSin * 3000)
       camera.lookAt(0, 0, 0)
-      placeGlows()
     }
     // The small image starts on a whole art pixel; the scale-up shifts it by
     // the rest.
@@ -1328,31 +1208,23 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
       waterMaterial.uniforms.uTime.value = time
       clock.value = time
       updateDaylight(now)
-      glows.mesh.visible = glow > 0.01
-      // The firelight wavers in steps, like the flames.
-      glowMaterial.opacity = glow * (0.86 + 0.14 * Math.sin(Math.floor(time * 7) * 2.4))
-      softGlows.mesh.visible = glows.mesh.visible
-      // Fireflies pulse slowly instead.
-      softGlowMaterial.opacity = glow * (0.6 + 0.3 * Math.sin(time * 1.6))
       placeWildlife(still ? 0 : dt)
       if (viewer) followEyes(viewer, dt)
       placeHands(dt, viewer !== null && viewer.walkClock !== previousWalkClock)
       placeResidents()
       renderer.setRenderTarget(target)
       renderer.clear()
-      renderer.render(scene, viewer ? eyeCamera : camera)
-      if (viewer && handsScene.visible) {
-        renderer.clearDepth()
-        renderer.render(handsScene, handsCamera)
-      }
-      if (!viewer) {
-        renderer.clearDepth()
-        renderer.render(overlay, overlayCamera)
-      }
-      // The map receives daylight in its overlay. Tint the eye-level image at blit time.
-      if (viewer) blitMaterial.uniforms.uTint.value.copy(tintMaterial.color)
+      const activeCamera = viewer ? eyeCamera : camera
+      renderer.render(scene, activeCamera)
+      if (!viewer) renderer.render(overlay, overlayCamera)
+      renderer.setRenderTarget(litTarget)
+      renderer.render(tintScene, blitCamera)
+      inverseProjection.value = activeCamera.projectionMatrixInverse
+      renderer.render(decor.firelightScene, activeCamera)
       renderer.setRenderTarget(null)
       renderer.render(blitScene, blitCamera)
+      renderer.render(decor.particleScene, activeCamera)
+      if (viewer && handsScene.visible) renderer.render(handsScene, handsCamera)
       onFrame(viewer ? [] : project(), view)
       if (!still) frame = requestAnimationFrame(draw)
     } catch (error) {
@@ -1454,7 +1326,6 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
         terrain.update(indices)
         decor.update(indices)
         if (editing) syncGrid()
-        placeGlows()
         renderer.shadowMap.needsUpdate = true
       } catch (error) {
         fail(error)
@@ -1511,7 +1382,6 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
       eyeCamera.zoom = 1
       followHeading = true
       scene.background = viewer ? skyColor : null
-      blitMaterial.uniforms.uTint.value.setRGB(1, 1, 1)
       placeCamera()
       wake()
     },
@@ -1587,8 +1457,6 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
       reducedMotion.removeEventListener('change', wake)
       canvas.removeEventListener('webglcontextlost', contextLost)
       for (const { mesh } of cursorLayers) mesh.dispose()
-      glows.dispose()
-      softGlows.dispose()
       for (const item of disposables) item.dispose()
       renderer.dispose()
     }

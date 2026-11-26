@@ -1,11 +1,17 @@
 import {
+  BoxGeometry,
   BufferAttribute,
   BufferGeometry,
   type Group,
+  type InstancedBufferGeometry,
   InstancedMesh,
   Matrix4,
-  type MeshLambertMaterial
+  Mesh,
+  type MeshLambertMaterial,
+  Scene,
+  type ShaderMaterial
 } from 'three'
+import { type DecorPlacement, firelightVolumes, lightGeometry } from './island-lights.client'
 import { leafToneSlot, palette } from './island-palette'
 import { tileHeight } from './island-relief'
 import type { VoxelResult } from './island-voxels.worker'
@@ -22,6 +28,8 @@ import {
 
 type Batch = {
   tiles: Set<number>
+  particles?: Mesh<InstancedBufferGeometry>
+  firelight?: InstancedMesh
   data?: VoxelResult
   geometry: Map<number, BufferGeometry>
   meshes: InstancedMesh[]
@@ -33,6 +41,7 @@ export function createDecor(
   parent: Group,
   material: MeshLambertMaterial,
   time: { value: number },
+  lightMaterials: { particles: ShaderMaterial; firelight: ShaderMaterial },
   changed: () => void,
   failure: (error: unknown) => void
 ) {
@@ -47,7 +56,9 @@ export function createDecor(
     loaded = resolve
   })
   const matrix = new Matrix4()
-  const lights = new Map<number, { x: number; y: number; z: number; soft: boolean }>()
+  const particleScene = new Scene()
+  const firelightScene = new Scene()
+  const lightBox = new BoxGeometry(2, 2, 2)
   function rebuild(batch: Batch) {
     const data = batch.data
     if (!data || !batch.material) return
@@ -56,13 +67,35 @@ export function createDecor(
       mesh.dispose()
     }
     batch.meshes = []
-    const tones = new Map<number, number[]>()
+    if (batch.particles) {
+      particleScene.remove(batch.particles)
+      batch.particles.geometry.dispose()
+      batch.particles = undefined
+    }
+    if (batch.firelight) {
+      firelightScene.remove(batch.firelight)
+      batch.firelight.dispose()
+      batch.firelight = undefined
+    }
+    const placements: DecorPlacement[] = []
+    const tones = new Map<number, DecorPlacement[]>()
     for (const tile of batch.tiles) {
       const x = tile % world.columns,
         y = Math.floor(tile / world.columns)
-      const tone = decorToneAt(world.decor[tile], x, y)
+      const code = world.decor[tile]
+      const scale = decorScale(decorSizeAt(code, x, y))
+      const placement = {
+        tile,
+        x: (x + 0.5) * TILE_SIZE,
+        y: (y + 0.5) * TILE_SIZE + 6 * scale,
+        z: tileHeight(world, x, y),
+        scale
+      }
+      if (data.emitters.length) placements.push(placement)
+      if (!data.surface.indices.length) continue
+      const tone = decorToneAt(code, x, y)
       const group = tones.get(tone) ?? []
-      group.push(tile)
+      group.push(placement)
       tones.set(tone, group)
     }
     for (const [tone, tiles] of tones) {
@@ -82,26 +115,29 @@ export function createDecor(
         batch.geometry.set(tone, geo)
       }
       const mesh = new InstancedMesh(geo, batch.material, tiles.length)
-      tiles.forEach((tile, i) => {
-        const x = tile % world.columns,
-          y = Math.floor(tile / world.columns)
-        const scale = decorScale(decorSizeAt(world.decor[tile], x, y))
-        const h = tileHeight(world, x, y)
-        const px = x * TILE_SIZE + TILE_SIZE / 2,
-          py = y * TILE_SIZE + TILE_SIZE / 2 + 6 * scale
-        matrix.makeScale(scale, scale, scale).setPosition(px, py, h)
+      tiles.forEach(({ x, y, z, scale }, i) => {
+        matrix.makeScale(scale, scale, scale).setPosition(x, y, z)
         mesh.setMatrixAt(i, matrix)
-        if (data.glowHeight !== undefined)
-          lights.set(tile, {
-            x: px,
-            y: py - 6 * scale,
-            z: h + data.glowHeight * scale,
-            soft: data.kind === 'fireflies'
-          })
       })
       mesh.castShadow = mesh.receiveShadow = true
       batch.meshes.push(mesh)
       parent.add(mesh)
+    }
+    if (placements.length) {
+      batch.particles = new Mesh(
+        lightGeometry(data.emitters, placements, data.kind === 'campfire'),
+        lightMaterials.particles
+      )
+      // The shader positions quads across the island from per-instance origins.
+      batch.particles.frustumCulled = false
+      particleScene.add(batch.particles)
+      batch.firelight = firelightVolumes(
+        data.emitters,
+        placements,
+        lightBox,
+        lightMaterials.firelight
+      )
+      if (batch.firelight) firelightScene.add(batch.firelight)
     }
   }
 
@@ -139,7 +175,6 @@ export function createDecor(
   function update(indices: Iterable<number>) {
     const dirty = new Set<Batch>()
     for (const tile of indices) {
-      lights.delete(tile)
       const old = tileKeys.get(tile)
       if (old) {
         const batch = batches.get(old)
@@ -172,13 +207,17 @@ export function createDecor(
   return {
     ready,
     update,
-    lights,
+    firelightScene,
+    particleScene,
     dispose() {
       worker.terminate()
+      lightBox.dispose()
       for (const batch of batches.values()) {
         for (const geometry of batch.geometry.values()) geometry.dispose()
         for (const mesh of batch.meshes) mesh.dispose()
         batch.material?.dispose()
+        batch.particles?.geometry.dispose()
+        batch.firelight?.dispose()
       }
     }
   }

@@ -29,8 +29,11 @@ export function voxelSurface(model: Model): VoxelSurface {
           const d = part.d(px, py, pz)
           const cell = x + y * stride[1] + z * stride[2]
           if (d > step * 0.24 || d >= distance[cell]) continue
+          const material = part.paint(px, py, pz)
+          // The live scene renders luminous parts as particles. The thumbnail baker keeps the paint.
+          if (material.glow) continue
           distance[cell] = d
-          cells[cell] = part.paint(px, py, pz).slot
+          cells[cell] = material.slot
         }
   }
   // Only exposed faces enter the mesh. Neighboring blocks share no inner walls.
