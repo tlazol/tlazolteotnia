@@ -1,12 +1,19 @@
 import {
+  BoxGeometry,
   BufferAttribute,
   BufferGeometry,
   DataTexture,
+  type Group,
+  InstancedMesh,
+  Matrix4,
   Mesh,
   MeshLambertMaterial,
-  NearestFilter
+  NearestFilter,
+  type Scene,
+  ShaderMaterial
 } from 'three'
 import { groundTexel } from './island-art'
+import { type DecorPlacement, lightVolumes } from './island-lights.client'
 import { tileHeight } from './island-relief'
 import {
   CLOVER,
@@ -55,7 +62,12 @@ function terrainTexture() {
 }
 
 // Each patch owns its tops and only the walls exposed to lower neighbors.
-function patchGeometry(world: IslandWorld, startX: number, startY: number) {
+function patchGeometry(
+  world: IslandWorld,
+  startX: number,
+  startY: number,
+  lamps: DecorPlacement[]
+) {
   const positions: number[] = [],
     uv: number[] = [],
     colors: number[] = [],
@@ -121,6 +133,16 @@ function patchGeometry(world: IslandWorld, startX: number, startY: number) {
           wall(floor, h, SOIL, 0.81)
         } else if (kind === DECK && h > 0) {
           wall(Math.max(floor, h - 3), h, DECK, 0.86)
+          // A low lantern every other tile along the water-facing rim.
+          if ((dx ? y : x) % 2 === 0 && isWetGround(groundAt(world, x + dx, y + dy))) {
+            lamps.push({
+              tile: y * world.columns + x,
+              x: (a[0] + b[0]) / 2 - dx * 1.5,
+              y: (a[1] + b[1]) / 2 - dy * 1.5,
+              z: h,
+              scale: 1
+            })
+          }
           // Short square pilings below the exposed edge.
           const ax = a[0] + (b[0] - a[0]) * 0.15 - dx
           const ay = a[1] + (b[1] - a[1]) * 0.15 - dy
@@ -160,16 +182,67 @@ function patchGeometry(world: IslandWorld, startX: number, startY: number) {
   return geometry
 }
 
-export function createTerrain(world: IslandWorld, parent: import('three').Group) {
+export function createTerrain(
+  world: IslandWorld,
+  parent: Group,
+  night: { value: number },
+  lightScene: Scene,
+  lightMaterial: ShaderMaterial
+) {
   const map = terrainTexture()
   const material = new MeshLambertMaterial({ map, vertexColors: true, alphaTest: 0.5 })
   const patches = new Map<number, Mesh>()
+  const lampsByPatch = new Map<number, InstancedMesh[]>()
+  const lampBox = new BoxGeometry(2, 2, 2)
+  const lampMaterial = new ShaderMaterial({
+    uniforms: { uNight: night },
+    vertexShader: /* glsl */ `
+      varying vec3 vLocal;
+      void main() {
+        vLocal = position;
+        gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: /* glsl */ `
+      varying vec3 vLocal;
+      uniform float uNight;
+      void main() {
+        float pane = min(abs(vLocal.x), abs(vLocal.y));
+        bool glass = vLocal.z > -0.40 && vLocal.z < 0.74 && pane < 0.86;
+        float core = exp(-2.8 * pane - 2.4 * abs(vLocal.z - 0.1));
+        vec3 brass = vec3(0.36, 0.24, 0.14) * (0.82 + 0.3 * step(0.73, vLocal.z));
+        vec3 amber = mix(vec3(0.92, 0.48, 0.15), vec3(1.0, 0.90, 0.60), core);
+        amber = mix(vec3(0.72, 0.59, 0.43), amber, uNight);
+        gl_FragColor = vec4(glass ? amber : brass, glass ? 1.0 - uNight : 1.0);
+      }
+    `
+  })
+  function removeLamps(key: number) {
+    for (const mesh of lampsByPatch.get(key) ?? []) {
+      mesh.removeFromParent()
+      mesh.dispose()
+    }
+    lampsByPatch.delete(key)
+  }
   const columns = Math.ceil(world.columns / PATCH)
   function rebuild(key: number) {
     const x = (key % columns) * PATCH,
       y = Math.floor(key / columns) * PATCH
     const mesh = patches.get(key)
-    const geometry = patchGeometry(world, x, y)
+    const lamps: DecorPlacement[] = []
+    const geometry = patchGeometry(world, x, y, lamps)
+    removeLamps(key)
+    if (lamps.length) {
+      const fixtures = new InstancedMesh(lampBox, lampMaterial, lamps.length)
+      const matrix = new Matrix4().makeScale(1.5, 1.5, 2.6)
+      lamps.forEach(({ x, y, z }, i) => {
+        fixtures.setMatrixAt(i, matrix.setPosition(x, y, z + 2.6))
+      })
+      parent.add(fixtures)
+      const pools = lightVolumes(lamps, lampBox, lightMaterial, [0, 0, 3.2], 21)
+      lightScene.add(pools)
+      lampsByPatch.set(key, [fixtures, pools])
+    }
     if (mesh) {
       mesh.geometry.dispose()
       mesh.geometry = geometry
@@ -202,6 +275,9 @@ export function createTerrain(world: IslandWorld, parent: import('three').Group)
       for (const key of dirty) rebuild(key)
     },
     dispose() {
+      for (const key of lampsByPatch.keys()) removeLamps(key)
+      lampBox.dispose()
+      lampMaterial.dispose()
       for (const mesh of patches.values()) mesh.geometry.dispose()
       material.dispose()
       map.dispose()

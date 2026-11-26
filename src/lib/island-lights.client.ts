@@ -13,8 +13,9 @@ import {
   type Texture,
   type Vector4
 } from 'three'
+import { WORLD_HEIGHT, WORLD_WIDTH } from './island-camera'
 import type { LightEmitter } from './island-models'
-import { hash2 } from './island-world'
+import { hash2, SEA_LEVEL_CODE } from './island-world'
 
 const FLAME = 1
 const EMBER = 2
@@ -205,14 +206,30 @@ export function firelightVolumes(
 ) {
   const fire = emitters.find((e) => e.kind === 'flame')
   if (!fire) return
+  const [dx, dy, dz] = fire.at
+  return lightVolumes(
+    placements,
+    box,
+    material,
+    [dx, dy, dz + fire.size * 1.25],
+    16 + fire.size * 7
+  )
+}
+
+export function lightVolumes(
+  placements: DecorPlacement[],
+  box: BoxGeometry,
+  material: ShaderMaterial,
+  [dx, dy, dz]: [number, number, number],
+  reach: number
+) {
   const mesh = new InstancedMesh(box, material, placements.length)
   const matrix = new Matrix4()
   placements.forEach(({ x, y, z, scale }, i) => {
-    const radius = (16 + fire.size * 7) * scale
-    const [dx, dy, dz] = fire.at
+    const radius = reach * scale
     matrix
       .makeScale(radius, radius, radius)
-      .setPosition(x + dx * scale, -(y + dy * scale), z + (dz + fire.size * 1.25) * scale)
+      .setPosition(x + dx * scale, -(y + dy * scale), z + dz * scale)
     mesh.setMatrixAt(i, matrix)
   })
   return mesh
@@ -223,6 +240,7 @@ export function firelightMaterial(
   night: { value: number },
   depth: Texture,
   sceneColor: Texture,
+  elevation: Texture,
   inverseProjection: { value: Matrix4 }
 ) {
   return new ShaderMaterial({
@@ -231,6 +249,7 @@ export function firelightMaterial(
       uNight: night,
       uDepth: { value: depth },
       uSurface: { value: sceneColor },
+      uElevation: { value: elevation },
       uInverseProjection: inverseProjection
     },
     side: BackSide,
@@ -252,7 +271,7 @@ export function firelightMaterial(
       }
     `,
     fragmentShader: /* glsl */ `
-      uniform sampler2D uDepth, uSurface;
+      uniform sampler2D uDepth, uSurface, uElevation;
       uniform mat4 uInverseProjection;
       uniform float uTime, uNight;
       varying vec3 vCenter;
@@ -276,8 +295,21 @@ export function firelightMaterial(
         float energy = incident * falloff * flicker;
         float coverage = energy * uNight * 0.90;
         vec3 warm = (paint + 0.06) * vec3(1.16, 0.82, 0.43);
-        gl_FragColor = vec4(warm * coverage + warm * vec3(1.0, 0.69, 0.26) *
-                            energy * (0.07 + 0.27 * uNight), coverage);
+        vec3 lit = warm * coverage + warm * vec3(1.0, 0.69, 0.26) * energy * (0.07 + 0.27 * uNight);
+        // The sea and shallows are at z = 0. Break the reflected lamp into
+        // short strokes on the waves; the wooden deck keeps its diffuse light.
+        vec3 world = transpose(mat3(viewMatrix)) * surface + cameraPosition;
+        vec2 mapUv = world.xy / vec2(${WORLD_WIDTH.toFixed(1)}, -${WORLD_HEIGHT.toFixed(1)});
+        if (uNight > 0.0 && abs(world.z) < 0.25 &&
+            texture2D(uElevation, mapUv).r * 255.0 < ${(SEA_LEVEL_CODE - 0.5).toFixed(1)}) {
+          vec3 eyeDir = isOrthographic ? vec3(0.0, 0.0, 1.0) : normalize(-surface);
+          vec3 halfway = normalize(normalize(toward) + eyeDir);
+          float specular = max(0.0, dot(viewMatrix[2].xyz, halfway));
+          float ripple = sin(world.y * 2.1 + 1.8 * sin(world.x * 0.43) + uTime * 1.7);
+          lit += vec3(1.0, 0.56, 0.19) * uNight * pow(specular, 9.0) *
+                 smoothstep(-0.30, 0.75, ripple) * (1.0 - d * d);
+        }
+        gl_FragColor = vec4(lit, coverage);
       }
     `
   })

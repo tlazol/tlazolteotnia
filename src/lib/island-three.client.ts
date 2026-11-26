@@ -207,6 +207,14 @@ void clipDugLand(vec2 uv) {
 }
 `
 
+// Map coordinates run east/south; the sky ray uses Three's north-positive Y.
+const twilightGlsl = /* glsl */ `
+uniform float uSunrise, uAfterglow, uNight;
+vec2 twilightBearing() {
+  return uSunrise > 0.0 ? normalize(vec2(1.0, -0.25)) : normalize(vec2(-1.0, -0.38));
+}
+`
+
 // The sea: depth bands dithered into each other from pale lagoon to deep blue,
 // reef patches and moving light on the shallows, surf rolling onto the shore.
 // Lakes, shallows and hot springs show between their banks too, as clear fresh
@@ -219,8 +227,37 @@ uniform float uPad;
 uniform float uRange;
 ${seaCutout}
 uniform float uTime;
+${twilightGlsl}
 varying vec2 vWorld;
 ${noiseGlsl}
+vec3 reflectedSky(vec3 water, vec2 p) {
+  float twilight = max(uSunrise, uAfterglow);
+  if (uNight + twilight == 0.0) return water;
+  // Keep the pale sand bars, reef shadows and foam visible through reflected light.
+  float value = dot(water, vec3(0.22, 0.61, 0.17));
+  vec3 nightWater = mix(vec3(0.11, 0.16, 0.31), vec3(0.54, 0.78, 0.87), value);
+  water = mix(water, nightWater, uNight);
+  if (twilight == 0.0) return water;
+  vec2 bearing = twilightBearing();
+  float centerX = uSunrise > 0.0 ? 0.67 : 0.43;
+  vec2 offset = (p - uWorld * vec2(centerX, 0.50)) / uWorld.y;
+  float across = dot(offset, vec2(-bearing.y, bearing.x));
+  float ripple = vnoise(vec2(p.x * 0.019, p.y * 0.093 - uTime * 0.18));
+  float shaft = exp(-9.0 * abs(across + 0.068 * (ripple - 0.5)));
+  if (!isOrthographic) {
+    vec2 sight = p - cameraPosition.xy * vec2(1.0, -1.0);
+    shaft = pow(max(0.0, dot(sight / max(length(sight), 1.0), bearing)), 6.0);
+  }
+  vec3 shade = mix(vec3(0.19, 0.17, 0.44), vec3(0.81, 0.73, 0.92), value);
+  vec3 shine = mix(vec3(0.76, 0.40, 0.55), vec3(1.0, 0.86, 0.74), value);
+  if (uSunrise > 0.0) {
+    shade = mix(vec3(0.31, 0.39, 0.58), vec3(0.80, 0.88, 0.91), value);
+    shine = mix(vec3(0.92, 0.58, 0.62), vec3(1.0, 0.94, 0.73), value);
+  }
+  float crest = smoothstep(0.57, 0.84, ripple);
+  vec3 reflection = mix(shade, shine, shaft * (0.34 + 0.66 * crest));
+  return mix(water, reflection, twilight);
+}
 void main() {
   vec2 p = floor(vWorld);
   vec2 uv = (p + 0.5) / uWorld;
@@ -297,7 +334,7 @@ void main() {
         * vnoise(p / 23.0 + vec2(tick * 0.04, 8.1));
       if (steam + dither * 0.08 > 0.42) col = mix(col, vec3(1.0), 0.55);
     }
-    gl_FragColor = vec4(col, 1.0);
+    gl_FragColor = vec4(reflectedSky(col, p), 1.0);
     return;
   }
   float drift = (vnoise(p / 26.0 + 3.7) - 0.5) * 22.0 * smoothstep(6.0, 50.0, dist);
@@ -362,7 +399,45 @@ void main() {
     vec2 k = abs(p - gp);
     if ((k.x == 0.0 && k.y <= 1.0) || (k.y == 0.0 && k.x <= 1.0)) col = vec3(1.0);
   }
-  gl_FragColor = vec4(col, 1.0);
+  gl_FragColor = vec4(reflectedSky(col, p), 1.0);
+}
+`
+
+// Eye-level sky. Project clouds onto a layer above the island so that they
+// narrow towards the horizon and stay in place as a resident looks around.
+const skyFragment = /* glsl */ `
+uniform float uTime;
+${twilightGlsl}
+varying vec3 vRay;
+${noiseGlsl}
+void main() {
+  vec3 ray = normalize(vRay);
+  float height = max(ray.z, 0.0);
+  vec2 bearing = twilightBearing() * vec2(1.0, -1.0);
+  float sunward = 0.5 + 0.5 * dot(ray.xy, bearing);
+  float band = exp(-3.6 * height);
+  vec3 horizon = mix(vec3(0.78, 0.89, 0.94), vec3(0.36, 0.40, 0.57), uNight);
+  vec3 zenith = mix(vec3(0.46, 0.74, 0.91), vec3(0.10, 0.13, 0.26), uNight);
+  horizon = mix(horizon, mix(vec3(0.73, 0.63, 0.91), vec3(1.0, 0.88, 0.73), sunward), uAfterglow);
+  zenith = mix(zenith, vec3(0.37, 0.32, 0.70), uAfterglow);
+  horizon = mix(horizon, mix(vec3(0.70, 0.76, 0.91), vec3(1.0, 0.84, 0.67), sunward), uSunrise);
+  zenith = mix(zenith, vec3(0.48, 0.61, 0.85), uSunrise);
+  vec3 sky = mix(zenith, horizon, band);
+  float rose = exp(-9.0 * abs(height - 0.17)) * sunward * sunward * max(uSunrise, uAfterglow);
+  sky = mix(sky, vec3(1.0, 0.74, 0.92), 0.72 * rose);
+  if (uSunrise > 0.0) {
+    vec3 sun = normalize(vec3(bearing, mix(0.18, -0.14, uNight)));
+    float radius = length(ray - sun);
+    float disc = 1.0 - smoothstep(0.023, 0.028, radius);
+    sky = mix(sky, vec3(1.0, 0.95, 0.78), uSunrise * (disc + (1.0 - disc) * 0.46 * exp(-9.0 * radius)));
+  }
+  vec2 q = ray.xy / (0.14 + height) * vec2(2.3, 4.0) + vec2(uTime * 0.003, 0.0);
+  float cloud = 0.7 * vnoise(q) + 0.3 * vnoise(q * 2.6);
+  float veil = smoothstep(0.52, 0.72, cloud) * smoothstep(0.0, 0.06, height);
+  vec3 cloudColor = mix(vec3(0.94, 0.95, 0.98), zenith, uNight);
+  cloudColor = mix(cloudColor, mix(zenith, horizon, 0.32 * band), uAfterglow);
+  cloudColor = mix(cloudColor, mix(zenith, vec3(1.0, 0.77, 0.75), sunward * band), uSunrise);
+  gl_FragColor = vec4(mix(sky, cloudColor, veil * 0.72), 1.0);
 }
 `
 
@@ -525,7 +600,6 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
   camera.up.set(0, 0, 1)
   const eyeCamera = new PerspectiveCamera(90, 1, 0.35, 6000)
   eyeCamera.up.set(0, 0, 1)
-  const skyColor = rawColor('#a5d8ed')
   const ground = new Group()
   ground.scale.y = -1
   scene.add(ground)
@@ -612,6 +686,39 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
   blit.frustumCulled = false
   blitScene.add(blit)
   const blitCamera = new OrthographicCamera(-1, 1, 1, -1, 0, 1)
+  const clock = { value: 0 }
+  const night = { value: 0 }
+  const afterglow = { value: 0 }
+  const sunrise = { value: 0 }
+  const sky = new Mesh(
+    blit.geometry,
+    track(
+      new ShaderMaterial({
+        uniforms: {
+          uInverseProjection: { value: eyeCamera.projectionMatrixInverse },
+          uCameraWorld: { value: eyeCamera.matrixWorld },
+          uAfterglow: afterglow,
+          uSunrise: sunrise,
+          uNight: night,
+          uTime: clock
+        },
+        vertexShader: /* glsl */ `
+          uniform mat4 uInverseProjection, uCameraWorld;
+          varying vec3 vRay;
+          void main() {
+            vec4 eye = uInverseProjection * vec4(position.xy, 1.0, 1.0);
+            vRay = mat3(uCameraWorld) * eye.xyz;
+            gl_Position = vec4(position.xy, 1.0, 1.0);
+          }
+        `,
+        fragmentShader: skyFragment,
+        depthWrite: false
+      })
+    )
+  )
+  sky.frustumCulled = false
+  sky.visible = false
+  scene.add(sky)
 
   // Sea, lying at height 0 in the world.
   const field = createShoreField(world)
@@ -648,7 +755,10 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
         uWorld: { value: [WORLD_WIDTH, WORLD_HEIGHT] },
         uPad: { value: SHORE_RANGE * SHORE_CELL },
         uRange: { value: SHORE_RANGE * SHORE_CELL },
-        uTime: { value: 0 }
+        uTime: clock,
+        uNight: night,
+        uSunrise: sunrise,
+        uAfterglow: afterglow
       }
     })
   )
@@ -658,7 +768,6 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
   const water = new Mesh(seaGeometry, waterMaterial)
   water.frustumCulled = false
   ground.add(water)
-  const clock = { value: 0 }
   const skyGeometry = track(new PlaneGeometry(WORLD_WIDTH + seaSize, WORLD_HEIGHT + seaSize))
   const clouds = new Mesh(
     skyGeometry,
@@ -708,7 +817,6 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
   const tint = new Mesh(blit.geometry, tintMaterial)
   tint.position.z = -0.5
   tintScene.add(tint)
-  const night = { value: 0 }
   let lightChecked = -Infinity
   function updateDaylight(now: number) {
     if (now - lightChecked < 15_000) return
@@ -716,16 +824,20 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
     const light = daylightNow()
     daylightTint.setRGB(...light.tint, LinearSRGBColorSpace)
     night.value = light.glow
+    afterglow.value = light.afterglow
+    sunrise.value = light.sunrise
     handMaterial.color.copy(daylightTint)
   }
 
   const scenery = new Group()
   ground.add(scenery)
-  const terrain = createTerrain(world, scenery)
   const decorMaterial = track(
     stampStencil(new MeshLambertMaterial({ vertexColors: true }), BEHIND_DECOR)
   )
   const inverseProjection = { value: camera.projectionMatrixInverse }
+  const firelight = track(
+    firelightMaterial(clock, night, depth, target.texture, elevationTexture, inverseProjection)
+  )
   const decor = createDecor(
     world,
     scenery,
@@ -733,7 +845,7 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
     clock,
     {
       particles: track(lightMaterial(clock, night, depth, artRect)),
-      firelight: track(firelightMaterial(clock, night, depth, target.texture, inverseProjection))
+      firelight
     },
     () => {
       renderer.shadowMap.needsUpdate = true
@@ -741,6 +853,7 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
     },
     fail
   )
+  const terrain = createTerrain(world, scenery, night, decor.firelightScene, firelight)
   renderer.shadowMap.needsUpdate = true
   // Editing aids: corner dots near the cursor and the edge of the editable area.
   const gridMaterial = track(
@@ -1238,7 +1351,6 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
           if (!viewer) placeCamera()
         }
       }
-      waterMaterial.uniforms.uTime.value = time
       clock.value = time
       updateDaylight(now)
       placeWildlife(still ? 0 : dt)
@@ -1418,7 +1530,7 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
       eyePitch = initialEyePitch
       eyeCamera.zoom = 1
       followHeading = true
-      scene.background = viewer ? skyColor : null
+      sky.visible = viewer !== null
       placeCamera()
       wake()
     },

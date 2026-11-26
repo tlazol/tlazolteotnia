@@ -1,11 +1,11 @@
-import { Group, Raycaster, Vector3 } from 'three'
+import { Group, InstancedMesh, Raycaster, Scene, ShaderMaterial, Vector3 } from 'three'
 import { describe, expect, it } from 'vitest'
 import { applyEdits, planStroke } from '../src/lib/island-edit'
 import type { Model } from '../src/lib/island-models'
 import { box } from '../src/lib/island-sdf'
 import { createTerrain } from '../src/lib/island-terrain.client'
 import { voxelSurface } from '../src/lib/island-voxels'
-import { createIsland, SAND, TILE_SIZE } from '../src/lib/island-world'
+import { createIsland, DECK, SAND, TILE_SIZE, WATER } from '../src/lib/island-world'
 
 describe('live terrain mesh', () => {
   it('opens and fills a pit next to water across a patch boundary', () => {
@@ -13,7 +13,8 @@ describe('live terrain mesh', () => {
     const index = 3 * world.columns + 7
     world.ground[index] = SAND
     const scene = new Group()
-    const terrain = createTerrain(world, scene)
+    const lightMaterial = new ShaderMaterial()
+    const terrain = createTerrain(world, scene, { value: 0 }, new Scene(), lightMaterial)
     const center = new Vector3(7.5 * TILE_SIZE, 3.5 * TILE_SIZE, 0)
     function floor() {
       const ray = new Raycaster(center.clone().setZ(30), new Vector3(0, 0, -1))
@@ -40,6 +41,33 @@ describe('live terrain mesh', () => {
       expect(pitWall()).toBeUndefined()
     } finally {
       terrain.dispose()
+      lightMaterial.dispose()
+    }
+  })
+
+  it('moves the pier lights with the edited shoreline across patch edges', () => {
+    const world = createIsland(16, 8)
+    const pier = 4 * world.columns + 7
+    world.ground[pier] = DECK
+    const lights = new Scene()
+    const lightMaterial = new ShaderMaterial()
+    const terrain = createTerrain(world, new Group(), { value: 1 }, lights, lightMaterial)
+    const count = () =>
+      lights.children.reduce(
+        (sum, mesh) => sum + (mesh instanceof InstancedMesh ? mesh.count : 0),
+        0
+      )
+    try {
+      expect(count()).toBe(2)
+      world.ground[pier + 1] = SAND
+      terrain.update([pier + 1])
+      expect(count()).toBe(1)
+      world.ground[pier] = WATER
+      terrain.update([pier])
+      expect(count()).toBe(0)
+    } finally {
+      terrain.dispose()
+      lightMaterial.dispose()
     }
   })
 })
