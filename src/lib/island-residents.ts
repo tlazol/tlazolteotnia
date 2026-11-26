@@ -508,8 +508,7 @@ function paintHead(p: Painter, d: ResidentDesign, facing: Facing, bob: number) {
     p.px(4, 10 + dy, blush)
     p.px(11, 10 + dy, blush)
   } else if (facing === 'downSide') {
-    p.rect(7, 8 + dy, 1, 2, eye)
-    p.px(11, 8 + dy, eye)
+    for (const x of [7, 11]) p.rect(x, 8 + dy, 1, 2, eye)
     p.px(6, 10 + dy, blush)
   } else if (side) {
     p.rect(10, 8 + dy, 1, 2, eye)
