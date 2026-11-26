@@ -12,7 +12,7 @@ import {
   type ShaderMaterial
 } from 'three'
 import { type DecorPlacement, firelightVolumes, lightGeometry } from './island-lights.client'
-import { leafToneSlot, palette } from './island-palette'
+import { inlayEmission, leafToneSlot, palette } from './island-palette'
 import { tileHeight } from './island-relief'
 import type { VoxelResult } from './island-voxels.worker'
 import {
@@ -114,6 +114,12 @@ export function createDecor(
           colors.set([c.r, c.g, c.b], i * 3)
         })
         geo.setAttribute('color', new BufferAttribute(colors, 3, true))
+        if (data.kind === 'relic') {
+          geo.setAttribute(
+            'inlay',
+            new BufferAttribute(Float32Array.from(surface.slots, inlayEmission), 1)
+          )
+        }
         batch.geometry.set(tone, geo)
       }
       const mesh = new InstancedMesh(geo, batch.material, tiles.length)
@@ -149,6 +155,7 @@ export function createDecor(
       if (!batch) return
       batch.data = data
       const animated = material.clone()
+      const hasInlay = data.kind === 'relic'
       animated.onBeforeCompile = (shader) => {
         shader.uniforms.uTime = time
         shader.vertexShader =
@@ -162,8 +169,26 @@ export function createDecor(
           transformed.z += wave * ${data.bob.toFixed(2)};
         `
           )
+        if (hasInlay) {
+          shader.vertexShader =
+            'attribute float inlay; varying float vInlay;\n' +
+            shader.vertexShader.replace(
+              '#include <color_vertex>',
+              '#include <color_vertex>\nvInlay = inlay;'
+            )
+          shader.fragmentShader =
+            'varying float vInlay;\n' +
+            shader.fragmentShader.replace(
+              '#include <opaque_fragment>',
+              `
+              outgoingLight = mix(outgoingLight, vColor.rgb, vInlay);
+              #include <opaque_fragment>
+              gl_FragColor.a = 1.0 - vInlay;
+              `
+            )
+        }
       }
-      animated.customProgramCacheKey = () => `voxel:${data.sway}:${data.bob}`
+      animated.customProgramCacheKey = () => `voxel:${data.sway}:${data.bob}:${hasInlay}`
       batch.material = animated
       rebuild(batch)
       changed()

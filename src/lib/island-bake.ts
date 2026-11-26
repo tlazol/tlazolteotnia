@@ -18,6 +18,7 @@ import {
 } from './island-models'
 import {
   bayer,
+  inlayEmission,
   leafToneSlot,
   lightSteps,
   type Outline,
@@ -313,7 +314,8 @@ export function bakeTemplate(m: Model): Template {
       const part = nearestPart(m, X, Y, z)
       const material = part.paint(X, Y, z)
       let slot = material.slot
-      if (!material.glow) {
+      const emission = inlayEmission(slot)
+      if (!material.glow && emission < 1) {
         const e = 0.3
         let nx = distance(X + e, Y, z) - distance(X - e, Y, z)
         let ny = distance(X, Y + e, z) - distance(X, Y - e, z)
@@ -332,7 +334,8 @@ export function bakeTemplate(m: Model): Template {
         )
         const light = shade(nx, ny, nz, ao, lit)
         // Drawn as a sign: lit or in shade, nothing between.
-        slot = stepSlot(slot, material.flat ? (light < 0.72 ? -1 : 0) : lightSteps(light, sx, sy))
+        const steps = material.flat ? (light < 0.72 ? -1 : 0) : lightSteps(light, sx, sy)
+        slot = stepSlot(slot, Math.round(steps * (1 - emission)))
       }
       hit[(sy - y0 + 1) * width + (sx - x0 + 1)] = xs.length
       xs.push(sx)

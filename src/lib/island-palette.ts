@@ -101,7 +101,8 @@ export const ramps = {
   peach: ['#6a3010', '#a85018', '#e07a2a', '#ffad5c', '#ffe2b8'],
   lilac: ['#3a2470', '#5a3a9a', '#8660cf', '#b99af0', '#e9d9ff'],
   steel: ['#15171c', '#1f2228', '#3d424b', '#5a606b', '#7c838f'],
-  firefly: ['#4f7a1a', '#7fae2a', '#b9e85a', '#e8ff9a']
+  firefly: ['#4f7a1a', '#7fae2a', '#b9e85a', '#e8ff9a'],
+  relicInlay: ['#799c9c', '#56aba7', '#73dace']
 } as const satisfies Record<string, readonly string[]>
 
 export type RampName = keyof typeof ramps
@@ -183,6 +184,15 @@ export function stepSlot(slot: number, steps: number) {
 export function rampSlot(name: RampName, step: number) {
   const slots = rampSlots[rampNames.indexOf(name)]
   return slots[Math.max(0, Math.min(slots.length - 1, step))]
+}
+
+// The stone at the edge catches a little light; the center supplies its own.
+const inlayStrengths = new Float32Array(palette.length)
+for (const [step, strength] of [0.18, 0.56, 1].entries()) {
+  inlayStrengths[rampSlot('relicInlay', step)] = strength
+}
+export function inlayEmission(slot: number) {
+  return inlayStrengths[slot]
 }
 
 // Leaf tones: the same tree, read on another foliage ramp, so a wood of one

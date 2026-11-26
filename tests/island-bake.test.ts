@@ -256,7 +256,7 @@ describe('island baker', () => {
     }
     // Reference scene rendered with the complete list of lighting candidates.
     expect(hash.digest('hex')).toBe(
-      '946687e6ee178542b6279608d449e7d0b0201f8c5efd066af96171465a070d1e'
+      'd16dd97ac9b52d5d9a9034169c201408832e71425c4c14499dd56c276cb5fa29'
     )
   }, 15_000)
 

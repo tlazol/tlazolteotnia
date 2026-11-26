@@ -676,10 +676,28 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
   clouds.frustumCulled = false
   overlay.add(clouds)
 
-  // Time of day: everything drawn so far is multiplied by the hour's color.
+  // Opaque scenery has alpha 1 in the world image. Inlays store the fraction
+  // that still needs the hour's tint, so their cores stay lit after sundown.
+  const daylightTint = new Color()
   const tintMaterial = track(
-    new MeshBasicMaterial({
-      map: target.texture,
+    new ShaderMaterial({
+      vertexShader: blitVertex,
+      fragmentShader: /* glsl */ `
+        uniform sampler2D uImage;
+        uniform vec3 uTint;
+        varying vec2 vUv;
+        void main() {
+          vec4 world = texture2D(uImage, vUv);
+          vec3 lit = world.rgb * mix(vec3(1.0), uTint, world.a);
+          // Spread a little of a visible seam's light to its four neighbors.
+          float halo = 4.0 - textureOffset(uImage, vUv, ivec2(-1, 0)).a
+                           - textureOffset(uImage, vUv, ivec2(1, 0)).a
+                           - textureOffset(uImage, vUv, ivec2(0, -1)).a
+                           - textureOffset(uImage, vUv, ivec2(0, 1)).a;
+          gl_FragColor = vec4(lit + halo * world.a * vec3(0.012, 0.059, 0.052), 1.0);
+        }
+      `,
+      uniforms: { uImage: { value: target.texture }, uTint: { value: daylightTint } },
       depthTest: false,
       depthWrite: false
     })
@@ -694,9 +712,9 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
     if (now - lightChecked < 15_000) return
     lightChecked = now
     const light = daylightNow()
-    tintMaterial.color.setRGB(...light.tint, LinearSRGBColorSpace)
+    daylightTint.setRGB(...light.tint, LinearSRGBColorSpace)
     night.value = light.glow
-    handMaterial.color.copy(tintMaterial.color)
+    handMaterial.color.copy(daylightTint)
   }
 
   const scenery = new Group()

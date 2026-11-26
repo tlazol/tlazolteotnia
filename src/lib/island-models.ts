@@ -1080,6 +1080,16 @@ function hewnStone(c: Vec3, half: Vec3, paint: Painter, chip: number, yaw = 0): 
 function relic(look: number, seed: number) {
   const paint = dressedStone(look === 0 || look === 2 ? 'gravel' : 'cobble')
   const debris = stone(seed + 5, false)
+  const [edge, halo, core] = [0, 1, 2].map((step) => mat('relicInlay', step))
+  function inlaid(distance: (x: number, y: number, z: number) => number): Painter {
+    return (x, y, z) => {
+      const d = distance(x, y, z)
+      if (d < 0.85) return core
+      if (d < 1.65) return halo
+      if (d < 2.45) return edge
+      return paint(x, y, z)
+    }
+  }
   // Two-tile monument bases, with a three-tile span for the gate.
   if (look === 0)
     return model([
@@ -1095,7 +1105,12 @@ function relic(look: number, seed: number) {
             (x + y - MID - 11 + Math.max(0, 1 - Math.abs(z - 33) / 11) * 4) * Math.SQRT1_2
           return Math.max(shaft, cap, spall, (z + x * 0.55 - 61) / 1.15, 6 - z)
         },
-        paint,
+        // A seam on each face opens into a small diamond halfway up the shaft.
+        paint: inlaid((x, y, z) => {
+          const across = Math.min(Math.abs(x), Math.abs(y - MID))
+          const diamond = Math.max(0, 3.6 - Math.abs(z - 36) * 0.52)
+          return Math.max(Math.abs(across - diamond), 10 - z, z - 53)
+        }),
         lo: [-8, MID - 8, 6],
         hi: [8, MID + 8, 64]
       }
@@ -1111,13 +1126,12 @@ function relic(look: number, seed: number) {
       )
       return Math.min(ring, Math.max(Math.abs(x) - 7, chevron * 0.87))
     }
-    const groove = mat('cobble', 1)
     return model([
       hewnStone([0, MID, 0], [16, 14, 3], paint, 4, 0.05),
       {
         ...tablet,
-        d: (x, y, z) => Math.max(tablet.d(x, y, z), Math.min(y - MID - 3.5, 2 - incision(x, z))),
-        paint: (x, y, z) => (y > MID + 3 && incision(x, z) < 2.2 ? groove : paint(x, y, z))
+        d: (x, y, z) => Math.max(tablet.d(x, y, z), Math.min(y - MID - 4.8, 2 - incision(x, z))),
+        paint: inlaid((x, y, z) => Math.max(incision(x, z), MID + 3 - y))
       },
       slab([-10, MID + 9, 2.5], [5, 3.5, 2.3], debris, seed)
     ])
@@ -1136,7 +1150,7 @@ function relic(look: number, seed: number) {
             z - 26 - dx * 0.43 - dy * 0.17 - (noise3(dx / 3, dy / 3, 0, seed) - 0.5) * 5
           return Math.max(shaft, fracture * 0.8)
         },
-        paint,
+        paint: inlaid((_x, _y, z) => Math.abs(z - 13)),
         lo: [-14, MID - 13, 0],
         hi: [6, MID + 7, 34]
       },
@@ -1146,18 +1160,24 @@ function relic(look: number, seed: number) {
           const dy = y - MID - 7 - (x - 7) * 0.24
           return cylinder(dy, z - 7, x - 1, 6 - fluted(dy, z - 7), 14, 0.7)
         },
-        paint,
+        paint: inlaid((x) => Math.abs(x - 10)),
         lo: [1, MID - 1, 1],
         hi: [15, MID + 15, 13]
       }
     ])
   }
-  const lintel = hewnStone([0, MID, 44], [24, 7.5, 5.3], paint, 6, 0.025)
+  // Trace the opening up both uprights and across the lintel.
+  const gate = inlaid((x, _y, z) => {
+    const side = Math.abs(x) - 15
+    const top = z - 44
+    return Math.max(Math.abs(Math.max(side, top)), 7 - z)
+  })
+  const lintel = hewnStone([0, MID, 44], [24, 7.5, 5.3], gate, 6, 0.025)
   return model([
     hewnStone([-14, MID, 1], [9, 10, 4], paint, 3, 0.08),
     hewnStone([14, MID + 1, 0], [10, 10, 4], paint, 4, -0.06),
-    hewnStone([-15, MID, 21], [6.5, 6.5, 19], paint, 3, -0.1),
-    hewnStone([15, MID + 1, 21], [6, 7, 19], paint, 4, 0.12),
+    hewnStone([-15, MID, 21], [6.5, 6.5, 19], gate, 3, -0.1),
+    hewnStone([15, MID + 1, 21], [6, 7, 19], gate, 4, 0.12),
     {
       ...lintel,
       d: (x, y, z) => {
