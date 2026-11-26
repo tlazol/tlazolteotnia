@@ -242,7 +242,7 @@ export function decorLightVolumes(
       })
     } else if (emitter.kind === 'flame') {
       const [x, y, z] = emitter.at
-      pools.push({ at: [x, y, z + emitter.size * 1.25], reach: 16 + emitter.size * 7 })
+      pools.push({ at: [x, y, z + emitter.size * 1.25], reach: 24 + emitter.size * 9 })
       break
     }
   }
@@ -335,13 +335,15 @@ export function firelightMaterial(
         if (d >= 1.0 || depth == 1.0) discard;
         float cosine = dot(normal, toward) / max(length(normal) * length(toward), 0.0001);
         float incident = 0.18 + 0.82 * clamp(cosine, 0.0, 1.0);
-        float falloff = pow(1.0 - d * d, 2.0) / (1.0 + 5.0 * d * d);
+        // A broad, flat pool: the surrounding tiles are lit nearly to daylight,
+        // then the light drops off quickly into the dark night tint.
+        float falloff = (1.0 - smoothstep(0.45, 1.0, d)) * (1.0 - 0.25 * d);
         float flicker = 0.94 + 0.045 * sin(uTime * 5.7 + vPhase) + 0.025 * sin(uTime * 12.3 + vPhase);
         vec4 receiver = texelFetch(uSurface, pixel, 0);
         vec3 paint = receiver.rgb;
         // Recover the receiver's local pigment under the cast light, including its dark grain.
         float energy = incident * falloff * mix(flicker, receiver.a, vLamp.a);
-        float coverage = energy * uNight * 0.90;
+        float coverage = min(energy * uNight, 0.97);
         vec3 pigment = (paint + 0.06) * mix(vec3(1.16, 0.82, 0.43), 1.4 * vLamp.rgb, vLamp.a);
         vec3 lit = pigment * coverage + pigment * mix(vec3(1.0, 0.69, 0.26), vLamp.rgb, vLamp.a) * energy * (0.07 + 0.27 * uNight);
         // The sea and shallows are at z = 0. Break the reflected lamp into
