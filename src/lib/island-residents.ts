@@ -275,28 +275,50 @@ function painter(buffer: PixelBuffer, ox: number, oy: number): Painter {
   }
 }
 
-// A camera-facing right hand; mirror it for the left. Keep the same palette
-// and chunky outline as the resident sprites, with the sleeve below the wrist.
+// Right hand, seen from above. The left hand mirrors this sprite.
+const handSprite = [
+  '      hhhh',
+  '    hhHHhhh',
+  '   hhHHHhhhhs',
+  '   hhhhhhhhhs',
+  '  hhhhhhhhhss',
+  '  hhhshhhhsss',
+  '   hhsssaaaaaa',
+  '    aaAAAaaaaaa',
+  '   aAAAaaaaaaaaa',
+  '   aaaaaaaWaWaaad',
+  '    aaaaaaaWaaadd',
+  '    dddaaaaaadddt',
+  '    TTTddddddttttt',
+  '   TTTTTttttttttttd',
+  '   TTTTtttttttttttdd',
+  '   TTtttttttttttttdd',
+  '    Ttttttttttttttddd'
+] as const
+
 export function paintResidentHand(design: ResidentDesign) {
   const buffer = createBuffer(24, 32)
   const p = painter(buffer, 0, 0)
-  const skin = hex(design.skin)
-  p.rect(8, 3, 9, 2, hex(islandPalette.outline))
-  p.rect(6, 5, 13, 10, hex(islandPalette.outline))
-  p.rect(4, 10, 5, 7, hex(islandPalette.outline))
-  p.rect(7, 14, 11, 7, hex(islandPalette.outline))
-  p.rect(8, 5, 9, 10, skin)
-  p.rect(6, 11, 5, 4, skin)
-  p.rect(9, 14, 7, 6, skin)
-  p.rect(15, 6, 2, 9, shade(design.skin, -0.18))
-  p.rect(9, 5, 6, 2, shade(design.skin, 0.2))
-  p.rect(7, 11, 2, 3, shade(design.skin, 0.2))
-  p.rect(9, 12, 1, 3, shade(design.skin, -0.18))
-  p.rect(6, 19, 14, 13, hex(islandPalette.outline))
-  p.rect(8, 20, 10, 12, hex(design.top))
-  p.rect(8, 20, 10, 2, hex(design.accent))
-  p.rect(16, 22, 2, 10, shade(design.top, -0.25))
-  p.rect(8, 23, 2, 9, shade(design.top, 0.15))
+  const colors: Record<string, Rgba> = {
+    h: hex(design.skin),
+    H: shade(design.skin, 0.25),
+    s: shade(design.skin, -0.15),
+    a: hex(design.accent),
+    A: shade(design.accent, 0.32),
+    W: hex('#fff2dc'),
+    t: hex(design.top),
+    T: shade(design.top, 0.22),
+    d: shade(design.top, -0.23)
+  }
+  // Extend the sleeve past the frame throughout the walk cycle.
+  p.rect(6, 20, 17, 12, colors.t)
+  p.rect(20, 20, 3, 12, colors.d)
+  handSprite.forEach((row, y) => {
+    for (let x = 0; x < row.length; x++) {
+      if (row[x] !== ' ') p.px(x + 2, y + 4, colors[row[x]])
+    }
+  })
+  outline(buffer, hex(islandPalette.outline))
   return buffer
 }
 

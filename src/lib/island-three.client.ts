@@ -651,7 +651,7 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
   const handsScene = new Scene()
   const handsCamera = new OrthographicCamera(-1, 1, 1, -1, 0.1, 10)
   handsCamera.position.z = 2
-  const handGeometry = track(new PlaneGeometry(0.48, 0.64))
+  const handGeometry = track(new PlaneGeometry(0.42, 0.56))
   const handMaterial = track(
     new MeshBasicMaterial({ transparent: true, depthTest: false, depthWrite: false })
   )
@@ -1220,11 +1220,11 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
     for (const { mesh, side } of hands) {
       const swing = Math.sin(phase + (side < 0 ? Math.PI : 0)) * handLift
       mesh.position.set(
-        side * (Math.min(aspect * 0.62, 0.95) + swing * 0.025),
-        -1.4 + handLift * 0.54 + swing * 0.09,
+        side * (Math.min(aspect * 0.65, 0.95) + swing * 0.015),
+        -1.3 + handLift * 0.38 + swing * 0.045,
         0
       )
-      mesh.rotation.z = side * (0.16 + swing * 0.08)
+      mesh.rotation.z = side * (0.24 + swing * 0.04)
     }
   }
 
