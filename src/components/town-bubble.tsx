@@ -51,7 +51,7 @@ export function TownBubble({
           title="この住民の視点で見る"
           onClick={onFirstPerson}
         >
-          <PixelIcon name="eye" size={24} />
+          <PixelIcon name="camera" size={24} />
         </button>
         <button type="button" aria-label="吹き出しを閉じる" onClick={onClose}>
           ×
