@@ -1,4 +1,5 @@
 import { isProtectedIndex } from './island-policy'
+import { elevationCode, elevationLevel, naturalLevel } from './island-relief'
 import {
   type DecorKind,
   decorBlocksWalking,
@@ -12,11 +13,14 @@ import {
   groundNames,
   type IslandWorld,
   isEditableTile,
+  isWetGround,
   type LandGround,
+  MAX_ELEVATION_LEVEL,
+  MIN_ELEVATION_LEVEL,
   WATER
 } from './island-world'
 
-export type IslandTool = 'land' | 'erase' | 'decor' | 'remove'
+export type IslandTool = 'land' | 'erase' | 'raise' | 'lower' | 'decor' | 'remove'
 export type BrushSize = 1 | 3
 export type EditOptions = {
   tool: IslandTool
@@ -26,7 +30,7 @@ export type EditOptions = {
   looks?: Partial<Record<DecorKind, number>>
   brush: BrushSize
 }
-export type TileState = { ground: Ground; decor: number }
+export type TileState = { ground: Ground; decor: number; elevation?: number }
 export type TileEdit = TileState & { index: number }
 // soft reasons describe a no-op (already sea, already grass) rather than a refusal.
 export type TilePlan = { edit: TileEdit | null; reason: string | null; soft?: boolean }
@@ -34,13 +38,15 @@ export type TilePlan = { edit: TileEdit | null; reason: string | null; soft?: bo
 export const toolNames: Record<IslandTool, string> = {
   land: '土地を足す・塗り替える',
   erase: '土地を削る',
+  raise: '土地を一段盛る',
+  lower: '土地を一段掘る',
   decor: '装飾を置く',
   remove: '装飾を撤去'
 }
 
 export type IslandCommand =
   | { tool: 'land'; ground: LandGround }
-  | { tool: 'erase' }
+  | { tool: 'erase' | 'raise' | 'lower' }
   | { tool: 'decor'; decor: DecorKind; look?: number }
   | { tool: 'remove' }
 
@@ -81,19 +87,42 @@ export function planCommand(
 ): CommandPlan {
   const ground = world.ground[index] as Ground
   const decor = world.decor[index]
-  const edit = (next: Partial<TileState>): CommandPlan => ({
-    edit: { index, ground, decor, ...next },
+  const elevation = world.elevation[index]
+  const edit = ({
+    ground: nextGround = ground,
+    decor: nextDecor = decor,
+    elevation: nextLevel = elevation
+  }: Partial<TileState>): CommandPlan => ({
+    edit: {
+      index,
+      ground: nextGround,
+      decor: nextDecor,
+      ...(nextLevel ? { elevation: nextLevel } : {})
+    },
     code: null
   })
   const skip = (code: SkipCode): CommandPlan => ({ edit: null, code })
   switch (command.tool) {
     case 'land':
       if (ground === command.ground) return skip('NO_CHANGE')
-      return edit({ ground: command.ground, decor: ground === WATER ? 0 : decor })
+      return edit({
+        ground: command.ground,
+        decor: ground === WATER ? 0 : decor,
+        elevation: isWetGround(command.ground) ? 0 : elevation
+      })
     case 'erase':
       if (ground === WATER) return skip('NO_CHANGE')
       if (isProtectedIndex(index)) return skip('PROTECTED_TILE')
-      return edit({ ground: WATER, decor: 0 })
+      return edit({ ground: WATER, decor: 0, elevation: 0 })
+    case 'raise':
+    case 'lower': {
+      if (isWetGround(ground)) return skip('INVALID_GROUND')
+      const natural = naturalLevel(ground, index % world.columns, Math.floor(index / world.columns))
+      const current = elevation ? elevationLevel(elevation) : natural
+      const level = current + (command.tool === 'raise' ? 1 : -1)
+      if (level < MIN_ELEVATION_LEVEL || level > MAX_ELEVATION_LEVEL) return skip('NO_CHANGE')
+      return edit({ elevation: elevationCode(level, natural) })
+    }
     case 'decor': {
       if (!decorFits(command.decor, ground)) return skip('INVALID_GROUND')
       const existing = decorKindOf(decor)
@@ -140,6 +169,8 @@ function explain(
     case 'NO_CHANGE':
       if (options.tool === 'land')
         return { reason: `もう${groundNames[options.ground]}です`, soft: true }
+      if (options.tool === 'raise') return { reason: 'これ以上高くできません', soft: true }
+      if (options.tool === 'lower') return { reason: 'これ以上深く掘れません', soft: true }
       if (options.tool === 'erase') return { reason: 'ここはもう海です', soft: true }
       if (options.tool === 'decor' && existing)
         return {
@@ -156,6 +187,8 @@ function explain(
         reason: `${existing ? decorNames[existing] : '装飾'}があります。先に「撤去」してください`
       }
     case 'INVALID_GROUND':
+      if (options.tool === 'raise' || options.tool === 'lower')
+        return { reason: '水面の高さは変えられません' }
       return {
         reason:
           decorInfo[options.decor].on === 'water'
@@ -281,27 +314,32 @@ export function overlayPreview(
   touched: Iterable<number>,
   preview: TileEdit[]
 ) {
-  const indices = new Set(touched)
-  for (const edit of preview) indices.add(edit.index)
-  const before = new Map<number, number>()
-  for (const index of indices) {
-    before.set(index, drawn.ground[index] * 256 + drawn.decor[index])
-    drawn.ground[index] = confirmed.ground[index]
-    drawn.decor[index] = confirmed.decor[index]
+  const edits = new Map(preview.map((edit) => [edit.index, edit]))
+  const changed: number[] = []
+  for (const index of new Set([...touched, ...edits.keys()])) {
+    const edit = edits.get(index)
+    const ground = edit?.ground ?? confirmed.ground[index]
+    const decor = edit?.decor ?? confirmed.decor[index]
+    const elevation = edit ? (edit.elevation ?? 0) : confirmed.elevation[index]
+    if (
+      ground === drawn.ground[index] &&
+      decor === drawn.decor[index] &&
+      elevation === drawn.elevation[index]
+    )
+      continue
+    drawn.ground[index] = ground
+    drawn.decor[index] = decor
+    drawn.elevation[index] = elevation
+    changed.push(index)
   }
-  for (const edit of preview) {
-    drawn.ground[edit.index] = edit.ground
-    drawn.decor[edit.index] = edit.decor
-  }
-  return [...indices].filter(
-    (index) => before.get(index) !== drawn.ground[index] * 256 + drawn.decor[index]
-  )
+  return changed
 }
 
 export function applyEdits(world: IslandWorld, edits: TileEdit[]) {
   for (const edit of edits) {
     world.ground[edit.index] = edit.ground
     world.decor[edit.index] = edit.decor
+    world.elevation[edit.index] = edit.elevation ?? 0
   }
 }
 
@@ -310,6 +348,7 @@ export function cloneIsland(world: IslandWorld): IslandWorld {
     columns: world.columns,
     rows: world.rows,
     ground: world.ground.slice(),
-    decor: world.decor.slice()
+    decor: world.decor.slice(),
+    elevation: world.elevation.slice()
   }
 }

@@ -27,6 +27,7 @@ import {
   CLAY,
   CLOVER,
   COBBLE,
+  createIsland,
   DECK,
   type DecorKind,
   DRYGRASS,
@@ -550,12 +551,7 @@ export class IslandBaker {
     this.chunkColumns = Math.ceil(this.width / BAKE_CHUNK)
     this.chunkRows = Math.ceil(this.height / BAKE_CHUNK)
     const size = this.width * this.height
-    this.world = {
-      columns,
-      rows,
-      ground: new Uint8Array(columns * rows),
-      decor: new Uint8Array(columns * rows)
-    }
+    this.world = createIsland(columns, rows)
     this.classes = new Uint8Array(size)
     this.raw = new Float32Array(size)
     this.eroded = new Float32Array(size)

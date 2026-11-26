@@ -17,6 +17,7 @@ import {
   groundAt,
   hash2,
   type IslandWorld,
+  isWetGround,
   MOSS,
   SOIL,
   STEPPING,
@@ -27,6 +28,12 @@ import {
 const PATCH = 8
 const SWATCH = TILE_SIZE * 4
 const BANDS = 5
+const neighbors = [
+  [0, -1],
+  [1, 0],
+  [0, 1],
+  [-1, 0]
+]
 
 function terrainTexture() {
   const size = BANDS * SWATCH
@@ -58,7 +65,8 @@ function patchGeometry(world: IslandWorld, startX: number, startY: number) {
     for (let x = startX; x < Math.min(world.columns, startX + PATCH); x++) {
       const kind = groundAt(world, x, y)
       const h = tileHeight(world, x, y)
-      if (kind === WATER) continue
+      if (kind === WATER && !neighbors.some(([dx, dy]) => tileHeight(world, x + dx, y + dy) < 0))
+        continue
       const left = x * TILE_SIZE,
         back = y * TILE_SIZE
       const right = left + TILE_SIZE,
@@ -84,17 +92,13 @@ function patchGeometry(world: IslandWorld, startX: number, startY: number) {
         }
         indices.push(first, first + 1, first + 2, first, first + 2, first + 3)
       }
-      quad(
-        corners.map((c) => [...c, h || 0.12]),
-        kind
-      )
-      if (!h) continue
-      const neighbors = [
-        [0, -1],
-        [1, 0],
-        [0, 1],
-        [-1, 0]
-      ]
+      if (kind !== WATER) {
+        const top = isWetGround(kind) ? 0.12 : h
+        quad(
+          corners.map((c) => [...c, top]),
+          kind
+        )
+      }
       for (let side = 0; side < 4; side++) {
         const [dx, dy] = neighbors[side]
         const floor = tileHeight(world, x + dx, y + dy)
@@ -113,7 +117,9 @@ function patchGeometry(world: IslandWorld, startX: number, startY: number) {
             light,
             Math.min(16, top - bottom)
           )
-        if (kind === DECK) {
+        if (isWetGround(kind)) {
+          wall(floor, h, SOIL, 0.81)
+        } else if (kind === DECK && h > 0) {
           wall(Math.max(floor, h - 3), h, DECK, 0.86)
           // Short square pilings below the exposed edge.
           const ax = a[0] + (b[0] - a[0]) * 0.15 - dx
@@ -129,8 +135,8 @@ function patchGeometry(world: IslandWorld, startX: number, startY: number) {
               q = post[(i + 1) % 4]
             quad(
               [
-                [...p, 0],
-                [...q, 0],
+                [...p, Math.min(0, floor)],
+                [...q, Math.min(0, floor)],
                 [...q, h - 3],
                 [...p, h - 3]
               ],

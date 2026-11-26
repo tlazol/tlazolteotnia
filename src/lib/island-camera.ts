@@ -1,5 +1,18 @@
-import { MAX_GROUND_HEIGHT, tileHeight } from './island-relief'
-import { ISLAND_COLUMNS, ISLAND_ROWS, type IslandWorld, TILE_SIZE } from './island-world'
+import {
+  elevationLevel,
+  MAX_GROUND_HEIGHT,
+  MIN_GROUND_HEIGHT,
+  naturalLevel,
+  tileHeight
+} from './island-relief'
+import {
+  groundAt,
+  ISLAND_COLUMNS,
+  ISLAND_ROWS,
+  type IslandWorld,
+  inBounds,
+  TILE_SIZE
+} from './island-world'
 import type { SceneSize } from './scene-math'
 
 // The view center is a map coordinate at sea level. turn is measured in quarter turns.
@@ -72,13 +85,14 @@ export function screenToWorld(view: IslandView, size: SceneSize, point: Point): 
   return { x: view.x + axis.y * u + axis.x * v, y: view.y - axis.x * u + axis.y * v }
 }
 
-// Walk the short pick ray from above the highest terrace to the water. Within
+// Walk the short pick ray from above the highest terrace to the deepest pit. Within
 // each tile, the first intersection may be its top or its exposed cliff face.
 export function tileAt(
   view: IslandView,
   size: SceneSize,
   point: Point,
-  world?: IslandWorld | null
+  world?: IslandWorld | null,
+  pickPitWall = false
 ) {
   const base = screenToWorld(view, size, point)
   const seaTile = { x: Math.floor(base.x / TILE_SIZE), y: Math.floor(base.y / TILE_SIZE) }
@@ -89,11 +103,29 @@ export function tileAt(
   let z = MAX_GROUND_HEIGHT
   let x = Math.floor((base.x + z * dx) / TILE_SIZE)
   let y = Math.floor((base.y + z * dy) / TILE_SIZE)
-  while (z > 0) {
+  let previousX = x
+  let previousY = y
+  while (z > MIN_GROUND_HEIGHT) {
     const nextX = dx === 0 ? -Infinity : ((x + (dx < 0 ? 1 : 0)) * TILE_SIZE - base.x) / dx
     const nextY = dy === 0 ? -Infinity : ((y + (dy < 0 ? 1 : 0)) * TILE_SIZE - base.y) / dy
     const exit = Math.max(nextX, nextY)
-    if (tileHeight(world, x, y) >= Math.max(0, exit)) return { x, y }
+    const height = tileHeight(world, x, y)
+    if (height >= Math.max(MIN_GROUND_HEIGHT, exit)) {
+      // A narrow pit can hide its floor. When shaping it, its exposed inner
+      // wall belongs to the excavated tile on the near side of this boundary.
+      if (pickPitWall && height > z && inBounds(world, previousX, previousY)) {
+        const code = world.elevation[previousY * world.columns + previousX]
+        if (
+          code &&
+          elevationLevel(code) <
+            naturalLevel(groundAt(world, previousX, previousY), previousX, previousY)
+        )
+          return { x: previousX, y: previousY }
+      }
+      return { x, y }
+    }
+    previousX = x
+    previousY = y
     if (nextX >= nextY) x -= Math.sign(dx)
     if (nextY >= nextX) y -= Math.sign(dy)
     z = exit

@@ -22,7 +22,13 @@ const tools: Array<{ tool: IslandTool; icon: IconName; short: string; key: strin
   { tool: 'decor', icon: 'decor', short: '装飾', key: '3' },
   { tool: 'remove', icon: 'remove', short: '撤去', key: '4' }
 ]
-export const toolShortcuts = Object.fromEntries(tools.map(({ key, tool }) => [key, tool]))
+const heightTools = [
+  { tool: 'raise', icon: 'plus', short: '盛る', key: '5' },
+  { tool: 'lower', icon: 'minus', short: '掘る', key: '6' }
+] as const
+export const toolShortcuts = Object.fromEntries(
+  [...tools, ...heightTools].map(({ key, tool }) => [key, tool])
+)
 
 // Pixels of ground across a swatch; it is shown at two screen pixels each, as
 // the island is at its first zoom.
@@ -112,6 +118,9 @@ export function IslandToolbar({
   }, [])
   const block: EditBlock = shared ? editBlock(shared, now()) : 'connecting'
   const showGround = options.tool === 'land'
+  const heightTool = options.tool === 'raise' || options.tool === 'lower'
+  const showHeight = heightTool && !panTool
+  const heightId = useId()
   // While waiting for an answer the tools stay usable to pick, but not to edit.
   const disabled = block !== null && block !== 'pending'
 
@@ -123,8 +132,27 @@ export function IslandToolbar({
       inert={!open}
       data-island-ui
     >
-      {(showGround || options.tool === 'decor') && (
+      {(showGround || showHeight || options.tool === 'decor') && (
         <div className="island-toolbar__options">
+          {showHeight && (
+            <fieldset className="island-chips" id={heightId}>
+              <legend className="sr-only">高さ</legend>
+              {heightTools.map(({ tool, icon, short, key }) => (
+                <button
+                  key={tool}
+                  type="button"
+                  disabled={disabled}
+                  aria-pressed={options.tool === tool}
+                  aria-keyshortcuts={key}
+                  title={`${toolNames[tool]}（${key}）`}
+                  onClick={() => onOptions({ ...options, tool })}
+                >
+                  <PixelIcon name={icon} size={14} />
+                  {short}
+                </button>
+              ))}
+            </fieldset>
+          )}
           {showGround && (
             <div className="island-palette">
               {groundGroups.map((group) => (
@@ -215,6 +243,22 @@ export function IslandToolbar({
               <span>{short}</span>
             </button>
           ))}
+          <button
+            type="button"
+            className={`island-tool${block === 'pending' && showHeight ? ' is-pending' : ''}`}
+            disabled={disabled}
+            aria-expanded={showHeight}
+            aria-pressed={showHeight}
+            aria-controls={showHeight ? heightId : undefined}
+            aria-busy={block === 'pending' && showHeight}
+            onClick={() => {
+              onPanTool(false)
+              if (!heightTool) onOptions({ ...options, tool: 'raise' })
+            }}
+          >
+            <PixelIcon name="height" />
+            <span>高さ</span>
+          </button>
           <button
             type="button"
             className="island-tool island-tool--hand"

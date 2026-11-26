@@ -40,6 +40,12 @@ export const SHALLOWS = 20
 export const HOTSPRING = 21
 // New grounds go at the end: saves store a ground as this number.
 export const GROUND_COUNT = 22
+export const MAX_ELEVATION_LEVEL = 12
+export const MIN_ELEVATION_LEVEL = -12
+// Saved bytes 1–12 keep their original meaning. The next byte is sea level,
+// followed by successively deeper levels. Zero still means natural terrain.
+export const SEA_LEVEL_CODE = MAX_ELEVATION_LEVEL + 1
+export const MAX_ELEVATION_CODE = SEA_LEVEL_CODE - MIN_ELEVATION_LEVEL
 export type Ground =
   | typeof WATER
   | typeof SAND
@@ -279,6 +285,8 @@ export type IslandWorld = {
   rows: number
   ground: Uint8Array
   decor: Uint8Array
+  // Stored elevation codes, including the zero sentinel for natural terrain.
+  elevation: Uint8Array
 }
 
 export function createIsland(columns = ISLAND_COLUMNS, rows = ISLAND_ROWS): IslandWorld {
@@ -286,7 +294,8 @@ export function createIsland(columns = ISLAND_COLUMNS, rows = ISLAND_ROWS): Isla
     columns,
     rows,
     ground: new Uint8Array(columns * rows),
-    decor: new Uint8Array(columns * rows)
+    decor: new Uint8Array(columns * rows),
+    elevation: new Uint8Array(columns * rows)
   }
 }
 
@@ -693,6 +702,7 @@ export type IslandSave = {
   rows: number
   ground: string
   decor: string
+  elevation?: string
 }
 
 export function encodeIsland(world: IslandWorld): IslandSave {
@@ -701,7 +711,8 @@ export function encodeIsland(world: IslandWorld): IslandSave {
     columns: world.columns,
     rows: world.rows,
     ground: encodeRuns(world.ground),
-    decor: encodeRuns(world.decor)
+    decor: encodeRuns(world.decor),
+    elevation: encodeRuns(world.elevation)
   }
 }
 
@@ -724,14 +735,25 @@ export function decodeIsland(data: unknown): IslandWorld | null {
   const length = ISLAND_COLUMNS * ISLAND_ROWS
   const ground = decodeRuns(save.ground, length, GROUND_COUNT - 1)
   const decor = decodeRuns(save.decor, length, 0xff)
-  if (!ground || !decor) return null
-  const world: IslandWorld = { columns: ISLAND_COLUMNS, rows: ISLAND_ROWS, ground, decor }
+  const elevation =
+    save.elevation === undefined
+      ? new Uint8Array(length)
+      : decodeRuns(save.elevation, length, MAX_ELEVATION_CODE)
+  if (!ground || !decor || !elevation) return null
+  const world: IslandWorld = {
+    columns: ISLAND_COLUMNS,
+    rows: ISLAND_ROWS,
+    ground,
+    decor,
+    elevation
+  }
   for (let y = 0; y < world.rows; y++) {
     for (let x = 0; x < world.columns; x++) {
       const index = y * world.columns + x
       if (isRetiredDecorCode(decor[index])) decor[index] = 0
       if (!isEditableTile(world, x, y) && (ground[index] !== WATER || decor[index] !== 0))
         return null
+      if (elevation[index] && isWetGround(ground[index] as Ground)) return null
       if (!isDecorCode(decor[index])) return null
       const kind = decorKindOf(decor[index])
       if (kind && !decorFits(kind, ground[index] as Ground)) return null

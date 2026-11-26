@@ -89,7 +89,7 @@ import {
   shadowSizes
 } from './island-sprites'
 import { createTerrain } from './island-terrain.client'
-import { EDIT_MARGIN, hash2, type IslandWorld, TILE_SIZE } from './island-world'
+import { EDIT_MARGIN, hash2, type IslandWorld, SEA_LEVEL_CODE, TILE_SIZE } from './island-world'
 import type { SceneSize } from './scene-math'
 
 export type ResidentScreen = {
@@ -266,6 +266,16 @@ float bayer4(vec2 a) {
 }
 `
 
+// The sea and its edit grid span the whole map. Cut both at tile boundaries
+// wherever dry land has been dug to sea level or below.
+const seaCutout = /* glsl */ `
+uniform sampler2D uElevation;
+void clipDugLand(vec2 uv) {
+  if (all(greaterThanEqual(uv, vec2(0.0))) && all(lessThan(uv, vec2(1.0))) &&
+      texture2D(uElevation, uv).r * 255.0 > ${(SEA_LEVEL_CODE - 0.5).toFixed(1)}) discard;
+}
+`
+
 // The sea: depth bands dithered into each other from pale lagoon to deep blue,
 // reef patches and moving light on the shallows, surf rolling onto the shore.
 // Lakes, shallows and hot springs show between their banks too, as clear fresh
@@ -276,12 +286,14 @@ uniform sampler2D uLake;
 uniform vec2 uWorld;
 uniform float uPad;
 uniform float uRange;
+${seaCutout}
 uniform float uTime;
 varying vec2 vWorld;
 ${noiseGlsl}
 void main() {
   vec2 p = floor(vWorld);
   vec2 uv = (p + 0.5) / uWorld;
+  clipDugLand(uv);
   float d = 1.0;
   // The shore field reaches past the map's edge; beyond it lies open sea.
   vec2 suv = (p + 0.5 + uPad) / (uWorld + 2.0 * uPad);
@@ -439,6 +451,9 @@ void main() {
 `
 
 const gridFragment = /* glsl */ `
+#ifdef SEA_GRID
+${seaCutout}
+#endif
 uniform vec2 uCursor;
 uniform float uRadius;
 uniform vec2 uWorld;
@@ -448,6 +463,9 @@ varying vec2 vWorld;
 
 void main() {
   vec2 p = floor(vWorld);
+  #ifdef SEA_GRID
+  clipDugLand((p + 0.5) / uWorld);
+  #endif
   vec2 m = mod(p, ${TILE_SIZE.toFixed(1)});
   float a = 0.0;
   bool corner = (m.x == 0.0 || m.x == ${(TILE_SIZE - 1).toFixed(1)}) && (m.y == 0.0 || m.y == ${(TILE_SIZE - 1).toFixed(1)});
@@ -698,12 +716,17 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
     new DataTexture(field.lake, field.width, field.height, RedFormat, UnsignedByteType)
   )
   lakeTexture.needsUpdate = true
+  const elevationTexture = track(
+    new DataTexture(world.elevation, world.columns, world.rows, RedFormat, UnsignedByteType)
+  )
+  elevationTexture.needsUpdate = true
   const waterMaterial = track(
     new ShaderMaterial({
       vertexShader: groundVertex,
       fragmentShader: waterFragment,
       side: DoubleSide,
       uniforms: {
+        uElevation: { value: elevationTexture },
         uShore: { value: shoreTexture },
         uLake: { value: lakeTexture },
         uWorld: { value: [WORLD_WIDTH, WORLD_HEIGHT] },
@@ -837,7 +860,10 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
     })
   )
   const grid = new Group()
-  const seaGrid = new Mesh(seaGeometry, gridMaterial)
+  const seaGridMaterial = track(gridMaterial.clone())
+  seaGridMaterial.defines = { SEA_GRID: 1 }
+  seaGridMaterial.uniforms = { ...gridMaterial.uniforms, uElevation: { value: elevationTexture } }
+  const seaGrid = new Mesh(seaGeometry, seaGridMaterial)
   grid.add(seaGrid)
   ground.add(grid)
   grid.visible = false
@@ -1384,6 +1410,7 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
           (maxX + 2) * cells,
           (maxY + 2) * cells
         )
+        elevationTexture.needsUpdate = true
         shoreTexture.needsUpdate = true
         lakeTexture.needsUpdate = true
         settleResidents(world, residents)

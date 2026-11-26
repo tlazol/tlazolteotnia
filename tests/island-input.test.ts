@@ -2,7 +2,15 @@ import { describe, expect, it, vi } from 'vitest'
 import { cameraAxis, screenToWorld, tileAt, worldToScreen } from '../src/lib/island-camera'
 import { createIslandInput, type IslandInputBindings } from '../src/lib/island-input'
 import { tileHeight } from '../src/lib/island-relief'
-import { createIsland, ROCK, TILE_SIZE, WATER } from '../src/lib/island-world'
+import {
+  createIsland,
+  MAX_ELEVATION_CODE,
+  ROCK,
+  SAND,
+  SEA_LEVEL_CODE,
+  TILE_SIZE,
+  WATER
+} from '../src/lib/island-world'
 
 function setup() {
   const resident = {
@@ -228,6 +236,29 @@ describe('camera rotation', () => {
 
 describe('voxel terrain picking', () => {
   const size = { width: 800, height: 600 }
+  it('picks a floor below sea level and lets the height tools reach a narrow pit by its wall', () => {
+    const world = createIsland()
+    world.ground.fill(SAND)
+    world.elevation.fill(MAX_ELEVATION_CODE)
+    const tile = { x: 39, y: 28 }
+    const middle = { x: (tile.x + 0.5) * TILE_SIZE, y: (tile.y + 0.5) * TILE_SIZE }
+    const view = { ...middle, zoom: 2, turn: 0.5 }
+    const floor = worldToScreen(view, size, middle, tileHeight(world, tile.x, tile.y))
+    expect(tileAt(view, size, floor, world)).toEqual(tile)
+
+    world.elevation.fill(0)
+    world.elevation[tile.y * world.columns + tile.x] = SEA_LEVEL_CODE + 3
+    const opening = worldToScreen(view, size, middle, 4)
+    expect(tileAt(view, size, opening, world)).toEqual({ x: tile.x - 1, y: tile.y })
+    expect(tileAt(view, size, opening, world, true)).toEqual(tile)
+
+    world.ground.fill(ROCK)
+    world.elevation.fill(0)
+    const rock = worldToScreen(view, size, middle, tileHeight(world, tile.x, tile.y))
+    world.elevation[tile.y * world.columns + tile.x] = 2
+    expect(tileAt(view, size, rock, world, true)).toEqual(tile)
+  })
+
   it.each([0, 0.3, 0.5, 1, 1.5, 2, 2.5, 3, 3.5])(
     'picks the drawn top and exposed wall at turn %s',
     (turn) => {

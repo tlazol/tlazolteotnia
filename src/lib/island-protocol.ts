@@ -8,11 +8,14 @@ import {
   decorKinds,
   decorLooks,
   GROUND_COUNT,
+  type Ground,
   ISLAND_COLUMNS,
   ISLAND_ROWS,
   type IslandSave,
   isDecorCode,
-  landGrounds
+  isWetGround,
+  landGrounds,
+  MAX_ELEVATION_CODE
 } from './island-world'
 
 export const PROTOCOL_VERSION = 1
@@ -152,6 +155,8 @@ function parseCommand(value: unknown): IslandCommand | null {
         ? { tool: 'decor', decor, look: value.look }
         : null
     }
+    case 'raise':
+    case 'lower':
     case 'erase':
     case 'remove':
       return hasOnlyKeys(value, ['tool']) ? { tool: value.tool } : null
@@ -245,7 +250,11 @@ function isTileEdit(value: unknown): value is TileEdit {
     isCount(value.ground) &&
     value.ground < GROUND_COUNT &&
     isCount(value.decor) &&
-    isDecorCode(value.decor)
+    isDecorCode(value.decor) &&
+    (value.elevation === undefined ||
+      (isCount(value.elevation) &&
+        value.elevation <= MAX_ELEVATION_CODE &&
+        (!value.elevation || !isWetGround(value.ground as Ground))))
   )
 }
 

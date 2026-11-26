@@ -142,8 +142,16 @@ export function useIsland({
     const target = drawn.current
     if (!base || !target) return
     const current = stroke.current
-    const next = current ? planStroke(base, current.command, current.targets) : []
     const indices = new Set(touched)
+    // A height command is relative. Once sent, let incoming authoritative tiles
+    // replace their previews so our own patch cannot apply the step twice.
+    const pendingHeight =
+      current?.sent && (current.command.tool === 'raise' || current.command.tool === 'lower')
+    const next = pendingHeight
+      ? preview.current.filter((edit) => !indices.has(edit.index))
+      : current
+        ? planStroke(base, current.command, current.targets)
+        : []
     for (const edit of preview.current) indices.add(edit.index)
     preview.current = next
     renderer.current?.updateTiles(overlayPreview(target, base, indices, next))
@@ -175,10 +183,15 @@ export function useIsland({
           if (!base) return
           const changed: number[] = []
           for (let i = 0; i < base.ground.length; i++)
-            if (base.ground[i] !== world.ground[i] || base.decor[i] !== world.decor[i])
+            if (
+              base.ground[i] !== world.ground[i] ||
+              base.decor[i] !== world.decor[i] ||
+              base.elevation[i] !== world.elevation[i]
+            )
               changed.push(i)
           base.ground.set(world.ground)
           base.decor.set(world.decor)
+          base.elevation.set(world.elevation)
           redraw(changed)
         },
         patch: (edits) => {
@@ -215,7 +228,7 @@ export function useIsland({
       if (import.meta.env.DEV) {
         const world = (target: IslandWorld | null) =>
           target
-            ? `${Array.from(target.ground).join('')}|${Array.from(target.decor).join(',')}`
+            ? `${Array.from(target.ground).join('')}|${Array.from(target.decor).join(',')}|${target.elevation.join(',')}`
             : null
         ;(window as unknown as Record<string, unknown>).__islandDebug = {
           confirmed: () => world(confirmed.current),
@@ -294,8 +307,14 @@ export function useIsland({
   }, [])
 
   const pickTile = useCallback(
-    (point: { x: number; y: number }) =>
-      tileAt(view.current, sizeRef.current, point, confirmed.current),
+    (point: { x: number; y: number }, tool?: EditOptions['tool']) =>
+      tileAt(
+        view.current,
+        sizeRef.current,
+        point,
+        confirmed.current,
+        tool === 'raise' || tool === 'lower'
+      ),
     []
   )
   const tileScreen = (tile: { x: number; y: number }) =>
@@ -317,7 +336,7 @@ export function useIsland({
         renderer.current?.setCursor(null)
         return null
       }
-      const tile = chosenTile ?? pickTile(point)
+      const tile = chosenTile ?? pickTile(point, options.tool)
       const plan = planBrush(drawn.current, tile.x, tile.y, options)
       const settled = settledTile.current
       if (settled && (settled.x !== tile.x || settled.y !== tile.y)) settledTile.current = null
@@ -363,7 +382,7 @@ export function useIsland({
   const strokeTo = useCallback(
     (point: { x: number; y: number }, options: EditOptions) => {
       if (!stroke.current || stroke.current.sent || !drawn.current) return null
-      const tile = pickTile(point)
+      const tile = pickTile(point, options.tool)
       const path = lastStrokeTile.current
         ? tilesAlong(lastStrokeTile.current, tile).slice(1)
         : [tile]

@@ -19,12 +19,15 @@ import {
   zoomViewAt
 } from '../src/lib/island-camera'
 import {
+  applyEdits,
+  cloneIsland,
   type EditOptions,
   overlayPreview,
   planBrush,
   planStroke,
   tilesAlong
 } from '../src/lib/island-edit'
+import { tileHeight } from '../src/lib/island-relief'
 import {
   canResidentEnter,
   createResidents,
@@ -77,6 +80,8 @@ import {
   LAVA,
   landGrounds,
   layoutResidentHomes,
+  MAX_ELEVATION_LEVEL,
+  MIN_ELEVATION_LEVEL,
   MOSS,
   PATH,
   ROCK,
@@ -326,6 +331,58 @@ describe('island editing', () => {
     world.ground[index] = WATER
     world.decor[index] = decorCode('searock')
     expect(planBrush(world, 10, 10, options()).edits).toEqual([{ index, ground: GRASS, decor: 0 }])
+  })
+
+  it('round-trips a height-only edit through preview, save and reversal', () => {
+    const world = createIsland()
+    const index = 10 * world.columns + 10
+    world.ground[index] = BRICK
+    world.decor[index] = decorCode('flowers')
+    const { elevation: _, ...legacy } = encodeIsland(world)
+    const original = decodeIsland(legacy)
+    if (!original) throw new Error('legacy save rejected')
+    const start = tileHeight(original, 10, 10)
+    const preview = planStroke(original, { tool: 'raise' }, [index])
+    const drawn = cloneIsland(original)
+    expect(overlayPreview(drawn, original, [], preview)).toEqual([index])
+    expect(tileHeight(drawn, 10, 10)).toBe(start + 4)
+    expect(tileHeight(original, 10, 10)).toBe(start)
+    expect(overlayPreview(drawn, original, [index], [])).toEqual([index])
+    expect(tileHeight(drawn, 10, 10)).toBe(start)
+    applyEdits(original, preview)
+    const restored = decodeIsland(encodeIsland(original))
+    if (!restored) throw new Error('edited save rejected')
+    expect(tileHeight(restored, 10, 10)).toBe(start + 4)
+    applyEdits(restored, planStroke(restored, { tool: 'lower' }, [index]))
+    expect(restored).toEqual(world)
+  })
+
+  it('stops at both height limits and clears the level when the land becomes water', () => {
+    const world = createIsland()
+    const index = 10 * world.columns + 10
+    world.ground[index] = SAND
+    for (let level = 0; level >= MIN_ELEVATION_LEVEL; level--) {
+      applyEdits(world, planStroke(world, { tool: 'lower' }, [index]))
+      expect(tileHeight(world, 10, 10)).toBe(level * 4)
+    }
+    const restored = decodeIsland(encodeIsland(world))
+    if (!restored) throw new Error('pit save rejected')
+    expect(tileHeight(restored, 10, 10)).toBe(MIN_ELEVATION_LEVEL * 4)
+    for (let level = MIN_ELEVATION_LEVEL + 1; level <= 1; level++) {
+      applyEdits(restored, planStroke(restored, { tool: 'raise' }, [index]))
+      expect(tileHeight(restored, 10, 10)).toBe(level * 4)
+    }
+    expect(restored.elevation[index]).toBe(0)
+    expect(planStroke(world, { tool: 'lower' }, [index])).toEqual([])
+    world.elevation[index] = MAX_ELEVATION_LEVEL
+    expect(planStroke(world, { tool: 'raise' }, [index])).toEqual([])
+    for (const tool of [{ tool: 'erase' }, { tool: 'land', ground: SHALLOWS }] as const) {
+      const copy = cloneIsland(world)
+      applyEdits(copy, planStroke(copy, tool, [index]))
+      expect(copy.elevation[index]).toBe(0)
+      expect(planStroke(copy, { tool: 'raise' }, [index])).toEqual([])
+      expect(tileHeight(copy, 10, 10)).toBe(0)
+    }
   })
 
   it('previews over the confirmed island without writing back stale tiles', () => {
