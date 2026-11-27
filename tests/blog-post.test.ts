@@ -97,6 +97,7 @@ describe('blog post parser', () => {
     expect(
       sortBlogPostsNewestFirst(posts.filter((post) => !post.draft)).map((post) => post.slug)
     ).toEqual([
+      'claude-code-from-my-phone',
       'tired-of-ai-questions',
       'anti-poem-skill',
       'gpt-sol-luna-coding-workflow',

@@ -5,6 +5,7 @@ export type PostAccent = (typeof postAccents)[number]
 // Keep a stable color per article while resolving hash collisions between
 // neighboring articles in the full timeline and tag-filtered timelines.
 const accentOverrides: Partial<Record<string, PostAccent>> = {
+  'claude-code-from-my-phone': 'green',
   'dialogflow-actions-builder-simulator-version': 'pink',
   'firebase-contentful-markdown-blog': 'green',
   'firebase-multiple-project-initialize': 'pink',
