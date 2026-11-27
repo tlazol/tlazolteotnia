@@ -14,7 +14,6 @@ import { Route as AtomDotxmlRouteImport } from './routes/atom[.]xml'
 import { Route as BlogRouteImport } from './routes/blog'
 import { Route as RssDotxmlRouteImport } from './routes/rss[.]xml'
 import { Route as TownIndexRouteImport } from './routes/_town.index'
-import { Route as AppLightsOutRouteImport } from './routes/app.lights-out'
 import { Route as TownBlogSlugRouteImport } from './routes/_town.blog.$slug'
 
 const TownRoute = TownRouteImport.update({
@@ -41,11 +40,6 @@ const TownIndexRoute = TownIndexRouteImport.update({
   path: '/',
   getParentRoute: () => TownRoute,
 } as any)
-const AppLightsOutRoute = AppLightsOutRouteImport.update({
-  id: '/app/lights-out',
-  path: '/app/lights-out',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const TownBlogSlugRoute = TownBlogSlugRouteImport.update({
   id: '/blog/$slug',
   path: '/blog/$slug',
@@ -57,14 +51,12 @@ export interface FileRoutesByFullPath {
   '/atom.xml': typeof AtomDotxmlRoute
   '/blog': typeof BlogRoute
   '/rss.xml': typeof RssDotxmlRoute
-  '/app/lights-out': typeof AppLightsOutRoute
   '/blog/$slug': typeof TownBlogSlugRoute
 }
 export interface FileRoutesByTo {
   '/atom.xml': typeof AtomDotxmlRoute
   '/blog': typeof BlogRoute
   '/rss.xml': typeof RssDotxmlRoute
-  '/app/lights-out': typeof AppLightsOutRoute
   '/': typeof TownIndexRoute
   '/blog/$slug': typeof TownBlogSlugRoute
 }
@@ -74,24 +66,20 @@ export interface FileRoutesById {
   '/atom.xml': typeof AtomDotxmlRoute
   '/blog': typeof BlogRoute
   '/rss.xml': typeof RssDotxmlRoute
-  '/app/lights-out': typeof AppLightsOutRoute
   '/_town/': typeof TownIndexRoute
   '/_town/blog/$slug': typeof TownBlogSlugRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths:
-    '/' | '/atom.xml' | '/blog' | '/rss.xml' | '/app/lights-out' | '/blog/$slug'
+  fullPaths: '/' | '/atom.xml' | '/blog' | '/rss.xml' | '/blog/$slug'
   fileRoutesByTo: FileRoutesByTo
-  to:
-    '/atom.xml' | '/blog' | '/rss.xml' | '/app/lights-out' | '/' | '/blog/$slug'
+  to: '/atom.xml' | '/blog' | '/rss.xml' | '/' | '/blog/$slug'
   id:
     | '__root__'
     | '/_town'
     | '/atom.xml'
     | '/blog'
     | '/rss.xml'
-    | '/app/lights-out'
     | '/_town/'
     | '/_town/blog/$slug'
   fileRoutesById: FileRoutesById
@@ -101,7 +89,6 @@ export interface RootRouteChildren {
   AtomDotxmlRoute: typeof AtomDotxmlRoute
   BlogRoute: typeof BlogRoute
   RssDotxmlRoute: typeof RssDotxmlRoute
-  AppLightsOutRoute: typeof AppLightsOutRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -141,13 +128,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TownIndexRouteImport
       parentRoute: typeof TownRoute
     }
-    '/app/lights-out': {
-      id: '/app/lights-out'
-      path: '/app/lights-out'
-      fullPath: '/app/lights-out'
-      preLoaderRoute: typeof AppLightsOutRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/_town/blog/$slug': {
       id: '/_town/blog/$slug'
       path: '/blog/$slug'
@@ -175,7 +155,6 @@ const rootRouteChildren: RootRouteChildren = {
   AtomDotxmlRoute: AtomDotxmlRoute,
   BlogRoute: BlogRoute,
   RssDotxmlRoute: RssDotxmlRoute,
-  AppLightsOutRoute: AppLightsOutRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

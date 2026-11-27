@@ -4,17 +4,15 @@ import { artStationUrl, authorAccount, authorName, siteName, xUrl } from '#/lib/
 
 export function SiteHeader({
   children,
-  revealMenu = false,
+  revealMenu,
   toggleRef
 }: {
-  children?: ReactNode
-  revealMenu?: boolean
-  toggleRef?: RefObject<HTMLButtonElement | null>
-} = {}) {
+  children: ReactNode
+  revealMenu: boolean
+  toggleRef: RefObject<HTMLButtonElement | null>
+}) {
   const [open, setOpen] = useState(false)
   const header = useRef<HTMLElement>(null)
-  const internalToggle = useRef<HTMLButtonElement>(null)
-  const toggle = toggleRef ?? internalToggle
 
   useEffect(() => {
     if (revealMenu) setOpen(true)
@@ -28,7 +26,7 @@ export function SiteHeader({
     function handleEscape(event: KeyboardEvent) {
       if (event.key === 'Escape') {
         setOpen(false)
-        toggle.current?.focus()
+        toggleRef.current?.focus()
       }
     }
     document.addEventListener('pointerdown', dismiss)
@@ -37,7 +35,7 @@ export function SiteHeader({
       document.removeEventListener('pointerdown', dismiss)
       document.removeEventListener('keydown', handleEscape)
     }
-  }, [open, toggle])
+  }, [open, toggleRef])
 
   return (
     <header className="site-header" ref={header}>
@@ -47,7 +45,7 @@ export function SiteHeader({
           <span aria-hidden="true">✳</span>
         </Link>
         <button
-          ref={toggle}
+          ref={toggleRef}
           type="button"
           className="site-menu-toggle"
           aria-label={open ? 'メニューを閉じる' : 'メニューを開く'}
@@ -70,7 +68,6 @@ export function SiteHeader({
           }}
         >
           <Link to="/">Town</Link>
-          <Link to="/app/lights-out">Lights Out ↗</Link>
           <a href={artStationUrl}>ArtStation ↗</a>
           <a href={xUrl}>X / Twitter ↗</a>
           <a href="/rss.xml">RSS</a>

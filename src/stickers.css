@@ -344,9 +344,6 @@ body::after {
   padding-left: 1.5em;
   list-style: decimal;
 }
-.game-page {
-  background: #101114;
-}
 /* Before hydration the SSR dialog is only `open`, not in the top layer,
    so it has to stack over the town's loading scene on its own. */
 .post-modal {
