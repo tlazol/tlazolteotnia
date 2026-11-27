@@ -1,6 +1,6 @@
 import type { GlassShade } from './island-lamp-glass'
 import { decorModel, type LightEmitter } from './island-models'
-import { type VoxelSurface, voxelSurface } from './island-voxels'
+import { decorVoxelStep, type VoxelSurface, voxelSurface } from './island-voxels'
 import type { DecorKind } from './island-world'
 
 export type VoxelRequest = { kind: DecorKind; look: number }
@@ -13,11 +13,7 @@ export type VoxelResult = VoxelRequest & {
 }
 self.onmessage = ({ data }: MessageEvent<VoxelRequest>) => {
   const model = decorModel(data.kind, data.look)
-  // Keep fine brass hardware and the pore rows on the shell visible.
-  const surface = voxelSurface(
-    model,
-    data.kind === 'resortLight' ? 0.72 : data.kind === 'relic' ? 1.25 : undefined
-  )
+  const surface = voxelSurface(model, decorVoxelStep(data.kind))
   const result: VoxelResult = {
     ...data,
     surface,

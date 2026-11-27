@@ -1,10 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { raymarchDecor } from '../src/lib/island-decor-raymarch'
 import { decorModel, modelLookCount, partsDistance } from '../src/lib/island-models'
 import {
   LEAF_TONES,
   leafToneSlot,
-  lightSteps,
   nearestSlot,
   palette,
   rampSlot,
@@ -12,6 +10,7 @@ import {
   stepSlot
 } from '../src/lib/island-palette'
 import { box, capsule, ellipsoid, smin, sphere } from '../src/lib/island-sdf'
+import { decorVoxelStep, voxelSurface } from '../src/lib/island-voxels'
 import {
   decorCode,
   decorInfo,
@@ -52,14 +51,6 @@ describe('palette', () => {
     expect(stepSlot(base, 20)).toBe(rampSlot('grass', 7))
   })
 
-  it('leaves full sun on flat ground as it is and darkens shade', () => {
-    for (let y = 0; y < 4; y++)
-      for (let x = 0; x < 4; x++) {
-        expect(lightSteps(1, x, y)).toBe(0)
-        expect(lightSteps(0.45, x, y)).toBeLessThan(-1)
-      }
-  })
-
   it('keeps in-between ground tones on their own ramp', () => {
     const color = palette[slotOnRamp(240, 215, 150, 'sand')]
     expect(palette.indexOf(color)).toBe(nearestSlot(color.r, color.g, color.b))
@@ -71,11 +62,13 @@ describe('decoration models', () => {
   it.each(decorKinds)('draws every look of %s', (kind) => {
     expect(modelLookCount(kind)).toBe(decorInfo[kind].looks)
     for (let look = 0; look < decorInfo[kind].looks; look++) {
-      const template = raymarchDecor(decorModel(kind, look))
+      const surface = voxelSurface(decorModel(kind, look), decorVoxelStep(kind), { glow: true })
       // Fireflies are a few glowing specks; everything else has a body.
-      expect(template.count, `look ${look}`).toBeGreaterThan(kind === 'fireflies' ? 4 : 20)
+      expect(surface.indices.length / 6, `look ${look}`).toBeGreaterThan(
+        kind === 'fireflies' ? 4 : 20
+      )
       expect(
-        template.slot.every((slot) => slot < palette.length),
+        surface.slots.every((slot) => slot < palette.length),
         `look ${look}`
       ).toBe(true)
     }

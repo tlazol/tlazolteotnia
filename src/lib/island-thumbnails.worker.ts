@@ -1,4 +1,4 @@
-// Draws the editing palette's pictures off the main thread: baking every look
+// Draws the editing palette's pictures off the main thread: voxelizing every look
 // of every decoration takes the better part of a second. Grounds are answered
 // first, all at once, then each decoration kind as soon as its looks are drawn,
 // in the order asked.

@@ -274,23 +274,3 @@ export function leafToneSlot(slot: number, tone: number) {
 // a painter would shade a turning edge ('soft'), the darkest of its ramp
 // ('ramp'), a bold ink line ('ink'), or not at all.
 export type Outline = 'soft' | 'ramp' | 'ink' | 'none'
-
-// The color of the rim beside a point of `slot`.
-export function rimSlot(slot: number, outline: Outline = 'ramp') {
-  if (outline === 'ink') return rampSlot('ink', 0)
-  if (outline === 'soft') return stepSlot(slot, -2)
-  const slots = rampSlots[palette[slot].ramp]
-  return slots[0]
-}
-
-// Ordered dither threshold in [0, 1) on a 4×4 pixel grid.
-const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5]
-export function bayer(x: number, y: number) {
-  return (BAYER[(y & 3) * 4 + (x & 3)] + 0.5) / 16
-}
-
-// How many ramp steps a light level moves a color: 1 is full sun on flat
-// ground and leaves it as it is; the dither breaks the bands between steps.
-export function lightSteps(light: number, x: number, y: number) {
-  return Math.max(-4, Math.min(2, Math.floor((light - 1) * 4.6 + bayer(x, y))))
-}
