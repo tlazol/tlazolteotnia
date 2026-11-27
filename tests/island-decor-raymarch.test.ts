@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { bakeTemplate } from '../src/lib/island-bake'
+import { raymarchDecor } from '../src/lib/island-decor-raymarch'
 import { decorModel, modelLookCount, partsDistance } from '../src/lib/island-models'
 import {
   LEAF_TONES,
@@ -71,7 +71,7 @@ describe('decoration models', () => {
   it.each(decorKinds)('draws every look of %s', (kind) => {
     expect(modelLookCount(kind)).toBe(decorInfo[kind].looks)
     for (let look = 0; look < decorInfo[kind].looks; look++) {
-      const template = bakeTemplate(decorModel(kind, look))
+      const template = raymarchDecor(decorModel(kind, look))
       // Fireflies are a few glowing specks; everything else has a body.
       expect(template.count, `look ${look}`).toBeGreaterThan(kind === 'fireflies' ? 4 : 20)
       expect(

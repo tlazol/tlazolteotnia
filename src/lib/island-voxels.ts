@@ -30,7 +30,7 @@ export function voxelSurface(model: Model, maxStep = 4): VoxelSurface {
           const cell = x + y * stride[1] + z * stride[2]
           if (d > step * 0.24 || d >= distance[cell]) continue
           const material = part.paint(px, py, pz)
-          // The live scene renders luminous parts as particles. The thumbnail baker keeps the paint.
+          // The live scene renders luminous parts as particles. The thumbnail ray-marcher keeps the paint.
           if (material.glow) continue
           distance[cell] = d
           cells[cell] = material.slot

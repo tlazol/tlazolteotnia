@@ -1,18 +1,18 @@
 import { describe, expect, it } from 'vitest'
-import { bakeTemplate } from '../src/lib/island-bake'
+import { raymarchDecor } from '../src/lib/island-decor-raymarch'
 import { decorModel } from '../src/lib/island-models'
 import { decorThumbnail, groundThumbnail } from '../src/lib/island-thumbnails'
 import { decorInfo, decorKinds, landGrounds } from '../src/lib/island-world'
 
 describe('palette thumbnails', () => {
-  it('draw every look of every decoration from its baked model', () => {
+  it('draw every look of every decoration from its ray-marched model', () => {
     for (const kind of decorKinds)
       for (let look = 0; look < decorInfo[kind].looks; look++) {
         const thumbnail = decorThumbnail(kind, look)
         let drawn = 0
         for (let i = 3; i < thumbnail.data.length; i += 4) if (thumbnail.data[i]) drawn++
         const model = decorModel(kind, look)
-        const solids = bakeTemplate(model).count
+        const solids = raymarchDecor(model).count
         if (model.shades) {
           expect(drawn).toBeGreaterThanOrEqual(solids)
           if (drawn > solids)
@@ -20,7 +20,7 @@ describe('palette thumbnails', () => {
         } else expect(drawn).toBe(solids)
         expect(thumbnail.data.length).toBe(thumbnail.width * thumbnail.height * 4)
       }
-    // Bakes every look twice over, the big trees too: slow beside the others.
+    // Ray-marches every look twice over, the big trees too: slow beside the others.
   }, 30_000)
 
   it('fill every ground swatch, pools with their water', () => {

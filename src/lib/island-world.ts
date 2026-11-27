@@ -191,7 +191,7 @@ export function decorSizeAt(code: number, x: number, y: number) {
 }
 // Leafy trees take one of LEAF_TONES leaf tones from their position: the one as
 // drawn for 40% of them, the others sharing the rest. Only colors change, so
-// no tone costs another bake of the model.
+// no tone costs another voxelization of the model.
 const leafyKinds: ReadonlySet<DecorKind> = new Set(['tree', 'palm', 'banana', 'bamboo'])
 export function decorToneAt(code: number, x: number, y: number) {
   const kind = decorKindOf(code)

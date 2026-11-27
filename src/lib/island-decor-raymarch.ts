@@ -1,4 +1,4 @@
-// Rasterize a decoration from the south for its editing-palette thumbnail.
+// Ray-march a decoration's SDF from the south for its editing-palette thumbnail.
 // A surface point at (x, y, z) projects to (x, y - z), with depth y + z.
 import { type Model, nearestPart, partsDistance } from './island-models'
 import { lightSteps, type Outline, rimSlot, stepSlot, surfaceEmission } from './island-palette'
@@ -56,7 +56,7 @@ function occlusion(
 
 // Samples a model's surface once per screen pixel, lights each point and adds
 // a dark rim around the silhouette, as the hand-drawn sprites had.
-export function bakeTemplate(m: Model) {
+export function raymarchDecor(m: Model) {
   const x0 = Math.floor(m.lo[0])
   const x1 = Math.ceil(m.hi[0])
   const y0 = Math.floor(m.lo[1] - m.hi[2])

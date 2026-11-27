@@ -1,9 +1,9 @@
 // Pictures for the editing palette, drawn the way the island itself is drawn:
-// decorations from their baked models, grounds from their lit texels, so what
+// decorations ray-marched from their models, grounds from their lit texels, so what
 // the palette shows is what lands on the island.
 
 import { groundTextures, hex, islandPalette, type PixelBuffer, type Rgba } from './island-art'
-import { bakeTemplate } from './island-bake'
+import { raymarchDecor } from './island-decor-raymarch'
 import { type GlassShade, glassFacets } from './island-lamp-glass'
 import { decorModel } from './island-models'
 import { palette, slotOnRamp } from './island-palette'
@@ -12,7 +12,7 @@ import { type DecorKind, HOTSPRING, type LandGround, SHALLOWS, SWAMP } from './i
 // A decoration's look as it stands on the island, cropped to its outline.
 export function decorThumbnail(kind: DecorKind, look: number): PixelBuffer {
   const model = decorModel(kind, look)
-  const t = bakeTemplate(model)
+  const t = raymarchDecor(model)
   let x0 = Number.POSITIVE_INFINITY
   let y0 = Number.POSITIVE_INFINITY
   let x1 = Number.NEGATIVE_INFINITY
@@ -54,8 +54,8 @@ export function decorThumbnail(kind: DecorKind, look: number): PixelBuffer {
   return image
 }
 
-// Composite the front pane over the bulb in the baker's x, y-z projection.
-// Opaque hardware in front of a pane keeps its baked color.
+// Composite the front pane over the bulb in the ray-marcher's x, y-z projection.
+// Opaque hardware in front of a pane keeps its ray-marched color.
 function drawGlass(
   image: PixelBuffer,
   depth: Float32Array,
