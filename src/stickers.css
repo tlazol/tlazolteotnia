@@ -1254,8 +1254,7 @@ body::after {
   background: #2b22361a;
   image-rendering: pixelated;
 }
-/* The ground and decoration palettes: groups of tiles, scrolling sideways
-   when they do not fit. */
+/* Decoration groups scroll sideways when they do not fit. */
 .island-palette {
   display: flex;
   gap: 10px;
@@ -1264,10 +1263,23 @@ body::after {
   overflow-x: auto;
   scrollbar-width: thin;
 }
-.island-chips--ground {
-  flex: none;
-  flex-wrap: nowrap;
+.island-ground-picker {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+}
+.island-ground-picker fieldset {
+  min-width: 0;
   white-space: nowrap;
+}
+.island-ground-categories {
+  padding-bottom: 5px;
+  border-bottom: 1px solid #2b223640;
+}
+.island-ground-categories button {
+  padding-inline: 10px;
+  border-color: transparent;
+  background: transparent;
 }
 .island-chips--decor {
   flex: none;

@@ -71,7 +71,7 @@ export type Ground =
   | typeof HOTSPRING
 export type LandGround = Exclude<Ground, typeof WATER>
 export const groundGroups: Array<{ name: string; grounds: LandGround[] }> = [
-  { name: '草', grounds: [GRASS, MOSS, DRYGRASS, CLOVER] },
+  { name: '草地', grounds: [GRASS, MOSS, DRYGRASS, CLOVER] },
   { name: '砂と土', grounds: [SAND, WHITESAND, BLACKSAND, SOIL, CLAY, MUD, GRAVEL] },
   { name: '岩', grounds: [ROCK, LAVA] },
   { name: '道', grounds: [PATH, COBBLE, BRICK, STEPPING, DECK] },

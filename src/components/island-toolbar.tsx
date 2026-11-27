@@ -35,6 +35,14 @@ export const toolShortcuts = Object.fromEntries(
 // the island is at its first zoom.
 const GROUND_SWATCH = 9
 
+function GroundSwatch({ src }: { src: string | undefined }) {
+  return src ? (
+    <img className="island-swatch" src={src} alt="" />
+  ) : (
+    <span className="island-swatch" aria-hidden="true" />
+  )
+}
+
 type Thumbnails = {
   grounds: Partial<Record<LandGround, string>>
   decor: Partial<Record<DecorKind, string[]>>
@@ -119,6 +127,8 @@ export function IslandToolbar({
   }, [])
   const block: EditBlock = shared ? editBlock(shared, now()) : 'connecting'
   const showGround = options.tool === 'land'
+  const groundGroup =
+    groundGroups.find((group) => group.grounds.includes(options.ground)) ?? groundGroups[0]
   const heightTool = options.tool === 'raise' || options.tool === 'lower'
   const showHeight = heightTool && !panTool
   const heightId = useId()
@@ -155,28 +165,39 @@ export function IslandToolbar({
             </fieldset>
           )}
           {showGround && (
-            <div className="island-palette">
-              {groundGroups.map((group) => (
-                <fieldset key={group.name} className="island-chips island-chips--ground">
-                  <legend className="sr-only">{group.name}</legend>
-                  {group.grounds.map((ground) => (
-                    <button
-                      key={ground}
-                      type="button"
-                      disabled={disabled}
-                      aria-pressed={options.ground === ground}
-                      onClick={() => onOptions({ ...options, ground })}
-                    >
-                      {swatches[ground] ? (
-                        <img className="island-swatch" src={swatches[ground]} alt="" />
-                      ) : (
-                        <span className="island-swatch" aria-hidden="true" />
-                      )}
-                      {groundNames[ground]}
-                    </button>
-                  ))}
-                </fieldset>
-              ))}
+            <div className="island-ground-picker">
+              <fieldset className="island-chips island-ground-categories">
+                <legend className="sr-only">土地のカテゴリ</legend>
+                {groundGroups.map((group) => (
+                  <button
+                    key={group.name}
+                    type="button"
+                    disabled={disabled}
+                    aria-pressed={group === groundGroup}
+                    onClick={() => {
+                      if (group !== groundGroup) onOptions({ ...options, ground: group.grounds[0] })
+                    }}
+                  >
+                    <GroundSwatch src={swatches[group.grounds[0]]} />
+                    {group.name}
+                  </button>
+                ))}
+              </fieldset>
+              <fieldset className="island-chips">
+                <legend className="sr-only">{groundGroup.name}の種類</legend>
+                {groundGroup.grounds.map((ground) => (
+                  <button
+                    key={ground}
+                    type="button"
+                    disabled={disabled}
+                    aria-pressed={options.ground === ground}
+                    onClick={() => onOptions({ ...options, ground })}
+                  >
+                    <GroundSwatch src={swatches[ground]} />
+                    {groundNames[ground]}
+                  </button>
+                ))}
+              </fieldset>
             </div>
           )}
           {options.tool === 'decor' && (
