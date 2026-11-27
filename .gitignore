@@ -18,7 +18,8 @@
 # Uploads
 /uploads/
 
-.claude
+.claude/*
+!.claude/skills/
 .codex
 offline_bundle*
 .agents*
