@@ -275,6 +275,20 @@ function painter(buffer: PixelBuffer, ox: number, oy: number): Painter {
   }
 }
 
+export function paintConversationBubble() {
+  const buffer = createBuffer(13, 10)
+  const p = painter(buffer, 0, 0)
+  const paper = hex('#fff6df')
+  const ink = hex('#473943')
+  p.rect(2, 1, 9, 6, paper)
+  p.rect(1, 2, 11, 4, paper)
+  p.rect(3, 7, 2, 1, paper)
+  p.px(3, 8, paper)
+  for (const x of [3, 6, 9]) p.px(x, 4, ink)
+  outline(buffer, ink)
+  return buffer
+}
+
 // Right hand, seen from above. The left hand mirrors this sprite.
 const handSprite = [
   '      hhhh',
@@ -916,6 +930,77 @@ const isWet = isWetGround
 
 export function residentIsSwimming(world: IslandWorld, resident: Resident) {
   return residentFootHeight(world, resident) === 0
+}
+
+type Greeting = { first: Resident; second: Resident; elapsed: number; speaker: Resident | null }
+
+function faces(resident: Resident, dx: number, dy: number) {
+  const { x, y } = resident.heading
+  const forward = x * dx + y * dy
+  return forward > 0 && Math.abs(x * dy - y * dx) <= forward
+}
+
+export function createResidentGreetings(world: IslandWorld, residents: Resident[]) {
+  const byResident = new Map<string, Greeting>()
+  const greeted = new Set<number>()
+  const previous = residents.map(({ x, y }) => ({ x, y }))
+  let untilScan = 0
+  const canGreet = (r: Resident) => r.action === 'walk' || r.action === 'idle'
+  const sameLevel = (a: Resident, b: Resident) =>
+    Math.abs(residentFootHeight(world, a) - residentFootHeight(world, b)) < TILE_SIZE / 2
+  const reach = (1.8 * TILE_SIZE) ** 2
+  const apart = (2.5 * TILE_SIZE) ** 2
+
+  function step(dt: number, available: (resident: Resident) => boolean) {
+    for (const [slug, greeting] of byResident) {
+      const { first, second } = greeting
+      if (slug !== first.slug) continue
+      greeting.elapsed += dt
+      if (
+        greeting.elapsed >= 2 ||
+        !available(first) ||
+        !available(second) ||
+        (first.x - second.x) ** 2 + (first.y - second.y) ** 2 > reach ||
+        !sameLevel(first, second)
+      ) {
+        byResident.delete(first.slug)
+        byResident.delete(second.slug)
+      } else {
+        greeting.speaker = greeting.elapsed < 0.9 ? first : greeting.elapsed >= 1.1 ? second : null
+      }
+    }
+
+    untilScan -= dt
+    if (untilScan > 0) return
+    untilScan = 0.15
+    const free = residents.map((r) => canGreet(r) && available(r) && !byResident.has(r.slug))
+    for (let i = 0; i < residents.length; i++) {
+      const first = residents[i]
+      for (let j = i + 1; j < residents.length; j++) {
+        const second = residents[j]
+        const dx = second.x - first.x
+        const dy = second.y - first.y
+        const distanceSq = dx * dx + dy * dy
+        const key = i * residents.length + j
+        // Passing the edge of speaking distance briefly is still the same encounter.
+        if (distanceSq > apart) greeted.delete(key)
+        if (distanceSq > reach || !free[i] || !free[j] || greeted.has(key)) continue
+        const oldDx = previous[j].x - previous[i].x
+        const oldDy = previous[j].y - previous[i].y
+        const approaching = distanceSq < oldDx * oldDx + oldDy * oldDy - 0.01
+        if (!approaching && !(faces(first, dx, dy) && faces(second, -dx, -dy))) continue
+        if (!sameLevel(first, second)) continue
+        const greeting: Greeting = { first, second, elapsed: 0, speaker: first }
+        byResident.set(first.slug, greeting)
+        byResident.set(second.slug, greeting)
+        free[i] = free[j] = false
+        greeted.add(key)
+      }
+      previous[i].x = first.x
+      previous[i].y = first.y
+    }
+  }
+  return { byResident, step }
 }
 
 export function dropResident(

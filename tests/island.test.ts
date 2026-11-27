@@ -30,6 +30,7 @@ import {
 import { tileHeight } from '../src/lib/island-relief'
 import {
   canResidentEnter,
+  createResidentGreetings,
   createResidents,
   designResidents,
   dropResident,
@@ -94,6 +95,7 @@ import {
   STEPPING,
   SWAMP,
   serializeIsland,
+  TILE_SIZE,
   WATER,
   WHITESAND
 } from '../src/lib/island-world'
@@ -563,6 +565,75 @@ describe('island residents', () => {
         expect(residentPose(projectGround(view, step.x, step.y))).toEqual({ facing, flip })
       }
     }
+  })
+
+  it('greets on approach and face to face, with independent exchanges across the island', () => {
+    const world = createIsland(16, 2)
+    world.ground.fill(SAND)
+    const residents = createResidents(
+      ['walker', 'passerby', 'neighbor', 'friend'],
+      [
+        { x: 1, y: 0 },
+        { x: 3, y: 1 },
+        { x: 10, y: 0 },
+        { x: 11, y: 0 }
+      ],
+      () => 0.1
+    )
+    const [walker, passerby, neighbor, friend] = residents
+    neighbor.heading = { x: 1, y: 0 }
+    friend.heading = { x: -1, y: 0 }
+    const { byResident, step } = createResidentGreetings(world, residents)
+    const available = () => true
+    step(0, available)
+    expect(byResident.size).toBe(2)
+    expect(byResident.get(friend.slug)?.speaker).toBe(neighbor)
+
+    // Two walkers on parallel paths approach from opposite directions.
+    walker.x += 6
+    passerby.x -= 6
+    step(0.2, available)
+    expect(byResident.size).toBe(4)
+    expect(byResident.get(passerby.slug)?.speaker).toBe(walker)
+    step(1.2, available)
+    expect(byResident.get(walker.slug)?.speaker).toBe(passerby)
+    expect(byResident.get(neighbor.slug)?.speaker).toBe(friend)
+    step(0.05, (r) => r !== passerby)
+    expect(byResident.has(walker.slug)).toBe(false)
+    expect(byResident.has(friend.slug)).toBe(true)
+    step(2, available)
+    expect(byResident.size).toBe(0)
+
+    // Standing together never repeats the greeting. Meeting again does.
+    step(10, available)
+    expect(byResident.size).toBe(0)
+    friend.x += 3 * TILE_SIZE
+    step(0.2, available)
+    friend.x -= 3 * TILE_SIZE
+    step(0.2, available)
+    expect(byResident.size).toBe(2)
+    expect(byResident.get(friend.slug)?.first).toBe(neighbor)
+  })
+
+  it('lets neighbors walk alongside or away from each other without stopping', () => {
+    const world = createIsland(8, 2)
+    world.ground.fill(SAND)
+    const residents = createResidents(
+      ['a', 'b'],
+      [
+        { x: 1, y: 0 },
+        { x: 1, y: 1 }
+      ],
+      () => 0.1
+    )
+    const { step, byResident } = createResidentGreetings(world, residents)
+    const available = () => true
+    step(0, available)
+    for (const resident of residents) resident.x += 4
+    step(0.2, available)
+    residents[1].y += 4
+    step(0.2, available)
+    expect(byResident.size).toBe(0)
   })
 
   it('walks diagonally at its usual speed and checks both sides of a reserved corner', () => {

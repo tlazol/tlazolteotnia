@@ -74,8 +74,10 @@ import { createDecor } from './island-decor.client'
 import { firelightMaterial, lightMaterial } from './island-lights.client'
 import { tileHeight } from './island-relief'
 import {
+  createResidentGreetings,
   dropResident,
   facings,
+  paintConversationBubble,
   paintResidentHand,
   paintResidentSheet,
   RESIDENT_FRAME,
@@ -914,6 +916,11 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
   const residentHeight = RESIDENT_FRAME.height * RESIDENT_SCALE
   const residentGeometry = track(new PlaneGeometry(residentWidth, residentHeight))
   residentGeometry.translate(0, residentHeight / 2, 0)
+  const greetings = createResidentGreetings(world, residents)
+  const bubbleArt = paintConversationBubble()
+  const bubbleMaterial = track(
+    new SpriteMaterial({ map: track(textureFrom(bubbleArt)), alphaTest: 0.5 })
+  )
   const residentMeshes = residents.map((resident) => {
     const design = designs.get(resident.slug)
     const buffer = design
@@ -950,8 +957,13 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
     )
     silhouette.renderOrder = 5
     mesh.add(silhouette)
+    const bubble = new Sprite(bubbleMaterial)
+    bubble.scale.set(bubbleArt.width, bubbleArt.height, 1)
+    bubble.center.set(0.25, 0)
+    bubble.position.set(5, residentHeight - 2, 0)
+    mesh.add(bubble)
     scene.add(mesh)
-    return { mesh, texture, swimTexture, silhouette, buffer, swimBuffer }
+    return { mesh, bubble, texture, swimTexture, silhouette, buffer, swimBuffer }
   })
   const pickMeshes = residentMeshes.map(({ mesh }) => mesh)
 
@@ -1353,7 +1365,7 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
     right.set(1, 0, 0).applyQuaternion(rotation)
     up.set(0, 1, 0).applyQuaternion(rotation)
     residents.forEach((resident, i) => {
-      const { mesh, texture: walkTexture, swimTexture, silhouette } = residentMeshes[i]
+      const { mesh, bubble, texture: walkTexture, swimTexture, silhouette } = residentMeshes[i]
       mesh.visible = viewer !== resident
       silhouette.visible = !viewer
       const isDragged = dragged?.resident === resident
@@ -1374,13 +1386,18 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
       mesh.material.map = texture
       silhouette.material.uniforms.map.value = texture
       silhouette.material.uniforms.uvTransform.value = texture.matrix
+      const greeting = greetings.byResident.get(resident.slug)
+      const partner = greeting && (resident === greeting.first ? greeting.second : greeting.first)
+      const heading = partner
+        ? { x: partner.x - resident.x, y: partner.y - resident.y }
+        : resident.heading
       const { facing, flip } = residentPose(
         viewer
           ? {
-              x: right.x * resident.heading.x - right.y * resident.heading.y,
-              y: -Math.cos(eyeYaw) * resident.heading.x - Math.sin(eyeYaw) * resident.heading.y
+              x: right.x * heading.x - right.y * heading.y,
+              y: -Math.cos(eyeYaw) * heading.x - Math.sin(eyeYaw) * heading.y
             }
-          : projectGround(view, resident.heading.x, resident.heading.y)
+          : projectGround(view, heading.x, heading.y)
       )
       const row = facings.indexOf(facing)
       texture.offset.set(resident.frame / RESIDENT_FRAMES, 1 - (row + 1) / facings.length)
@@ -1392,6 +1409,8 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
         .addScaledVector(right, resident.offsetX)
         .addScaledVector(up, -resident.offsetY + (isDragged ? 5 : 0))
       mesh.quaternion.copy(rotation)
+      bubble.visible = greeting?.speaker === resident
+      bubble.position.x = flip ? -5 : 5
       mesh.rotateZ(resident.tilt)
       mesh.scale.x = flip ? -1 : 1
       mesh.material.depthTest = !isDragged
@@ -1435,6 +1454,10 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
       }
       last = now
       const still = reducedMotion.matches
+      greetings.step(
+        dt,
+        (r) => !still && !editing && r !== dragged?.resident && r !== viewer && r.slug !== selected
+      )
       const previousWalkClock = viewer?.walkClock
       if (!still) time += dt
       if (!still || (viewer && walkInput)) {
@@ -1445,7 +1468,10 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
             world,
             residents,
             dt,
-            (slug) => slug === dragged?.resident.slug || (!!walkInput && slug === viewer?.slug)
+            (slug) =>
+              slug === dragged?.resident.slug ||
+              (!!walkInput && slug === viewer?.slug) ||
+              greetings.byResident.has(slug)
           )
         if (viewer && walkInput) {
           const direction = queuedInput ?? walkInput
