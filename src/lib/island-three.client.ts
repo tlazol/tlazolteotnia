@@ -962,8 +962,10 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
     bubble.center.set(0.25, 0)
     bubble.position.set(5, residentHeight - 2, 0)
     mesh.add(bubble)
-    scene.add(mesh)
-    return { mesh, bubble, texture, swimTexture, silhouette, buffer, swimBuffer }
+    const standing = new Group()
+    standing.add(mesh)
+    scene.add(standing)
+    return { standing, mesh, bubble, texture, swimTexture, silhouette, buffer, swimBuffer }
   })
   const pickMeshes = residentMeshes.map(({ mesh }) => mesh)
 
@@ -1323,7 +1325,6 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
   }
 
   const right = new Vector3()
-  const up = new Vector3()
   function followEyes(resident: Resident, dt: number) {
     if (followHeading && !walkInput) {
       const delta = Math.atan2(resident.heading.y, resident.heading.x) - eyeYaw
@@ -1363,9 +1364,19 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
     let anglers = 0
     const rotation = (viewer ? eyeCamera : camera).quaternion
     right.set(1, 0, 0).applyQuaternion(rotation)
-    up.set(0, 1, 0).applyQuaternion(rotation)
+    const yaw = Math.atan2(right.y, right.x)
+    // A vertical sprite stays above its feet beside cliffs. Compensate for
+    // foreshortening so one sprite pixel still covers one map art pixel.
+    const heightScale = viewer ? 1 : 1 / pitchCos
     residents.forEach((resident, i) => {
-      const { mesh, bubble, texture: walkTexture, swimTexture, silhouette } = residentMeshes[i]
+      const {
+        standing,
+        mesh,
+        bubble,
+        texture: walkTexture,
+        swimTexture,
+        silhouette
+      } = residentMeshes[i]
       mesh.visible = viewer !== resident
       silhouette.visible = !viewer
       const isDragged = dragged?.resident === resident
@@ -1404,14 +1415,14 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
       texture.updateMatrix()
       const footX = resident.x
       const footY = resident.y
-      mesh.position
-        .set(footX, -footY, base + 0.15)
-        .addScaledVector(right, resident.offsetX)
-        .addScaledVector(up, -resident.offsetY + (isDragged ? 5 : 0))
-      mesh.quaternion.copy(rotation)
+      standing.position.set(footX, -footY, base + 0.15)
+      standing.rotation.set(Math.PI / 2, 0, yaw, 'ZXY')
+      standing.scale.y = heightScale
+      mesh.position.set(resident.offsetX, -resident.offsetY + (isDragged ? 5 : 0), 0)
+      mesh.rotation.z = resident.tilt
       bubble.visible = greeting?.speaker === resident
       bubble.position.x = flip ? -5 : 5
-      mesh.rotateZ(resident.tilt)
+      bubble.scale.y = bubbleArt.height / heightScale
       mesh.scale.x = flip ? -1 : 1
       mesh.material.depthTest = !isDragged
       mesh.renderOrder = isDragged ? 31 : 0
