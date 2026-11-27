@@ -774,7 +774,7 @@ export type Resident = {
   wait: number
   walkClock: number
   speed: number
-  action: 'walk' | 'idle' | 'dance' | 'jump'
+  action: 'walk' | 'idle' | 'dance' | 'jump' | 'fish'
   actionClock: number
   actionRemaining: number
   offsetX: number
@@ -783,13 +783,18 @@ export type Resident = {
   seed: number
 }
 
-function chooseAction(random: () => number, current?: Resident['action']): Resident['action'] {
+function chooseAction(
+  random: () => number,
+  current?: Resident['action'],
+  canFish = false
+): Resident['action'] {
+  if (current === 'fish') return 'walk'
   const roll = random()
   // Dancing and jumping are rare treats: 2% each on arrival and on each activity change.
   if (roll < 0.02) return current === 'dance' ? 'walk' : 'dance'
   if (roll < 0.04) return current === 'jump' ? 'walk' : 'jump'
   // Otherwise residents mostly walk, stopping for a breather between strolls.
-  if (current === 'walk') return 'idle'
+  if (current === 'walk') return canFish && roll < 0.34 ? 'fish' : 'idle'
   if (current === 'idle') return 'walk'
   return roll < 0.85 ? 'walk' : 'idle'
 }
@@ -799,6 +804,7 @@ function actionDuration(action: Resident['action'], random: () => number) {
   if (action === 'walk') return 10 + random() * 20
   if (action === 'idle') return 2 + random() * 3
   if (action === 'jump') return 2.8 + random() * 2.8
+  if (action === 'fish') return 8 + random() * 8
   return 6 + random() * 14
 }
 
@@ -877,16 +883,22 @@ export function canResidentEnter(world: IslandWorld, x: number, y: number) {
   return inBounds(world, x, y) && !decorBlocksWalking(decorAt(world, x, y))
 }
 
-const neighborSteps = [
+const cardinalSteps = [
   [1, 0],
   [0, 1],
   [-1, 0],
-  [0, -1],
-  [1, 1],
-  [-1, 1],
-  [-1, -1],
-  [1, -1]
+  [0, -1]
 ] as const
+const neighborSteps = [...cardinalSteps, [1, 1], [-1, 1], [-1, -1], [1, -1]] as const
+
+// Cast from a bank, pier or shallow into the next open water tile.
+function canCast(world: IslandWorld, resident: Resident, dx: number, dy: number) {
+  const { x, y } = resident.tile
+  const bank = groundAt(world, x, y)
+  if ((isWetGround(bank) && bank !== SHALLOWS) || tileHeight(world, x, y) < 0) return false
+  const water = groundAt(world, x + dx, y + dy)
+  return (water === WATER || water === SHALLOWS) && canResidentEnter(world, x + dx, y + dy)
+}
 
 // A diagonal needs clearance on both sides of the corner it crosses.
 function canStep(
@@ -918,6 +930,7 @@ export function dropResident(
     residents.some((other) => other !== resident && residentOccupies(other, tile.x, tile.y))
   )
     return false
+  if (resident.action === 'fish') takeOverResident(resident)
   Object.assign(resident, footOf(tile), { tile, target: null, route: [], frame: 0, wait: 0.6 })
   return true
 }
@@ -1120,6 +1133,11 @@ export function settleResidents(world: IslandWorld, residents: Resident[]) {
         !canStep(resident.tile.x, resident.tile.y, resident.target.x, resident.target.y, (x, y) =>
           canResidentEnter(world, x, y)
         ))
+    if (
+      resident.action === 'fish' &&
+      (blocked || !canCast(world, resident, resident.heading.x, resident.heading.y))
+    )
+      takeOverResident(resident)
     if (!blocked) continue
     const spot = nearestWalkable(world, resident.tile.x, resident.tile.y, (x, y) =>
       residents.some((other) => other !== resident && residentOccupies(other, x, y))
@@ -1229,12 +1247,16 @@ export function stepResidents(
     resident.actionRemaining -= dt
     // Finish the current tile before changing activities so reservations stay valid.
     if (resident.actionRemaining <= 0 && !resident.target) {
-      resident.action = chooseAction(Math.random, resident.action)
+      const cast =
+        resident.action === 'walk' &&
+        cardinalSteps.find(([dx, dy]) => canCast(world, resident, dx, dy))
+      resident.action = chooseAction(Math.random, resident.action, !!cast)
+      resident.heading =
+        resident.action === 'fish' && cast ? { x: cast[0], y: cast[1] } : { x: 1, y: 1 }
       resident.actionClock = 0
       resident.actionRemaining = actionDuration(resident.action, Math.random)
       // A breather only interrupts the journey; performances end it.
       if (resident.action === 'dance' || resident.action === 'jump') resident.route = []
-      resident.heading = { x: 1, y: 1 }
     }
     if (resident.action !== 'walk' && !resident.target) {
       resident.actionClock += dt

@@ -752,6 +752,53 @@ describe('island residents', () => {
     }
   })
 
+  it.for([WATER, SHALLOWS])(
+    'occasionally casts into water %i, then resumes the walk',
+    (water, { onTestFinished }) => {
+      const random = vi.spyOn(Math, 'random').mockReturnValue(0.2)
+      onTestFinished(() => random.mockRestore())
+      const world = createIsland(3, 1)
+      world.ground.set([water, SAND, GRASS])
+      const residents = createResidents(['angler'], [{ x: 1, y: 0 }])
+      const [angler] = residents
+      angler.route = [{ x: 2, y: 0 }]
+      angler.actionRemaining = 0
+      stepResidents(world, residents, 0.1, () => false)
+      expect(angler.action).toBe('fish')
+      expect(angler.heading).toEqual({ x: -1, y: 0 })
+      stepResidents(world, residents, 5, () => false)
+      expect(angler.x).toBe(footOf(angler.tile).x)
+      expect(angler.target).toBeNull()
+      expect(angler.action).toBe('fish')
+      stepResidents(world, residents, angler.actionRemaining, () => false)
+      expect(angler.action).toBe('walk')
+      expect(angler.tile.x).toBe(2)
+    }
+  )
+
+  it('puts the rod away when a fishing spot is edited and keeps it away on dry ground', ({
+    onTestFinished
+  }) => {
+    const random = vi.spyOn(Math, 'random').mockReturnValue(0.2)
+    onTestFinished(() => random.mockRestore())
+    const world = createIsland(2, 1)
+    world.ground.set([SHALLOWS, WATER])
+    const residents = createResidents(['angler'], [{ x: 0, y: 0 }])
+    const [angler] = residents
+    angler.actionRemaining = 0
+    stepResidents(world, residents, 0.1, () => false)
+    expect(angler.action).toBe('fish')
+    for (const ground of [GRASS, SWAMP, HOTSPRING]) {
+      world.ground[1] = ground
+      settleResidents(world, residents)
+      expect(angler.action).not.toBe('fish')
+      angler.action = 'walk'
+      angler.actionRemaining = 0
+      stepResidents(world, residents, 0.1, () => false)
+      expect(angler.action).toBe('idle')
+    }
+  })
+
   it('changes activities after a timeout but finishes a reserved step first', () => {
     const world = createIsland(20, 1)
     world.ground.fill(GRASS)

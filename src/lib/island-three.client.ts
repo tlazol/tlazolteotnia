@@ -1,6 +1,8 @@
 import {
   AlwaysStencilFunc,
   AmbientLight,
+  BoxGeometry,
+  BufferGeometry,
   CanvasTexture,
   Color,
   DataTexture,
@@ -12,8 +14,10 @@ import {
   GreaterDepth,
   Group,
   InstancedMesh,
+  Line,
   LinearFilter,
   LinearSRGBColorSpace,
+  LineBasicMaterial,
   type Material,
   Matrix4,
   Mesh,
@@ -29,6 +33,8 @@ import {
   ReplaceStencilOp,
   Scene,
   ShaderMaterial,
+  Sprite,
+  SpriteMaterial,
   type Texture,
   UnsignedByteType,
   UnsignedInt248Type,
@@ -95,7 +101,14 @@ import {
   shadowSizes
 } from './island-sprites'
 import { createTerrain } from './island-terrain.client'
-import { EDIT_MARGIN, hash2, type IslandWorld, SEA_LEVEL_CODE, TILE_SIZE } from './island-world'
+import {
+  EDIT_MARGIN,
+  HOTSPRING,
+  hash2,
+  type IslandWorld,
+  SEA_LEVEL_CODE,
+  TILE_SIZE
+} from './island-world'
 import type { SceneSize } from './scene-math'
 
 export type ResidentScreen = {
@@ -328,12 +341,6 @@ void main() {
       if ((k.x == 0.0 && k.y <= 1.0) || (k.y == 0.0 && k.x <= 1.0)) col = vec3(1.0);
     }
 
-    // Steam curling up off a hot spring.
-    if (spring) {
-      float steam = vnoise(vec2(p.x / 9.0 + sin(tick * 0.5) * 0.4, p.y / 6.0 + tick * 0.55))
-        * vnoise(p / 23.0 + vec2(tick * 0.04, 8.1));
-      if (steam + dither * 0.08 > 0.42) col = mix(col, vec3(1.0), 0.55);
-    }
     gl_FragColor = vec4(reflectedSky(col, p), 1.0);
     return;
   }
@@ -947,6 +954,34 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
     return { mesh, texture, swimTexture, silhouette, buffer, swimBuffer }
   })
   const pickMeshes = residentMeshes.map(({ mesh }) => mesh)
+
+  // In local coordinates the rod points along +X. Its tip stays with the
+  // resident while the far end of the line follows the float at sea level.
+  const rodTipHeight = 19
+  const rodGeometry = track(new BoxGeometry(Math.hypot(11, 12), 1.3, 1.3))
+  rodGeometry.rotateY(-Math.atan2(12, 11)).translate(7.5, 0, rodTipHeight - 6)
+  const rodMaterial = track(new MeshBasicMaterial({ color: rawColor('#b97b43') }))
+  const lineGeometry = track(
+    new BufferGeometry().setFromPoints([new Vector3(0, 0, 1), new Vector3(1, 0, 0)])
+  )
+  const lineMaterial = track(new LineBasicMaterial({ color: rawColor('#f2e5cc') }))
+  const floatGeometry = track(new BoxGeometry(2.6, 2.6, 1.7))
+  const floatMaterial = track(new MeshBasicMaterial({ color: rawColor('#ec514b') }))
+  const capMaterial = track(new MeshBasicMaterial({ color: rawColor('#fff4db') }))
+  function createFishingTackle() {
+    const group = new Group()
+    const rod = new Mesh(rodGeometry, rodMaterial)
+    const line = new Line(lineGeometry, lineMaterial)
+    const float = new Mesh(floatGeometry, floatMaterial)
+    const cap = new Mesh(floatGeometry, capMaterial)
+    cap.position.z = 1.25
+    cap.scale.set(0.72, 0.72, 0.55)
+    float.add(cap)
+    group.add(rod, line, float)
+    scene.add(group)
+    return { group, rod, line, float }
+  }
+  const fishingTackle: ReturnType<typeof createFishingTackle>[] = []
   // Flat things lying on the ground: shadows and selection rings.
   // The world's y runs south, so a flat picture is flipped to keep its top north.
   const flatGeometry = (buffer: PixelBuffer) =>
@@ -976,6 +1011,57 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
   const focusRing = flatMesh(ring, '#ffffff')
   selectedRing.visible = false
   focusRing.visible = false
+
+  const wisp = createBuffer(7, 9)
+  const mist = hex('#fffaf1')
+  const curl = [
+    '   ##  ',
+    '  ##   ',
+    '  #    ',
+    '  ##   ',
+    '   ##  ',
+    '    #  ',
+    '   ##  ',
+    '  ##   ',
+    '  #    '
+  ]
+  for (const [y, row] of curl.entries()) {
+    for (let x = 0; x < row.length; x++) {
+      if (row[x] === '#') setPixel(wisp, x, y, mist)
+    }
+  }
+  const steamMap = track(textureFrom(wisp))
+  const wisps = Array.from({ length: 3 }, () => {
+    const sprite = new Sprite(track(new SpriteMaterial({ map: steamMap, depthWrite: false })))
+    scene.add(sprite)
+    return sprite
+  })
+  function findSprings() {
+    const tiles: number[] = []
+    world.ground.forEach((kind, index) => {
+      if (kind === HOTSPRING) tiles.push(index)
+    })
+    return tiles
+  }
+  let springs = findSprings()
+  function placeSteam(still: boolean) {
+    const burst = Math.floor(time / 7)
+    const tile = springs[Math.floor(hash2(burst, 0, 851) * springs.length)]
+    for (const [i, sprite] of wisps.entries()) {
+      const age = ((time % 7) - 0.5 - i * 0.42) / 2.4
+      sprite.visible = !still && tile !== undefined && age > 0 && age < 1
+      if (!sprite.visible) continue
+      const originX = ((tile % world.columns) + 0.5) * TILE_SIZE
+      const originY = (Math.floor(tile / world.columns) + 0.5) * TILE_SIZE
+      sprite.position.set(
+        originX + (i - 1) * 3 + Math.sin(age * 5 + i) * 1.6,
+        -originY,
+        3 + age * 18
+      )
+      sprite.scale.set(4 + age * 5, 5 + age * 6, 1)
+      sprite.material.opacity = 0.68 * Math.sin(Math.PI * age)
+    }
+  }
 
   // Wildlife: gulls crossing overhead with their shadows, fish and turtles
   // circling in the shallows. None of it is saved or editable.
@@ -1262,6 +1348,7 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
   }
 
   function placeResidents() {
+    let anglers = 0
     const rotation = (viewer ? eyeCamera : camera).quaternion
     right.set(1, 0, 0).applyQuaternion(rotation)
     up.set(0, 1, 0).applyQuaternion(rotation)
@@ -1271,6 +1358,17 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
       silhouette.visible = !viewer
       const isDragged = dragged?.resident === resident
       const base = footHeight(resident)
+      if (resident.action === 'fish' && !isDragged) {
+        if (anglers === fishingTackle.length) fishingTackle.push(createFishingTackle())
+        const { group, rod, line, float } = fishingTackle[anglers++]
+        group.visible = true
+        group.rotation.z = Math.atan2(-resident.heading.y, resident.heading.x)
+        group.position.set(resident.x, -resident.y, 0)
+        rod.position.set(0, -2, base)
+        float.position.set(TILE_SIZE + 2, -2, 1 + 0.6 * Math.sin(resident.actionClock * 3))
+        line.position.set(13, -2, float.position.z)
+        line.scale.set(float.position.x - 13, 1, base + rodTipHeight - float.position.z)
+      }
       const swimming = base === 0 && !isDragged
       const texture = swimming ? swimTexture : walkTexture
       mesh.material.map = texture
@@ -1312,6 +1410,7 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
         ring.position.set(footX, footY - 1 + 0.4, surfaceHeight + 0.4)
       }
     })
+    for (let i = anglers; i < fishingTackle.length; i++) fishingTackle[i].group.visible = false
     if (!selected || !residents.some((r) => r.slug === selected)) selectedRing.visible = false
     if (!focused || focused === selected || !residents.some((r) => r.slug === focused))
       focusRing.visible = false
@@ -1364,6 +1463,7 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
       }
       clock.value = time
       updateDaylight(now)
+      placeSteam(still)
       placeWildlife(still ? 0 : dt)
       if (viewer) followEyes(viewer, dt)
       if (still) handLift = 0
@@ -1480,6 +1580,7 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
         elevationTexture.needsUpdate = true
         shoreTexture.needsUpdate = true
         lakeTexture.needsUpdate = true
+        springs = findSprings()
         settleResidents(world, residents)
         terrain.update(indices)
         decor.update(indices)
