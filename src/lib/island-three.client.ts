@@ -1548,6 +1548,7 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
     setWalkInput(input: Point | null) {
       if (!viewer) return
       if (input && !walkInput) takeOverResident(viewer)
+      if (walkInput && !input) followHeading = true
       walkInput = input
       // Remember a quick tap until the current tile reservation finishes.
       if (!input || input.x || input.y) queuedInput = input
