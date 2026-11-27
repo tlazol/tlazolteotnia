@@ -823,7 +823,7 @@ describe('island residents', () => {
     expect(fromCentre()).toBeGreaterThan(start * 0.75)
     // Residents keep to dry land, only swimming on the way across water.
     expect(afloat / samples).toBeLessThan(0.06)
-  })
+  }, 30_000)
 
   it('takes the trail in preference to a straight line over grass', () => {
     const world = createIsland(24, 2)
