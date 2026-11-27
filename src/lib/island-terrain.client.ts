@@ -12,7 +12,7 @@ import {
   type Scene,
   ShaderMaterial
 } from 'three'
-import { groundTexel } from './island-art'
+import { groundTextures } from './island-art'
 import { type DecorPlacement, lightVolumes } from './island-lights.client'
 import { tileHeight } from './island-relief'
 import {
@@ -20,11 +20,11 @@ import {
   DECK,
   DRYGRASS,
   GRASS,
-  GROUND_COUNT,
   groundAt,
   hash2,
   type IslandWorld,
   isWetGround,
+  landGrounds,
   MOSS,
   SOIL,
   STEPPING,
@@ -45,15 +45,12 @@ const neighbors = [
 function terrainTexture() {
   const size = BANDS * SWATCH
   const pixels = new Uint8ClampedArray(size * size * 4)
-  for (let kind = 1; kind < GROUND_COUNT; kind++) {
+  for (const kind of landGrounds) {
+    const { pixel } = groundTextures[kind]
     const ox = (kind % BANDS) * SWATCH
     const oy = Math.floor(kind / BANDS) * SWATCH
     for (let y = 0; y < SWATCH; y++)
-      for (let x = 0; x < SWATCH; x++)
-        pixels.set(
-          groundTexel(kind, x, y, () => kind, false),
-          ((oy + y) * size + ox + x) * 4
-        )
+      for (let x = 0; x < SWATCH; x++) pixels.set(pixel(x, y), ((oy + y) * size + ox + x) * 4)
   }
   const map = new DataTexture(new Uint8Array(pixels.buffer), size, size)
   map.minFilter = map.magFilter = NearestFilter

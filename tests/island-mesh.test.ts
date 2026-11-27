@@ -6,7 +6,7 @@ import { surfaceEmission } from '../src/lib/island-palette'
 import { box } from '../src/lib/island-sdf'
 import { createTerrain } from '../src/lib/island-terrain.client'
 import { voxelSurface } from '../src/lib/island-voxels'
-import { createIsland, DECK, decorLooks, SAND, TILE_SIZE, WATER } from '../src/lib/island-world'
+import { createIsland, DECK, decorInfo, SAND, TILE_SIZE, WATER } from '../src/lib/island-world'
 
 describe('live terrain mesh', () => {
   it('opens and fills a pit next to water across a patch boundary', () => {
@@ -76,7 +76,7 @@ describe('live terrain mesh', () => {
 describe('decoration voxel mesh', () => {
   it('keeps the resort lamps luminous in the mesh and supplies colored light emitters', () => {
     const colors = new Set<string>()
-    for (let look = 0; look < decorLooks.resortLight; look++) {
+    for (let look = 0; look < decorInfo.resortLight.looks; look++) {
       const model = decorModel('resortLight', look)
       const lamps = model.parts.flatMap((part) =>
         part.emitter?.kind === 'lamp' ? [part.emitter] : []
@@ -92,7 +92,6 @@ describe('decoration voxel mesh', () => {
     const model: Model = {
       lo: [0, 0, 0],
       hi: [3, 1, 1],
-      glow: null,
       sway: 0,
       bob: 0,
       parts: [0, 1, 2].map((x) => ({

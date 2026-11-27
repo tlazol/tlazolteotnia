@@ -1,3 +1,4 @@
+import type { RampName } from './island-palette'
 import {
   BLACKSAND,
   BRICK,
@@ -15,6 +16,7 @@ import {
   hash2,
   type IslandWorld,
   LAVA,
+  type LandGround,
   MOSS,
   MUD,
   PATH,
@@ -112,19 +114,14 @@ export const islandPalette = {
   sand: '#fbe7ae',
   sandLight: '#fff7d6',
   sandDark: '#efd08c',
-  sandWet: '#e2bb76',
-  face: '#d6a45a',
-  faceDark: '#b17d3c',
   grass: '#5cad43',
   grassLight: '#7bc650',
   grassPale: '#aadc6a',
   grassDark: '#48973e',
   grassEdge: '#357e38',
-  grassDeep: '#25602d',
   path: '#e8c080',
   pathLight: '#f7da9f',
   pathDark: '#d09e5e',
-  pathEdge: '#b17d44',
   soil: '#a3714a',
   soilLight: '#b98a5e',
   soilDark: '#87583a',
@@ -139,7 +136,6 @@ export const islandPalette = {
   lakeDeep: '#2a7fc8',
   lakeShallow: '#72c4ee',
   lakeShine: '#d8f4fb',
-  lakeBank: '#7a5a3a',
   pad: '#8ccb55',
   padDark: '#4f9641',
   padBloom: '#f7bccb',
@@ -151,7 +147,6 @@ export const islandPalette = {
   springDeep: '#7fc5c8',
   springShallow: '#cbf0e6',
   springShine: '#ffffff',
-  springBank: '#8b8478',
   deck: '#bd8950',
   deckLight: '#deb078',
   deckDark: '#986838',
@@ -164,7 +159,6 @@ const c = Object.fromEntries(
   Object.entries(islandPalette).map(([name, value]) => [name, hex(value)])
 ) as Record<keyof typeof islandPalette, Rgba>
 const transparent: Rgba = [0, 0, 0, 0]
-const lipShadow: Rgba = [10, 60, 110, 96]
 const shell = {
   pink: hex('#f7a9a0'),
   white: hex('#ffffff'),
@@ -289,162 +283,28 @@ export function terrainClass(world: IslandWorld, px: number, py: number) {
   )
 }
 
-const PAD = 7
-
 // What the shore field's `lake` holds for each kind of fresh water; a lake is 255.
 export const POOL_MASK = { shallows: 170, spring: 85 } as const
 
-// Paints the terrain for art pixels [x0, x0 + width) × [y0, y0 + height) into
-// `buffer` at (bx, by). Sea pixels stay transparent for the water shader,
-// except the shore face below southern coasts and the stilts below decks; so
-// does the open water of a lake, wherever the shore field marks it as one.
-export function paintTerrain(
-  world: IslandWorld,
-  buffer: PixelBuffer,
-  x0: number,
-  y0: number,
-  width: number,
-  height: number,
-  bx = 0,
-  by = 0
-) {
-  const cw = width + PAD * 2
-  const ch = height + PAD * 2
-  const classes = new Uint8Array(cw * ch)
-  for (let y = 0; y < ch; y++)
-    for (let x = 0; x < cw; x++)
-      classes[y * cw + x] = terrainClass(world, x0 + x - PAD, y0 + y - PAD)
-  const at = (x: number, y: number) => classes[(y + PAD) * cw + x + PAD]
-  // How many pixels above (x, y) the nearest deck board is, up to PAD.
-  const deckAbove = (x: number, y: number) => {
-    for (let d = 1; d <= PAD; d++) {
-      const kind = at(x, y - d)
-      if (kind === DECK) return d
-      if (kind !== WATER) return 0
-    }
-    return 0
-  }
-
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      const px = x0 + x
-      const py = y0 + y
-      const kind = at(x, y)
-      let color: Rgba = transparent
-      if (kind === WATER) {
-        const under = deckAbove(x, y)
-        if (under) {
-          const post = (((px % 16) + 16) % 16) % 11 < 2
-          if (under <= 2) color = under === 1 ? c.deckEdge : c.post
-          else if (post) color = under === PAD ? lipShadow : c.post
-          else if (under <= 5) color = lipShadow
-        } else if (at(x, y - 1) !== WATER) color = c.face
-        else if (at(x, y - 2) !== WATER) color = c.faceDark
-        else if (at(x, y - 3) !== WATER || at(x, y - 4) !== WATER) color = lipShadow
-      } else color = groundTexel(kind, px, py, (dx, dy) => at(x + dx, y + dy), true)
-      setPixel(buffer, bx + x, by + y, color)
-    }
-  }
+function deckPixel(px: number, py: number): Rgba {
+  const row = Math.floor(py / 5)
+  const boardX = (((px + (row % 2 ? 9 : 0)) % 22) + 22) % 22
+  const boardY = ((py % 5) + 5) % 5
+  const grain = Math.sin(px * 0.32 + valueNoise(px / 12, row, 75) * 5 + boardY * 1.8)
+  if (boardY === 4 || boardX === 0) return c.deckEdge
+  if ((boardX === 2 || boardX === 20) && boardY === 1) return c.post
+  if (boardY === 0) return c.deckLight
+  if (grain > 0.9) return c.deckDark
+  if (grain < -0.8 || hash2(Math.floor(px / 22), row, 73) < 0.18) return c.deckLight
+  return c.deck
 }
 
-// The color of one land pixel of `kind` at (px, py); `near(dx, dy)` gives the
-// ground class of the pixel that far away. With `rims` the edges are shaded as
-// flat art needs; without, only what belongs to the ground itself is drawn
-// (wet sand, frayed paving, board ends), for scenes that light their own relief.
-// Open pool water comes back transparent.
-export function groundTexel(
-  kind: number,
-  px: number,
-  py: number,
-  near: (dx: number, dy: number) => number,
-  rims: boolean
-): Rgba {
-  const sand = sands[kind]
-  const green = greens[kind]
-  const solid = solids[kind]
-  const pool = pools[kind]
-  if (sand) {
-    const wet = (d: number) =>
-      near(-d, 0) === WATER || near(d, 0) === WATER || near(0, -d) === WATER
-    if (rims && near(0, 1) === WATER) return sand.light
-    if (wet(1) || wet(2)) return sand.wet
-    if (wet(3) && (px + py) % 2 === 0) return sand.wet
-    if (rims && (isGreen(near(0, -1)) || isGreen(near(0, -2)))) return sand.dark
-    if (rims && near(0, -1) === DECK) return sand.dark
-    return sand.pixel(px, py)
-  }
-  if (green) {
-    if (!rims) return green.pixel(px, py)
-    // Greens shade their rim only where the green ends, not against each other.
-    if (!isGreen(near(0, 1))) return green.deep
-    if (!isGreen(near(0, 2))) return green.edge
-    if (!isGreen(near(-1, 0)) || !isGreen(near(1, 0))) return green.edge
-    if (!isGreen(near(0, -1))) return green.pale
-    return green.pixel(px, py)
-  }
-  if (kind === DECK) {
-    const row = Math.floor(py / 5)
-    const boardX = (((px + (row % 2 ? 9 : 0)) % 22) + 22) % 22
-    const boardY = ((py % 5) + 5) % 5
-    const grain = Math.sin(px * 0.32 + valueNoise(px / 12, row, 75) * 5 + boardY * 1.8)
-    if (near(0, 1) !== DECK || near(-1, 0) !== DECK || near(1, 0) !== DECK) return c.deckEdge
-    if (rims && near(0, -1) !== DECK) return c.deckLight
-    if ((near(-2, 0) !== DECK || near(2, 0) !== DECK) && ((py % 16) + 16) % 16 < 3) return c.post
-    if (boardY === 4 || boardX === 0) return c.deckEdge
-    if ((boardX === 2 || boardX === 20) && boardY === 1) return c.post
-    if (boardY === 0) return c.deckLight
-    if (grain > 0.9) return c.deckDark
-    if (grain < -0.8 || hash2(Math.floor(px / 22), row, 73) < 0.18) return c.deckLight
-    return c.deck
-  }
-  if (solid) {
-    if (!rims) return solid.pixel(px, py)
-    if (near(0, 1) !== kind) return solid.edge
-    if (near(-1, 0) !== kind || near(1, 0) !== kind) return solid.dark
-    if (near(0, -1) !== kind) return solid.light
-    return solid.pixel(px, py)
-  }
-  if (kind === COBBLE) {
-    // The paving frays at its edges, where sand has crept in over the stones.
-    const frayed = (d: number) =>
-      near(0, d) !== COBBLE ||
-      near(0, -d) !== COBBLE ||
-      near(-d, 0) !== COBBLE ||
-      near(d, 0) !== COBBLE
-    if (frayed(1)) return c.cobbleGap
-    if (hash2(px >> 1, py >> 1, 107) < (frayed(2) ? 0.15 : frayed(3) ? 0.04 : 0))
-      return hash2(px, py, 108) < 0.25 ? c.cobbleSandDark : c.cobbleSand
-    return cobblePixel(px, py)
-  }
-  if (pool) {
-    if (!rims) return pool.pixel(px, py)
-    // Clear water lying below its banks: the bank's shadow along the top,
-    // pale shallows lapping the rest of the rim.
-    const bank = (d: number) => near(-d, 0) !== kind || near(d, 0) !== kind || near(0, d) !== kind
-    if (near(0, -1) !== kind) return pool.bank
-    if (near(0, -2) !== kind || near(0, -3) !== kind) return pool.deep
-    if (bank(1)) return pool.shine
-    if (bank(2) || (bank(3) && (px + py) % 2 === 0)) return pool.shallow
-    const color = pool.pixel(px, py)
-    // The shader takes over only in cells the shore field knows as this water.
-    const cell = (v: number) => Math.floor(v / SHORE_CELL) * SHORE_CELL + 1
-    if (color === transparent && near(cell(px) - px, cell(py) - py) !== kind) return pool.base
-    return color
-  }
-  if (kind === WATER) return transparent
+function pathPixel(px: number, py: number): Rgba {
   const speck = hash2(px, py, 51)
-  if (rims && (near(0, 1) !== PATH || near(-1, 0) !== PATH || near(1, 0) !== PATH))
-    return c.pathEdge
-  if (rims && near(0, -1) !== PATH) return c.pathDark
   if (speck < 0.03) return c.pathLight
   if (hash2(px, py - 1, 51) < 0.03) return c.pathDark
   const tone = valueNoise(px / 8, py / 8, 61) + ((px + py) % 2 ? 0.02 : -0.02)
   return tone > 0.72 ? c.pathLight : tone < 0.26 ? c.pathDark : c.path
-}
-
-// Whether the ground is open water lying on the land (lake, shallows, spring).
-export function isPoolGround(kind: number) {
-  return pools[kind] !== undefined
 }
 
 type SandTones = { base: Rgba; light: Rgba; dark: Rgba }
@@ -583,7 +443,6 @@ type GreenTones = {
   pale: Rgba
   dark: Rgba
   edge: Rgba
-  deep: Rgba
   // The tip of a dried blade.
   dry: Rgba
 }
@@ -785,7 +644,6 @@ const grassTones: GreenTones = {
   pale: c.grassPale,
   dark: c.grassDark,
   edge: c.grassEdge,
-  deep: c.grassDeep,
   dry: c.pathLight
 }
 const mossTones: GreenTones = tones({
@@ -794,7 +652,6 @@ const mossTones: GreenTones = tones({
   pale: '#8cc070',
   dark: '#3f7a45',
   edge: '#2f653b',
-  deep: '#214b30',
   dry: '#8cc070'
 })
 const dryGrassTones: GreenTones = tones({
@@ -803,7 +660,6 @@ const dryGrassTones: GreenTones = tones({
   pale: '#efe29b',
   dark: '#ad9746',
   edge: '#8d7838',
-  deep: '#6b592b',
   dry: '#f6efc8'
 })
 const cloverTones: GreenTones = tones({
@@ -812,7 +668,6 @@ const cloverTones: GreenTones = tones({
   pale: '#b4e77c',
   dark: '#4a9c40',
   edge: '#34803a',
-  deep: '#25602d',
   dry: '#b4e77c'
 })
 const cloverBloomShade = hex('#f1d3df')
@@ -873,75 +728,38 @@ const brickMortar = hex('#d9c5a3')
 const brickMortarDark = hex('#b89f7c')
 
 type Pixel = (px: number, py: number) => Rgba
-const isGreen = (kind: number) => FAMILY[kind] === GREEN
-
-// How each ground is painted, indexed by ground. Sands lighten toward the
-// water, greens and solid grounds shade their rims, pools lie below a bank.
-const sands: Array<{ light: Rgba; wet: Rgba; dark: Rgba; pixel: Pixel } | undefined> = []
 const beach: SandTones = { base: c.sand, light: c.sandLight, dark: c.sandDark }
-const whiteBeach: SandTones = tones({ base: '#fbf5e4', light: '#ffffff', dark: '#e8dcc0' })
-const blackBeach: SandTones = tones({ base: '#504e58', light: '#6c6a76', dark: '#3d3b45' })
-sands[SAND] = { ...beach, wet: c.sandWet, pixel: (px, py) => sandPixel(px, py, beach) }
-sands[WHITESAND] = {
-  ...whiteBeach,
-  wet: hex('#d6c7a4'),
-  pixel: (px, py) => sandPixel(px, py, whiteBeach)
-}
-sands[BLACKSAND] = {
-  ...blackBeach,
-  wet: hex('#2f2d37'),
-  pixel: (px, py) => sandPixel(px, py, blackBeach)
-}
-
-const greens: Array<(GreenTones & { pixel: Pixel }) | undefined> = []
-greens[GRASS] = { ...grassTones, pixel: (px, py) => grassPixel(px, py, grassTones) }
-greens[MOSS] = { ...mossTones, pixel: mossPixel }
-greens[DRYGRASS] = { ...dryGrassTones, pixel: (px, py) => grassPixel(px, py, dryGrassTones, 300) }
-greens[CLOVER] = { ...cloverTones, pixel: cloverPixel }
-greens[STEPPING] = { ...grassTones, pixel: steppingPixel }
-
-const solids: Array<(SolidTones & { pixel: Pixel }) | undefined> = []
-solids[SOIL] = { ...soilTones, pixel: (px, py) => soilPixel(px, py, soilTones) }
-solids[CLAY] = { ...clayTones, pixel: (px, py) => soilPixel(px, py, clayTones, 300) }
-solids[MUD] = { ...mudTones, pixel: mudPixel }
-solids[GRAVEL] = { ...gravelTones, pixel: gravelPixel }
-solids[ROCK] = { ...rockTones, pixel: rockPixel }
-solids[LAVA] = { ...lavaTones, pixel: lavaPixel }
-solids[BRICK] = { ...brickTones, pixel: brickPixel }
-
-// Pools leave their open water transparent for the water shader, which tells
-// them apart by `mask` in the shore field.
+const whiteBeach = tones({ base: '#fbf5e4', light: '#ffffff', dark: '#e8dcc0' })
+const blackBeach = tones({ base: '#504e58', light: '#6c6a76', dark: '#3d3b45' })
 const clear: Pixel = () => transparent
-const pools: Array<
-  | { bank: Rgba; deep: Rgba; shine: Rgba; shallow: Rgba; base: Rgba; pixel: Pixel; mask: number }
-  | undefined
-> = []
-pools[SWAMP] = {
-  bank: c.lakeBank,
-  deep: c.lakeDeep,
-  shine: c.lakeShine,
-  shallow: c.lakeShallow,
-  base: c.lake,
-  pixel: swampPixel,
-  mask: 255
+export const groundTextures: Record<LandGround, { pixel: Pixel; ramp: RampName }> = {
+  [SAND]: { ramp: 'sand', pixel: (x, y) => sandPixel(x, y, beach) },
+  [WHITESAND]: { ramp: 'whiteSand', pixel: (x, y) => sandPixel(x, y, whiteBeach) },
+  [BLACKSAND]: { ramp: 'blackSand', pixel: (x, y) => sandPixel(x, y, blackBeach) },
+  [GRASS]: { ramp: 'grass', pixel: (x, y) => grassPixel(x, y, grassTones) },
+  [MOSS]: { ramp: 'moss', pixel: mossPixel },
+  [DRYGRASS]: { ramp: 'dryGrass', pixel: (x, y) => grassPixel(x, y, dryGrassTones, 300) },
+  [CLOVER]: { ramp: 'clover', pixel: cloverPixel },
+  [STEPPING]: { ramp: 'grass', pixel: steppingPixel },
+  [SOIL]: { ramp: 'soil', pixel: (x, y) => soilPixel(x, y, soilTones) },
+  [CLAY]: { ramp: 'clay', pixel: (x, y) => soilPixel(x, y, clayTones, 300) },
+  [MUD]: { ramp: 'mud', pixel: mudPixel },
+  [GRAVEL]: { ramp: 'gravel', pixel: gravelPixel },
+  [ROCK]: { ramp: 'rock', pixel: rockPixel },
+  [LAVA]: { ramp: 'lava', pixel: lavaPixel },
+  [BRICK]: { ramp: 'brick', pixel: brickPixel },
+  [DECK]: { ramp: 'deck', pixel: deckPixel },
+  [PATH]: { ramp: 'path', pixel: pathPixel },
+  [COBBLE]: { ramp: 'cobble', pixel: cobblePixel },
+  [SWAMP]: { ramp: 'pad', pixel: swampPixel },
+  [SHALLOWS]: { ramp: 'sand', pixel: clear },
+  [HOTSPRING]: { ramp: 'springBank', pixel: clear }
 }
-pools[SHALLOWS] = {
-  bank: c.sandWet,
-  deep: c.shoalDeep,
-  shine: c.shoalShine,
-  shallow: c.shoalShallow,
-  base: c.shoal,
-  pixel: clear,
-  mask: POOL_MASK.shallows
-}
-pools[HOTSPRING] = {
-  bank: c.springBank,
-  deep: c.springDeep,
-  shine: c.springShine,
-  shallow: c.springShallow,
-  base: c.spring,
-  pixel: clear,
-  mask: POOL_MASK.spring
+
+const poolMasks: Partial<Record<Ground, number>> = {
+  [SWAMP]: 255,
+  [SHALLOWS]: POOL_MASK.shallows,
+  [HOTSPRING]: POOL_MASK.spring
 }
 
 // Distance from each 2×2 pixel cell to the nearest land, for the sea's depth
@@ -1016,7 +834,7 @@ export function updateShoreField(
     for (let x = Math.max(0, cx0); x < Math.min(width, cx1); x++) {
       const kind = terrainClass(world, x * SHORE_CELL + 1, y * SHORE_CELL + 1)
       field.land[y * width + x] = kind === WATER || kind === DECK ? 0 : 1
-      field.lake[y * width + x] = pools[kind]?.mask ?? 0
+      field.lake[y * width + x] = poolMasks[kind] ?? 0
     }
   const pad = SHORE_RANGE
   const wide = width + 2 * pad

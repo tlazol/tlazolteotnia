@@ -4,8 +4,8 @@ import { createBlogFeedResponse } from '../src/lib/blog-feed.server'
 
 describe('blog feeds', () => {
   it('publishes every post with summaries and full content as RSS', async () => {
-    const posts = await getBlogFeedPosts()
-    const response = await createBlogFeedResponse('rss')
+    const posts = getBlogFeedPosts()
+    const response = createBlogFeedResponse('rss')
     const xml = await response.text()
 
     expect(response.status).toBe(200)
@@ -20,8 +20,8 @@ describe('blog feeds', () => {
   })
 
   it('publishes every post with stable ids, summaries, and full content as Atom', async () => {
-    const posts = await getBlogFeedPosts()
-    const response = await createBlogFeedResponse('atom')
+    const posts = getBlogFeedPosts()
+    const response = createBlogFeedResponse('atom')
     const xml = await response.text()
 
     expect(response.status).toBe(200)
@@ -33,8 +33,8 @@ describe('blog feeds', () => {
     expect(xml).toContain('<link rel="self" href="https://0rga.org/atom.xml"/>')
   })
 
-  it('keeps all published posts in newest-first order', async () => {
-    const posts = await getBlogFeedPosts()
+  it('keeps all published posts in newest-first order', () => {
+    const posts = getBlogFeedPosts()
 
     expect(posts.length).toBeGreaterThan(20)
     for (let index = 1; index < posts.length; index += 1) {

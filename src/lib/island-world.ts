@@ -46,29 +46,7 @@ export const MIN_ELEVATION_LEVEL = -12
 // followed by successively deeper levels. Zero still means natural terrain.
 export const SEA_LEVEL_CODE = MAX_ELEVATION_LEVEL + 1
 export const MAX_ELEVATION_CODE = SEA_LEVEL_CODE - MIN_ELEVATION_LEVEL
-export type Ground =
-  | typeof WATER
-  | typeof SAND
-  | typeof GRASS
-  | typeof PATH
-  | typeof DECK
-  | typeof SOIL
-  | typeof COBBLE
-  | typeof SWAMP
-  | typeof MOSS
-  | typeof DRYGRASS
-  | typeof CLOVER
-  | typeof WHITESAND
-  | typeof BLACKSAND
-  | typeof CLAY
-  | typeof MUD
-  | typeof GRAVEL
-  | typeof ROCK
-  | typeof LAVA
-  | typeof BRICK
-  | typeof STEPPING
-  | typeof SHALLOWS
-  | typeof HOTSPRING
+export type Ground = keyof typeof groundNames
 export type LandGround = Exclude<Ground, typeof WATER>
 export const groundGroups: Array<{ name: string; grounds: LandGround[] }> = [
   { name: '草地', grounds: [GRASS, MOSS, DRYGRASS, CLOVER] },
@@ -78,7 +56,7 @@ export const groundGroups: Array<{ name: string; grounds: LandGround[] }> = [
   { name: '水', grounds: [SWAMP, SHALLOWS, HOTSPRING] }
 ]
 export const landGrounds: LandGround[] = groundGroups.flatMap((group) => group.grounds)
-export const groundNames: Record<Ground, string> = {
+export const groundNames = {
   [WATER]: '海',
   [SAND]: '砂浜',
   [GRASS]: '草地',
@@ -116,35 +94,41 @@ export const resortLightNames = [
 ] as const
 
 // Decorations stand on land or float on the sea; flat ones can be walked over.
-// Saves store a kind by its slot in storedDecorKinds, not by its place here.
+// Codes are stored in saved islands. Give new kinds a fresh code and never reuse retired ones.
 export const decorInfo = {
-  tree: { name: '木', on: 'land', blocks: true },
-  palm: { name: 'ヤシ', on: 'land', blocks: true },
-  bush: { name: '茂み', on: 'land', blocks: true },
-  rock: { name: '岩', on: 'land', blocks: true },
-  flowers: { name: '花', on: 'land', blocks: false },
-  driftwood: { name: '流木', on: 'land', blocks: true },
-  torch: { name: 'たいまつ', on: 'land', blocks: true },
-  searock: { name: '岩礁', on: 'water', blocks: true },
-  bamboo: { name: '竹', on: 'land', blocks: true },
-  banana: { name: 'バナナの木', on: 'land', blocks: true },
-  deadtree: { name: '枯れ木', on: 'land', blocks: true },
-  monstera: { name: 'モンステラ', on: 'land', blocks: true },
-  cactus: { name: 'サボテン', on: 'land', blocks: true },
-  relic: { name: '遺物', on: 'land', blocks: true },
-  mushroom: { name: 'キノコ', on: 'land', blocks: false },
-  shell: { name: '貝殻', on: 'land', blocks: false },
-  campfire: { name: '焚き火', on: 'land', blocks: true },
-  fireflies: { name: 'ホタル', on: 'land', blocks: false },
-  flotsam: { name: '浮き流木', on: 'water', blocks: true },
-  buoy: { name: 'ブイ', on: 'water', blocks: true },
-  resortLight: { name: 'リゾートライト', on: 'land', blocks: true }
-} as const satisfies Record<string, { name: string; on: 'land' | 'water'; blocks: boolean }>
+  tree: { code: 1, looks: 5, name: '木', on: 'land', blocks: true },
+  palm: { code: 2, looks: 5, name: 'ヤシ', on: 'land', blocks: true },
+  bush: { code: 3, looks: 6, name: '茂み', on: 'land', blocks: true },
+  rock: { code: 4, looks: 5, name: '岩', on: 'land', blocks: true },
+  flowers: { code: 5, looks: 6, name: '花', on: 'land', blocks: false },
+  driftwood: { code: 6, looks: 4, name: '流木', on: 'land', blocks: true },
+  torch: { code: 7, looks: 4, name: 'たいまつ', on: 'land', blocks: true },
+  searock: { code: 8, looks: 5, name: '岩礁', on: 'water', blocks: true },
+  bamboo: { code: 9, looks: 4, name: '竹', on: 'land', blocks: true },
+  banana: { code: 10, looks: 4, name: 'バナナの木', on: 'land', blocks: true },
+  deadtree: { code: 11, looks: 4, name: '枯れ木', on: 'land', blocks: true },
+  monstera: { code: 13, looks: 4, name: 'モンステラ', on: 'land', blocks: true },
+  cactus: { code: 14, looks: 4, name: 'サボテン', on: 'land', blocks: true },
+  relic: { code: 15, looks: 4, name: '遺物', on: 'land', blocks: true },
+  mushroom: { code: 16, looks: 4, name: 'キノコ', on: 'land', blocks: false },
+  shell: { code: 17, looks: 4, name: '貝殻', on: 'land', blocks: false },
+  campfire: { code: 18, looks: 5, name: '焚き火', on: 'land', blocks: true },
+  fireflies: { code: 20, looks: 4, name: 'ホタル', on: 'land', blocks: false },
+  flotsam: { code: 23, looks: 4, name: '浮き流木', on: 'water', blocks: true },
+  buoy: { code: 24, looks: 2, name: 'ブイ', on: 'water', blocks: true },
+  resortLight: {
+    code: 25,
+    looks: resortLightNames.length,
+    name: 'リゾートライト',
+    on: 'land',
+    blocks: true
+  }
+} as const satisfies Record<
+  string,
+  { code: number; looks: number; name: string; on: 'land' | 'water'; blocks: boolean }
+>
 export type DecorKind = keyof typeof decorInfo
 export const decorKinds = Object.keys(decorInfo) as DecorKind[]
-export const decorNames = Object.fromEntries(
-  decorKinds.map((kind) => [kind, decorInfo[kind].name])
-) as Record<DecorKind, string>
 export const decorGroups: Array<{ name: string; kinds: DecorKind[] }> = [
   {
     name: '自然',
@@ -168,72 +152,22 @@ export const decorGroups: Array<{ name: string; kinds: DecorKind[] }> = [
   { name: 'あかり', kinds: ['torch', 'campfire', 'fireflies', 'resortLight'] },
   { name: '海', kinds: ['searock', 'flotsam', 'buoy'] }
 ]
-// Stored decoration codes: 0 is empty, otherwise the slot here plus one.
-// Retired kinds leave a null hole (mangrove 12, stone lantern 19, coral 21, seaweed 22) so the codes
-// after them keep their kinds; new kinds go at the end.
-const storedDecorKinds: Array<DecorKind | null> = [
-  'tree',
-  'palm',
-  'bush',
-  'rock',
-  'flowers',
-  'driftwood',
-  'torch',
-  'searock',
-  'bamboo',
-  'banana',
-  'deadtree',
-  null,
-  'monstera',
-  'cactus',
-  'relic',
-  'mushroom',
-  'shell',
-  'campfire',
-  null,
-  'fireflies',
-  null,
-  null,
-  'flotsam',
-  'buoy',
-  'resortLight'
-]
-export const MAX_DECOR_CODE = storedDecorKinds.length
-// How many looks each kind has; the sprites draw exactly this many.
-export const decorLooks = {
-  tree: 5,
-  palm: 5,
-  bush: 6,
-  rock: 5,
-  flowers: 6,
-  driftwood: 4,
-  torch: 4,
-  searock: 5,
-  bamboo: 4,
-  banana: 4,
-  deadtree: 4,
-  monstera: 4,
-  cactus: 4,
-  relic: 4,
-  mushroom: 4,
-  shell: 4,
-  campfire: 5,
-  fireflies: 4,
-  flotsam: 4,
-  buoy: 2,
-  resortLight: resortLightNames.length
-} as const satisfies Record<DecorKind, number>
+const kindByCode: Array<DecorKind | undefined> = []
+for (const kind of decorKinds) kindByCode[decorInfo[kind].code] = kind
+
+// Mangrove, stone lantern, coral and seaweed still occur in older saves.
+const retiredDecorCodes = new Set([12, 19, 21, 22])
 // A stored code keeps the kind in its low five bits and, above them, the look
 // the visitor picked plus one. Zero there (every older save) lets the tile's
 // position pick the look.
 const LOOK_SHIFT = 5
 const KIND_MASK = (1 << LOOK_SHIFT) - 1
 export function decorCode(kind: DecorKind, look?: number | null) {
-  const base = storedDecorKinds.indexOf(kind) + 1
+  const base = decorInfo[kind].code
   return look == null ? base : base | ((look + 1) << LOOK_SHIFT)
 }
 export function decorKindOf(code: number): DecorKind | null {
-  return storedDecorKinds[(code & KIND_MASK) - 1] ?? null
+  return kindByCode[code & KIND_MASK] ?? null
 }
 // The look picked when the decoration was placed, or null if none was.
 export function decorLookOf(code: number): number | null {
@@ -244,7 +178,7 @@ export function decorLookOf(code: number): number | null {
 export function decorLookAt(code: number, x: number, y: number): number | null {
   const kind = decorKindOf(code)
   if (!kind) return null
-  return decorLookOf(code) ?? Math.floor(hash2(x, y, 211) * decorLooks[kind])
+  return decorLookOf(code) ?? Math.floor(hash2(x, y, 211) * decorInfo[kind].looks)
 }
 // Trees grow to one of TREE_SIZES sizes, from as drawn up to 1.75 times that. The
 // size comes from the tile's position, (x + 2y) mod 5 shuffled, so no two
@@ -290,9 +224,9 @@ export function decorPlacementScale(kind: DecorKind, look: number) {
 export function isDecorCode(code: number) {
   if (!Number.isSafeInteger(code) || code < 0 || code > 0xff) return false
   const look = decorLookOf(code)
-  if (look === null) return code <= MAX_DECOR_CODE
   const kind = decorKindOf(code)
-  return kind !== null && look < decorLooks[kind]
+  if (!kind) return code === 0 || retiredDecorCodes.has(code)
+  return look === null || look < decorInfo[kind].looks
 }
 export function decorBlocksWalking(code: number) {
   const kind = decorKindOf(code)
@@ -301,8 +235,7 @@ export function decorBlocksWalking(code: number) {
 // A code left by a retired kind, with or without a picked look: it shows
 // nothing, and loading a save clears it.
 export function isRetiredDecorCode(code: number) {
-  const slot = code & KIND_MASK
-  return slot > 0 && slot <= MAX_DECOR_CODE && storedDecorKinds[slot - 1] === null
+  return retiredDecorCodes.has(code & KIND_MASK)
 }
 // Whether a decoration may sit on this kind of ground.
 export function decorFits(kind: DecorKind, ground: Ground) {

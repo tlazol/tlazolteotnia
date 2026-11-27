@@ -1,6 +1,6 @@
 import { createServerFn } from '@tanstack/react-start'
 import { setResponseHeader } from '@tanstack/react-start/server'
-import { loadHomeData, loadPostData } from '#/lib/blog-data.server'
+import { loadHomeData, loadPostData } from '#/lib/blog.server'
 import { isValidSlug } from '#/lib/blog-slug'
 
 function validateSlug(input: unknown) {

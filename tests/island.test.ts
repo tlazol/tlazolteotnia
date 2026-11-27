@@ -1,9 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
-  createBuffer,
   createShoreField,
   POOL_MASK,
-  paintTerrain,
   SHORE_CELL,
   SHORE_RANGE,
   terrainClass,
@@ -47,7 +45,6 @@ import {
   stepResidents,
   takeOverResident
 } from '../src/lib/island-residents'
-import { decorVariants } from '../src/lib/island-sprites'
 import {
   BLACKSAND,
   BRICK,
@@ -64,11 +61,11 @@ import {
   decorCode,
   decorFits,
   decorGroups,
+  decorInfo,
   decorKindOf,
   decorKinds,
   decorLookAt,
   decorLookOf,
-  decorLooks,
   encodeIsland,
   GRASS,
   GRAVEL,
@@ -167,9 +164,42 @@ describe('island world', () => {
     expect(restored?.decor[10 * world.columns + 11]).toBe(0)
   })
 
+  it('reads the original decoration ids from version 3 saves', () => {
+    // Index is the stored id. Retired decorations leave holes in the archive.
+    const savedKinds = [
+      null,
+      'tree',
+      'palm',
+      'bush',
+      'rock',
+      'flowers',
+      'driftwood',
+      'torch',
+      'searock',
+      'bamboo',
+      'banana',
+      'deadtree',
+      null,
+      'monstera',
+      'cactus',
+      'relic',
+      'mushroom',
+      'shell',
+      'campfire',
+      null,
+      'fireflies',
+      null,
+      null,
+      'flotsam',
+      'buoy',
+      'resortLight'
+    ]
+    expect(savedKinds.map((_, id) => decorKindOf(id))).toEqual(savedKinds)
+  })
+
   it('stores a picked look with the kind and keeps older codes picking by position', () => {
     for (const kind of decorKinds)
-      for (let look = 0; look < decorLooks[kind]; look++) {
+      for (let look = 0; look < decorInfo[kind].looks; look++) {
         const code = decorCode(kind, look)
         expect(code).toBeLessThan(256)
         expect(decorKindOf(code)).toBe(kind)
@@ -179,7 +209,7 @@ describe('island world', () => {
     expect(decorLookOf(decorCode('palm'))).toBeNull()
     const auto = decorLookAt(decorCode('palm'), 3, 4)
     expect(auto).toBeGreaterThanOrEqual(0)
-    expect(auto).toBeLessThan(decorLooks.palm)
+    expect(auto).toBeLessThan(decorInfo.palm.looks)
 
     const world = createIsland()
     world.ground[10 * world.columns + 10] = GRASS
@@ -190,7 +220,7 @@ describe('island world', () => {
     expect(restored?.decor[10 * world.columns + 10]).toBe(decorCode('palm', 4))
     expect(restored?.decor[10 * world.columns + 11]).toBe(decorCode('palm'))
     // A look the kind does not have is refused.
-    world.decor[10 * world.columns + 10] = decorCode('torch', decorLooks.torch)
+    world.decor[10 * world.columns + 10] = decorCode('torch', decorInfo.torch.looks)
     expect(decodeIsland(encodeIsland(world))).toBeNull()
   })
 
@@ -411,15 +441,12 @@ describe('island editing', () => {
 })
 
 describe('island rendering helpers', () => {
-  it('rounds coastlines from neighboring tiles and paints only nearby pixels', () => {
+  it('rounds coastlines from neighboring tiles', () => {
     const world = createIsland()
     world.ground[10 * world.columns + 10] = GRASS
     // The tile center is land; its corner blends into the sea.
     expect(terrainClass(world, 168, 168)).not.toBe(WATER)
     expect(terrainClass(world, 160, 160)).toBe(WATER)
-    const buffer = createBuffer(48, 48)
-    paintTerrain(world, buffer, 144, 144, 48, 48)
-    expect(buffer.data.some((value, i) => i % 4 === 3 && value > 0)).toBe(true)
   })
 
   it('shows every ground in the middle of its own patch and marks fresh water by kind', () => {
@@ -429,9 +456,6 @@ describe('island rendering helpers', () => {
         for (let x = 9; x <= 11; x++) world.ground[y * world.columns + x] = ground
       for (let py = 164; py < 172; py++)
         for (let px = 164; px < 172; px++) expect(terrainClass(world, px, py)).toBe(ground)
-      const buffer = createBuffer(48, 48)
-      paintTerrain(world, buffer, 144, 144, 48, 48)
-      expect(buffer.data.some((value, i) => i % 4 === 3 && value > 0)).toBe(true)
       const field = createShoreField(world)
       updateShoreField(world, field)
       const mask = field.lake[(168 / SHORE_CELL) * field.width + 168 / SHORE_CELL]
@@ -481,22 +505,6 @@ describe('island rendering helpers', () => {
     world.ground[10 * world.columns + 10] = WATER
     updateShoreField(world, field, 70, 70, 100, 100)
     expect(at(168, 168)).toBe(SHORE_RANGE * SHORE_CELL)
-  })
-
-  it('paints a sprite for every decoration, with animation frames of one size', () => {
-    for (const kind of decorKinds) {
-      // Only man-made things come in fewer than four designs.
-      const manMade = ['buoy'].includes(kind)
-      expect(decorVariants[kind].length).toBeGreaterThan(manMade ? 0 : 3)
-      expect(decorVariants[kind].length).toBe(decorLooks[kind])
-      for (const frame of decorVariants[kind] as Array<(typeof decorVariants)['torch'][number]>) {
-        expect(frame.buffer.data.some((value, i) => i % 4 === 3 && value > 0)).toBe(true)
-        for (const extra of frame.frames ?? []) {
-          expect(extra.width).toBe(frame.buffer.width)
-          expect(extra.height).toBe(frame.buffer.height)
-        }
-      }
-    }
   })
 
   it('zooms in steps around a fixed point and clamps the view near the map', () => {

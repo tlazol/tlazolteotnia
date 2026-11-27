@@ -2,11 +2,11 @@
 // decorations from their baked models, grounds from their lit texels, so what
 // the palette shows is what lands on the island.
 
-import { hex, islandPalette, type PixelBuffer, type Rgba } from './island-art'
-import { bakeTemplate, flatGroundSlot } from './island-bake'
+import { groundTextures, hex, islandPalette, type PixelBuffer, type Rgba } from './island-art'
+import { bakeTemplate } from './island-bake'
 import { type GlassShade, glassFacets } from './island-lamp-glass'
 import { decorModel } from './island-models'
-import { palette } from './island-palette'
+import { palette, slotOnRamp } from './island-palette'
 import { type DecorKind, HOTSPRING, type LandGround, SHALLOWS, SWAMP } from './island-world'
 
 // A decoration's look as it stands on the island, cropped to its outline.
@@ -130,12 +130,14 @@ const SEARCH = 64
 // windows nearby, the one whose mix of colors is closest to the whole area's
 // is taken: a typical patch, neither bare nor caught on a rare detail.
 export function groundThumbnail(ground: LandGround, size: number): PixelBuffer {
+  const { pixel, ramp } = groundTextures[ground]
   const span = SEARCH + size
   const slots = new Int32Array(span * span)
   const overall = new Map<number, number>()
   for (let y = 0; y < span; y++)
     for (let x = 0; x < span; x++) {
-      const slot = flatGroundSlot(ground, x, y) ?? -1
+      const [r, g, b, alpha] = pixel(x, y)
+      const slot = alpha ? slotOnRamp(r, g, b, ramp) : -1
       slots[y * span + x] = slot
       overall.set(slot, (overall.get(slot) ?? 0) + 1 / (span * span))
     }

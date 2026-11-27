@@ -20,11 +20,10 @@ import {
   sphere,
   type Vec3
 } from './island-sdf'
-import { type DecorKind, decorLooks, decorPlacementScale, decorScale } from './island-world'
+import type { DecorKind } from './island-world'
 
 // 'flame' is a drawn flame: steady colors, its tip leaning from side to side.
 export type Glow = 'fire' | 'firefly' | 'flame'
-export const GLOW_CODE = { fire: 1, firefly: 2, flame: 3 } as const satisfies Record<Glow, number>
 // `flat` lights a surface in two tones only, as a sign rather than a thing.
 export type Material = { slot: number; glow?: Glow; outline?: Outline; flat?: boolean }
 export type Painter = (x: number, y: number, z: number) => Material
@@ -52,14 +51,9 @@ export type Model = {
   // Pixels the top sways in the wind, and pixels a floating thing bobs.
   sway: number
   bob: number
-  // Where a flame burns, for the glow around it at night.
-  glow: { height: number; soft?: boolean } | null
   // Bounds of all parts together.
   lo: Vec3
   hi: Vec3
-  // A model grown from another by `scale` about (0, `middle`, 0). Shadows
-  // look the same at any size, so they can be marched on the smaller one.
-  grown?: { from: Model; scale: number; middle: number }
 }
 
 // ---- Materials --------------------------------------------------------------
@@ -311,10 +305,7 @@ function limb(points: Vec3[], r1: number, r2: number, paint: Painter): Part[] {
   return [group(parts, paint)]
 }
 
-function model(
-  parts: Part[],
-  options: { sway?: number; bob?: number; glow?: Model['glow'] } = {}
-): Model {
+function model(parts: Part[], options: { sway?: number; bob?: number } = {}): Model {
   const lo: Vec3 = [
     Math.min(...parts.map((p) => p.lo[0])),
     Math.min(...parts.map((p) => p.lo[1])),
@@ -329,7 +320,6 @@ function model(
     parts,
     sway: options.sway ?? 0,
     bob: options.bob ?? 0,
-    glow: options.glow ?? null,
     lo,
     hi
   }
@@ -1336,15 +1326,12 @@ function torch(look: number, seed: number) {
   const C = -4
   if (look === 0) {
     const wrap = toon('cuteRing', 1)
-    return model(
-      [
-        cuteLog([0, C, -1], [0, C, 13], 2.2),
-        egg([0, C, 13.5], [3.5, 3.5, 2.8], plain(wrap)),
-        ...fireParts([0, C, 15], 3.9),
-        ...embers([0, C, 22], seed)
-      ],
-      { glow: { height: 22 } }
-    )
+    return model([
+      cuteLog([0, C, -1], [0, C, 13], 2.2),
+      egg([0, C, 13.5], [3.5, 3.5, 2.8], plain(wrap)),
+      ...fireParts([0, C, 15], 3.9),
+      ...embers([0, C, 22], seed)
+    ])
   }
   if (look === 1) {
     // A carved post: stacked blocks, a bowl, and the flame above.
@@ -1363,37 +1350,31 @@ function torch(look: number, seed: number) {
       ...fireParts([0, C, 15.5], 3.9),
       ...embers([0, C, 24], seed)
     )
-    return model(parts, { glow: { height: 24 } })
+    return model(parts)
   }
   if (look === 2) {
     const iron = plain(toon('steel', 3))
-    return model(
-      [
-        stick([-5, C + 2, 0], [0, C, 8], 1.6, iron),
-        stick([5, C + 2, 0], [0, C, 8], 1.6, iron),
-        stick([0, C - 5, 0], [0, C, 8], 1.6, iron),
-        {
-          d: (x, y, z) => Math.max(ellipsoid(x, y - C, z - 10, 5, 4.4, 2.8), z - 10.8),
-          paint: (_x, _y, z) => (z > 10.2 ? toon('steel', 4) : toon('steel', 3)),
-          lo: [-5.5, C - 5, 7],
-          hi: [5.5, C + 5, 11]
-        },
-        ...fireParts([0, C, 10], 3.6),
-        ...embers([0, C, 19], seed)
-      ],
-      { glow: { height: 19 } }
-    )
+    return model([
+      stick([-5, C + 2, 0], [0, C, 8], 1.6, iron),
+      stick([5, C + 2, 0], [0, C, 8], 1.6, iron),
+      stick([0, C - 5, 0], [0, C, 8], 1.6, iron),
+      {
+        d: (x, y, z) => Math.max(ellipsoid(x, y - C, z - 10, 5, 4.4, 2.8), z - 10.8),
+        paint: (_x, _y, z) => (z > 10.2 ? toon('steel', 4) : toon('steel', 3)),
+        lo: [-5.5, C - 5, 7],
+        hi: [5.5, C + 5, 11]
+      },
+      ...fireParts([0, C, 10], 3.6),
+      ...embers([0, C, 19], seed)
+    ])
   }
-  return model(
-    [
-      cuteStone([0, C, 2.6], [5, 4.2, 3], 1),
-      cuteStone([0.4, C, 7.6], [3.8, 3.3, 2.4], 2),
-      cuteStone([0, C, 11.4], [2.8, 2.5, 2], 1),
-      ...fireParts([0, C, 13], 3.4),
-      ...embers([0, C, 20], seed)
-    ],
-    { glow: { height: 20 } }
-  )
+  return model([
+    cuteStone([0, C, 2.6], [5, 4.2, 3], 1),
+    cuteStone([0.4, C, 7.6], [3.8, 3.3, 2.4], 2),
+    cuteStone([0, C, 11.4], [2.8, 2.5, 2], 1),
+    ...fireParts([0, C, 13], 3.4),
+    ...embers([0, C, 20], seed)
+  ])
 }
 
 function campfire(look: number, seed: number) {
@@ -1422,7 +1403,7 @@ function campfire(look: number, seed: number) {
       parts.push(cuteLog([-14, C + 3, 1.8], [-10, C - 5, 1.8], 2))
       parts.push(cuteLog([10, C - 5, 1.8], [14, C + 3, 1.8], 2))
     }
-    return model(parts, { glow: { height: look ? 13 : 11 } })
+    return model(parts)
   }
   if (look === 2) {
     // Logs stacked like a little cabin, the flame on top.
@@ -1436,7 +1417,7 @@ function campfire(look: number, seed: number) {
         )
     }
     parts.push(...fireParts([0, C, 7], 4.4), ...embers([0, C, 18], seed))
-    return model(parts, { glow: { height: 16 } })
+    return model(parts)
   }
   ring(8)
   parts.push(...fireParts([0, C + 1, 1.6], 3.5))
@@ -1452,7 +1433,7 @@ function campfire(look: number, seed: number) {
       ),
       ball([0, C, 17.3], 1.6, plain(toon('cuteStone', 3)))
     )
-    return model(parts, { glow: { height: 8 } })
+    return model(parts)
   }
   // Fish on skewers, leaning in to cook.
   const stickPaint = plain(toon('cuteLog', 3))
@@ -1471,7 +1452,7 @@ function campfire(look: number, seed: number) {
     )
   }
   parts.push(...embers([0, C, 11], seed))
-  return model(parts, { glow: { height: 8 } })
+  return model(parts)
 }
 
 function fireflies(seed: number) {
@@ -1484,7 +1465,7 @@ function fireflies(seed: number) {
     const at: Vec3 = [Math.cos(angle) * 10, Math.sin(angle) * 8, 5 + rand() * 10]
     parts.push({ ...ball(at, 1.15, glow), emitter: { kind: 'firefly', at, size: 1.3 } })
   }
-  return model(parts, { glow: { height: 10, soft: true } })
+  return model(parts)
 }
 
 function afloat(base: Model) {
@@ -1848,68 +1829,21 @@ function toy(m: Model): Model {
   return { ...m, parts, lo: shrink(m.lo), hi: shrink(m.hi) }
 }
 
-// Trees scale about the trunk at MID. Small decorations scale about their foot.
-function scaled(m: Model, s: number, middle: number): Model {
-  if (s === 1) return m
-  const grow = (v: Vec3): Vec3 => [v[0] * s, middle + (v[1] - middle) * s, v[2] * s]
-  const parts = m.parts.map(
-    (p): Part => ({
-      d: (x, y, z) => p.d(x / s, middle + (y - middle) / s, z / s) * s,
-      paint: (x, y, z) => p.paint(x / s, middle + (y - middle) / s, z / s),
-      lo: grow(p.lo),
-      hi: grow(p.hi)
-    })
-  )
-  return {
-    ...m,
-    parts,
-    sway: m.sway * s,
-    glow: m.glow && { ...m.glow, height: m.glow.height * s },
-    lo: grow(m.lo),
-    hi: grow(m.hi),
-    grown: { from: m, scale: s, middle }
-  }
-}
-
-const built = new Map<string, Model>()
-// `size` grows the model by decorScale(size); 0 is the model as drawn.
-export function decorModel(kind: DecorKind, look: number, size = 0): Model {
-  const key = `${kind}:${look}:${size}`
-  let found = built.get(key)
-  if (!found) {
-    if (size > 0) found = scaled(decorModel(kind, look), decorScale(size), MID)
-    else {
-      const make = makers[kind][Math.max(0, Math.min(decorLooks[kind] - 1, look))]
-      found = toyKinds.has(kind) ? toy(make()) : make()
-    }
-    built.set(key, found)
-  }
-  return found
+export function decorModel(kind: DecorKind, look: number): Model {
+  const looks = makers[kind]
+  const make = looks[Math.max(0, Math.min(looks.length - 1, look))]
+  const model = make()
+  return toyKinds.has(kind) ? toy(model) : model
 }
 
 export function modelLookCount(kind: DecorKind) {
   return makers[kind].length
 }
 
-// The voxel renderer scales its mesh instances. The point baker needs the same
-// dimensions before sampling so its ground shadows follow the placed object.
-export function placedDecorModel(kind: DecorKind, look: number, size: number): Model {
-  const model = decorModel(kind, look, size)
-  const scale = decorPlacementScale(kind, look)
-  if (scale === 1) return model
-  const key = `placed:${kind}:${look}:${size}`
-  let found = built.get(key)
-  if (!found) {
-    found = scaled(model, scale, 0)
-    built.set(key, found)
-  }
-  return found
-}
-
 // Distance from a model's surface, and the part nearest, at a point.
-export function modelDistance(m: Model, x: number, y: number, z: number) {
+export function partsDistance(parts: Part[], x: number, y: number, z: number) {
   let best = Number.POSITIVE_INFINITY
-  for (const part of m.parts) {
+  for (const part of parts) {
     const ox = Math.max(part.lo[0] - x, 0, x - part.hi[0])
     const oy = Math.max(part.lo[1] - y, 0, y - part.hi[1])
     const oz = Math.max(part.lo[2] - z, 0, z - part.hi[2])

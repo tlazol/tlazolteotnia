@@ -6,9 +6,8 @@ import type { ThumbnailRequest, ThumbnailResponse } from '#/lib/island-thumbnail
 import {
   type DecorKind,
   decorGroups,
+  decorInfo,
   decorKinds,
-  decorLooks,
-  decorNames,
   groundGroups,
   groundNames,
   type LandGround,
@@ -122,9 +121,10 @@ export function IslandToolbar({
   const [, tick] = useState(0)
   // Countdowns and refills repaint once a second; nothing is sent for them.
   useEffect(() => {
+    if (!open) return
     const timer = window.setInterval(() => tick((value) => value + 1), 1000)
     return () => window.clearInterval(timer)
-  }, [])
+  }, [open])
   const block: EditBlock = shared ? editBlock(shared, now()) : 'connecting'
   const showGround = options.tool === 'land'
   const groundGroup =
@@ -222,8 +222,8 @@ export function IslandToolbar({
                       type="button"
                       disabled={disabled}
                       aria-pressed={options.decor === decor}
-                      aria-label={decorNames[decor]}
-                      title={decorNames[decor]}
+                      aria-label={decorInfo[decor].name}
+                      title={decorInfo[decor].name}
                       onClick={() => onOptions({ ...options, decor })}
                     >
                       {thumbnails[decor] ? (
@@ -315,7 +315,7 @@ function DecorLooks({
   onSelect: (look: number) => void
 }) {
   const nameId = useId()
-  const name = decorNames[kind]
+  const name = decorInfo[kind].name
   const lookName = (look: number) =>
     kind === 'resortLight' ? resortLightNames[look] : `${name}（${look + 1}）`
   return (
@@ -324,7 +324,7 @@ function DecorLooks({
         {kind === 'resortLight' ? lookName(selected) : name}
       </p>
       <div className="island-chips island-chips--decor island-looks__list">
-        {Array.from({ length: decorLooks[kind] }, (_, look) => (
+        {Array.from({ length: decorInfo[kind].looks }, (_, look) => (
           <button
             key={look}
             type="button"

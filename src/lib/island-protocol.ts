@@ -5,8 +5,8 @@ import type { IslandCommand, SkipCode, TileEdit } from './island-edit'
 import type { ActorAdmission, GlobalQuota } from './island-policy'
 import { MAX_EDIT_TILES, MAX_MESSAGE_BYTES } from './island-policy'
 import {
+  decorInfo,
   decorKinds,
-  decorLooks,
   GROUND_COUNT,
   type Ground,
   ISLAND_COLUMNS,
@@ -151,7 +151,7 @@ function parseCommand(value: unknown): IslandCommand | null {
         return null
       const decor = value.decor as (typeof decorKinds)[number]
       if (value.look === undefined) return { tool: 'decor', decor }
-      return isCount(value.look) && value.look < decorLooks[decor]
+      return isCount(value.look) && value.look < decorInfo[decor].looks
         ? { tool: 'decor', decor, look: value.look }
         : null
     }

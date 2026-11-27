@@ -19,10 +19,10 @@ const feedUrls = {
   atom: getAbsoluteUrl('/atom.xml'),
   rss: getAbsoluteUrl('/rss.xml')
 }
-let blogFeedDocumentsPromise: Promise<Record<BlogFeedFormat, string>> | null = null
+let documents: Record<BlogFeedFormat, string> | undefined
 
-export async function createBlogFeedResponse(format: BlogFeedFormat) {
-  const documents = await getBlogFeedDocuments()
+export function createBlogFeedResponse(format: BlogFeedFormat) {
+  documents ??= buildBlogFeedDocuments()
 
   return new Response(documents[format], {
     headers: {
@@ -32,17 +32,8 @@ export async function createBlogFeedResponse(format: BlogFeedFormat) {
   })
 }
 
-async function getBlogFeedDocuments() {
-  blogFeedDocumentsPromise ??= buildBlogFeedDocuments().catch((error) => {
-    blogFeedDocumentsPromise = null
-    throw error
-  })
-
-  return blogFeedDocumentsPromise
-}
-
-async function buildBlogFeedDocuments(): Promise<Record<BlogFeedFormat, string>> {
-  const posts = await getBlogFeedPosts()
+function buildBlogFeedDocuments(): Record<BlogFeedFormat, string> {
+  const posts = getBlogFeedPosts()
   const updated = toFeedDate(posts[0]?.date ?? '1970-01-01')
   const feed = new Feed({
     title: siteName,

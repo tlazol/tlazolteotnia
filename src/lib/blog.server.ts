@@ -1,13 +1,4 @@
-import {
-  type BlogPost,
-  type BlogPostRecord,
-  type BlogPostSummary,
-  parseBlogPosts,
-  sortBlogPostsNewestFirst,
-  toPublicBlogPost
-} from '#/lib/blog-post'
-
-export type { BlogPost, BlogPostSummary } from '#/lib/blog-post'
+import { parseBlogPosts, sortBlogPostsNewestFirst, toPublicBlogPost } from '#/lib/blog-post'
 
 const blogSources = import.meta.glob<string>('/content/blog/*.md', {
   eager: true,
@@ -15,72 +6,35 @@ const blogSources = import.meta.glob<string>('/content/blog/*.md', {
   query: '?raw'
 })
 
-type BlogPostCache = {
-  postsBySlug: Map<string, BlogPost>
-  posts: BlogPost[]
-  summaries: BlogPostSummary[]
-}
-
-let blogPostCachePromise: Promise<BlogPostCache> | null = null
-
-export async function getBlogPosts(): Promise<BlogPostSummary[]> {
-  const cache = await getBlogPostCache()
-
-  return cache.summaries
-}
-
-export async function getBlogPost(slug: string): Promise<BlogPost | null> {
-  const cache = await getBlogPostCache()
-  const post = cache.postsBySlug.get(slug)
-
-  if (!post) {
-    return null
-  }
-
-  return post
-}
-
-export async function getBlogFeedPosts(): Promise<BlogPost[]> {
-  const cache = await getBlogPostCache()
-
-  return cache.posts
-}
-
-async function getBlogPostCache() {
-  blogPostCachePromise ??= buildBlogPostCache().catch((error) => {
-    blogPostCachePromise = null
-    throw error
-  })
-
-  return blogPostCachePromise
-}
-
-async function buildBlogPostCache(): Promise<BlogPostCache> {
-  const posts = await readAllPosts()
-  const publishedPosts = sortBlogPostsNewestFirst(posts.filter((post) => !post.draft)).map(
+function indexPosts() {
+  const records = parseBlogPosts(
+    Object.entries(blogSources).map(([path, source]) => ({ path: path.slice(1), source }))
+  )
+  const posts = sortBlogPostsNewestFirst(records.filter((post) => !post.draft)).map(
     toPublicBlogPost
   )
-  const postsBySlug = new Map<string, BlogPost>()
-
-  for (const post of publishedPosts) {
-    postsBySlug.set(post.slug, post)
-  }
-
   return {
-    postsBySlug,
-    posts: publishedPosts,
-    summaries: publishedPosts.map((post) => {
-      const { body: _body, ...summary } = post
-      return summary
-    })
+    posts,
+    bySlug: new Map(posts.map((post) => [post.slug, post])),
+    summaries: posts.map(({ body: _body, ...summary }) => summary)
   }
 }
 
-async function readAllPosts(): Promise<BlogPostRecord[]> {
-  return parseBlogPosts(
-    Object.entries(blogSources).map(([path, source]) => ({
-      path: path.replace(/^\//, ''),
-      source
-    }))
-  )
+let index: ReturnType<typeof indexPosts>
+function getIndex() {
+  index ??= indexPosts()
+  return index
+}
+
+export function loadHomeData() {
+  return { posts: getIndex().summaries }
+}
+
+export function loadPostData(slug: string) {
+  const post = getIndex().bySlug.get(slug)
+  return post ? { post } : null
+}
+
+export function getBlogFeedPosts() {
+  return getIndex().posts
 }

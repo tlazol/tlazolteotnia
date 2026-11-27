@@ -2,12 +2,12 @@ import { describe, expect, it } from 'vitest'
 import { bakeTemplate } from '../src/lib/island-bake'
 import { decorModel } from '../src/lib/island-models'
 import { decorThumbnail, groundThumbnail } from '../src/lib/island-thumbnails'
-import { decorKinds, decorLooks, landGrounds } from '../src/lib/island-world'
+import { decorInfo, decorKinds, landGrounds } from '../src/lib/island-world'
 
 describe('palette thumbnails', () => {
   it('draw every look of every decoration from its baked model', () => {
     for (const kind of decorKinds)
-      for (let look = 0; look < decorLooks[kind]; look++) {
+      for (let look = 0; look < decorInfo[kind].looks; look++) {
         const thumbnail = decorThumbnail(kind, look)
         let drawn = 0
         for (let i = 3; i < thumbnail.data.length; i += 4) if (thumbnail.data[i]) drawn++

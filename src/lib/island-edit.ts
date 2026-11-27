@@ -8,7 +8,6 @@ import {
   decorInfo,
   decorKindOf,
   decorLookAt,
-  decorNames,
   type Ground,
   groundNames,
   type IslandWorld,
@@ -174,7 +173,7 @@ function explain(
       if (options.tool === 'erase') return { reason: 'ここはもう海です', soft: true }
       if (options.tool === 'decor' && existing)
         return {
-          reason: `もう同じ${decorNames[existing]}があります`,
+          reason: `もう同じ${decorInfo[existing].name}があります`,
           soft: true
         }
       return { reason: '撤去できる装飾がありません' }
@@ -184,7 +183,7 @@ function explain(
       }
     case 'DECOR_CONFLICT':
       return {
-        reason: `${existing ? decorNames[existing] : '装飾'}があります。先に「撤去」してください`
+        reason: `${existing ? decorInfo[existing].name : '装飾'}があります。先に「撤去」してください`
       }
     case 'INVALID_GROUND':
       if (options.tool === 'raise' || options.tool === 'lower')
@@ -192,7 +191,7 @@ function explain(
       return {
         reason:
           decorInfo[options.decor].on === 'water'
-            ? `${decorNames[options.decor]}は海に浮かべてください`
+            ? `${decorInfo[options.decor].name}は海に浮かべてください`
             : '海の上には置けません'
       }
   }

@@ -1,11 +1,11 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { ArticleContent } from '#/components/article-content'
-import { loadHomeData, loadPostData } from '#/lib/blog-data.server'
+import { loadHomeData, loadPostData } from '#/lib/blog.server'
 
 describe('public article data', () => {
-  it('loads and renders an article without visitor state or a database', async () => {
-    const result = await loadPostData('react-router-renewal')
+  it('loads and renders an article without visitor state or a database', () => {
+    const result = loadPostData('react-router-renewal')
     expect(result).not.toBeNull()
     expect(Object.keys(result ?? {})).toEqual(['post'])
     if (!result) throw new Error('Expected a published article')
@@ -16,12 +16,12 @@ describe('public article data', () => {
     expect(html).not.toContain('aria-label="リアクションを追加"')
   })
 
-  it('returns null for an unknown article', async () => {
-    expect(await loadPostData('missing-post')).toBeNull()
+  it('returns null for an unknown article', () => {
+    expect(loadPostData('missing-post')).toBeNull()
   })
 
-  it('lists published articles without visitor state', async () => {
-    const result = await loadHomeData()
+  it('lists published articles without visitor state', () => {
+    const result = loadHomeData()
     expect(Object.keys(result)).toEqual(['posts'])
     expect(result.posts.length).toBeGreaterThan(20)
     expect(result.posts.some((post) => post.slug === 'react-router-renewal')).toBe(true)

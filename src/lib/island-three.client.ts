@@ -94,14 +94,7 @@ import {
   stepResidents,
   takeOverResident
 } from './island-residents'
-import {
-  GULL_FRAME,
-  paintFishSchool,
-  paintGull,
-  paintShadow,
-  paintTurtle,
-  shadowSizes
-} from './island-sprites'
+import { GULL_FRAME, paintFishSchool, paintGull, paintShadow, paintTurtle } from './island-sprites'
 import { createTerrain } from './island-terrain.client'
 import {
   EDIT_MARGIN,
@@ -1018,7 +1011,7 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
     ground.add(mesh)
     return mesh
   }
-  const shadowBuffer = paintShadow('small')
+  const shadowBuffer = paintShadow()
   const residentShadows = residents.map(() => flatMesh(shadowBuffer))
   const ring = ringBuffer()
   const selectedRing = flatMesh(ring, '#ffe66b')
@@ -1099,7 +1092,7 @@ export function createIslandRenderer(canvas: HTMLCanvasElement, options: IslandR
       depthWrite: false
     })
   )
-  const gullShadowGeometry = track(new PlaneGeometry(...shadowSizes.small))
+  const gullShadowGeometry = track(new PlaneGeometry(shadowBuffer.width, shadowBuffer.height))
   const gulls = [0, 1, 2].map((i) => {
     const mesh = new Mesh(gullGeometry, gullMaterial)
     mesh.renderOrder = 22

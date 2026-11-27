@@ -5,7 +5,7 @@
 
 import type { PixelBuffer } from './island-art'
 import { decorThumbnail, groundThumbnail } from './island-thumbnails'
-import { type DecorKind, decorLooks, type LandGround } from './island-world'
+import { type DecorKind, decorInfo, type LandGround } from './island-world'
 
 export type ThumbnailRequest = { grounds: LandGround[]; groundSize: number; kinds: DecorKind[] }
 export type ThumbnailResponse =
@@ -31,7 +31,7 @@ scope.onmessage = (event: MessageEvent<ThumbnailRequest>) => {
       swatches.map(([, { data }]) => data.buffer)
     )
     for (const kind of kinds) {
-      const looks = Array.from({ length: decorLooks[kind] }, (_, look) =>
+      const looks = Array.from({ length: decorInfo[kind].looks }, (_, look) =>
         decorThumbnail(kind, look)
       )
       scope.postMessage(
@@ -45,4 +45,5 @@ scope.onmessage = (event: MessageEvent<ThumbnailRequest>) => {
       []
     )
   }
+  self.close()
 }
