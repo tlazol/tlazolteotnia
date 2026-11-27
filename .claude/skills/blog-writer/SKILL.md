@@ -52,9 +52,9 @@ description: このリポジトリのブログ記事（content/blog/*.md）を�
 
   本文からは `[[1]](#reference-1)` で参照する。
 
-## 書かないこと（anti-poem）
+## 書かないこと
 
-[tlazol/skills の anti-poem](https://github.com/tlazol/skills/tree/main/anti-poem) の基準を、技術的な説明や経緯の説明にあたる部分に適用する。
+次の基準は、技術的な説明や経緯の説明にあたる部分に適用する。
 
 - 読み物としての演出より、情報を伝えることを優先する。
 - 問いかけ、溜め、決め台詞、抽象的な意味づけを足さない（「なぜ〜なのか。」「ここで重要になるのが〜だ」「これは単なる〜ではない」）。
@@ -95,9 +95,9 @@ draft: true
 - `draft` は `true` で作る。公開は筆者が決める。
 - tags は既存記事で使われているタグを優先する（`grep -h '^tags' content/blog/*.md` で確認する）。
 
-## 表記の仕上げ（proofreading）
+## 表記の仕上げ
 
-[tlazol/skills の proofreading](https://github.com/tlazol/skills/tree/main/proofreading) の基準で表記を整える。
+次の基準で表記を整える。
 
 - 文末を揃える（常体に統一する）。
 - 日本語の中の半角英字・数字の前後に半角スペースを入れる。
