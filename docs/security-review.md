@@ -33,4 +33,5 @@ npm run deploy:dry-run
 ```
 
 The shared checks cover Markdown security behavior, URL handling, content validation, and generated
-OG-image consistency. Cloudflare deployment writes happen only in `npm run deploy`.
+OG-image consistency. Cloudflare deploys automatically when `main` changes, and from a local checkout only through
+`npm run deploy`.

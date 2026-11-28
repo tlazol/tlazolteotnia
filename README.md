@@ -34,7 +34,13 @@ After upgrading Biome, run `npx biome migrate --write`. After upgrading Wrangler
 ## Production
 
 Cloudflare configuration, the custom domain, and Durable Object migrations live in `wrangler.jsonc`.
-Provision `ISLAND_COOKIE_SECRET` as described below, then run `npm run deploy`.
+
+**Merging into `main` deploys automatically.** Cloudflare's Git integration builds and deploys the
+Worker whenever `main` changes, so anything merged there goes live without a manual step. Run the
+verification commands above before merging. `npm run deploy` deploys from a local checkout and is
+only needed outside that flow.
+
+Provision `ISLAND_COOKIE_SECRET` as described below before the first deployment.
 
 The article emoji reaction feature has been retired. No D1 database is required.
 When updating an existing deployment, deploy this version first to stop reaction reads and writes,
