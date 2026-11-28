@@ -4,6 +4,8 @@ export type BlogPost = {
   slug: string
   title: string
   date: string
+  /** Last significant revision (YYYY-MM-DD); absent when the post has not been revised. */
+  updated?: string
   description: string
   tags: string[]
   body: string
@@ -48,7 +50,14 @@ export class BlogPostValidationError extends Error {
 }
 
 const frontmatterPattern = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/
-const allowedFrontmatterFields = new Set(['title', 'date', 'description', 'tags', 'draft'])
+const allowedFrontmatterFields = new Set([
+  'title',
+  'date',
+  'updated',
+  'description',
+  'tags',
+  'draft'
+])
 
 export function parseBlogPost(source: string, sourcePath: string): BlogPostRecord {
   const issues: BlogPostValidationIssue[] = []
@@ -88,6 +97,10 @@ export function parseBlogPost(source: string, sourcePath: string): BlogPostRecor
 
   const title = requiredNonBlankString(frontmatter.title, sourcePath, 'title', issues)
   const date = requiredDate(frontmatter.date, sourcePath, issues)
+  const updated =
+    frontmatter.updated === undefined
+      ? undefined
+      : requiredDate(frontmatter.updated, sourcePath, issues, 'updated')
   const description = requiredNonBlankString(
     frontmatter.description,
     sourcePath,
@@ -106,6 +119,10 @@ export function parseBlogPost(source: string, sourcePath: string): BlogPostRecor
     issues.push(issue(sourcePath, 'body', 'published post body must not be empty'))
   }
 
+  if (date && updated && updated < date) {
+    issues.push(issue(sourcePath, 'updated', 'must not be earlier than date'))
+  }
+
   if (issues.length > 0) {
     throw new BlogPostValidationError(issues)
   }
@@ -114,6 +131,7 @@ export function parseBlogPost(source: string, sourcePath: string): BlogPostRecor
     slug,
     title: title as string,
     date: date as string,
+    ...(updated ? { updated } : {}),
     description: description as string,
     tags: tags as string[],
     draft: draft as boolean,
@@ -168,6 +186,11 @@ export function toPublicBlogPost(post: BlogPostRecord): BlogPost {
   return publicPost
 }
 
+/** The date a post last changed in a way readers would notice. */
+export function getBlogPostModifiedDate(post: { date: string; updated?: string }) {
+  return post.updated ?? post.date
+}
+
 export function sortBlogPostsNewestFirst<Post extends { date: string }>(posts: Post[]) {
   return [...posts].sort((a, b) => Date.parse(b.date) - Date.parse(a.date))
 }
@@ -191,9 +214,14 @@ function requiredNonBlankString(
   return value
 }
 
-function requiredDate(value: unknown, path: string, issues: BlogPostValidationIssue[]) {
+function requiredDate(
+  value: unknown,
+  path: string,
+  issues: BlogPostValidationIssue[],
+  field = 'date'
+) {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    issues.push(issue(path, 'date', 'must use YYYY-MM-DD format'))
+    issues.push(issue(path, field, 'must use YYYY-MM-DD format'))
     return undefined
   }
 
@@ -205,7 +233,7 @@ function requiredDate(value: unknown, path: string, issues: BlogPostValidationIs
     parsed.getUTCMonth() + 1 !== month ||
     parsed.getUTCDate() !== day
   ) {
-    issues.push(issue(path, 'date', 'must be a real calendar date'))
+    issues.push(issue(path, field, 'must be a real calendar date'))
     return undefined
   }
 

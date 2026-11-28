@@ -13,6 +13,7 @@ import { Route as TownRouteImport } from './routes/_town'
 import { Route as AtomDotxmlRouteImport } from './routes/atom[.]xml'
 import { Route as BlogRouteImport } from './routes/blog'
 import { Route as RssDotxmlRouteImport } from './routes/rss[.]xml'
+import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as TownIndexRouteImport } from './routes/_town.index'
 import { Route as TownBlogSlugRouteImport } from './routes/_town.blog.$slug'
 
@@ -35,6 +36,11 @@ const RssDotxmlRoute = RssDotxmlRouteImport.update({
   path: '/rss.xml',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
+  id: '/sitemap.xml',
+  path: '/sitemap.xml',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TownIndexRoute = TownIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -51,12 +57,14 @@ export interface FileRoutesByFullPath {
   '/atom.xml': typeof AtomDotxmlRoute
   '/blog': typeof BlogRoute
   '/rss.xml': typeof RssDotxmlRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/blog/$slug': typeof TownBlogSlugRoute
 }
 export interface FileRoutesByTo {
   '/atom.xml': typeof AtomDotxmlRoute
   '/blog': typeof BlogRoute
   '/rss.xml': typeof RssDotxmlRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/': typeof TownIndexRoute
   '/blog/$slug': typeof TownBlogSlugRoute
 }
@@ -66,20 +74,23 @@ export interface FileRoutesById {
   '/atom.xml': typeof AtomDotxmlRoute
   '/blog': typeof BlogRoute
   '/rss.xml': typeof RssDotxmlRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/_town/': typeof TownIndexRoute
   '/_town/blog/$slug': typeof TownBlogSlugRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/atom.xml' | '/blog' | '/rss.xml' | '/blog/$slug'
+  fullPaths:
+    '/' | '/atom.xml' | '/blog' | '/rss.xml' | '/sitemap.xml' | '/blog/$slug'
   fileRoutesByTo: FileRoutesByTo
-  to: '/atom.xml' | '/blog' | '/rss.xml' | '/' | '/blog/$slug'
+  to: '/atom.xml' | '/blog' | '/rss.xml' | '/sitemap.xml' | '/' | '/blog/$slug'
   id:
     | '__root__'
     | '/_town'
     | '/atom.xml'
     | '/blog'
     | '/rss.xml'
+    | '/sitemap.xml'
     | '/_town/'
     | '/_town/blog/$slug'
   fileRoutesById: FileRoutesById
@@ -89,6 +100,7 @@ export interface RootRouteChildren {
   AtomDotxmlRoute: typeof AtomDotxmlRoute
   BlogRoute: typeof BlogRoute
   RssDotxmlRoute: typeof RssDotxmlRoute
+  SitemapDotxmlRoute: typeof SitemapDotxmlRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -119,6 +131,13 @@ declare module '@tanstack/react-router' {
       path: '/rss.xml'
       fullPath: '/rss.xml'
       preLoaderRoute: typeof RssDotxmlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sitemap.xml': {
+      id: '/sitemap.xml'
+      path: '/sitemap.xml'
+      fullPath: '/sitemap.xml'
+      preLoaderRoute: typeof SitemapDotxmlRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_town/': {
@@ -155,6 +174,7 @@ const rootRouteChildren: RootRouteChildren = {
   AtomDotxmlRoute: AtomDotxmlRoute,
   BlogRoute: BlogRoute,
   RssDotxmlRoute: RssDotxmlRoute,
+  SitemapDotxmlRoute: SitemapDotxmlRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -17,6 +17,11 @@ export function ArticleContent({
         <ArticleSticker post={post} />
         <p className="article-byline">
           <time dateTime={post.date}>{post.date.replaceAll('-', '.')}</time>
+          {post.updated && (
+            <span>
+              更新 <time dateTime={post.updated}>{post.updated.replaceAll('-', '.')}</time>
+            </span>
+          )}
           <span>{authorName}</span>
         </p>
         <p className="article-description">{post.description}</p>

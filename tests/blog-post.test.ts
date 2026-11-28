@@ -56,6 +56,21 @@ describe('blog post parser', () => {
     expectValidationError(validFrontmatter.replace('2026-05-15', '2026-02-30'), 'real calendar')
   })
 
+  it('accepts an optional updated date that is not earlier than date', () => {
+    const revised = validFrontmatter.replace('draft: false', 'updated: "2026-06-01"\ndraft: false')
+
+    expect(parseBlogPost(revised, 'content/blog/revised.md').updated).toBe('2026-06-01')
+    expect(parseBlogPost(validFrontmatter, 'content/blog/plain.md')).not.toHaveProperty('updated')
+    expectValidationError(
+      revised.replace('2026-06-01', '2026/06/01'),
+      'updated: must use YYYY-MM-DD'
+    )
+    expectValidationError(
+      revised.replace('2026-06-01', '2026-05-14'),
+      'updated: must not be earlier than date'
+    )
+  })
+
   it('rejects invalid tags, string booleans, unknown fields, and empty published bodies', () => {
     expectValidationError(
       validFrontmatter.replace('["React", "Diary"]', '["React", 1]'),

@@ -1,2 +1,4 @@
 User-agent: *
 Allow: /
+
+Sitemap: https://0rga.org/sitemap.xml

@@ -2,19 +2,20 @@ import { Feed } from 'feed'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { MarkdownBody } from '#/components/markdown-body'
 import { getBlogFeedPosts } from '#/lib/blog.server'
+import { getBlogPostModifiedDate } from '#/lib/blog-post'
 import {
   authorName,
   copyrightCurrentYear,
   getAbsoluteUrl,
   getBlogPostUrl,
   getCopyrightText,
+  siteDescription,
   siteName,
   siteOrigin
 } from '#/lib/site'
 
 export type BlogFeedFormat = 'atom' | 'rss'
 
-const feedDescription = `Personal site and notes from ${authorName} / ${siteName}.`
 const feedUrls = {
   atom: getAbsoluteUrl('/atom.xml'),
   rss: getAbsoluteUrl('/rss.xml')
@@ -34,12 +35,12 @@ export function createBlogFeedResponse(format: BlogFeedFormat) {
 
 function buildBlogFeedDocuments(): Record<BlogFeedFormat, string> {
   const posts = getBlogFeedPosts()
-  const updated = toFeedDate(posts[0]?.date ?? '1970-01-01')
+  const updated = toFeedDate(posts.map(getBlogPostModifiedDate).sort().at(-1) ?? '1970-01-01')
   const feed = new Feed({
     title: siteName,
     id: siteOrigin,
     link: siteOrigin,
-    description: feedDescription,
+    description: siteDescription,
     language: 'ja-JP',
     updated,
     generator: siteName,
@@ -58,7 +59,7 @@ function buildBlogFeedDocuments(): Record<BlogFeedFormat, string> {
       title: post.title,
       id: postUrl,
       link: postUrl,
-      date: published,
+      date: toFeedDate(getBlogPostModifiedDate(post)),
       published,
       description: post.description,
       content: renderToStaticMarkup(<MarkdownBody body={post.body} baseUrl={postUrl} />),
